@@ -1,0 +1,59 @@
+{
+  "name": "Mochi (Cream)",
+  "author": "Utter \u2014 tools/mochi/generate_mochi.py",
+  "pixelArt": true,
+  "eyeTravel": 2,
+  "eyeAnchors": {
+    "knead": [
+      -1,
+      -3
+    ]
+  },
+  "animation": {
+    "resting": {
+      "frames": 10,
+      "fps": 5
+    },
+    "alert": {
+      "frames": 1
+    },
+    "thinking": {
+      "frames": 4,
+      "fps": 4
+    },
+    "delighted": {
+      "frames": 1
+    },
+    "startled": {
+      "frames": 1
+    },
+    "sleepy": {
+      "frames": 4,
+      "fps": 5
+    },
+    "knead": {
+      "frames": 4,
+      "fps": 10
+    },
+    "overheat": {
+      "frames": 2,
+      "fps": 10
+    },
+    "purr": {
+      "frames": 1
+    },
+    "hunt": {
+      "frames": 1
+    },
+    "drag": {
+      "frames": 1
+    },
+    "walk": {
+      "frames": 4,
+      "fps": 8
+    },
+    "stretch": {
+      "frames": 1
+    }
+  }
+}

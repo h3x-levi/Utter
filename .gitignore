@@ -1,26 +1,10 @@
-# macOS
+# macOS metadata
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
 
-# Xcode / SwiftPM
-.build/
-.swiftpm/
-DerivedData/
-*.xcuserstate
-xcuserdata/
-
-# Build artifacts
-build/
-*.dmg
-*.app
-
-# Models (Whisper speech model binaries - fetched via curl, see README.md)
-Models/*.bin
-!Models/.gitkeep
-
-# Python
+# Python caches
 __pycache__/
 *.py[cod]
 *$py.class

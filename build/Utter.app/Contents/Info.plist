@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Utter</string>
+    <key>CFBundleDisplayName</key>
+    <string>Utter</string>
+    <key>CFBundleIdentifier</key>
+    <string>utter.dictation.app</string>
+    <key>CFBundleVersion</key>
+    <string>3.0.19.20260821222359</string>
+    <key>CFBundleShortVersionString</key>
+    <string>3.0.19</string>
+    <key>CFBundleExecutable</key>
+    <string>Utter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Utter needs microphone access to transcribe your speech into text.</string>
+    <!-- Meeting capture, on the CoreAudio process-tap route (SystemAudioCapture ->
+         ProcessTapCapture). Apple documents this key as "A message that tells people why
+         your app is requesting access to capture system audio on macOS", macOS 14.2+, and
+         it is what makes the "would like access to record your system audio" prompt appear
+         instead of the request being dropped. Without it the tap route is dead and every
+         meeting silently falls back to ScreenCaptureKit and Screen Recording.
+
+         This is a *different* permission from Screen Recording: kTCCServiceAudioCapture,
+         not kTCCServiceScreenCapture, with its own prompt. Screen Recording has no usage
+         description key at all - it is granted in System Settings - which is why only one
+         line appears here for two capture routes. -->
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Utter records the audio of a meeting so it can transcribe what the other participants say into a note. Audio is transcribed on this Mac and never saved.</string>
+    <!-- No NSSpeechRecognitionUsageDescription: Utter does not use Apple's Speech
+         framework (whisper runs locally), so advertising that capability would be
+         a usage string for a permission the app never requests. -->
+    <key>LSMinimumSystemVersion</key>
+    <string>13.3</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- Launch as a menu-bar app, with no Dock icon and no menu bar.
+
+         Without this the app starts .regular and shows a Dock icon for the few frames
+         before applicationDidFinishLaunching flips it to .accessory — visible on every
+         launch, and wrong for anyone who has "Show in Dock" switched off. LSUIElement
+         only sets the *initial* policy: setActivationPolicy(.regular) at runtime still
+         adds the icon when the preference asks for it. -->
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
