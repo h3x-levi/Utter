@@ -37,6 +37,9 @@ struct VersionEntry: Identifiable {
 /// and is gone; `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "3.0.20", version: "3.0.20", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
         VersionEntry(id: "3.0.19", version: "3.0.19", date: "August 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),

@@ -6,7 +6,7 @@
 	<dict>
 		<key>Resources/AppIcon.icns</key>
 		<data>
-		ZujQPgHgb9ZjyxByASOESa6QeVk=
+		0h/4zsNyGKqHaTgbjiLxoXEsayI=
 		</data>
 		<key>Resources/Companions/dog/alert.png</key>
 		<data>
@@ -570,11 +570,11 @@
 		</data>
 		<key>Resources/MenuBarIcon/menubar-icon.png</key>
 		<data>
-		DVnUuan2Wn2zgGGn7jRWvnOHUgo=
+		EZJr6NGbUluQGfZITyoKO+nP9A0=
 		</data>
 		<key>Resources/MenuBarIcon/menubar-icon@2x.png</key>
 		<data>
-		7zT3ReWA7sF5aGE+I6cXQghEU9s=
+		XBHms4ayvmCDnUHyYUW9G74xRSU=
 		</data>
 		<key>Resources/Models/ggml-small.en-q5_1.bin</key>
 		<data>
@@ -628,7 +628,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			uxNsNwmoYoryHAQGNtJoZikGciW9MjtheR0NGrWIteI=
+			XTeNXt79M8V325I8XLADux5GXp7EwvNQr9EK6ocT+sg=
 			</data>
 		</dict>
 		<key>Resources/Companions/dog/alert.png</key>
@@ -1615,14 +1615,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			4+tR6PQqxW+J1d4uRMYCxcxdkXs/ydP1RnvNT4IonpI=
+			ibxirOPJOGL2VUul0ZkGUq9/QhIlDODL7dBJOyKiqR4=
 			</data>
 		</dict>
 		<key>Resources/MenuBarIcon/menubar-icon@2x.png</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			IVH5kByPYwJO6vZerbWSAoJ4X1FIyakE/KDbpMB++CQ=
+			8Pebb3/j3qbZBH3O6Y1MT10//ojY9O5vUbMCFX6yicI=
 			</data>
 		</dict>
 		<key>Resources/Models/ggml-small.en-q5_1.bin</key>
