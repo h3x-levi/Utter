@@ -1,0 +1,84 @@
+// swift-tools-version: 5.9
+import PackageDescription
+
+// Naming: everything is **Utter**, inside and out.
+//
+// The app has been renamed twice: `AWSFlow` while it was an internal tool, then `Lumen`,
+// now `Utter`. The package, the executable, the bundle identifier and the log subsystem
+// are all `Utter` / `utter.dictation.app`; `scripts/build-app.sh` derives the executable
+// name and `CFBundleExecutable` from one variable so the bundle cannot point at a
+// binary that is not there.
+//
+// **Four old-name literals survive on purpose and must not be swept up.** Both old names
+// appear twice: in `AppDirectory.legacyNames` (`Sources/UtterKit/Model/AppDirectory.swift`),
+// which migrates `Application Support/Lumen` and `.../AWSFlow` into `Utter`, and in the
+// permission-reset step of `build-app.sh`, which backs those folders up before a fresh-install
+// test. They are the on-disk names of real folders and the only thing that finds an upgrading
+// user's notes. `legacyNames` is ordered newest-first and a future rename adds to the FRONT —
+// appending would migrate the oldest data and abandon the rest.
+let package = Package(
+    name: "Utter",
+    // 13.3 is the floor set by the prebuilt whisper.cpp xcframework.
+    platforms: [.macOS("13.3")],
+    dependencies: [
+        // Swift Testing.
+        //
+        // Declared as a dependency rather than taken from the toolchain because this
+        // machine has only the Command Line Tools, which ship neither `XCTest` nor a
+        // built-in `Testing` module — both fail with "no such module". The package
+        // build works on exactly this setup, which is what matters: the tests have to
+        // run here, not only under a full Xcode.
+        //
+        // The compiler notes that Swift 6 bundles Testing and that this dependency is
+        // therefore deprecated. Once Xcode is installed, drop this line and the
+        // `.product` entry below; the test sources need no change either way.
+        //
+        // `exact:`, not `from:`. This was `from: "0.10.0"`, and the open upper bound moved on
+        // its own: clearing `.build/workspace-state.json` while bumping whisper re-resolved it
+        // and it jumped 0.10.0 -> 0.99.0 in a build nobody asked to change. The suite happened
+        // to pass, which is the problem — a test dependency that can silently change version
+        // means a green run proves less than it looks like it does. Pinned to the version the
+        // 316 tests are known to pass on; bump it deliberately or not at all.
+        .package(url: "https://github.com/swiftlang/swift-testing.git", exact: "0.99.0"),
+    ],
+    targets: [
+        // Prebuilt whisper.cpp (Metal + Core ML enabled, minOS 13.3).
+        // Pinned by checksum so a tampered or swapped archive fails the build.
+        .binaryTarget(
+            name: "WhisperFramework",
+            url: "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-v1.9.2-xcframework.zip",
+            checksum: "af74fed13ea7f2d5ca2a39d9f58ec177713fafd7cab63aef4e27b79f3ceca80b"
+        ),
+
+        // The whole app, as a library.
+        //
+        // Everything lives here so that it can be tested: SwiftPM cannot attach a test
+        // target to an executable target, so while the app *was* a single executable
+        // target, none of it was reachable from a test — `import XCTest` fails to
+        // resolve and `@testable import` has no module to enter. Verified on this
+        // machine before restructuring.
+        .target(
+            name: "UtterKit",
+            dependencies: ["WhisperFramework"],
+            path: "Sources/UtterKit",
+            // Documentation, not a compilable source or a runtime resource.
+            exclude: ["README.md"]
+        ),
+
+        // The executable: a two-line shim that calls `UtterApp.main()`.
+        .executableTarget(
+            name: "Utter",
+            dependencies: ["UtterKit"],
+            path: "Sources/Utter"
+        ),
+
+        .testTarget(
+            name: "UtterKitTests",
+            dependencies: [
+                "UtterKit",
+                .product(name: "Testing", package: "swift-testing"),
+            ],
+            path: "Tests/UtterKitTests"
+        ),
+    ]
+)

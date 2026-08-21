@@ -1,0 +1,137 @@
+Utter
+Copyright 2026 Akshay Mondal
+
+This product includes software developed by third parties, listed below.
+
+Utter itself is licensed under the Apache License, Version 2.0. See the LICENSE
+file. The components below keep their own licences, which are reproduced here in
+full.
+
+The distinction that matters in this file is which side of the line a component
+falls on. Two components are copied into Utter.app and are therefore
+redistributed to anyone who installs it, so their licence terms travel with the
+app and their notices have to be carried. Everything else is a tool used on the
+build machine and never leaves it.
+
+
+===============================================================================
+SHIPPED INSIDE Utter.app
+===============================================================================
+
+These are placed in the application bundle by scripts/build-app.sh and are
+present in every installed copy and every DMG.
+
+
+1. whisper.cpp - version 1.9.2
+   https://github.com/ggml-org/whisper.cpp
+   Licence: MIT
+   Copyright (c) 2023-2026 The ggml authors
+
+   Consumed as the prebuilt macOS xcframework
+   `whisper-v1.9.2-xcframework.zip`, declared as a `binaryTarget` and pinned by
+   SHA-256 checksum in Package.swift. scripts/build-app.sh copies
+   `whisper.framework` out of the resolved artefact into
+   `Utter.app/Contents/Frameworks/`.
+
+   The upstream release archive contains no licence file of its own, so nothing
+   supplies this notice implicitly. MIT requires the copyright notice and
+   permission notice in "all copies or substantial portions of the Software";
+   shipping the framework inside the app is such a copy. This file is how that
+   obligation is met.
+
+
+2. Whisper speech recognition model weights
+   https://github.com/openai/whisper
+   Licence: MIT
+   Copyright (c) 2022 OpenAI
+
+   `ggml-small.en-q5_1.bin` is bundled at
+   `Utter.app/Contents/Resources/Models/` so that transcription works offline on
+   first launch with no download step. The larger tiers Utter offers in
+   Settings are the same weights at a different size; they are downloaded by the
+   user on request and are not part of the bundle.
+
+
+3. ggml / GGUF conversions of the Whisper weights
+   https://huggingface.co/ggerganov/whisper.cpp
+   Repository licence tag: mit
+
+   The bundled `.bin` file is not OpenAI's original checkpoint. It is a
+   quantized ggml conversion of it, and the conversion published in the
+   repository above is the one Utter ships and the one it downloads from. The
+   credit is owed to that conversion work as well as to the original weights.
+
+
+-------------------------------------------------------------------------------
+MIT License
+-------------------------------------------------------------------------------
+
+The three components above are all MIT licensed, so the text is reproduced once
+here and applies to each of them under its own copyright line as stated above.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+===============================================================================
+USED ONLY TO BUILD OR TEST UTTER - NOT REDISTRIBUTED
+===============================================================================
+
+Nothing in this section is copied into Utter.app. These are developer
+dependencies, and an installed copy of Utter contains no part of them.
+
+
+4. Swift Testing - version 0.99.0
+   https://github.com/swiftlang/swift-testing
+   Licence: Apache License 2.0 with the Runtime Library Exception
+   Copyright (c) 2023 Apple Inc. and the Swift project authors
+
+   TEST-ONLY. It is a dependency of the `UtterKitTests` target and of nothing
+   else, so it is linked into the test binary and never into the app. See
+   Package.swift, where it appears only under `.testTarget`. It is declared as a
+   package dependency rather than taken from the toolchain because a
+   Command-Line-Tools-only machine ships neither XCTest nor a built-in Testing
+   module.
+
+   Its Runtime Library Exception reads:
+
+     As an exception, if you use this Software to compile your source code and
+     portions of this Software are embedded into the binary product as a result,
+     you may redistribute such product without providing attribution as would
+     otherwise be required by Sections 4(a), 4(b) and 4(d) of the License.
+
+   The exception is noted for completeness rather than relied on: no part of
+   Swift Testing is embedded in Utter.app in the first place.
+
+   The full Apache License 2.0 text is in this repository's LICENSE file, which
+   is the same licence Utter itself uses.
+
+
+5. Pillow
+   https://python-pillow.github.io/
+   Licence: MIT-CMU
+
+   BUILD-TIME ONLY. Pillow is imported by the asset-generation scripts under
+   scripts/ and tools/mochi/ - the app icon, the menu-bar template image, the
+   DMG installer background, and the companion sprite packs. Those scripts run
+   on the build machine and write PNG files; the PNGs are shipped, Pillow is
+   not. See requirements.txt.
+
+   Utter contains no Python. A machine that only wants to run the app never
+   installs Pillow, and a machine building from source needs it only when the
+   generated art is missing or out of date.

@@ -1,0 +1,30 @@
+{
+  "name": "Panda",
+  "author": "from individually generated poses",
+  "animation": {
+    "resting": {
+      "frames": 8,
+      "fps": 8
+    },
+    "alert": {
+      "frames": 8,
+      "fps": 10
+    },
+    "thinking": {
+      "frames": 8,
+      "fps": 8
+    },
+    "delighted": {
+      "frames": 8,
+      "fps": 12
+    },
+    "startled": {
+      "frames": 8,
+      "fps": 12
+    },
+    "sleepy": {
+      "frames": 8,
+      "fps": 5
+    }
+  }
+}
