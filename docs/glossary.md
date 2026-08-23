@@ -12,7 +12,7 @@ three names for one thing.
 | **the note card** | What the pill becomes while dictating into a note: 292×124, destination, live words, elapsed, meter. Not "popup", "box", or "rectangle". | `NoteCaptureBox` → rename to `NoteCard` |
 | **the hands-free button** | The record ring the pill reveals on hover, and the stop square it becomes while latched. | `HandsFreeRevealButton` |
 | **the companion** | The animated character. Its own window, its own saved position. Never "the pet" or "the mascot". | `CompanionWindow` |
-| **a character** | One companion design — Panda, Golden Dog, Mochi (Cream), Mochi (Midnight). | `SpritePack` |
+| **a character** | One companion design — Panda, Golden Dog, Pixel Cat (Ginger), Pixel Cat (Gray). | `SpritePack` |
 | **a pack** | The folder of art that supplies a character. | `SpritePack`, `Companions/<id>/` |
 | **a pose** | One drawn state of a character: `resting`, `alert`, `thinking`, `delighted`, `startled`, `sleepy`. | `CompanionMood`, `CompanionPose` |
 

@@ -136,14 +136,13 @@ class UserData: ObservableObject {
     /// off, which is a different bargain — so silencing one should not silence the other.
     @Published var companionSounds: Bool = true
 
-    /// The pack selected on a fresh install: `mochi-midnight`, one of the folders
-    /// `scripts/build-app.sh` copies from `Companions/` into the bundle's Resources.
+    /// The character selected on a fresh install. The pixel cat is drawn in code, so it is
+    /// available in both app bundles and plain `swift run` development builds.
     ///
     /// A bundled pack rather than "whichever is installed first", so a new user gets a
-    /// known character. Only a default, though: resolution falls back to another pack
-    /// when this one is absent, which is the case for a plain `swift build` binary —
-    /// it has no bundle, so it has no bundled packs.
-    static let defaultCompanionPack = "mochi-midnight"
+    /// known character. Only a default, though: resolution still falls back to another
+    /// available character if a stored selection no longer exists.
+    static let defaultCompanionPack = "pixel-cat-gray"
 
     /// The prefix this value used to carry when it named a sprite pack rather than one
     /// of the four code-drawn characters that used to ship alongside them.

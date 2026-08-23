@@ -252,28 +252,60 @@ private struct ContentGlass<S: InsettableShape>: ViewModifier {
                 .overlay(shape.strokeBorder(Line.strong, lineWidth: Line.width))
         } else {
             content
-                // The themed surface at partial opacity over a blur: the theme
-                // stays visible (Ember still reads as Ember) while the canvas
-                // shows through enough to feel like one continuous material.
-                // A warm wash over the material, not the material alone.
+                // **An opaque themed fill, NOT a live `.regularMaterial`, and that is a bug fix.**
                 //
-                // `.regularMaterial` is a neutral system grey: measured, the tiles
-                // came out (236,234,235) — blue above green, i.e. *cool*, sitting
-                // inside a warm cream parent, and only one unit away from the
-                // sidebar so the nesting hierarchy read backwards. The themed
-                // surface at a higher opacity pulls them warm and lifts them clear
-                // of both the sidebar and the card behind them.
-                .background(shape.fill(.regularMaterial))
-                .background(shape.fill(Surface.raised.opacity(Veil.nestedSurface(isDark: isDark))))
+                // A material tile re-samples the window's `.behindWindow` backdrop every frame.
+                // When a scrollbar-thumb drag exposes a large region of the history at once, the
+                // material cannot re-sample in time and paints SwiftUI Material's blank near-white
+                // state — the "page goes white on the side scroller" the user reported. The mouse
+                // wheel exposes a thin strip per tick, so the same cost degrades to *lag* rather
+                // than white — which is exactly the two-way split they described. The content plane
+                // behind these tiles is itself an `NSVisualEffectView`, and this file already quotes
+                // the HIG remedy (line ~180): do not put a material over a material.
+                //
+                // Nearly no visual change, measured: `Veil.nestedSurface` was already 0.86 opaque
+                // in light, so the material showed through ~14% and the tile rendered ≈ this same
+                // `Surface.raised`. Dark loses a little translucency (nested was 0.62) and reads as
+                // a more solidly themed card, which sits better in the hierarchy anyway. What it
+                // costs is a per-frame backdrop sample and the white blank; what it keeps is the
+                // themed colour and the rim.
+                .background(shape.fill(Surface.raised))
                 .overlay(shape.strokeBorder(rim, lineWidth: Line.width))
+                // Light mode gets a cast shadow; dark mode does not.
+                //
+                // In dark mode a raised card separates by being *lighter* than the canvas, and a
+                // shadow under it adds nothing a darker surround can show. In light mode there is
+                // no headroom to be lighter with — `Surface.raised` for the Paper theme is already
+                // (1.0, 0.988, 0.965), so the card cannot out-brighten its own canvas, which is
+                // exactly why it measured 1.117:1 against it and read as flat. Depth in light mode
+                // therefore has to come from the two cues a physical raised object actually gives:
+                // a defined edge (`rim`, below) and a shadow. This is the shadow.
+                .shadow(
+                    color: isDark ? .clear : .black.opacity(0.10),
+                    radius: 3, x: 0, y: 1
+                )
         }
     }
 
+    /// The card's edge, and the direction it runs is **per appearance** — not one gradient with
+    /// two opacities.
+    ///
+    /// This was a white gradient in both appearances, and in light mode that is a white line on a
+    /// near-white card: measured against `Surface.raised`, white at 60% comes out at **1.015:1** for
+    /// Paper and **1.022:1** for Linen. 1.015:1 is not a subtle edge, it is no edge — which is the
+    /// "so much whitewashed, no depth" report. The same gradient measures ~1.55:1 in all four dark
+    /// themes, so it was tuned in dark mode and never checked in light.
+    ///
+    /// A raised object in light surroundings does not outline itself in white; it is bounded by the
+    /// shadow it occludes. So light mode strokes the warm dark hairline the rest of the app already
+    /// uses, and runs it *stronger at the bottom* where a raised edge sits in its own shadow:
+    /// **1.40:1 top → 1.71:1 bottom** against the card. Dark mode keeps the top-lit white rim it
+    /// always had, because there the card is the bright thing.
     private var rim: LinearGradient {
         LinearGradient(
             colors: isDark
                 ? [.white.opacity(0.14), .white.opacity(0.03)]
-                : [.white.opacity(0.60), .white.opacity(0.14)],
+                : [Line.hairlineInk.opacity(0.17), Line.hairlineInk.opacity(0.26)],
             startPoint: .top,
             endPoint: .bottom
         )

@@ -1,57 +1,5 @@
 import SwiftUI
 
-// MARK: - Privacy content pieces
-//
-// `struct PrivacyView` used to live here: a full Privacy screen with five
-// `PolicyCard`s and the app's only Reset Utter button. It had **no callers**.
-// `SettingsGroup.privacy` routes to `PrivacySettingsContent`
-// (`SettingsWindowView.detail`), so every one of those cards
-// was unreachable — and, worse than dead prose, `clearAllData()` was unreachable
-// too. The user could not reset the app, while the copy in this file told them a
-// button below would do it.
-//
-// So the view is gone and its contents are not: `PrivacySettingsContent` composes
-// `PolicyCard` and `DataResetSection` from here, one card per row to suit the
-// settings detail column. Deleting the file outright would have deleted the reset
-// itself, which is the opposite of the fix.
-//
-// The `BentoRow(columns: 2)` pairing the old view used went with it. That was a
-// deliberate arrangement for the main window's ~840pt content card; the settings
-// detail column is roughly half of it.
-
-/// A group of plain statements about what the app does with the user's data.
-///
-/// Bullet glyphs are `Image(systemName:)` at a raw point size on purpose — a symbol's
-/// size is a glyph metric rather than a step on the type scale, which is how
-/// `BentoTile` and `EmptyStateView` in `DesignSystem/` size theirs. `Ink.tertiary` is
-/// correct for it under `Ink.tertiary`'s own rule: decorative glyphs, never text the
-/// user must read. The statements themselves are `.callout`.
-struct PolicyCard: View {
-    let icon: String
-    let title: String
-    let items: [String]
-
-    var body: some View {
-        BentoTile(title: title, systemImage: icon) {
-            VStack(alignment: .leading, spacing: Space.x2) {
-                ForEach(items, id: \.self) { item in
-                    HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Ink.tertiary)
-                            // The tick is a bullet. Reading "checkmark" before every
-                            // one of eighteen statements is worse than reading none.
-                            .accessibilityHidden(true)
-                        Text(item)
-                            .typo(.callout)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Reset
 
 /// Erase everything Utter has saved, behind a confirmation.

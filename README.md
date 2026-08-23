@@ -94,7 +94,7 @@ Then, to compile and run the tests:
 
 ```sh
 swift build            # or: swift build -c release
-swift test             # 404 test functions across 38 files
+swift test             # 431 test functions across 42 files
 ```
 
 To produce an installable `Utter.app` and a DMG:
@@ -162,7 +162,7 @@ detail, including what a paid account would change.
 ## Companion packs
 
 The companion's art is data, not code. Four packs ship inside the app — `dog`,
-`panda`, `mochi-cream` and `mochi-midnight`, which is the default on a fresh
+`panda`, `pixel-cat-orange` and `pixel-cat-gray`, which is the default on a fresh
 install — and you add your own by dropping a folder into:
 
 ```
@@ -257,7 +257,7 @@ still loading.
 Body frames are downsampled at load to a cap derived from the character size you
 have chosen, while `eyes.png` is read at full size, and the size comparison happens
 after that downsampling. So keep the whole pack's canvas small: the two pixel-art
-packs that ship use a 32×32 canvas, and with larger art the two sizes may never
+packs that ship use a 64×64 canvas, and with larger art the two sizes may never
 agree.
 
 ### Limits and one gotcha
@@ -272,8 +272,11 @@ agree.
   change it. Use the Rescan button in Settings.
 
 The scripts under `scripts/` (`build_pack.py`, `animate_pack.py`, `dechecker.py`)
-are what the shipped packs were generated with, if you would rather derive a pack
-from source art than hand-assemble one.
+are what the shipped photo packs were generated with, if you would rather derive a
+pack from source art than hand-assemble one. The two pixel packs have no source art
+to derive from — they are drawn from primitives by
+`tools/newcat/generate_cat.py`, which also carries a `--verify` mode that checks the
+art without writing it.
 
 ## Status and known limitations
 
@@ -315,7 +318,7 @@ is given up on so the meeting keeps moving.
 ```
 Sources/UtterKit/     the whole app, as a library so it can be tested
 Sources/Utter/        a two-line executable shim
-Tests/UtterKitTests/  404 test functions, swift-testing
+Tests/UtterKitTests/  431 test functions, swift-testing
 Companions/           the sprite packs that ship
 scripts/              build script and asset generators
 tools/                standalone pack-authoring tools

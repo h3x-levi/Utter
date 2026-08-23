@@ -63,16 +63,39 @@ import SwiftUI
 //     double up with a system line on macOS 26. It is kept for the paths that have no glass, and
 //     it is load-bearing there: see its own note.
 //
-// What AppKit does *not* supply and this file still does: the row selection and hover treatment
-// (`SettingsGroupRow`, `SidebarLift`). These panes host SwiftUI buttons, not an `NSTableView`, so
-// no system selection arrives — and the white lift still composites correctly on top of the
-// glass, because the SwiftUI content is a *subview* of `NSContainerConcentricGlassEffectView`
-// (measured: `sidebarHostIsDescendant = true`), so it can only add light.
+// Selection and hover are the system's too, as of this pass. The column was a `VStack` of
+// `Button`s (`SettingsGroupRow`) carrying a hand-drawn white wash; it is now `List(selection:)`
+// under `.listStyle(.sidebar)` — an `NSTableView` — which supplies the hover fill, the selection
+// fill, arrow-key navigation and outline-row accessibility that a stack of buttons cannot.
+//
+// This is the swap `SidebarLift`'s note in FlowMainView.swift asked for and declined to make
+// blind: "Worth doing as its own change, with the screen in front of someone." Both columns took
+// it in the same pass — the main window's sidebar is a `List` too now, and `SidebarLift` and
+// `SidebarRow` are deleted, so nothing in the package computes a sidebar row's fill any more.
+//
+// The trade that note described was that it would give up a *measured* invariant for one only a
+// screen can check, and half of that turned out to be worth nothing: `SidebarLiftTests` passed
+// while the reported bug shipped. It proved the lifts were **ordered** — `B + k(1-B)` is monotonic
+// in k, so `0 < hover < selected` held over every backdrop — and light-mode hover was invisible
+// anyway, because over a ~230/255 sidebar there are only ~25 units of headroom above the backdrop
+// and 0.35 of that sits under the perceptual threshold. Ordering is not contrast, and a test that
+// checks the arithmetic of a hand-painted wash cannot tell you whether anyone can see it. It has
+// been replaced by `Tests/UtterKitTests/SidebarNavigationTests.swift`, which pins what code can
+// actually decide: tag uniqueness, `primary == allCases`, every `item.icon` resolving as a real SF
+// Symbol. What the system row's rendered contrast comes to, in both appearances over macOS 26
+// glass, still has to be checked by looking at a screen — the difference is that the OS corrects
+// it, rather than another hand-tuned opacity here.
+//
+// Two numbers the table above records for this column are therefore **no longer measured**: the
+// "SETTINGS" label's y=74 was the hand-tuned `Space.x2` under the 58pt inset, and rows were
+// `Layout.sidebarRowHeight` tall. A `List` positions its own section headers and sizes its own
+// rows. Both want re-measuring on a screen; neither is load-bearing beyond the two columns
+// reading as one design, which is the thing to check there.
 //
 // **The detail pane is still not glass**, and that is not an omission: it is the content layer,
 // and GlassSurface.swift's opening note quotes the HIG's instruction not to put Liquid Glass
 // behind content. Group headers stay small uppercase tracked labels ("SETTINGS", "ABOUT") — the
-// reference design's signature label style.
+// reference design's signature label style, now carried by real `Section` headers.
 
 // MARK: - Selection
 
@@ -106,11 +129,7 @@ final class SettingsSelection: ObservableObject {
 /// the detail pane beside it is prose and cards. That is the test GlassSurface.swift states, and
 /// this passes it on both halves. What changed is who draws the material: AppKit, not this file.
 ///
-/// The column no longer sets its own width either. 152pt is expressed to AppKit as the split
-/// item's `minimumThickness`/`maximumThickness` in `showSettingsWindow`, so there is one owner of
-/// that number and it is the one the system lays out from; this fills whatever thickness it is
-/// given. Measured: the thickness held at exactly 152 and `isCollapsed` stayed false at 720x500,
-/// 620x420 and 400x300 — below the window's own minimum.
+/// AppKit owns the width, collapse behavior, divider, selection, and keyboard navigation.
 struct SettingsSidebar: View {
     @ObservedObject private var selection = SettingsSelection.shared
     /// Observed rather than read, and load-bearing: the design tokens are computed properties, so
@@ -118,9 +137,10 @@ struct SettingsSidebar: View {
     /// `preferredColorScheme` alone restyles SwiftUI's own controls and does not re-read a token.
     @ObservedObject private var theme = ThemeManager.shared
     @ObservedObject private var motion = MotionPreference.shared
-    @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    // No `@Environment(\.colorScheme)` / `isDark` here any more. They existed to feed
+    // `SidebarLift`, which the `List` replaced; nothing else in this pane resolves per appearance,
+    // and the two modifiers below are what carry the theme down.
 
     /// The two modifiers applied per pane rather than by wrapping both in `ThemedRoot`, following
     /// `FlowSidebar`/`FlowContent` and `ThemedRoot`'s own note: "each pane observes the manager
@@ -133,7 +153,6 @@ struct SettingsSidebar: View {
     var body: some View {
         column
             .preferredColorScheme(theme.current.colorScheme)
-            .tint(Tint.accent)
     }
 
     /// No background on any path, and that is deliberate on all three.
@@ -151,55 +170,50 @@ struct SettingsSidebar: View {
     /// supply a translucent material below macOS 26 and to adapt under Reduce Transparency. If it
     /// does, this column gains a material it did not have on those paths — closer to the macOS 26
     /// look, not further from it — and `paneDivider` still separates the panes either way.
+    ///
+    /// `.scrollContentBackground(.hidden)` is the one thing the `List` needs to keep that promise.
+    /// `.listStyle(.sidebar)` paints a sidebar material of its own, and drawing that *inside* the
+    /// split item's Liquid Glass is the glass-on-glass the HIG warns against — two materials
+    /// sampling each other rather than the window. Hidden, the rows composite straight onto
+    /// AppKit's glass, exactly as the buttons did. Whether hiding the scroll background also
+    /// suppresses every part of the `.sidebar` style's own fill is **not verifiable from here** —
+    /// it needs the window on a screen in both appearances.
     private var column: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // `Space.x2`, not the old `Layout.toolbarBand + Space.x3` (42pt of hand-tuned
-            // clearance). AppKit hands this pane a 58pt top safe-area inset, so this is only the
-            // gap below the band: measured, the label lands at window y=74 with the close button
-            // ending at y=33 — the same 74 as the main window's wordmark, which is the point,
-            // since the two columns are meant to read as one design.
-            Text("SETTINGS").typo(.microLabel)
-                .padding(.horizontal, Space.x3)
-                .padding(.top, Space.x2)
-                .padding(.bottom, Space.x2)
-
-            // No `GlassCluster` around either group.
+            // No `GlassCluster` around the list.
             //
             // A `GlassEffectContainer` batches sibling `glassEffect` views into one render pass,
-            // and there is not one glass view left in this subtree — `SettingsGroupRow.background`
-            // is a plain fill in every branch (`Color.white.opacity(...)`, `Color.clear`) and the
-            // glass is now the system's, outside this tree entirely. A container here would group
-            // nothing while claiming a batching win, and nesting one inside the system's sidebar
-            // glass would be the glass-on-glass the HIG warns against. `FlowSidebar.navRows`
-            // records the same for the same reason.
-            VStack(spacing: 2) {
-                ForEach(SettingsGroup.settingsGroup) { item in
-                    SettingsGroupRow(group: item, isSelected: selection.group == item) {
-                        select(item)
-                    }
+            // and there is not one glass view in this subtree — the rows' fills are the table
+            // view's, and the glass is the system's, outside this tree entirely. A container here
+            // would group nothing while claiming a batching win, and nesting one inside the
+            // system's sidebar glass would be glass on glass. `FlowSidebar.navRows` records the
+            // same for the same reason.
+            //
+            // The two `Section`s replace two hand-padded `Text` labels above two `VStack`s. They
+            // keep `.typo(.microLabel)` — the reference design's uppercase tracked label, which is
+            // a *font* decision the list style has no opinion about — while the list supplies the
+            // header's inset, its spacing to the rows and, on macOS, its collapse affordance.
+            List(selection: animatedSelection) {
+                Section("Settings") {
+                    ForEach(SettingsGroup.settingsGroup, content: row)
+                }
+
+                Section("About") {
+                    ForEach(SettingsGroup.aboutGroup, content: row)
                 }
             }
-            .padding(.horizontal, Space.x2)
-
-            Text("ABOUT").typo(.microLabel)
-                .padding(.horizontal, Space.x3)
-                .padding(.top, Space.x5)
-                .padding(.bottom, Space.x2)
-
-            VStack(spacing: 2) {
-                ForEach(SettingsGroup.aboutGroup) { item in
-                    SettingsGroupRow(group: item, isSelected: selection.group == item) {
-                        select(item)
-                    }
-                }
-            }
-            .padding(.horizontal, Space.x2)
-
-            Spacer(minLength: Space.x4)
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, Layout.sidebarRowHeight)
 
             // Version pinned to the base, like the reference. The HIG warns against putting
             // anything critical at the bottom of a sidebar, which is exactly why the version
             // string lives here.
+            //
+            // Outside the `List`, not a last row in it: it is not selectable, and a row in a
+            // single-selection table that cannot be selected is a row the arrow keys walk into and
+            // stop dead on. Keeping it a sibling below the list also keeps it pinned when the list
+            // scrolls, which is what the old `Spacer(minLength:)` was doing by hand.
             Text("Utter \(ConfigManager.shared.appVersion)")
                 .typo(.caption, ink: Ink.tertiary)
                 .padding(.horizontal, Space.x3)
@@ -208,6 +222,34 @@ struct SettingsSidebar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
         .overlay(alignment: .trailing) { paneDivider }
+    }
+
+    /// One row. `Label`, not an `HStack` of a sized `Image` and a weighted `Text`: the sidebar list
+    /// style already sizes the glyph, aligns the two columns, and steps the label's weight and ink
+    /// on selection — which is why `isSelected` is gone from here. `.tag` is what makes the row
+    /// selectable at all; `ForEach` over `Identifiable` matches on `id` (a `String` here), and the
+    /// selection is a `SettingsGroup`, so without the tag nothing would ever select.
+    private func row(_ item: SettingsGroup) -> some View {
+        Label(item.title, systemImage: item.icon)
+            .tag(item)
+    }
+
+    /// The selection binding, with the crossfade kept.
+    ///
+    /// `List` writes its selection directly, outside any transaction, and `SettingsDetail` fades
+    /// panes with `.transition(.opacity)` keyed on `.id(group)` — so a bare `$selection.group`
+    /// would turn that crossfade into a hard cut. The write is wrapped here instead, in the same
+    /// curve the deleted `select(_:)` used, so the animation survives the control swap and still
+    /// collapses under Reduce Motion.
+    private var animatedSelection: Binding<SettingsGroup> {
+        Binding(
+            get: { selection.group },
+            set: { newValue in
+                withAnimation(motion.reduceMotion ? Motion.reduced : Motion.listChange) {
+                    selection.group = newValue
+                }
+            }
+        )
     }
 
     /// The rule between the two panes — on the paths where this column draws no glass.
@@ -246,12 +288,6 @@ struct SettingsSidebar: View {
             Rectangle()
                 .fill(Line.hairline)
                 .frame(width: 1)
-        }
-    }
-
-    private func select(_ item: SettingsGroup) {
-        withAnimation(motion.reduceMotion ? Motion.reduced : Motion.listChange) {
-            selection.group = item
         }
     }
 }
@@ -303,26 +339,23 @@ struct SettingsDetail: View {
     private var group: SettingsGroup { selection.group }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.x5) {
-                Text(group.title).typo(.heading)
+        VStack(alignment: .leading, spacing: Space.x3) {
+            Text(group.title)
+                .font(.title2.weight(.semibold))
+                .padding(.horizontal, Space.pageInset)
+                .padding(.top, Space.pageInset)
 
-                Group {
-                    switch group {
-                    case .general: GeneralSettingsContent()
-                    case .speech: SpeechSettingsContent()
-                    case .appearance: AppearanceSettingsContent()
-                    case .companion: CompanionSettingsContent()
-                    case .privacy: PrivacySettingsContent()
-                    case .diagnostics: DiagnosticsSettingsContent()
-                    case .about: AboutContent()
-                    }
+            if group.ownsScrolling {
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                ScrollView {
+                    detail
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Space.pageInset)
+                        .padding(.bottom, Space.pageInset)
                 }
-                .transition(.opacity)
-                .id(group)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Space.x6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // `.ignoresSafeArea()` on the surface, not on the scroll view: the plane has to reach the
@@ -332,7 +365,23 @@ struct SettingsDetail: View {
         // arrangement as `FlowContent`.
         .background(windowBackground.ignoresSafeArea())
         .preferredColorScheme(theme.current.colorScheme)
-        .tint(Tint.accent)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        Group {
+            switch group {
+            case .general: GeneralSettingsContent()
+            case .speech: SpeechSettingsContent()
+            case .appearance: AppearanceSettingsContent()
+            case .companion: CompanionSettingsContent()
+            case .privacy: PrivacySettingsContent()
+            case .diagnostics: DiagnosticsSettingsContent()
+            case .about: AboutContent()
+            }
+        }
+        .transition(.opacity)
+        .id(group)
     }
 
     /// The window's content plane — and, on macOS 26, the surface the group list's glass refracts.
@@ -351,21 +400,8 @@ struct SettingsDetail: View {
     /// estimated at ~4.1:1 when the material tracks a black wallpaper) is unchanged by this pass:
     /// the rows already sat on this exact stack, and putting a larger frame under the same glass
     /// does not thin the veil.
-    @ViewBuilder
     private var windowBackground: some View {
-        if motion.reduceTransparency {
-            Surface.canvas
-        } else {
-            ZStack {
-                WindowBacking(material: .underWindowBackground).ignoresSafeArea()
-                // `Veil.windowShell`, which is a real value change from what this window once ran:
-                // 0.50/0.38 becomes 0.55/0.42. Settings is a window that opens *from* the main
-                // window, and it was running the thinner veil — so it read cooler and more
-                // transparent than its own parent, with no reason anyone could have named. It is
-                // the same role, so it takes the same number.
-                Surface.canvas.opacity(Veil.windowShell(isDark: isDark)).ignoresSafeArea()
-            }
-        }
+        Color(nsColor: .windowBackgroundColor)
     }
 }
 
@@ -414,82 +450,22 @@ enum SettingsGroup: String, CaseIterable, Identifiable, Hashable {
         case .about: return "info.circle"
         }
     }
-}
 
-/// One row in the settings group list. Same lifted-glass selection as the main
-/// window's sidebar, so the two read as one design.
-private struct SettingsGroupRow: View {
-    let group: SettingsGroup
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovering = false
-    @ObservedObject private var motion = MotionPreference.shared
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isDark: Bool { colorScheme == .dark }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Space.x2) {
-                Image(systemName: group.icon)
-                    .font(.system(size: 12))
-                    .frame(width: 16)
-                    .foregroundStyle(isSelected ? Ink.primary : Ink.secondary)
-                Text(group.title)
-                    .typo(.callout, ink: isSelected ? Ink.primary : Ink.secondary)
-                    .fontWeight(isSelected ? .medium : .regular)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Space.x2)
-            .frame(height: Layout.sidebarRowHeight)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background)
-            .contentShape(Radius.rect(Radius.control))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) {
-                isHovering = hovering
-            }
-        }
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
-    }
-
-    /// Unchanged by the move to a system sidebar, and that survives the glass rather than being
-    /// assumed to: the SwiftUI content is a *subview* of `NSContainerConcentricGlassEffectView`
-    /// (measured), so a white wash still composites on top of the material and can only add light.
-    @ViewBuilder
-    private var background: some View {
-        let shape = Radius.rect(Radius.control)
-        if isSelected {
-            // Flat fill, not glass: this row holds a label, and text on glass
-            // loses subpixel smoothing (measured ~3x softer glyph edges).
-            shape.fill(Color.white.opacity(SidebarLift.selected(isDark: isDark)))
-                .overlay(shape.strokeBorder(Line.hairline, lineWidth: Line.width))
-        } else if isHovering {
-            // `SidebarLift.hover`, not `Surface.fillHover`.
-            //
-            // Two things are being fixed with one token. The bug: `Surface.fillHover` is
-            // `Color.primary.opacity(0.06)`, and `Color.primary` inverts per appearance,
-            // so in a light theme it is a *dark* wash. Hovering this row therefore
-            // darkened it while selecting it jumped to a 75% white wash — the pointer
-            // reversed direction on one control, running clear → darker → much lighter.
-            // `SidebarRow` in FlowMainView.swift records the same diagnosis for its own
-            // selected branch, where `Color.primary` measured the light-mode pill 108
-            // units *darker* than the sidebar.
-            //
-            // The drift: these two rows are the same control in two windows, and
-            // `SidebarLift`'s own note asks this file to call it rather than keep a
-            // second copy of the numbers. Hand-writing the fix here would have shipped
-            // 0.40 light hover against the main window's 0.35 — a new disagreement in
-            // place of the old one.
-            shape.fill(Color.white.opacity(SidebarLift.hover(isDark: isDark)))
-        } else {
-            Color.clear
+    var ownsScrolling: Bool {
+        switch self {
+        case .general, .speech, .appearance, .companion, .privacy, .about:
+            return true
+        case .diagnostics:
+            return false
         }
     }
 }
+
+// `SettingsGroupRow` is gone: a `Button` per row, a `@State isHovering` + `.onHover` pair, a
+// hand-written `.accessibilityAddTraits(.isSelected)`, and a three-branch `background` painting
+// `SidebarLift`'s white washes. `List(selection:)` supplies every one of those, so what is left of
+// a row is `Label(_:systemImage:).tag(_:)` in `SettingsSidebar.row`. The one thing it did that had
+// to be re-supplied by hand is the selection *animation* — see `animatedSelection`.
 
 // MARK: - Appearance
 
@@ -498,15 +474,23 @@ private struct SettingsGroupRow: View {
 /// It was previously one card among many in a long General pane; with a real
 /// settings window there is room to give appearance its own group, which is also
 /// where a user looks for it.
+///
+/// `Form` + `Section` rather than `SettingsCard`, with the description moved from above the grid to
+/// the section's `footer`. That is the order System Settings uses — control first, explanation
+/// under it, in the footer's own secondary ink — and it is the reason the caption no longer sets
+/// `.typo(.caption)` or `fixedSize`: a grouped form's footer already carries that size, that ink
+/// and multi-line wrapping. The string itself is unchanged.
 struct AppearanceSettingsContent: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x5) {
-            SettingsCard(title: "Theme") {
-                Text("Sets the appearance and accent colour, across the window and the pill.")
-                    .typo(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
+        Form {
+            Section {
                 ThemeSwatchGrid()
+            } header: {
+                Text("Theme")
+            } footer: {
+                Text("Sets the appearance and accent colour, across the window and the pill.")
             }
         }
+        .settingsForm()
     }
 }

@@ -16,9 +16,6 @@ struct BentoTile<Content: View>: View {
     var accessory: AnyView?
     @ViewBuilder let content: () -> Content
 
-    @ObservedObject private var motion = MotionPreference.shared
-    @Environment(\.colorScheme) private var colorScheme
-
     init(
         title: String? = nil,
         systemImage: String? = nil,
@@ -33,58 +30,100 @@ struct BentoTile<Content: View>: View {
         self.content = content
     }
 
+    /// `GroupBox`, not a hand-drawn surface.
+    ///
+    /// This tile used to paint itself: `.padding(Space.cardPadding)` then
+    /// `.glassSurface(.content, in: Radius.rect(Radius.panel), …)`, which is a fill
+    /// plus a rim gradient plus a light-mode shadow. That is what the light themes
+    /// were reporting as washed out, and the numbers were already recorded one file
+    /// over in `ContentGlass`: on Paper the tile fill is (1.0, 0.988, 0.965) against
+    /// a near-white canvas — **1.117:1**, below the 3:1 floor for a non-text
+    /// boundary — and the rim it leans on measures **1.015:1** (Paper) / **1.022:1**
+    /// (Linen) in light mode against ~1.55:1 in dark. A tile edge you cannot see is
+    /// a tile edge that isn't there.
+    ///
+    /// `GroupBox` is macOS's own container for exactly this ("a set of related
+    /// controls with an optional title"), and `DefaultGroupBoxStyle` draws the
+    /// system's grouped background — which is appearance-aware by construction, so
+    /// the light-mode contrast stops being something this file has to hit by hand.
+    /// It also supplies the content inset, so `Space.cardPadding` goes away rather
+    /// than double-padding inside the system's own.
+    ///
+    /// Available macOS 10.15, well under the 13.3 floor — no availability branch.
+    /// Deliberately *not* given `.backgroundStyle(Surface.raised)`: that is the
+    /// 1.117:1 fill above, so handing it to the system container would reinstate the
+    /// exact defect this replaces. The theme still reaches the tile through the
+    /// themed window plane the material samples.
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x3) {
-            if title != nil || accessory != nil {
-                HStack(spacing: Space.x2) {
-                    if let systemImage {
-                        // `Ink.secondary` by default, not the accent.
-                        //
-                        // This one line was the app's largest single source of
-                        // accent colour: every tile with an icon and no explicit
-                        // tint got one, which came to 6 glyphs in Style, 5 in
-                        // Privacy, 4 in Home and 78 in What's New. The HIG is
-                        // direct about that — "reserve it for elements that truly
-                        // benefit from emphasis", and "refrain from adding color
-                        // to the background of multiple controls" — and once the
-                        // accent is on every section header it has stopped meaning
-                        // anything, so the tiles that use it to *report* something
-                        // (a granted permission, an active state) no longer read
-                        // as different.
-                        //
-                        // It also failed contrast. A 13pt glyph is non-text
-                        // content, so its floor is 3:1; the accent on a tile
-                        // measured **2.95:1** on Paper. This is the same defect
-                        // that was already fixed one call site at a time — see the
-                        // export button in `HomeView`, which measured **1.39:1**
-                        // inheriting this default and had to opt out by hand.
-                        // Fixing the default retires the opt-outs.
-                        Image(systemName: systemImage)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(tint ?? Ink.secondary)
-                            .frame(width: 18)
-                    }
-                    if let title {
-                        Text(title).typo(.sectionHeader, ink: Ink.primary)
-                    }
-                    Spacer(minLength: 0)
-                    if let accessory { accessory }
-                }
+        tile
+            // Kept from the hand-drawn version. `BentoRow` puts three of these in an
+            // HStack and equal widths are the entire premise of the grid (see its
+            // note on the 1646-vs-1679pt misalignment), so the tile has to take the
+            // width it is offered instead of sizing to its longest line. GroupBox
+            // does not stretch on its own.
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Header or no header. Two `GroupBox` initialisers rather than one with an
+    /// `EmptyView` label, because an empty label still occupies a row in the
+    /// group's stack and `BentoTile(title: nil)` is a real call (`BentoStat` here,
+    /// `ReadyPanel` in Home, `NotesView`) — those tiles would gain a blank strip.
+    @ViewBuilder
+    private var tile: some View {
+        if title != nil || accessory != nil {
+            GroupBox {
+                tileContent
+            } label: {
+                header
             }
+        } else {
+            GroupBox { tileContent }
+        }
+    }
+
+    private var tileContent: some View {
+        VStack(alignment: .leading, spacing: Space.x3) {
             content()
         }
-        .padding(Space.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // `.content`, not `.chrome`: a tile holds text, and the HIG is explicit
-        // that Liquid Glass does not belong in the content layer. This is a
-        // standard translucent material wearing the same rim, so the tile reads
-        // as part of the glass family without refracting the words on it.
-        .glassSurface(
-            .content,
-            in: Radius.rect(Radius.panel),
-            reduceTransparency: motion.reduceTransparency,
-            isDark: colorScheme == .dark
-        )
+    }
+
+    private var header: some View {
+        HStack(spacing: Space.x2) {
+            if let systemImage {
+                // `Ink.secondary` by default, not the accent.
+                //
+                // This one line was the app's largest single source of accent
+                // colour: every tile with an icon and no explicit tint got one,
+                // which came to 6 glyphs in Style, 5 in Privacy, 4 in Home and 78
+                // in What's New. The HIG is direct about that — "reserve it for
+                // elements that truly benefit from emphasis", and "refrain from
+                // adding color to the background of multiple controls" — and once
+                // the accent is on every section header it has stopped meaning
+                // anything, so the tiles that use it to *report* something (a
+                // granted permission, an active state) no longer read as different.
+                //
+                // It also failed contrast. A 13pt glyph is non-text content, so its
+                // floor is 3:1; the accent on a tile measured **2.95:1** on Paper.
+                // This is the same defect that was already fixed one call site at a
+                // time — see the export button in `HomeView`, which measured
+                // **1.39:1** inheriting this default and had to opt out by hand.
+                // Fixing the default retires the opt-outs.
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(tint ?? Ink.secondary)
+                    .frame(width: 18)
+            }
+            if let title {
+                Text(title).typo(.sectionHeader, ink: Ink.primary)
+            }
+            Spacer(minLength: 0)
+            if let accessory { accessory }
+        }
+        // The label sits in `GroupBox`'s own stack, which offers it the group's
+        // width; without this the header would shrink to its text and the accessory
+        // (search field, export menu, "New command") would stop being right-aligned.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -183,4 +222,3 @@ struct BentoRow<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-

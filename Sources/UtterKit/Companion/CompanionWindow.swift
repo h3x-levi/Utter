@@ -151,6 +151,34 @@ final class CompanionWindow: NSPanel {
         ))
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = .clear
+        // **This line stops a hard crash, and it was the only hosting view in the app missing it.**
+        //
+        // Symptom: `SIGTRAP`, an `NSException` from
+        // `-[NSWindow _postWindowNeedsUpdateConstraints]`, thrown *inside* the window's own
+        // constraint pass. Read the reported stack from the bottom up and it is a re-entrancy
+        // loop, not a layout mistake:
+        //
+        //   NSWindow.updateConstraintsIfNeeded          ← the display cycle's constraint pass
+        //     → NSHostingView.updateConstraints
+        //       → updateWindowContentSizeExtremaIfNecessary   ← runs ONLY when sizingOptions
+        //         → minSize → _sizeThatFits                     asks for min/max propagation
+        //           → ViewGraph.invalidateTransform → graphDidChange
+        //             → NSHostingView.setNeedsUpdate
+        //               → NSView.setNeedsUpdateConstraints  ← invalidating mid-pass → throw
+        //
+        // `sizingOptions` defaults to `.standardBounds`, so the hosting view volunteers to
+        // publish its SwiftUI content's min and max size to the window. Satisfying that means
+        // *evaluating the view graph* during the constraint pass — and this particular graph is
+        // a `TimelineView` driving a live character at 30 Hz, so an evaluation almost always
+        // dirties it. Dirtying it calls `setNeedsUpdateConstraints` while AppKit is walking the
+        // constraint tree, which AppKit refuses. The animation is what makes the companion the
+        // one window that trips it; every other window's content is static between events.
+        //
+        // `[]` publishes nothing, so `updateWindowContentSizeExtremaIfNecessary` never runs and
+        // the graph is never evaluated from inside the pass. It is also correct on its own
+        // terms — this panel's size comes from `CompanionSize`, never from its content, exactly
+        // as `PillWindow` and `MeetingOfferPanel` document at their matching lines.
+        if #available(macOS 13.0, *) { hosting.sizingOptions = [] }
         // Only the character takes the mouse. The panel is 2.1x its size so a hop or a
         // stroll is not clipped, and all of that margin used to swallow clicks meant for
         // whatever is behind it.
@@ -236,13 +264,12 @@ final class CompanionWindow: NSPanel {
         // screen, which is the collision this whole design exists to make impossible.
         guard !cardHasTheCharacter else { return }
 
-        // No pack, no companion. Every character is a sprite pack now, so with none
-        // installed there is nothing to draw — and showing the panel anyway would leave
-        // a large invisible click target on the desktop and a toggle that looks broken.
-        // Declining is the honest behaviour; the Companion settings pane says why in
-        // words (see `CompanionSettingsContent`), which is the only place the user can
-        // act on it.
-        guard SpritePackStore.shared.pack(matching: UserData.shared.companionCharacter) != nil
+        // Nothing to draw, no companion. Showing the panel anyway would leave a large
+        // invisible click target on the desktop and a toggle that looks broken. Declining is
+        // the honest behaviour; the Companion settings pane says why in words (see
+        // `CompanionSettingsContent`), which is the only place the user can act on it.
+        let selection = UserData.shared.companionCharacter
+        guard SpritePackStore.shared.pack(matching: selection) != nil
         else {
             if !reportedMissingPack {
                 reportedMissingPack = true
@@ -1012,24 +1039,29 @@ private struct CompanionContainerView: View {
                             onDragEnded()
                         }
                 )
-                .overlay(alignment: .top) { quipBubble }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The bubble hangs off the **panel**, not off the character, and that is load-bearing
+        // rather than tidiness. As an overlay on the character it was proposed the character's
+        // own width — 84pt at `huge` — so "Water break" wrapped to two lines inside a 178pt
+        // panel with 141pt of text column going spare. Rendered and measured; see
+        // /tmp/companion-bubble-huge-light.png before the move. The panel is also the frame the
+        // bubble's geometry is expressed in, and it does not move when the character strolls or
+        // hops, so a hop cannot carry the bubble with it.
+        .overlay(alignment: .top) { quipBubble }
         // The companion lives in its own panel, so it needs the theme applied
         // directly — same reason `PillContainerView` does it, and deliberately
         // with no `.id(theme.id)`: keying on the theme rebuilds the subtree, which
         // restarts every material fade and reads as a pulse.
         .preferredColorScheme(themeManager.current.colorScheme)
-        .tint(Tint.accent)
     }
 
     /// The character, or nothing at all.
     ///
-    /// Nothing is the only honest rendering when no pack resolves: there is no
-    /// code-drawn character left to fall back to. `CompanionWindow.show()` refuses to
-    /// put the panel on screen in that case, so this branch is reachable only when a
-    /// pack disappears while the companion is already up — for the moment between the
-    /// folder going away and the next scan.
+    /// Nothing is the only honest rendering when no pack resolves. `CompanionWindow.show()`
+    /// refuses to put the panel on screen in that case, so this branch is reachable only when
+    /// a pack disappears while the companion is already up — for the moment between the folder
+    /// going away and the next scan.
     ///
     /// `userData.companionCharacter` is read here, rather than only inside
     /// `pack(matching:)`, so this body actually observes the preference and redraws when
@@ -1047,61 +1079,77 @@ private struct CompanionContainerView: View {
         }
     }
 
-    /// A small bubble for real messages only — currently the error reason from a
-    /// failed dictation. Never chatter: a pet that invents things to say turns
-    /// into noise beside a text field.
-    /// What the bubble is showing, or empty for no bubble.
-    private var bubbleText: String {
-        if !behaviour.quip.isEmpty { return behaviour.quip }
-        if let countdown = behaviour.pomodoroCountdown { return countdown }
-        return behaviour.pinnedMessage
+    /// What the bubble is showing, or nil for no bubble.
+    ///
+    /// Real messages only — never chatter: a pet that invents things to say turns into noise
+    /// beside a text field. Four kinds, and each is derived from *state*, never from reading
+    /// the words:
+    ///
+    ///   * **failure** — `mood == .startled` alongside a quip. `apply(pillState: .error)` is
+    ///     the only thing that sets that mood, and it sets it in the same call that sets the
+    ///     quip, so it is an honest discriminator. Reminders arrive through `announce`, which
+    ///     sets `.stretch`/`.delighted` instead.
+    ///   * **reminder** — any other quip.
+    ///   * **timer** — the pomodoro countdown while a block is running.
+    ///   * **pinned** — the note the user pinned, which never expires.
+    ///
+    /// `CompanionBehaviour` does not publish *which* `CompanionReminder` fired — `announce`
+    /// collapses it to a line — so stretch, water, a block boundary and a timed message all
+    /// share the one bell glyph. Publishing the case alongside the line is a one-property
+    /// change in that file and is what would give each its own symbol.
+    ///
+    /// The pinned note now survives as the **detail** line underneath a countdown or a
+    /// reminder. It used to be dropped outright by the priority order, which meant a note the
+    /// user deliberately pinned was invisible for the whole of a focus block — up to 25
+    /// minutes.
+    private var notice: CompanionNotice? {
+        let pinned = behaviour.pinnedMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = pinned.isEmpty ? nil : pinned
+
+        if !behaviour.quip.isEmpty {
+            let kind: CompanionNoticeKind = behaviour.mood == .startled ? .failure : .reminder
+            return CompanionNotice(kind: kind, line: behaviour.quip, detail: detail)
+        }
+        if let countdown = behaviour.pomodoroCountdown {
+            return CompanionNotice(kind: .timer, line: countdown, detail: detail)
+        }
+        if let pinnedLine = detail {
+            return CompanionNotice(kind: .pinned, line: pinnedLine, detail: nil)
+        }
+        return nil
     }
 
     @ViewBuilder
     private var quipBubble: some View {
-        // One bubble, three sources, in priority order: something the character just said,
-        // then the pomodoro countdown while a block is running, then a pinned note.
-        //
-        // One bubble rather than three overlays because there is no room for a second: the
-        // panel is exactly the character's reach envelope, and this bubble had to be moved
-        // once already after being clipped (see the note below). A transient line wins
-        // because it is the only one that expires — the countdown and the note are still
-        // there a second later.
-        if !bubbleText.isEmpty {
+        if let notice {
             let geometry = CompanionGeometry(userData.companionSize)
-            // Wrap to several lines rather than truncate one to a fragment.
-            //
-            // This was `.lineLimit(1)` bounded to the panel width, so a real error was cut to
-            // a middle slice: measured at 12pt caption plus the 2x8pt padding, "Recording a
-            // meeting — stop it first" is 211pt against a ~111pt panel, "Couldn't start the
-            // microphone" 186pt. A borderless panel clips, so the bubble cannot be wider than
-            // the panel — the fix is to grow *down* over the character, wrapping to as many
-            // lines as fit (`quipBubbleMaxLines`), which at every size on the ladder is enough
-            // for those real strings. `minimumScaleFactor` shrinks a lone over-wide word (a
-            // real case only at the smallest size) rather than truncating it. No tooltip: the
-            // bubble is `allowsHitTesting(false)` so it never eats a click meant for the cat,
-            // and a tooltip needs the hover it therefore cannot receive — the wrap is the fix.
-            Text(bubbleText)
-                .typo(.caption)
-                .multilineTextAlignment(.center)
-                .lineLimit(geometry.quipBubbleMaxLines(lineHeight: 16, verticalPadding: 6))
-                .truncationMode(.tail)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: geometry.panelSide - Space.x3 * 2)
-                .padding(.horizontal, Space.x2)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule().fill(Surface.raised)
-                        .overlay(Capsule().strokeBorder(Line.hairline, lineWidth: Line.width))
-                )
-                // Anchored one character's height above centre; a multi-line bubble grows
-                // downward from there over the character, which is bounded by the panel's
-                // bottom edge — the ceiling `quipBubbleMaxLines` is computed against. The
-                // overlay is laid out in the character's un-offset frame, so a hop does not
-                // carry the bubble any higher.
-                .offset(y: -characterSize * 0.5)
+            CompanionBubbleView(notice: notice, geometry: geometry)
+                // The bubble sizes to its content, bounded by what the panel has spare.
+                .frame(maxWidth: geometry.bubbleMaxWidth,
+                       maxHeight: geometry.bubbleMaxHeight,
+                       alignment: .bottom)
+                // A slot exactly `bubbleHeadroom` tall at the panel's top edge, with the bubble
+                // **bottom-aligned** in it. Since the panel is square and the character is
+                // centred in it, the slot's bottom edge is precisely the top of the character's
+                // resting frame — so the bubble grows *upward, away from the character*. That is
+                // the whole change: it used to be anchored a full `characterSize` above centre
+                // and grow *downward over the cat*, bounded only by the panel's far edge. At
+                // 84pt a three-line bubble reached 5pt into the character's frame and a
+                // four-line one 24pt.
+                //
+                // What this cannot fix, and it is a property of the panel rather than of the
+                // bubble: `bubbleHeadroom` (20.7-47.0pt across the ladder) is almost exactly the
+                // character's own motion budget above its resting top
+                // (`characterMotionAboveRest`, 19.7-45.9pt). The margin is 1.07-1.17pt. So at
+                // the peak of a hop the character still rises into this strip, and no placement
+                // inside this panel avoids it.
+                .frame(height: geometry.bubbleHeadroom, alignment: .bottom)
                 .transition(.opacity)
+                // A fade either way, and the same curve under Reduce Motion: the bubble's only
+                // movement is its own height changing as the text changes, which is layout, not
+                // travel. Read unobserved, exactly as the hover lift above does.
+                .animation(MotionPreference.shared.reduceMotion ? Motion.reduced : Motion.layout,
+                           value: notice)
                 // The bubble is a label, so it must not eat clicks meant for the
                 // character underneath it.
                 .allowsHitTesting(false)

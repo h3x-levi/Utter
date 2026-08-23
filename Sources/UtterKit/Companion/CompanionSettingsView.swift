@@ -14,9 +14,9 @@ struct CompanionSettingsContent: View {
     @ObservedObject private var readiness = ReadinessMonitor.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x5) {
-            SettingsCard(title: "Desktop companion") {
-                GlassToggle(
+        Form {
+            Section("Desktop companion") {
+                SettingsToggle(
                     title: "Show a companion",
                     description: "A small character that reacts while you dictate and wanders when idle. It appears beside the pill and can then be dragged anywhere.",
                     isOn: $userData.companionEnabled
@@ -24,8 +24,6 @@ struct CompanionSettingsContent: View {
                 .onChange(of: userData.companionEnabled) { _ in userData.save() }
 
                 if userData.companionEnabled {
-                    HairlineDivider()
-
                     VStack(alignment: .leading, spacing: Space.x3) {
                         Text("Size").typo(.body)
                         // A segmented control rather than a slider: `CompanionSize` is a
@@ -37,6 +35,14 @@ struct CompanionSettingsContent: View {
                             label: { $0.label },
                             selection: $userData.companionSize
                         )
+                        // The control is a real `Picker(.segmented)` now, and a Picker with
+                        // `labelsHidden()` names its segments but not the group — so VoiceOver
+                        // announced four sizes with nothing saying what they sized. The "Size"
+                        // Text above is the label visually but not semantically; this makes it
+                        // both. `.contain` rather than `.combine` so each segment stays its own
+                        // element and remains individually selectable.
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Size")
                         .onChange(of: userData.companionSize) { _ in
                             userData.save()
                             // The frames are decoded at the size they are drawn at, so a
@@ -50,7 +56,6 @@ struct CompanionSettingsContent: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    HairlineDivider()
                     Text("Drag the character to move it. It has a place on screen of its own, so moving it leaves the pill where it is. Right-click it to put it back beside the pill or to hide it.")
                         .typo(.caption)
                         .fixedSize(horizontal: false, vertical: true)
@@ -58,8 +63,8 @@ struct CompanionSettingsContent: View {
             }
 
             if userData.companionEnabled {
-                SettingsCard(title: "Reactions") {
-                    GlassToggle(
+                Section("Reactions") {
+                    SettingsToggle(
                         title: "React to typing and the cursor",
                         // Says exactly what is observed and what is not, because "reacts to
                         // your typing" is the kind of sentence a reasonable person reads as
@@ -71,15 +76,13 @@ struct CompanionSettingsContent: View {
                     .onChange(of: userData.companionPetBehaviours) { _ in userData.save() }
 
                     if userData.companionPetBehaviours {
-                        HairlineDivider()
-                        GlassToggle(
+                        SettingsToggle(
                             title: "Cat sounds",
                             description: "A meow when you tap it, a purr while you stroke it, and a chirp when a reminder lands. Separate from the dictation sounds, so you can have one without the other.",
                             isOn: $userData.companionSounds
                         )
                         .onChange(of: userData.companionSounds) { _ in userData.save() }
 
-                        HairlineDivider()
                         VStack(alignment: .leading, spacing: Space.x2) {
                             Text("Your name").typo(.body)
                             GlassTextField(
@@ -92,7 +95,6 @@ struct CompanionSettingsContent: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        HairlineDivider()
                         // Live, not a static sentence. Without Accessibility the global key
                         // monitor is COMPLETELY inert — macOS returns a valid token and then
                         // never calls the handler — so the character silently never kneads and
@@ -128,7 +130,7 @@ struct CompanionSettingsContent: View {
                     }
                 }
 
-                SettingsCard(title: "Reminders") {
+                Section("Reminders") {
                     // Minutes, as steppers rather than free text: these are intervals with a
                     // sensible range, and a text field invites "0.5" and "45 min" which then
                     // have to be parsed and rejected.
@@ -138,14 +140,12 @@ struct CompanionSettingsContent: View {
                         minutes: $userData.companionStretchMinutes,
                         onChange: { userData.save() }
                     )
-                    HairlineDivider()
                     MinuteRow(
                         title: "Drink water",
                         description: "A short reminder and a meow.",
                         minutes: $userData.companionWaterMinutes,
                         onChange: { userData.save() }
                     )
-                    HairlineDivider()
                     MinuteRow(
                         title: "Pomodoro — focus",
                         description: "Set to 0 to turn the timer off. The character tells you at each switch.",
@@ -161,7 +161,6 @@ struct CompanionSettingsContent: View {
                         )
                     }
 
-                    HairlineDivider()
                     VStack(alignment: .leading, spacing: Space.x2) {
                         Text("Pinned note").typo(.body)
                         GlassTextField(
@@ -176,7 +175,7 @@ struct CompanionSettingsContent: View {
                 }
             }
 
-            SettingsCard(title: "Character") {
+            Section("Character") {
                 if packStore.packs.isEmpty {
                     // Not an empty picker. Every character is a sprite pack now, so
                     // with none installed the companion cannot be shown at all,
@@ -201,7 +200,7 @@ struct CompanionSettingsContent: View {
                 }
             }
 
-            SettingsCard(title: "Your own characters") {
+            Section("Your own characters") {
                 VStack(alignment: .leading, spacing: Space.x3) {
                     Text("Utter ships its own characters. To use art of your own, put a folder of animated PNGs in the Companions folder and it appears above.")
                         .typo(.caption)
@@ -253,6 +252,7 @@ struct CompanionSettingsContent: View {
                 }
             }
         }
+        .settingsForm()
         .onAppear {
             packStore.reload()
             // Correct a selection that names a pack which is not there — a folder the
@@ -260,7 +260,9 @@ struct CompanionSettingsContent: View {
             // Done here as well as when the companion first appears, because this pane
             // can be opened before the companion has ever been switched on, and the
             // grid would otherwise show nothing selected.
-            userData.resolveCompanionCharacter(against: packStore.packs.map(\.id))
+            userData.resolveCompanionCharacter(
+                against: packStore.packs.map(\.id)
+            )
             // Without this the Accessibility row above shows whatever `axGranted` last
             // happened to be — which at launch is `false` — so a user who HAS granted it
             // would be told their typing reactions are broken. Polling is reference-counted,
@@ -399,7 +401,16 @@ private struct CompanionCharacterGrid: View {
                 ) {
                     select(pack.id)
                 } preview: {
-                    if let frame = pack.frames(for: .resting).first {
+                    if let style = CodePixelCatStyle(rawValue: pack.id) {
+                        CodePixelCatView(
+                            style: style,
+                            mood: .resting,
+                            pose: .neutral,
+                            size: 32,
+                            elapsed: 1
+                        )
+                        .frame(width: 34, height: 34)
+                    } else if let frame = pack.frames(for: .resting).first {
                         Image(nsImage: frame)
                             .resizable()
                             .interpolation(.high)
@@ -437,13 +448,26 @@ private struct CharacterTile<Preview: View>: View {
         Button(action: action) {
             VStack(spacing: Space.x2) {
                 ZStack {
-                    Radius.rect(Radius.control).fill(Surface.fillSubtle)
+                    // Hover moves the FILL, not the stroke.
+                    //
+                    // It used to move only the stroke, hairline -> strong. Measured on this
+                    // app's light canvases that is a 1.070:1 change on a 1pt border: hairline
+                    // is `hairlineInk` at 13% (a dark brown) and strong is `Color.primary` at
+                    // 14% (black), so the hover signal was a 0.01 alpha difference on one pixel
+                    // of edge. Imperceptible, and in both appearances — the tile simply did not
+                    // respond to the pointer.
+                    //
+                    // fillSubtle -> fillHover measures 1.147:1 and covers the whole 52pt well,
+                    // so the signal is large-area rather than hairline-thin. The stroke still
+                    // firms up as a second, quieter cue.
+                    Radius.rect(Radius.control)
+                        .fill(isHovering ? Surface.fillHover : Surface.fillSubtle)
                     preview()
                 }
                 .frame(height: 52)
                 .overlay(
                     Radius.rect(Radius.control).strokeBorder(
-                        isSelected ? Tint.accent : (isHovering ? Line.strong : Line.hairline),
+                        isSelected ? Tint.accent : (isHovering ? Line.hairlineHover : Line.hairline),
                         lineWidth: isSelected ? 2 : Line.width
                     )
                 )

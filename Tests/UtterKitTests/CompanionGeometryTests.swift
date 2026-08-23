@@ -249,33 +249,45 @@ struct CompanionGeometryTests {
     }
 
     // MARK: The speech bubble
+    //
+    // The two tests that were here pinned the *old* contract — "the bubble wraps to at least
+    // two lines, bounded by the panel's far edge" and "the longest real error fits at the
+    // default size" — and both were satisfied only because the bubble was allowed to grow
+    // downward over the character. That was the reported defect. The bubble is now bounded by
+    // the strip above the character's resting frame, so the honest contract is the one below:
+    // it never reaches the resting character, and the price is a line budget the panel dictates.
+    // `CompanionBubbleTests` holds the rest, including which real strings no longer fit.
 
-    @Test("The speech bubble wraps to more than one line and stays inside the panel",
-          arguments: sizes)
-    func bubbleWrapsWithinThePanel(size: CompanionSize) {
-        // A single line is what clipped a long error to a middle fragment. Every allowed
-        // line has to fit inside the panel, which clips — the bubble grows downward over the
-        // character, bounded by the panel's bottom edge.
+    @Test("The bubble never reaches the character at rest, at any size", arguments: sizes)
+    func bubbleClearsTheRestingCharacter(size: CompanionSize) {
         let geometry = CompanionGeometry(size)
-        let lineHeight: CGFloat = 16
-        let padding: CGFloat = 6
-        let lines = geometry.quipBubbleMaxLines(lineHeight: lineHeight, verticalPadding: padding)
-        #expect(lines >= 2, "\(size) allows only \(lines) bubble line(s)")
-        let used = CGFloat(lines) * lineHeight + padding
-        #expect(used <= geometry.panelSide / 2 + geometry.characterSize + 0.001,
-                "\(size): \(lines) lines do not fit the panel")
+        // The strip is measured from the panel's top edge down to the character's resting
+        // frame, so "fits in the strip" *is* "does not touch the character".
+        #expect(geometry.bubbleMaxHeight <= geometry.bubbleHeadroom)
+        #expect(geometry.bubbleHeadroom + geometry.characterSize / 2
+                <= geometry.panelSide / 2 + 0.001)
+
+        let room = CompanionBubble.room(in: geometry)
+        let used = CGFloat(room.lines) * room.step.lineHeight
+            + CGFloat(room.lines - 1) * room.step.lineGap
+            + CompanionBubble.verticalPadding * 2
+        let ceiling = geometry.bubbleMaxHeight
+        #expect(used <= ceiling + 0.001,
+                "\(size): \(room.lines) line(s) at \(room.step.size)pt need \(used)pt, only \(ceiling)pt above the character")
     }
 
-    @Test("The longest real error reason fits the bubble at the default size")
-    func longestErrorFitsAtDefaultSize() {
-        // "Recording a meeting — stop it first" measures ~211pt at the 12pt caption; the text
-        // wraps at the panel width less its breathing room and its capsule padding.
-        let geometry = CompanionGeometry(.medium)
-        let textWidth = geometry.panelSide - Space.x3 * 2
-        let neededLines = Int((211.0 / max(textWidth, 1)).rounded(.up))
-        let allowed = geometry.quipBubbleMaxLines(lineHeight: 16, verticalPadding: 6)
-        #expect(neededLines <= allowed,
-                "needs \(neededLines) lines for the longest error, only \(allowed) fit")
+    @Test("The panel has ~1pt spare beyond the character's own motion, which is why the bubble cannot clear a hop",
+          arguments: sizes)
+    func headroomIsAlmostEntirelyTheMotionBudget(size: CompanionSize) {
+        let geometry = CompanionGeometry(size)
+        let spare = geometry.bubbleHeadroom - geometry.characterMotionAboveRest
+        // Positive — the strip does contain the motion, which is what `clampedY` relies on.
+        #expect(spare > 0)
+        // …and by barely more than a point at every rung, which is the finding: there is no
+        // room in this panel for a bubble that also clears a hop. If a future change to the
+        // panel opens this up, this test is what says so.
+        #expect(spare < 1.5,
+                "\(size): \(spare)pt spare above the character's reach — if this has grown, the bubble could be placed clear of the hop as well as of the rest pose")
     }
 
     // MARK: The ladder itself

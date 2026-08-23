@@ -622,6 +622,9 @@ final class CompanionBehaviour: ObservableObject {
         objectWillChange.send()
 
         clock += tickInterval
+        // Reset the per-tick window-travel accumulator before the act runs, so `measureTravel()`
+        // below sees only what this tick moved.
+        windowTravelThisTick = 0
         // Read the live level once per frame, so the `alert` bounce is driven by the
         // same signal the pill's meter draws.
         inputLevel = levelSource()
@@ -792,8 +795,9 @@ final class CompanionBehaviour: ObservableObject {
             frame.offsetX = lerp(travelFrom.x, travelTo.x, easeInOut(progress))
         case .walk:
             // Ask the window to move the whole panel this tick, and see how far it could.
-            let requested = walkSpeed * CGFloat(tickInterval) * walkDirection
+            let requested = Self.walkSpeed * CGFloat(tickInterval) * walkDirection
             let actual = walkStep(requested)
+            windowTravelThisTick += actual
             // Hit a screen edge: turn around and carry on the other way. If it still cannot
             // move after turning — boxed into a corner, or the window is ordered out during
             // the note-card handover — end the walk rather than flip its facing every tick
@@ -1110,11 +1114,21 @@ final class CompanionBehaviour: ObservableObject {
         // Ambient acts layer on top of the mood, never replace it.
         applyActPose(to: &pose)
 
-        // Tell the renderer which body loop to draw. Only `.walk` asks for the walk cycle;
-        // everything else keeps the mood's own frames. `applyActPose` has already returned
-        // early under Reduce Motion or off duty, where `act` is forced to `.idle`, so this
-        // cannot request a walk animation the character is not actually performing.
-        pose.gait = act == .walk ? .walking : .idle
+        measureTravel()
+
+        // Tell the renderer which body loop to draw, from **measured travel** rather than from
+        // which act is running. See `CompanionPose.travelSpeed` for why: keying this off the act
+        // name was wrong in one direction as `act == .walk` (a stroll slid a seated cat) and wrong
+        // in the other as `act == .walk || act == .stroll` (a stroll ran on the spot inside its own
+        // panel). A speed is right either way.
+        //
+        // `.hop` is excluded explicitly: it translates, but the character is airborne and a stride
+        // mid-flight is worse than folded legs. Its arc carries the motion.
+        pose.travelSpeed = act == .hop ? 0 : travelSpeed
+        // 6 pt/s is about a seventh of a walk and well under a stroll's peak. Below it the
+        // character is fidgeting, not going anywhere, and cycling the legs for that reads as a
+        // treadmill.
+        pose.gait = abs(pose.travelSpeed) >= 6 ? .walking : .idle
 
         if reduceMotion {
             // Hold still: keep expression, drop oscillation. Reduce Motion asks
@@ -1219,10 +1233,60 @@ final class CompanionBehaviour: ObservableObject {
     private var walkDirection: CGFloat = 1
     private var walkStuckTicks = 0
 
+    /// The character's ground position last tick, for measuring how fast it is really moving.
+    ///
+    /// Window movement and in-panel offset are summed, because the two acts that translate the
+    /// character use one each and the renderer cannot tell them apart — nor should it.
+    private var lastGroundX: CGFloat?
+    /// Smoothed travel speed in points per second, signed.
+    ///
+    /// Smoothed because a per-tick difference at 30 Hz is noisy enough to flicker the gait on and
+    /// off at the threshold, and a walk cycle that starts and stops every few frames is worse than
+    /// either state. One-pole, time-constant about 0.15s: fast enough to start the legs on the
+    /// first step, slow enough not to chatter.
+    private var travelSpeed: CGFloat = 0
+    /// Window travel applied this tick by `walkStep`, which the engine cannot otherwise see.
+    private var windowTravelThisTick: CGFloat = 0
+
+    /// Update `travelSpeed` from how far the character actually moved this tick.
+    ///
+    /// The character's ground position is the window's travel plus its in-panel `offsetX`, because
+    /// `.walk` moves the first and `.stroll` the second. Summing them is what makes the gait
+    /// correct for both without the renderer needing to know which act is running.
+    private func measureTravel() {
+        // `offsetX` is absolute within the panel; window travel is a delta. Integrating the delta
+        // into a running total gives one comparable position.
+        groundX += windowTravelThisTick
+        let here = groundX + frame.offsetX
+        defer { lastGroundX = here }
+        guard let previous = lastGroundX else { return }
+        let instant = (here - previous) / CGFloat(tickInterval)
+        // One-pole smoothing, time constant ~0.15s at a 30 Hz tick. A raw per-tick difference
+        // crosses the gait threshold several times a second on a stroll's easing curve, and a
+        // walk cycle that starts and stops every few frames is worse than either state.
+        let alpha = CGFloat(tickInterval) / (0.15 + CGFloat(tickInterval))
+        travelSpeed += (instant - travelSpeed) * alpha
+    }
+
+    /// Integrated window travel, so the character has one continuous ground position.
+    private var groundX: CGFloat = 0
+
     /// Walk pace, in points per second. A calm amble — faster than the in-place stroll's
     /// implied pace, slow enough that the character crossing the desktop reads as a decision
     /// rather than as the window being flung. Over a 2.2-4.6s walk it covers roughly 90-190pt.
-    private let walkSpeed: CGFloat = 42
+    /// Points per second the window travels during a `.walk`.
+    ///
+    /// `static` and non-private because the window's motion note at `CompanionWindow` quotes it.
+    /// It was originally exposed so the code-drawn renderer could derive a stride cadence that
+    /// kept a planted paw from sliding; that renderer is gone and the sprite packs bake their
+    /// own walk frames, so nothing now constrains this constant mechanically.
+    ///
+    /// `nonisolated` because it is an immutable constant and the renderer reads it from a
+    /// nonisolated context. Without it Swift warns — and in Swift 6 mode errors — that a
+    /// main-actor-isolated static cannot be referenced from a nonisolated autoclosure. A `let` of
+    /// a value type has nothing to protect, so the isolation was accidental rather than meant: it
+    /// came free with the enclosing `@MainActor` class the moment this stopped being `private`.
+    nonisolated static let walkSpeed: CGFloat = 42
 
     /// Whether the pill is to the character's right, as of right now.
     ///

@@ -6,6 +6,14 @@ import SwiftUI
 /// (`UserData.scratchpad`) presented as "Notes" — writing a second note
 /// overwrote the first. State now lives in `NoteStore`, so the sidebar rebuilding
 /// this view on navigation no longer risks the text.
+///
+/// The list is a real `List(selection:)` with real `Section` headers, replacing a
+/// `ScrollView` + `LazyVStack` + `GlassSelectableRow`. That one change is what
+/// supplies row hover, the selection fill in the correct appearance, the focus ring,
+/// arrow-key and type-select navigation, and the accessibility table role — the old
+/// list had none of them beyond a hand-drawn hover wash, and `GlassSelectableRow`'s
+/// own doc comment names this exact conversion ("`List(selection:)`/`.listStyle(.inset)`
+/// retires this whole type") as the reason it should not survive.
 struct NotesView: View {
     @ObservedObject private var store = NoteStore.shared
     @State private var searchText = ""
@@ -34,16 +42,17 @@ struct NotesView: View {
     /// the common next move, and losing the rename there would look like the feature
     /// simply did not work.
     @FocusState private var focusedSpeaker: SpeakerRole?
-    /// Whether the notes search field has the caret.
-    ///
-    /// Added for one reason: the field had no focus indication at all. It is not used
-    /// for any behaviour — see `searchField`.
-    @FocusState private var searchFocused: Bool
     /// The action currently running, if any. Gates the buttons so two actions
     /// can't rewrite the same note concurrently.
     @State private var runningAction: NoteAction?
     @State private var actionMessage: String?
     @State private var actionMessageIsError = false
+    /// The note a delete has been *asked for* but not yet confirmed.
+    ///
+    /// Every delete path parks an id here rather than calling `store.delete` directly,
+    /// so there is exactly one place the destructive act can happen and exactly one
+    /// confirmation in front of it. See the `.confirmationDialog` on `body`.
+    @State private var pendingDeleteID: UUID?
 
     /// Meeting capture is owned by the app delegate — it needs the single shared
     /// microphone and transcriber.
@@ -58,11 +67,13 @@ struct NotesView: View {
     private var groups: [NoteGroup] { store.grouped(matching: searchText) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Space.x3) {
+        HSplitView {
             noteList
-                .frame(width: 260)
+                .frame(minWidth: 220, idealWidth: 280, maxWidth: 380,
+                       maxHeight: .infinity, alignment: .top)
             editor
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 420, maxWidth: .infinity,
+                       maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { syncDraft(from: store.selectedNote) }
@@ -93,6 +104,13 @@ struct NotesView: View {
                   latest != draftBody else { return }
             draftBody = latest
         }
+        // Unchanged by the move to `List(selection:)`, and deliberately so: the list's
+        // selection binding *is* `store.selectedNoteID`, so this still fires however the
+        // selection moved — a click, an arrow key, type-select, or `startMeeting`
+        // selecting the note it just created. A `List` can also clear the selection,
+        // which the old rows could not; that resolves safely, because `commitDraft` and
+        // `commitSpeakers` are keyed on `draftNoteID` rather than on the new selection,
+        // so the outgoing note is still written before the editor empties.
         .onChange(of: store.selectedNoteID) { _ in
             commitSpeakers()
             commitDraft()
@@ -105,6 +123,45 @@ struct NotesView: View {
             if focus == nil { commitSpeakers() }
         }
         .onDisappear { commitSpeakers(); commitDraft(); store.writeToDisk() }
+        // Deleting a note is irreversible from the UI. `NoteStore.delete` removes it and
+        // the next *differing* save overwrites the single retained generation at
+        // `notes.previous.json`, so the window in which a mistake is recoverable is
+        // seconds wide and requires a text editor to reach. The previous affordance was a
+        // trash button that faded in under the pointer on row hover, one click from gone.
+        //
+        // A real `.confirmationDialog` is the whole fix: the system supplies the sheet,
+        // the destructive-role button styling, Escape-to-cancel, the default button, and
+        // the VoiceOver announcement. This is not an undo system and does not pretend to
+        // be one — see `deleteWarning`, which says so.
+        .confirmationDialog(
+            "Delete this note?",
+            isPresented: Binding(
+                get: { pendingDeleteID != nil },
+                set: { if !$0 { pendingDeleteID = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeleteID
+        ) { id in
+            Button("Delete Note", role: .destructive) {
+                store.delete(id: id)
+                pendingDeleteID = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteID = nil }
+        } message: { id in
+            Text(deleteWarning(for: id))
+        }
+    }
+
+    /// What the user is actually agreeing to.
+    ///
+    /// Names the note rather than saying "this item": the delete can be started from a
+    /// context menu on a row that is *not* the selected one, so the title is the only
+    /// thing that confirms the right note is about to go. And it states the absence of
+    /// undo plainly instead of the softer "this cannot be undone", because Utter really
+    /// has no undo here and a vague warning invites the user to assume otherwise.
+    private func deleteWarning(for id: UUID) -> String {
+        let title = store.notes.first { $0.id == id }?.displayTitle ?? "This note"
+        return "“\(title)” will be removed. Utter has no undo for a deleted note."
     }
 
     // MARK: - List
@@ -122,7 +179,7 @@ struct NotesView: View {
             )
         ) {
             meetingBar
-            searchField
+            SystemSearchField(text: $searchText, prompt: "Search notes")
 
             if store.notes.isEmpty {
                 EmptyStateView(
@@ -137,39 +194,83 @@ struct NotesView: View {
                     let note = store.create()
                     syncDraft(from: note)
                 }
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
             } else if groups.isEmpty {
                 EmptyStateView(
                     icon: "magnifyingglass",
                     title: "No matches",
                     message: "Nothing here matches “\(searchText)”."
                 )
-                .frame(maxWidth: .infinity, minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: Space.x3) {
-                        ForEach(groups) { group in
-                            VStack(alignment: .leading, spacing: Space.x1) {
-                                Text(group.label)
-                                    .typo(.microLabel, ink: Ink.tertiary)
-                                ForEach(group.notes) { note in
-                                    NoteRow(
-                                        note: note,
-                                        isSelected: note.id == store.selectedNoteID
-                                    ) {
-                                        store.selectedNoteID = note.id
-                                    } onDelete: {
-                                        store.delete(id: note.id)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.vertical, Space.x1)
-                }
-                .frame(minHeight: 200, maxHeight: 460)
+                notesList
             }
         }
+    }
+
+    /// The notes themselves.
+    ///
+    /// `List(selection:)` bound straight to `store.selectedNoteID`. The store's
+    /// published selection *is* the list's selection, so there is no second copy to
+    /// keep in step and no `onSelect` closure to route through.
+    ///
+    /// `.inset`, not `.sidebar`: this list lives *inside* a `BentoTile`, which
+    /// `BentoView.swift` documents as a content-layer surface, and the source-list
+    /// appearance is drawn for the window's own vibrant sidebar — the app already has
+    /// one of those in `FlowMainView`, and a second would read as a nested hierarchy
+    /// that isn't there. `alternatesRowBackgrounds` is left off for the neighbouring
+    /// reason: striping is a data-table treatment and this list is a picker.
+    /// `.scrollContentBackground(.hidden)` stops the list painting its own background
+    /// on top of the tile's material.
+    private var notesList: some View {
+        List(selection: $store.selectedNoteID) {
+            ForEach(groups) { group in
+                Section {
+                    ForEach(group.notes) { note in
+                        NoteRow(note: note)
+                            .tag(note.id)
+                            .contextMenu {
+                                // Where macOS puts a per-row destructive action. It
+                                // names the row it was opened on, not the selection,
+                                // which is the behaviour of every Mac list — and the
+                                // reason `deleteWarning` repeats the title back.
+                                Button("Delete Note", role: .destructive) {
+                                    pendingDeleteID = note.id
+                                }
+                            }
+                    }
+                } header: {
+                    // A real `Section` header. The system supplies the grouping — the
+                    // inset placement, and VoiceOver announcing which group a row is
+                    // in — while `Typo.microLabel` keeps the reference layout's
+                    // small-tracked-caps signature. `NoteStore.dateLabel` already
+                    // uppercases, so the two compose without a `.textCase` override.
+                    Text(group.label).typo(.microLabel, ink: Ink.tertiary)
+                }
+            }
+        }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        // ⌫ on the focused list — the third of the three delete paths a Mac user
+        // expects (context menu, Delete key, an explicit button), and it routes through
+        // the same confirmation as the other two. `onDeleteCommand` is macOS-only and
+        // needs no availability gate at this deployment target.
+        .onDeleteCommand {
+            if let id = store.selectedNoteID { pendingDeleteID = id }
+        }
+        // A floor, not a cap.
+        //
+        // The old `.frame(minHeight: 200, maxHeight: 460)` is why an enlarged window
+        // left this list short with empty tile beneath it. `maxHeight: .infinity` fills
+        // whatever height the parent hands down.
+        //
+        // The floor is not belt-and-braces: `FlowContent` (FlowMainView.swift) still
+        // wraps every screen in a vertical `ScrollView`, which proposes an *unbounded*
+        // height, and a `List` given an unbounded proposal resolves to its ideal — for a
+        // one-note list, very short. Until that wrapper is removed for this screen (it
+        // is in the report, and it is also what stops two scroll views nesting), 320pt
+        // is what keeps the list usable.
+        .frame(minHeight: 320, maxHeight: .infinity)
     }
 
     // MARK: - Meeting capture
@@ -270,65 +371,6 @@ struct NotesView: View {
         }
     }
 
-    /// The notes search field.
-    ///
-    /// **Still hand-rolled, and that is a handoff rather than a decision.**
-    /// `GlassTextField` is the app's field and `HomeView`'s copy of this has now been
-    /// replaced by it — but this one carries a clear button, which the component has
-    /// no parameter for. Adopting it as-is would delete that button, and adding a
-    /// fourth copy of the *well* to keep it is what produced the drift in the first
-    /// place. `GlassTextField` needs a `trailingAccessory` (or an
-    /// `onClear: (() -> Void)?`) variant; it lives in `DesignSystem/GlassControls.swift`,
-    /// which another change owns, so the request is in the report.
-    ///
-    /// What is fixed here and now is the part that was not drift: **there was no focus
-    /// ring**. A keyboard user tabbing into the search field got no indication of it.
-    /// The ring below is `GlassTextField`'s, value for value — `Tint.accent.opacity(0.7)`
-    /// at 1.5pt, animated on `Motion.hoverIn` (`GlassTextField`) — so
-    /// adopting the variant later is a deletion, not a redesign.
-    private var searchField: some View {
-        HStack(spacing: Space.x2) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
-                .foregroundStyle(Ink.secondary)
-            TextField("Search notes", text: $searchText)
-                .textFieldStyle(.plain)
-                .typo(.callout)
-                .focused($searchFocused)
-            if !searchText.isEmpty {
-                // `IconButton`, not `GlassIconButton`.
-                //
-                // `GlassIconButton` is a *chrome* control: since it gained a persistent
-                // `glassEffect(.regular.interactive(), in: Circle())` — the rest state
-                // `.interactive()` needs in order to have anything to modulate — it
-                // draws glass whether or not the pointer is on it. Two things follow
-                // and both are wrong here. It is 28×28 inside a well pinned to 26,
-                // so the disc protrudes a point top and bottom; and it puts glass
-                // *inside* a `Surface.sunken` text field, which is the content layer.
-                // GlassSurface.swift is explicit that glass belongs to chrome and
-                // "no paragraph of text is ever asked to sit on a surface that warps
-                // what's behind it" — a field is that surface.
-                //
-                // `IconButton` is the content-layer equivalent and already the app's
-                // answer: 26×26, so it sits flush in the well, and a plain
-                // `Surface.fillHover` wash on hover instead of a material.
-                IconButton(systemName: "xmark.circle.fill", label: "Clear search") {
-                    searchText = ""
-                }
-            }
-        }
-        .padding(.horizontal, Space.x2)
-        .frame(height: 26)
-        .background(Radius.rect(Radius.field).fill(Surface.sunken))
-        .overlay(
-            Radius.rect(Radius.field).strokeBorder(
-                searchFocused ? Tint.accent.opacity(0.7) : Line.hairline,
-                lineWidth: searchFocused ? 1.5 : Line.width
-            )
-        )
-        .animation(Motion.hoverIn, value: searchFocused)
-    }
-
     // MARK: - Editor
 
     @ViewBuilder
@@ -338,9 +380,6 @@ struct NotesView: View {
                 title: nil,
                 accessory: AnyView(
                     HStack(spacing: Space.x2) {
-                        Text(wordLabel(for: draftBody))
-                            .typo(.caption, ink: Ink.tertiary)
-                            .monospacedDigit()
                         if note.source == .dictated {
                             GlassChip(text: "dictated", systemImage: "mic")
                         }
@@ -353,22 +392,55 @@ struct NotesView: View {
                             exportMarkdown(note)
                         }
                         .disabled(draftBody.isEmpty)
+                        // The explicit, always-visible delete — a document's own
+                        // destructive action, next to its other document actions,
+                        // rather than an icon that materialises on row hover. It is
+                        // enabled for an empty note too: an empty note is exactly the
+                        // one a user most wants to get rid of.
+                        //
+                        // `GlassIconButton` already carries `.help(label)` and
+                        // `.accessibilityLabel(label)`, so all three buttons here have a
+                        // tooltip and a VoiceOver name without a call-site modifier.
+                        GlassIconButton(systemName: "trash", label: "Delete note",
+                                        tint: Tint.danger) {
+                            pendingDeleteID = note.id
+                        }
                     }
                 )
             ) {
+                // `.plain` is the right style *here* and is not a hand-drawn one:
+                // this is the document's own heading, set in the editorial serif, and
+                // no Mac document app puts a bezel around its title. The caret is the
+                // focus indication, which is what a click into a title gives you
+                // anyway. The bezeled `.roundedBorder` fields on this screen are the
+                // *form* fields — the speaker labels below.
                 TextField(note.displayTitle, text: $draftTitle)
                     .textFieldStyle(.plain)
                     .typo(.serifHeading)
                     .onSubmit { commitDraft() }
 
-                Text(dateLine(for: note))
-                    .typo(.caption, ink: Ink.tertiary)
+                metadata(for: note)
 
                 if note.source == .meeting {
-                    speakerBar(for: note)
+                    speakerBar
                 }
 
-                GlassTextEditor(text: $draftBody, minHeight: 360)
+                // Stays `GlassTextEditor`, and that is a decision with a cited reason
+                // rather than an omission: `GlassControls.swift` records that macOS has
+                // no `TextEditorStyle` at this deployment target (`.roundedBorder` is
+                // `@available(macOS, unavailable)`, `.plain` is macOS 14.0+), so a bare
+                // `TextEditor` would draw no bezel and, worse, no focus ring at all.
+                // It already *is* a real `TextEditor`; the well around it is the part
+                // the SDK cannot supply here.
+                //
+                // What changes is that it now grows. `minHeight` drops 360 → 200 and
+                // becomes a floor rather than the editor's actual size, and the outer
+                // flexible frame is what fills an enlarged window: the proposal passes
+                // through the component's own `.frame(minHeight:)` to the `TextEditor`,
+                // so the well grows with the text area instead of the text area
+                // scrolling inside a fixed 360pt well.
+                GlassTextEditor(text: $draftBody, minHeight: 200)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onChange(of: draftBody) { _ in scheduleSync() }
 
                 actionBar(for: note)
@@ -380,9 +452,35 @@ struct NotesView: View {
                     title: "Nothing selected",
                     message: "Pick a note on the left, or press + to start a new one."
                 )
-                .frame(maxWidth: .infinity, minHeight: 300)
+                .frame(maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
             }
         }
+    }
+
+    /// The note's own facts, as real `LabeledContent`.
+    ///
+    /// Two label/value pairs rather than one interpolated sentence ("Edited Jun 21,
+    /// 3:04 PM") and one unlabelled number in the tile header. `LabeledContent` is the
+    /// system control for exactly this, and it earns its place twice: VoiceOver
+    /// announces "Edited, Jun 21, 3:04 PM" as a single labelled item instead of reading
+    /// a fragment, and the word count stops being a bare "142 words" floating beside the
+    /// action buttons where nothing said what was being counted.
+    ///
+    /// `.fixedSize()` on each: `LabeledContent`'s automatic style spreads label and
+    /// value to the full width it is offered, which is right in a `Form` and wrong in a
+    /// metadata row where the two pairs should sit next to each other.
+    private func metadata(for note: Note) -> some View {
+        let dateLabel = note.source == .meeting ? "Meeting" : "Edited"
+        return HStack(spacing: Space.x4) {
+            LabeledContent(dateLabel, value: timestamp(note.modified))
+                .fixedSize()
+            LabeledContent("Words", value: wordCount(draftBody))
+                .fixedSize()
+                .monospacedDigit()
+            Spacer(minLength: 0)
+        }
+        .font(Typo.caption.font)
+        .foregroundStyle(Ink.tertiary)
     }
 
     // MARK: - Speaker labels
@@ -397,14 +495,14 @@ struct NotesView: View {
     /// caption says so rather than leaving the user to discover it from a transcript
     /// that merged two colleagues under one name.
     @ViewBuilder
-    private func speakerBar(for note: Note) -> some View {
+    private var speakerBar: some View {
         VStack(alignment: .leading, spacing: Space.x1) {
             HStack(spacing: Space.x2) {
                 Image(systemName: "person.wave.2")
                     .font(.system(size: 11))
                     .foregroundStyle(Ink.tertiary)
-                speakerField(role: .you, note: note)
-                speakerField(role: .others, note: note)
+                speakerField(role: .you)
+                speakerField(role: .others)
                 Spacer(minLength: 0)
             }
             Text("Utter labels your microphone and the call’s audio separately. It can’t tell two "
@@ -414,40 +512,41 @@ struct NotesView: View {
         }
     }
 
-    /// One label field, styled like the search field so the two read as the same kind
-    /// of control.
+    /// One label field: a `TextField` in the system rounded bezel.
     ///
-    /// This one genuinely cannot be `GlassTextField`: the component owns its focus in a
-    /// `private @FocusState` (`GlassTextField.isFocused`), and this field's focus is *load
-    /// bearing* — `focusedSpeaker` going `nil` is what commits a rename when the user
-    /// clicks away (`onChange(of: focusedSpeaker)`, and see `commitSpeakers`). Handing
-    /// that to a component that keeps its focus private would lose every rename not
-    /// finished with Return. So the ring is drawn here off the focus state that already
-    /// exists, with `GlassTextField`'s own values; the component needs an optional
-    /// external focus binding before this can converge, which is in the report.
-    @ViewBuilder
-    private func speakerField(role: SpeakerRole, note: Note) -> some View {
+    /// `.roundedBorder` replaces a hand-drawn `Surface.sunken` well plus an accent
+    /// focus ring drawn off `focusedSpeaker`. The bezel draws its own focus ring, its
+    /// own pointer response and its own Increase Contrast behaviour, and it samples the
+    /// themed window behind it — none of which a themed rectangle can do. This is the
+    /// light-theme complaint in miniature: the old well and the tile it sat on were
+    /// nearly the same value, so the field read as a faint outline and gave no response
+    /// to anything.
+    ///
+    /// Deliberately *not* `GlassTextField`, though it now renders identically (that
+    /// component is exactly `TextField` + `.roundedBorder`). `GlassTextField` takes no
+    /// external focus binding, and this field's focus is *load bearing* —
+    /// `focusedSpeaker` going `nil` is what commits a rename when the user clicks away
+    /// (`onChange(of: focusedSpeaker)`, and see `commitSpeakers`). `.focused` has to be
+    /// applied to the `TextField` itself; on a wrapper that merely contains one it binds
+    /// nothing, and every rename not finished with Return would be silently lost. The
+    /// component needs an optional focus-binding parameter before this can converge,
+    /// which is in the report.
+    ///
+    /// `.font`, not `.typo(.callout)`: `Typo.callout` carries `Ink.secondary`, and
+    /// dimming editable text inside a native bezel is both wrong for the control and a
+    /// contrast regression. The type scale is the part worth keeping.
+    private func speakerField(role: SpeakerRole) -> some View {
         TextField(
             MeetingSpeakers.default[role],
             text: Binding(get: { draftSpeakers[role] }, set: { draftSpeakers[role] = $0 })
         )
-        .textFieldStyle(.plain)
-        .typo(.callout)
+        .textFieldStyle(.roundedBorder)
+        .font(Typo.callout.font)
         .accessibilityLabel(role == .you ? "Name for your microphone"
                                          : "Name for the call’s audio")
         .focused($focusedSpeaker, equals: role)
         .onSubmit { commitSpeakers() }
         .frame(width: 130)
-        .padding(.horizontal, Space.x2)
-        .frame(height: 24)
-        .background(Radius.rect(Radius.field).fill(Surface.sunken))
-        .overlay(
-            Radius.rect(Radius.field).strokeBorder(
-                focusedSpeaker == role ? Tint.accent.opacity(0.7) : Line.hairline,
-                lineWidth: focusedSpeaker == role ? 1.5 : Line.width
-            )
-        )
-        .animation(Motion.hoverIn, value: focusedSpeaker)
     }
 
     /// Apply both label drafts to the open note.
@@ -570,16 +669,16 @@ struct NotesView: View {
         return trimmed.isEmpty || trimmed.hasPrefix(".") ? "Note" : trimmed
     }
 
-    private func wordLabel(for text: String) -> String {
-        let count = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
-        return count == 1 ? "1 word" : "\(count) words"
+    /// Just the number. The word "Words" is the `LabeledContent` label now, so the
+    /// singular/plural branch this used to carry has gone with the sentence form.
+    private func wordCount(_ text: String) -> String {
+        String(text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count)
     }
 
-    private func dateLine(for note: Note) -> String {
+    private func timestamp(_ date: Date) -> String {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMM d, h:mm a"
-        let edited = fmt.string(from: note.modified)
-        return note.source == .meeting ? "Meeting · \(edited)" : "Edited \(edited)"
+        return fmt.string(from: date)
     }
 
     // MARK: - Draft syncing
@@ -615,65 +714,65 @@ struct NotesView: View {
     }
 }
 
-/// One row in the notes list.
+/// One row in the notes list — content only.
 ///
-/// `GlassSelectableRow` (GlassControls.swift), not a fourth hand-rolled
-/// selection. A notes list *is* the picker for the editor beside it, which is exactly
-/// the semantics that component describes, and it was previously used in one place in
-/// the whole app (`DiagnosticsView`) while three screens rolled their own. Converging
-/// costs nothing structurally: this row was already a `Button` with
-/// `.buttonStyle(.plain)` wrapping a `GlassIconButton`, and that is precisely what
-/// `GlassSelectableRow` is, so nesting depth is unchanged.
+/// Everything that used to be drawn here belongs to the enclosing
+/// `List(selection:)` now: the row background, the hover wash, the selection fill in
+/// the correct appearance, the focus ring, arrow-key and type-select navigation, and
+/// the accessibility table role. So `GlassSelectableRow`, the `@State isHovering`,
+/// the `.onHover { withAnimation { … } }` and the `.opacity(isHovering ? 1 : 0)` that
+/// faded a trash button in and out are all gone, along with the two defects their doc
+/// comment recorded — an unanimated hover, and a conditionally-inserted trash that
+/// took 28pt of the title's width with it when it appeared. A list row cannot have
+/// either defect if the list draws the row.
 ///
-/// Two defects went with it.
+/// The trash button itself is gone on purpose, not by accident of the migration, and
+/// the reason is worth keeping because the same `.opacity(isHovering ? 1 : 0)` pattern
+/// is used for row actions in `WordRow`, `CustomCommandRow` and `HistoryRow`:
+/// **`.opacity(0)` hides the pixels and keeps the behaviour.** Unlike `.hidden()`, it
+/// removes a view from neither hit-testing nor the accessibility tree, so every note
+/// row carried a live, focusable, VoiceOver-announced *delete* control with no visual
+/// presence. A click into apparently-empty row space could delete a note; Tab could
+/// land focus on nothing; VoiceOver announced a button that was not there. Reveal-on-
+/// hover is a fine Mac convention — doing it with opacity alone is the defect, and
+/// pairing an invisible trigger with an irreversible act (see `NotesView.deleteWarning`)
+/// is the worst version of it.
 ///
-/// **The hover was the only unanimated row hover in the app** — a bare
-/// `.onHover { isHovering = $0 }`, so the wash snapped on and off while every other
-/// row type in Utter crosses it on `Motion.hoverIn`/`hoverOut`. The component does
-/// that itself.
+/// The three replacements are the three a Mac user already knows, and all of them are
+/// reachable by pointer, keyboard *and* VoiceOver, which the hover button never was:
+/// right-click the row, press ⌫ with the list focused, or use the editor's own
+/// always-visible trash button. All three go through one confirmation.
 ///
-/// **The trash button was conditionally inserted**, where `WordRow`, `SnippetRow`,
-/// `CustomCommandRow` and `HistoryRow` all fade theirs with `.opacity(isHovering ? 1 : 0)`.
-/// So in Notes alone the icon popped into existence — and it took the row's layout with
-/// it, since appearing claimed 28pt the title had been using. It now holds its slot and
-/// fades, which is both the app's pattern and the reason `HistoryRow` gives for its own
-/// fixed-width action column.
+/// If a hover-revealed action is ever wanted back here for pointer discoverability,
+/// hide the behaviour along with the pixels —
+/// `.opacity(hovering ? 1 : 0).allowsHitTesting(hovering).accessibilityHidden(!hovering)`
+/// — rather than relying on opacity to do it.
 ///
-/// The local `isHovering` survives only to drive that fade; the component keeps its own
-/// hover state private, so the two track the same region independently. Noted in the
-/// report as something `GlassSelectableRow` could hand to its content builder.
+/// **The colours here are deliberately the system's, not the theme's.** `Ink.*` are
+/// absolute themed values, and an absolute value cannot invert when the system fills
+/// the row with the selection colour — the selected note's title would have stayed a
+/// dark themed grey on an accent fill. The type scale (`Typo.*.font`) is the part of
+/// the token that still applies; the foreground is left to the list for the title and
+/// set to the semantic `.secondary` for the preview, both of which AppKit remaps for a
+/// selected row.
 private struct NoteRow: View {
     let note: Note
-    let isSelected: Bool
-    let onSelect: () -> Void
-    let onDelete: () -> Void
-
-    @State private var isHovering = false
 
     var body: some View {
-        GlassSelectableRow(isSelected: isSelected, action: onSelect) {
-            HStack(alignment: .top, spacing: Space.x2) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(note.displayTitle)
-                        .typo(.callout)
-                        .lineLimit(1)
-                    if let preview = previewLine {
-                        Text(preview)
-                            .typo(.caption, ink: Ink.tertiary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: Space.x1)
-                GlassIconButton(systemName: "trash", label: "Delete note",
-                                tint: Tint.danger, action: onDelete)
-                    .opacity(isHovering ? 1 : 0)
-            }
-            .onHover { hovering in
-                withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) {
-                    isHovering = hovering
-                }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(note.displayTitle)
+                .font(Typo.callout.font)
+                .lineLimit(1)
+            if let preview = previewLine {
+                Text(preview)
+                    .font(Typo.caption.font)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
+        // The whole row width is the target, so a click or a hover lands anywhere on
+        // it rather than only on the text.
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Body text with the title line dropped, so the preview isn't the title twice.
@@ -685,14 +784,80 @@ private struct NoteRow: View {
         guard lines.count > 1 else { return nil }
         return lines.dropFirst().first
     }
+}
 
-    // `rowBackground` is gone: `GlassSelectableRow` draws it.
-    //
-    // Its doc comment argued against *tinted glass* behind a label, measured at
-    // 1.17:1 — and that argument still holds, which is why the replacement is not
-    // glass either. `GlassSelectableRow` reaches the same conclusion in its own note
-    // ("Selection is an accent wash plus a rim, not tinted glass: tinted glass behind
-    // a label measured 1.17:1"), so nothing that measurement bought is being given
-    // back. The selection changes appearance: a neutral white lift becomes the accent
-    // wash every other selectable row in the app uses.
+/// The system search field.
+///
+/// This replaces a hand-drawn search control — a `Surface.sunken` well, a
+/// magnifying-glass `Image`, an `IconButton` clear button, and an accent focus ring
+/// drawn off a `@FocusState` that existed for no other purpose. All four are
+/// `NSSearchField`'s own job, and it does them in the current appearance, at the
+/// current control size, with Increase Contrast honoured and with the clear button
+/// appearing and disappearing on its own. The hand-drawn version notably had **no
+/// focus indication at all** before a ring was bolted on, which is the whole class of
+/// defect this screen was rewritten for.
+///
+/// `.searchable(text:placement:prompt:)` is the SwiftUI answer and it cannot be used
+/// here. This screen is hosted in an `NSHostingController` inside an
+/// `NSSplitViewController` (`App.swift`), with no `NavigationStack` or
+/// `NavigationSplitView` above it, and the window's `NSToolbar` is built by AppKit
+/// with no delegate and no items — `App.swift` says so in as many words. `.searchable`
+/// needs one of those to place a field into, and with neither present the likely
+/// outcome is no field rendered at all, which would silently remove search from the
+/// screen holding the user's only copy of their own writing. The shell change that
+/// unlocks it is in the report; until then `NSSearchField` is the genuine system
+/// control that can actually be reached from here.
+private struct SystemSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        field.delegate = context.coordinator
+        // Filter as the user types rather than on Return: the list is the result.
+        field.sendsWholeSearchString = false
+        field.sendsSearchStringImmediately = true
+        // Target/action *as well as* the delegate, deliberately. `controlTextDidChange`
+        // covers typing; the built-in clear button empties the field through the
+        // control's action rather than a text-change notification, so a delegate alone
+        // can leave the binding holding a query the field no longer shows. Both funnel
+        // into one setter that drops a no-op, so the overlap costs nothing.
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.searchFieldChanged(_:))
+        // No `recentsAutosaveName` and no `searchMenuTemplate`, which is the default
+        // and is being left alone on purpose: searching your own notes should not
+        // leave a list of what you searched for on disk.
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.text = $text
+        field.placeholderString = prompt
+        // Only when it differs. Assigning `stringValue` unconditionally would reset the
+        // insertion point to the end of the field on every keystroke.
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) { self.text = text }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSSearchField else { return }
+            push(field.stringValue)
+        }
+
+        @objc func searchFieldChanged(_ sender: NSSearchField) {
+            push(sender.stringValue)
+        }
+
+        private func push(_ value: String) {
+            guard text.wrappedValue != value else { return }
+            text.wrappedValue = value
+        }
+    }
 }

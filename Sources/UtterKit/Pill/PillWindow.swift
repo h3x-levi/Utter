@@ -955,7 +955,6 @@ struct PillContainerView: View {
         // properties, and `themeManager` is observed here, so a theme change
         // invalidates this view and the children re-read the new values.
         .preferredColorScheme(themeManager.current.colorScheme)
-        .tint(Tint.accent)
     }
 }
 
@@ -1686,92 +1685,101 @@ struct BreathingDot: View {
 struct WritingPen: View {
     let reduceMotion: Bool
 
-    /// How far the wave has travelled, in whole wavelengths.
-    ///
-    /// **Periodic on purpose, and that is what removed the teleport.** This used to be a `progress`
-    /// that a `repeatForever(autoreverses: false)` drove 0 -> 1 and then reset instantly, so once
-    /// every 1.4 seconds the pen jumped 22pt to the left and the stroke it had drawn vanished — for
-    /// however long transcription took, which is the longest the pill ever holds one state. Shifting
-    /// a sine by exactly one wavelength gives a path identical to the one it started from, so the
-    /// animation still restarts and there is simply nothing to see when it does.
-    @State private var phase: CGFloat = 0
-
-    // Every number here is checked against the frame, because the first version of this was not and
-    // the pen went missing. `Image(systemName:)` reports a layout box of about its font size, but
-    // `rotationEffect` is a *render* transform that does not change that box — so a 11pt glyph turned
-    // 38 degrees actually paints across 11 * (cos38 + sin38) = 15.4pt. Parking it by offset alone put
-    // 7.2pt of it outside a 28pt frame, hard against the capsule's bright rim, and what was left read
-    // as no pen at all.
+    // MARK: Geometry
     //
-    // So the pen gets an explicit box big enough for what it paints, and the layout is stated in
-    // absolute terms from `.topLeading` rather than inferred from a `ZStack`'s centring.
-    private let waveWidth: CGFloat = 18
-    private let waveHeight: CGFloat = 10
-    /// The rotated glyph's real extent, rounded up.
-    private let penBox: CGFloat = 16
-    private var frameWidth: CGFloat { waveWidth + penBox / 2 + 2 }   // 28
-    private var frameHeight: CGFloat { penBox + 2 }                   // 18
+    // **There is no line, and that is the design now.** This drew a scrolling sine wave with the
+    // pencil parked at its right-hand end, and the two never read as one thing: the pen had to be
+    // anchored to the stroke's final point in *both* axes to look connected, the frame had to grow
+    // tall enough for the nib to track the wave's full travel, and growing it is what pushed the
+    // whole assembly low and off-centre in the capsule.
+    //
+    // A pencil moving as a hand moves says "writing" on its own. Removing the wave removes the
+    // coupling problem, the frame can shrink back to the pen's own motion, and it re-centres.
+
+    /// The glyph's box. It inks 8.5 x 8.5 (measured by rendering it alone), so 10 is enough.
+    private let penBox: CGFloat = 10
+    /// How far the pen travels across the page, and how far it rides up and down while it does.
+    private let strokeSpan: CGFloat = 5.5
+    private let strokeRise: CGFloat = 2.2
+    /// How far the pencil tips as it works. A hand writing rocks a little; it does not stay rigid.
+    private let tipDegrees: CGFloat = 5
+
+    /// Sized to the motion envelope, so the pen cannot paint outside its own frame and the frame is
+    /// no larger than it needs — which is what puts it back in the middle of the capsule.
+    private var frameSide: CGFloat { penBox + 2 * max(strokeSpan, strokeRise) + 2 }
+
+    // MARK: Motion
+    //
+    // Driven by a clock, not by `withAnimation` on a `@State` phase — and that distinction is the
+    // whole of the "pen is stale, nothing happens" defect this replaced.
+    //
+    // The old code did `withAnimation(.linear(duration: 1.1).repeatForever()) { phase = 1 }` and
+    // read `sin(phase * ...)` out of the three properties below. That cannot work, because
+    // `withAnimation` does not animate the *state*: it sets `phase` to its final value at once,
+    // evaluates the body at the old value and the new one, and interpolates the **animatable
+    // attributes those two evaluations returned** — here one `.offset` and one `.rotationEffect`.
+    // `sin()` is never sampled in between, so the curve's shape is invisible to SwiftUI; only its
+    // endpoints matter. And every motion here spans a whole number of half-turns over 0 -> 1, so
+    // the two endpoints are identical:
+    //
+    //     phase 0  ->  offsetX  0.0    offsetY  2.2    tilt  0.0
+    //     phase 1  ->  offsetX -0.0    offsetY  2.2    tilt -0.0
+    //
+    // Interpolating 2.2 to 2.2 for 1.1 seconds, forever, is a motionless pencil parked 2.2pt below
+    // centre. The sweep the geometry describes — +/-5.5pt across, +/-5 degrees of rock — exists only
+    // at phase 0.25 / 0.5 / 0.75, the samples that were never taken.
+    //
+    // A `TimelineView` is the fix rather than a different curve or duration, because this motion is
+    // a *function of time* rather than a transition between two states: it re-runs the body per tick
+    // so the sine is genuinely sampled. It also ticks only while the view is on screen, and the pen
+    // is on screen only while a transcription is in flight. 30 Hz matches the rate the companion
+    // already runs its character at, and is well past what a 5.5pt oscillation can show.
+
+    /// One scribble cycle, in seconds. Was the old animation's `duration`.
+    private let cycle: Double = 1.1
+    private let tickRate: Double = 1.0 / 30.0
+
+    /// Horizontal travel: one smooth sweep out and back, so there is no reset to jump at.
+    private func offsetX(_ phase: CGFloat) -> CGFloat {
+        reduceMotion ? 0 : sin(phase * 2 * .pi) * strokeSpan
+    }
+
+    /// Vertical travel at **three times** the horizontal rate.
+    ///
+    /// That ratio is the whole effect. Equal rates trace a diagonal line and read as sliding; three
+    /// to one traces a tight Lissajous loop, which is what a hand forming letters actually does —
+    /// several short up-and-down strokes while drifting along the line.
+    private func offsetY(_ phase: CGFloat) -> CGFloat {
+        reduceMotion ? 0 : sin(phase * 6 * .pi + .pi / 2) * strokeRise
+    }
+
+    /// The tip rocks with the vertical stroke, since that is the motion a wrist makes.
+    private func tilt(_ phase: CGFloat) -> CGFloat {
+        reduceMotion ? 0 : sin(phase * 6 * .pi) * tipDegrees
+    }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // The line being written: a continuous wave that scrolls, rather than one drawn and
-            // wiped. Fully stroked — there is no `trim` any more, because the reveal was what needed
-            // a beginning and an end.
-            WaveStroke(phase: reduceMotion ? 0 : phase)
-                .stroke(Ink.secondary.opacity(0.7),
-                        style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                .frame(width: waveWidth, height: waveHeight)
-                .offset(x: 0, y: (frameHeight - waveHeight) / 2)     // y 4..14 of 18
-
-            // The pen sits at the wave's right end with its nib on the line, and stays there while
-            // the paper moves under it. Its box is centred on x = waveWidth, so it spans
-            // 10..26 of 28 horizontally and 1..17 of 18 vertically — inside on both axes, with a
-            // point of margin, which is the property the previous version lacked.
+        // `paused:` rather than a branch to a static `Image`: the still pose is already what the
+        // three `reduceMotion` guards return, so pausing the clock keeps one code path and one
+        // centred pencil.
+        TimelineView(.animation(minimumInterval: tickRate, paused: reduceMotion)) { context in
+            let phase = CGFloat(
+                context.date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: cycle) / cycle
+            )
             Image(systemName: "pencil")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Ink.primary)
-                .rotationEffect(.degrees(38))
+                .rotationEffect(.degrees(tilt(phase)))
                 .frame(width: penBox, height: penBox)
-                .offset(x: waveWidth - penBox / 2, y: (frameHeight - penBox) / 2)
-        }
-        .frame(width: frameWidth, height: frameHeight)
-        .onAppear {
-            guard !reduceMotion else { return }
-            // Linear, because a scroll is continuous. `easeInOut` on a `repeatForever` pulses at every
-            // cycle boundary even when the geometry matches across it.
-            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
+                .offset(x: offsetX(phase), y: offsetY(phase))
+                // Centred in its frame, which is the fix for "off centre towards the bottom": the
+                // previous version placed the pen by an absolute offset from `.topLeading` because
+                // it had to meet a wave drawn at a fixed height. With nothing to meet, centring is
+                // correct and cannot drift.
+                .frame(width: frameSide, height: frameSide)
         }
         .accessibilityHidden(true)
-    }
-}
-
-/// A gentle wave, the "handwriting" the pen leaves behind, scrolled by `phase`.
-///
-/// `animatableData` is what lets SwiftUI interpolate the scroll: without it the shape would be
-/// rebuilt only when the state changed, and the phase would jump rather than travel.
-private struct WaveStroke: Shape {
-    var phase: CGFloat = 0
-
-    var animatableData: CGFloat {
-        get { phase }
-        set { phase = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let mid = rect.midY
-        let amp = rect.height * 0.30
-        let steps = 24
-        for i in 0...steps {
-            let t = CGFloat(i) / CGFloat(steps)
-            // `+ phase` shifts the whole wave by whole wavelengths, so phase 1 draws phase 0.
-            let point = CGPoint(x: t * rect.width,
-                                y: mid + sin((t + phase) * .pi * 2) * amp)
-            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
-        }
-        return path
     }
 }
 

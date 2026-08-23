@@ -3,8 +3,9 @@ import Testing
 
 /// Resolving the stored companion selection against the packs that exist.
 ///
-/// This is the upgrade path: Utter used to ship four characters drawn in code, and a
-/// `userdata.json` written before they were removed still names one of them. Left
+/// This is the upgrade path, and it has now been walked twice: Utter used to ship four
+/// characters drawn in code, and later two Persian cats plus the two Mochi sprite packs.
+/// A `userdata.json` written before either removal still names one of them. Left
 /// unresolved, that selection matches no pack and the companion cannot be shown at all
 /// — so the rule has to be exercised directly rather than inferred from a running app.
 ///
@@ -16,38 +17,43 @@ import Testing
 struct CompanionSelectionTests {
 
     /// The packs Utter bundles, in the order the picker lists them — sorted by display
-    /// name, which is what `SpritePackStore.reload()` produces: Golden Dog,
-    /// Mochi (Cream), Mochi (Midnight), Panda.
-    private let bundled = ["dog", "mochi-cream", "mochi-midnight", "panda"]
+    /// name, which is what `SpritePackStore.reload()` produces: Golden Dog, Panda,
+    /// Pixel Cat (Ginger), Pixel Cat (Gray).
+    ///
+    /// The order matters, and only here: the last-resort branch below falls back to
+    /// `available.first`, so a list sorted by *id* rather than by display name would test a
+    /// sequence the store never hands over.
+    private let bundled = ["dog", "panda", "pixel-cat-orange", "pixel-cat-gray"]
 
     @Test("A selection naming an installed pack is left alone")
     func exactMatchWins() {
         #expect(UserData.resolveCompanionCharacter("dog", available: bundled) == "dog")
     }
 
-    @Test("The default is the bundled Mochi pack")
-    func defaultIsMochi() {
+    @Test("The default is the bundled pixel-cat pack")
+    func defaultIsPixelCat() {
         // A fresh install starts here, so it has to be a pack that actually ships.
-        #expect(UserData.defaultCompanionPack == "mochi-midnight")
+        #expect(UserData.defaultCompanionPack == "pixel-cat-gray")
         #expect(bundled.contains(UserData.defaultCompanionPack))
         #expect(
             UserData.resolveCompanionCharacter(
                 UserData.defaultCompanionPack, available: bundled
-            ) == "mochi-midnight"
+            ) == "pixel-cat-gray"
         )
     }
 
-    @Test("A character from the old code-drawn set falls back to the default pack")
+    @Test("A character from any retired set falls back to the default pack")
     func retiredBuiltinFallsBack() {
-        // The four ids that used to be valid. None of them is a pack, so each has to
-        // resolve to something real rather than to nothing — and to the character a
-        // fresh install would get, not to whichever pack happens to sort first.
-        // Note `mochi`: one of the retired ids happens to share a prefix with the new
-        // `mochi-midnight` pack. It must NOT be resolved to it — a bare `mochi` names the
-        // old code-drawn character, which no longer exists, so it falls back like the rest.
-        for retired in ["mochi", "nori", "pip", "tori"] {
+        // Every id that used to be valid, across both removals: the four code-drawn
+        // characters, then the two Persian cats and the two Mochi packs. None of them is a
+        // pack now, so each has to resolve to something real rather than to nothing — and to
+        // the character a fresh install would get, not to whichever pack happens to sort
+        // first. A `userdata.json` written before either removal still names one of these.
+        for retired in ["mochi", "nori", "pip", "tori",
+                        "persian-silver", "persian-cream",
+                        "mochi-cream", "mochi-midnight"] {
             #expect(UserData.resolveCompanionCharacter(retired, available: bundled)
-                    == "mochi-midnight")
+                    == "pixel-cat-gray")
         }
     }
 
@@ -55,7 +61,7 @@ struct CompanionSelectionTests {
     func unknownFallsBack() {
         #expect(
             UserData.resolveCompanionCharacter("not-a-character", available: bundled)
-                == "mochi-midnight"
+                == "pixel-cat-gray"
         )
     }
 
@@ -87,7 +93,7 @@ struct CompanionSelectionTests {
         #expect(
             UserData.resolveCompanionCharacter(
                 UserData.legacyPackPrefix + "deleted-pack", available: bundled
-            ) == "mochi-midnight"
+            ) == "pixel-cat-gray"
         )
     }
 

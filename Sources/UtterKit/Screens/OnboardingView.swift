@@ -13,8 +13,9 @@ import ApplicationServices
 /// every move, so quitting part-way — which the Screen Recording step obliges the
 /// user to do — reopens where they were rather than at the welcome screen.
 struct OnboardingView: View {
-    /// Called when the user finishes or skips onboarding.
-    var onFinish: () -> Void
+    /// Called when the user finishes or skips onboarding, with `true` when they
+    /// skipped. See `finish(skipped:)` for why the caller has to be able to tell.
+    var onFinish: (_ skipped: Bool) -> Void
 
     /// Where the flow opens, restored from the last unfinished run.
     ///
@@ -58,9 +59,8 @@ struct OnboardingView: View {
                                    value: step)
                 }
             }
-            // Decorative: the step is already announced by the content, and seven
-            // unlabelled capsules in the rotor are seven things to skip.
-            .accessibilityHidden(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(step + 1) of \(Self.totalSteps)")
             .padding(.top, 22)
 
             // Centred when the step fits, scrollable when it doesn't.
@@ -118,10 +118,30 @@ struct OnboardingView: View {
             // overflow by that much and never centre — reopening the scar recorded above
             // it, where "Continue" was reachable only by keyboard shortcut. Take it when
             // the arithmetic is reworked to subtract the inset, not before.
+            // "Skip" was `.buttonStyle(.plain)` with a hand-set `Ink.secondary`, which is
+            // the app's own complaint in miniature: `.plain` draws no background, so it
+            // has no hover state, no pressed state and no focus ring. In a light theme
+            // the only feedback on mouse-over was none at all. It is now the same
+            // `GlassButton` the permission steps use, so the system draws all three.
+            //
+            // Non-prominent, deliberately: "Continue" is the one prominent control here,
+            // and a secondary action that looks as loud as the primary one is not a
+            // secondary action. `.bordered` beside `.borderedProminent` (pre-26) and
+            // `.glass` beside `.glassProminent` (26+) is the standard pairing —
+            // `GlassButtonLook` picks whichever the OS has.
             HStack {
-                Button("Skip") { finish() }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Ink.secondary)
+                if step > 0 {
+                    GlassButton(title: "Back") {
+                        withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
+                            step -= 1
+                        }
+                    }
+                }
+
+                if step < Self.totalSteps - 1 {
+                    GlassButton(title: "Skip") { finish(skipped: true) }
+                }
+
                 Spacer()
                 GlassButton(
                     title: step == Self.totalSteps - 1 ? "Get started" : "Continue",
@@ -132,9 +152,10 @@ struct OnboardingView: View {
                             step += 1
                         }
                     } else {
-                        finish()
+                        finish(skipped: false)
                     }
                 }
+                .disabled(!canAdvance)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(Space.x5)
@@ -156,11 +177,21 @@ struct OnboardingView: View {
         .onReceive(poll) { _ in
             micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
             axGranted = AXIsProcessTrusted()
+            modelReady = LocalWhisperProvider.modelURL() != nil
             screenGranted = SystemAudioCapture.permissionState() == .granted
         }
         // Drop an anchor on every move, forwards or back, so a relaunch reopens the
         // step the user was actually looking at.
         .onChange(of: step) { value in OnboardingState.recordStep(value) }
+    }
+
+    private var canAdvance: Bool {
+        OnboardingState.canAdvance(
+            step: step,
+            microphoneGranted: micGranted,
+            accessibilityGranted: axGranted,
+            modelReady: modelReady
+        )
     }
 
     // MARK: - Steps
@@ -329,15 +360,14 @@ struct OnboardingView: View {
 
             BentoTile(title: "Ready to use", systemImage: "checklist") {
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    ReadinessDot(ok: micGranted, label: "Microphone")
-                    ReadinessDot(ok: axGranted, label: "Accessibility")
-                    ReadinessDot(ok: modelReady, label: "Speech model")
-                    // Optional, so its absence is not a failure — the label says so
-                    // rather than showing a red dot for a feature the user may never
-                    // use.
-                    ReadinessDot(ok: screenGranted,
-                                 label: screenGranted ? "Screen Recording (meetings)"
-                                                      : "Screen Recording — optional, for meetings")
+                    ReadinessRow(label: "Microphone", ok: micGranted)
+                    ReadinessRow(label: "Accessibility", ok: axGranted)
+                    ReadinessRow(label: "Speech model", ok: modelReady)
+                    // Optional, so its absence is not a failure — the status says so
+                    // rather than showing an alarm for a feature the user may never use.
+                    ReadinessRow(label: "Screen Recording",
+                                 ok: screenGranted,
+                                 pendingText: "Optional \u{2014} for meetings")
                 }
             }
 
@@ -395,9 +425,20 @@ struct OnboardingView: View {
         }
     }
 
-    private func finish() {
+    /// Close the flow.
+    ///
+    /// `skipped` distinguishes "I walked the steps" from "I pressed Skip", and the
+    /// caller needs it: the app's post-onboarding fallback asks for the microphone,
+    /// and `AVCaptureDevice.requestAccess` on a `.notDetermined` status raises the
+    /// system's cold permission dialog. Pressing Skip on step one therefore produced
+    /// the exact modal this whole screen exists to replace, one frame after the user
+    /// said they did not want to be walked through it.
+    ///
+    /// Both paths still `markCompleted()`. Skip is a decision, not an interruption —
+    /// it must not reopen on next launch.
+    private func finish(skipped: Bool) {
         OnboardingState.markCompleted()
-        onFinish()
+        onFinish(skipped)
     }
 }
 
@@ -430,12 +471,7 @@ private struct PermissionStep: View {
                     // away from a `.glassProminent` "Continue" and a `.plain` "Skip".
                     // Three button styles on the first screen a user ever sees.
                     //
-                    // Not `prominent`: "Continue" in the nav row is the prominent
-                    // control, and the HIG allows one or two per view. Granting the
-                    // permission and moving on are competing calls to action, so only
-                    // one of them can look like one — and on an already-granted step
-                    // the only thing to do is continue.
-                    GlassButton(title: actionLabel, action: action)
+                    GlassButton(title: actionLabel, prominent: true, action: action)
                 }
             }
         }
@@ -456,6 +492,20 @@ enum OnboardingState {
 
     static var hasCompleted: Bool {
         UserDefaults.standard.bool(forKey: completedKey)
+    }
+
+    static func canAdvance(
+        step: Int,
+        microphoneGranted: Bool,
+        accessibilityGranted: Bool,
+        modelReady: Bool
+    ) -> Bool {
+        switch step {
+        case 1: return microphoneGranted
+        case 2: return accessibilityGranted
+        case 3: return modelReady
+        default: return true
+        }
     }
 
     /// Remember the step the user is on.
@@ -501,26 +551,41 @@ enum OnboardingState {
     }
 }
 
-/// Single readiness indicator used by the final onboarding step.
-private struct ReadinessDot: View {
-    let ok: Bool
+/// One readiness row on the final onboarding step: what it is, and whether it's ready.
+///
+/// `LabeledContent` — the system's label/value row, `@available(macOS 13.0)`, so no
+/// availability branch at this target. It replaces a hand-built `HStack` carrying a
+/// `Circle().frame(width: 7, height: 7)` and a manually composed
+/// `accessibilityElement(children: .combine)` + `accessibilityLabel("\(label): ready")`.
+/// The system now supplies the label/value pairing VoiceOver reads, the alignment
+/// between the four rows, and the trailing-value layout — including under a large
+/// system text size, where the hand-built version simply grew wider.
+///
+/// The status is a `Label`, not a bare colour, so the state is legible without relying
+/// on hue: a dot at `Tint.warning` on cream measures 1.48:1 (the figure recorded on the
+/// step's own header glyph), and colour alone fails the same test for anyone who cannot
+/// separate the two hues. The word "Ready" carries the meaning; the tint only reinforces
+/// it, and uses the `*Text` variants that were measured against these tiles.
+///
+/// `Ink.secondary` for the label, not `.secondary`: `secondaryLabelColor` is calibrated
+/// against an opaque control background and measures **4.01:1** on this app's
+/// translucent tiles (see `Ink.secondary`'s own note) — under the 4.5:1 floor, and this
+/// row sits inside a `BentoTile`.
+private struct ReadinessRow: View {
     let label: String
+    let ok: Bool
+    /// What to say when it isn't ready. Overridden for Screen Recording, which is
+    /// optional — "Needs attention" would be wrong for a feature the user may never use.
+    var pendingText: String = "Needs attention"
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(ok ? Tint.success : Tint.warning)
-                .frame(width: 7, height: 7)
-            // `Ink.secondary`, not `.secondary`. `secondaryLabelColor` is calibrated
-            // against an opaque control background and measured **4.01:1** on this
-            // app's translucent tiles (`Ink.secondary`'s own note) — under the 4.5:1
-            // floor, and this dot sits inside a `BentoTile`. `Typo.caption` at 12pt
-            // also brings it back onto the scale, whose floor is 12.
-            Text(label)
-                .typo(.caption, ink: Ink.secondary)
+        LabeledContent(label) {
+            Label(ok ? "Ready" : pendingText,
+                  systemImage: ok ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .labelStyle(.titleAndIcon)
+                .typo(.caption, ink: ok ? Tint.successText : Tint.warningText)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(ok ? "ready" : "needs attention")")
+        .typo(.caption, ink: Ink.secondary)
     }
 }
 

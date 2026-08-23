@@ -389,7 +389,9 @@ if [ -d "Companions" ]; then
     # loader skips non-directories so it did no harm, but it referenced local source
     # paths and read as an oversight in the bundle.
     mkdir -p "$RESOURCES/Companions"
-    find Companions -mindepth 1 -maxdepth 1 -type d -exec cp -R {} "$RESOURCES/Companions/" \;
+    find Companions -mindepth 1 -maxdepth 1 -type d \
+        ! -name pixel-cat-gray ! -name pixel-cat-orange \
+        -exec cp -R {} "$RESOURCES/Companions/" \;
     PACK_COUNT=$(find "$RESOURCES/Companions" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
     echo "   ✓ Companion packs bundled ($PACK_COUNT)"
 fi
@@ -571,6 +573,7 @@ done
 # create-dmg handles: background, icon positions, window size, text size,
 # and critically — sets the window to NOT be resizable.
 rm -f "build/$DMG_NAME"
+DMG_IS_PLAIN=0
 
 create-dmg \
     --volname "$APP_NAME" \
@@ -590,8 +593,24 @@ create-dmg \
     2>&1 | grep -v "^$" || true
 
 if [ ! -f "build/$DMG_NAME" ]; then
-    echo "❌ DMG creation failed"
-    exit 1
+    echo "   ⚠️  Finder could not lay out the branded DMG; creating a plain installer instead"
+    DMG_IS_PLAIN=1
+    DMG_STAGING_DIR=$(mktemp -d)
+    trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
+    ditto "$APP_DIR" "$DMG_STAGING_DIR/${APP_NAME}.app"
+    ln -s /Applications "$DMG_STAGING_DIR/Applications"
+    if ! hdiutil create \
+        -volname "$APP_NAME" \
+        -srcfolder "$DMG_STAGING_DIR" \
+        -format UDZO \
+        -ov \
+        "build/$DMG_NAME" \
+        -quiet; then
+        echo "❌ DMG creation failed"
+        exit 1
+    fi
+    rm -rf "$DMG_STAGING_DIR"
+    trap - EXIT
 fi
 
 # Recompress with LZMA. Quantized model weights are near-incompressible (LZMA
@@ -610,7 +629,11 @@ if hdiutil convert "build/$DMG_NAME" -format ULMO -o "build/.$DMG_NAME.lzma" -qu
 fi
 
 DMG_SIZE=$(du -h "build/$DMG_NAME" | cut -f1 | tr -d ' ')
-echo "   ✓ DMG created ($DMG_SIZE) — non-resizable window"
+if [ "$DMG_IS_PLAIN" -eq 1 ]; then
+    echo "   ✓ DMG created ($DMG_SIZE) — plain Finder layout"
+else
+    echo "   ✓ DMG created ($DMG_SIZE) — non-resizable window"
+fi
 
 # Confirm the installer window will actually show its background.
 #
@@ -620,7 +643,13 @@ echo "   ✓ DMG created ($DMG_SIZE) — non-resizable window"
 # DMG. Reading the shipped .DS_Store is the only way to know before they do.
 DMG_CHECK_MOUNT=$(mktemp -d)
 if hdiutil attach "build/$DMG_NAME" -nobrowse -readonly -mountpoint "$DMG_CHECK_MOUNT" -quiet 2>/dev/null; then
-    if strings -a "$DMG_CHECK_MOUNT/.DS_Store" 2>/dev/null | grep -q "backgroundImageAlias"; then
+    if [ ! -d "$DMG_CHECK_MOUNT/${APP_NAME}.app" ] || [ ! -L "$DMG_CHECK_MOUNT/Applications" ]; then
+        echo "❌ The DMG mounted, but its app or Applications link is missing"
+        hdiutil detach "$DMG_CHECK_MOUNT" -force -quiet 2>/dev/null || true
+        exit 1
+    elif [ "$DMG_IS_PLAIN" -eq 1 ]; then
+        echo "   ✓ Plain installer contents verified"
+    elif strings -a "$DMG_CHECK_MOUNT/.DS_Store" 2>/dev/null | grep -q "backgroundImageAlias"; then
         echo "   ✓ Installer background verified"
     else
         echo "   ⚠️  The DMG has no background image set — the installer window will be white."

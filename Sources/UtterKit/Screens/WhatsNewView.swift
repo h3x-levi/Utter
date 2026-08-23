@@ -7,36 +7,105 @@ struct VersionEntry: Identifiable {
     let highlights: [String]
 }
 
-/// The change-log ledger.
+/// The change-log ledger: a real `List`, one `Section` per release.
 ///
-/// **No Liquid Glass here, and that is the answer rather than an omission.** Asked
-/// directly — the Settings pass gave that window's navigation column real glass, so
-/// which layer of this window should get it — the honest answer is that this window
-/// has no chrome layer to put it on:
+/// # Why a List
 ///
-///   * Everything in this view is content. A header, then one `BentoTile` per
-///     release, then a footnote. Nothing here navigates and nothing here is a
-///     control, so nothing here "floats above the content it acts on" — which is the
-///     two-part test GlassSurface.swift states, and this fails both halves.
+/// This was a `VStack` of `BentoTile`s inside a `ScrollView`, hand-drawing what a list
+/// already is: the tile stood in for a section, a `Circle().frame(width: 4, height: 4)`
+/// with a hard-coded `.offset(y: 5)` stood in for a row bullet, and the version/date
+/// header was assembled into an `AnyView` accessory. All three are the system's now —
+/// `Section(header:)` draws the header, and a `List` row's own insets separate one
+/// highlight from the next, so the bullet glyph and its baseline offset are gone rather
+/// than re-tuned.
+///
+/// It is also the only arrangement that scales here. The ledger has 78 entries, ~28 of
+/// which render; the `VStack` built every one of them eagerly, each with its own
+/// `.glassSurface(.content)` render pass, on a window the user opens to read three
+/// lines. A `List` builds rows as they come into view.
+///
+/// # This List must be the window's only scroller
+///
+/// `App.showWhatsNew` presents this view — it wraps it in a `ScrollView` today, and that
+/// wrapper has to go: a `List` scrolls itself, and two scrollers over one gesture means
+/// the inner one swallows the wheel while the outer never moves. `OnboardingView` records
+/// the same hazard at its step container. `.scrollContentBackground(.hidden)`
+/// (`@available(macOS 13.0)`) is what keeps the window's own material visible through the
+/// list instead of the opaque list background painting over it.
+///
+/// # No Liquid Glass here, and that is the answer rather than an omission
+///
+/// Asked directly — the Settings pass gave that window's navigation column real glass, so
+/// which layer of this window should get it — the honest answer is that this window has
+/// no chrome layer to put it on:
+///
+///   * Everything in this view is content: a header, the releases, a footnote. Nothing
+///     here navigates and nothing here is a control, so nothing here "floats above the
+///     content it acts on" — the two-part test GlassSurface.swift states, and this fails
+///     both halves.
 ///   * The window's only chrome is its titlebar, and it is a real AppKit one
 ///     (`presentAuxWindow` in App.swift keeps `.titled` with a visible title, unlike
 ///     the main and Settings windows). AppKit draws that itself on macOS 26; there is
 ///     no `NSWindow` glass API to reach for and nothing for this view to decorate.
-///   * The plane the tiles sit on is the whole window. Glassing it would be both of
+///   * The plane the list sits on is the whole window. Glassing it would be both of
 ///     the things Apple rules out at once: Liquid Glass in the content layer, and
 ///     Liquid Glass "applied to large background areas" — with, here, several
 ///     thousand words of release notes sitting on top of a surface that refracts.
 ///
-/// So the ledger stays a standard material (`.underWindowBackground` plus the shell
-/// veil, applied by `presentAuxWindow`) with `BentoTile`'s `.content` surfaces
-/// nested on it. If this window ever grows a real control layer — a version filter,
-/// a search field, a floating "back to top" bar — that bar is what would carry the
-/// glass, not the ledger behind it. Reach for a real `NSToolbar` first: that is what
-/// replaced the hand-drawn band in the main and Settings windows, and it is the only
-/// route to the system's own material. `flushChromeGlass` was the SwiftUI stand-in
-/// and is gone; `GlassSurface.swift` records why.
+/// So the ledger stays a standard material (`.underWindowBackground` plus the shell veil,
+/// applied by `presentAuxWindow`) with a transparent list on it. If this window ever
+/// grows a real control layer — a version filter, a search field, a floating "back to
+/// top" bar — that bar is what would carry the glass, not the ledger behind it. Reach
+/// for a real `NSToolbar` first: that is what replaced the hand-drawn band in the main
+/// and Settings windows, and it is the only route to the system's own material, and it
+/// is also the prerequisite for `.searchable` here — on macOS the search field is placed
+/// in the toolbar, and this window has none, so adding `.searchable` today would put a
+/// filter nowhere. `flushChromeGlass` was the SwiftUI stand-in and is gone;
+/// `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "3.0.33", version: "3.0.33", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.32", version: "3.0.32", date: "August 2026", highlights: [
+            "The companion is now a pixel cat. The two Mochi packs and the two code-drawn Persian cats were removed; the bundled characters are Golden Dog, Panda, Pixel Cat (Ginger) and Pixel Cat (Gray).",
+            "No character is drawn in code any more — a sprite pack is the only way one can exist, which is ~3,100 fewer lines to maintain.",
+            "An existing selection naming a removed character is migrated to the default pack on first launch and the correction saved, so nobody lands on an empty companion window.",
+            "Fixed: a pixel-art pack whose canvas is larger than the chosen character size was drawn at full canvas size, overflowing the panel that clips it, so the cat was sliced at the window edge while roaming. Only reproduced on a non-Retina display.",
+        ]),
+        VersionEntry(id: "3.0.31", version: "3.0.31", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.30", version: "3.0.30", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.29", version: "3.0.29", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.28", version: "3.0.28", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.27", version: "3.0.27", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.26", version: "3.0.26", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.25", version: "3.0.25", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.24", version: "3.0.24", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.23", version: "3.0.23", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.22", version: "3.0.22", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.21", version: "3.0.21", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
         VersionEntry(id: "3.0.20", version: "3.0.20", date: "August 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),
@@ -511,68 +580,75 @@ struct WhatsNewView: View {
     private var suppressedCount: Int { versions.count - releases.count }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text("What\u{2019}s new").typo(.title)
-                Text("Every release with something to report, newest first.").typo(.lede)
-                // The running version, stated because it may not be one of the tiles.
-                //
-                // It is 2.0.101 as this ships, which is a packaging-only build and so is
-                // filtered out below — which also means no tile carries the "Latest"
-                // chip. Answering "which one am I on?" here is better than putting the
-                // chip on an older release to fill the slot. This is a window of its
-                // own, so it is not the version twice on one screen.
+        List {
+            // The lede, as an unheaded first section — the standard way to open a
+            // grouped list, and the running version is a genuine section *footer*: a
+            // footnote about the block above it, which is what a footer is for.
+            //
+            // Stated at all because the running version may not be one of the sections.
+            // It is a packaging-only build as this ships, and those are filtered out
+            // below — which also means no section carries the "Latest" chip. Answering
+            // "which one am I on?" here is better than putting the chip on an older
+            // release to fill the slot. This is a window of its own, so it is not the
+            // version twice on one screen.
+            Section {
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text("What\u{2019}s new").typo(.title)
+                    Text("Every release with something to report, newest first.").typo(.lede)
+                }
+                .padding(.vertical, Space.x1)
+            } footer: {
                 Text("You\u{2019}re running \(ConfigManager.shared.appVersion).")
                     .typo(.caption, ink: Ink.tertiary)
             }
 
             ForEach(releases) { version in
-                // "Latest" now marks the version actually running, not index 0 of the
-                // list. With the filler filtered out those stopped being the same
-                // entry — the newest ledger entry is an internal build — so the chip
-                // would have labelled an older release as the current one.
+                // "Latest" marks the version actually running, not index 0 of the list.
+                // With the filler filtered out those stopped being the same entry — the
+                // newest ledger entry is an internal build — so the chip would have
+                // labelled an older release as the current one.
                 let isCurrent = version.version == ConfigManager.shared.appVersion
-                BentoTile(
-                    title: "Version \(version.version)",
-                    systemImage: isCurrent ? "sparkles" : "clock.arrow.circlepath",
-                    accessory: AnyView(
-                        HStack(spacing: Space.x2) {
-                            Text(version.date).typo(.caption, ink: Ink.tertiary)
-                            if isCurrent {
-                                GlassChip(text: "Latest", tint: Tint.success)
-                            }
+                Section {
+                    // One highlight, one row. The list's row insets and separators are
+                    // what set them apart now, which is why there is no bullet glyph
+                    // here any more.
+                    ForEach(version.highlights, id: \.self) { item in
+                        Text(item)
+                            .typo(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    HStack(spacing: Space.x2) {
+                        Label("Version \(version.version)",
+                              systemImage: isCurrent ? "sparkles" : "clock.arrow.circlepath")
+                            .labelStyle(.titleAndIcon)
+                            .typo(.sectionHeader)
+                        if isCurrent {
+                            GlassChip(text: "Latest", tint: Tint.success)
                         }
-                    )
-                ) {
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        ForEach(version.highlights, id: \.self) { item in
-                            HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
-                                // A dot glyph rather than a bullet character:
-                                // "\u{2022}" inherited the body text's size and
-                                // baseline, so it sat heavy against 13pt copy.
-                                Circle()
-                                    .fill(Ink.tertiary)
-                                    .frame(width: 4, height: 4)
-                                    .offset(y: 5)
-                                Text(item)
-                                    .typo(.callout)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
+                        Spacer(minLength: Space.x2)
+                        Text(version.date).typo(.caption, ink: Ink.tertiary)
                     }
                 }
             }
 
             if suppressedCount > 0 {
                 // Accounts for the filtered entries rather than pretending the version
-                // numbers skip. One line, not fifty cards.
-                Text(suppressedCount == 1
-                     ? "One further release carried packaging and tooling changes only."
-                     : "\(suppressedCount) further releases carried packaging and tooling changes only.")
-                    .typo(.caption, ink: Ink.tertiary)
+                // numbers skip. One row, not fifty cards.
+                Section {
+                    Text(suppressedCount == 1
+                         ? "One further release carried packaging and tooling changes only."
+                         : "\(suppressedCount) further releases carried packaging and tooling changes only.")
+                        .typo(.caption, ink: Ink.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
-        .padding(Space.screenPadding)
-        .frame(maxWidth: Layout.contentWidth, alignment: .leading)
+        // `.inset`, not `.plain`: inset rows and real section headers are what a change
+        // log wants, and it is the style the rest of this app's lists use.
+        .listStyle(.inset)
+        // Without this the list paints its own opaque background over the window's
+        // material and veil, and this window stops matching every other one.
+        .scrollContentBackground(.hidden)
     }
 }

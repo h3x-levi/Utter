@@ -80,4 +80,24 @@ struct OnboardingResumeTests {
             #expect((0..<Self.steps).contains(resolved))
         }
     }
+
+    @Test("Required setup steps cannot advance before they work")
+    func requiredStepsGateContinue() {
+        #expect(!OnboardingState.canAdvance(
+            step: 1, microphoneGranted: false,
+            accessibilityGranted: true, modelReady: true
+        ))
+        #expect(!OnboardingState.canAdvance(
+            step: 2, microphoneGranted: true,
+            accessibilityGranted: false, modelReady: true
+        ))
+        #expect(!OnboardingState.canAdvance(
+            step: 3, microphoneGranted: true,
+            accessibilityGranted: true, modelReady: false
+        ))
+        #expect(OnboardingState.canAdvance(
+            step: 4, microphoneGranted: false,
+            accessibilityGranted: false, modelReady: false
+        ))
+    }
 }

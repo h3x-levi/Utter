@@ -22,10 +22,21 @@ import SwiftUI
 // `glassEffect`, `.buttonStyle(.glass)`, and `.glassProminent`. A toggle's knob
 // becomes glass transiently, but only the system can do that, so `GlassToggle`
 // below wraps the real `Toggle` rather than faking a switch.
+//
+// **Everything here is a real system control.** That is the fourth rule, and it
+// was the one being broken: a `Button`+`Capsule` segmented control, a `Circle`
+// behind an icon, a `RoundedRectangle` well behind a `TextField`. Each of those
+// reimplemented the pixels and silently dropped what only the OS supplies — the
+// pointer-over highlight, the pressed state, the keyboard focus ring, and the
+// accessibility role. The measurement that made this urgent: the hand-drawn
+// light-mode hover wash came out at **1.142:1** against a light theme's card,
+// i.e. a hover state the user cannot see (see `Surface.fillHover`). A system
+// control's hover is drawn by AppKit against the appearance it is actually in,
+// which is not a value this file can get wrong.
 
 // MARK: - Segmented control
 
-/// A segmented picker with a glass selection indicator that slides.
+/// A segmented picker.
 ///
 /// This replaces two pop-up menus (`Picker` with the default menu style). The
 /// HIG's own test for a pop-up is whether the set is large: "If you need to
@@ -34,122 +45,55 @@ import SwiftUI
 /// record hotkey — have three and four options, so hiding them behind a click
 /// was costing a click and all of the affordance for nothing.
 ///
-/// The indicator is a single glass capsule moved with `matchedGeometryEffect`,
-/// so selection *slides* between segments rather than blinking.
+/// A real `Picker` with `.segmented`, which is `NSSegmentedControl`. What that
+/// supplies and the `Button`-per-segment build it replaces did not: pointer-over
+/// highlighting, the pressed state, a keyboard focus ring, arrow-key traversal
+/// between segments, and VoiceOver announcing each segment with its position and
+/// selected state. The sliding `matchedGeometryEffect` indicator, the recessed
+/// track, and the `withAnimation` on selection are all gone with it — the system
+/// animates its own selection, and honours Reduce Motion while doing it.
 struct GlassSegmentedControl<T: Hashable>: View {
     let options: [T]
     let label: (T) -> String
-    /// Optional SF Symbol per option.
+    /// Optional SF Symbol per option. No call site passes one today; a segmented
+    /// `Picker` renders it through `Label`, so what shows is whatever
+    /// `NSSegmentedControl` does with an image-and-text segment rather than
+    /// something drawn here.
     var symbol: ((T) -> String?)? = nil
     @Binding var selection: T
 
-    @ObservedObject private var motion = MotionPreference.shared
-    @Environment(\.colorScheme) private var colorScheme
-    @Namespace private var indicator
-
     var body: some View {
-        HStack(spacing: 2) {
+        // The title is empty and hidden because this control has no title
+        // parameter to pass one through: all three call sites put a `Text` above
+        // the control instead. That leaves the *group* unnamed to VoiceOver — the
+        // segments themselves are named — which is exactly as it was before, and
+        // is fixed by giving the callers a label to pass, not by inventing one.
+        Picker("", selection: $selection) {
             ForEach(options, id: \.self) { option in
-                segment(option)
-            }
-        }
-        .padding(3)
-        .background(track)
-    }
-
-    private func segment(_ option: T) -> some View {
-        let isSelected = selection == option
-        return Button {
-            // `withAnimation(nil)` does not mean "use the default" — it clears the
-            // transaction's animation outright. So the branches were inverted: with Reduce
-            // Motion OFF (the default) the `matchedGeometryEffect` indicator had nothing to
-            // move under and teleported between segments, and it only slid for the users who
-            // had asked for *less* motion. `Motion.listChange` matches `GlassTabBar` below,
-            // which drives the identical indicator.
-            withAnimation(motion.reduceMotion ? Motion.reduced : Motion.listChange) {
-                selection = option
-            }
-        } label: {
-            HStack(spacing: Space.x1 + 2) {
                 if let name = symbol?(option) {
-                    Image(systemName: name).font(.system(size: 12, weight: .medium))
-                }
-                Text(label(option)).typo(.callout, ink: isSelected ? Ink.primary : Ink.secondary)
-            }
-            .padding(.horizontal, Space.x3)
-            .frame(height: 26)
-            .frame(maxWidth: .infinity)
-            .background {
-                if isSelected {
-                    // One indicator, moved between segments — not one per
-                    // segment fading in and out.
-                    selectionIndicator
-                        .matchedGeometryEffect(id: "glassSegmentIndicator", in: indicator)
+                    Label(label(option), systemImage: name).tag(option)
+                } else {
+                    Text(label(option)).tag(option)
                 }
             }
-            // `Rectangle`, not `Capsule` — the shape of the *target*, not of the art.
-            //
-            // A `Capsule` here matched `selectionIndicator`, which reads as the tidy choice and
-            // is wrong: the segments tile edge to edge, so a capsule on each one leaves four
-            // dead wedges per segment, and they meet at the segment *boundaries* — the place a
-            // pointer most often lands when moving between two options. On a 26pt-tall segment
-            // the capsule's ends are radius 13, so each end forfeits `13×26 − π·13²/2` ≈ 72pt²;
-            // for three segments across ~300pt that is ~5.6% of each segment, all of it on the
-            // edges. `NSSegmentedControl` has no dead zones, and neither should this.
-            //
-            // The indicator stays a capsule. What the user clicks and what they see are allowed
-            // to differ, and here they have to: a rectangle tiles without gaps, a capsule does
-            // not, and only one of those two jobs is about pixels.
-            //
-            // `GlassTabBar` below already did this, and it drives the identical indicator — so
-            // this was two spellings of one control, not two decisions.
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
-    }
-
-    @ViewBuilder
-    private var selectionIndicator: some View {
-        if #available(macOS 26.0, *),
-           GlassSupport.active(reduceTransparency: motion.reduceTransparency) {
-            Capsule().fill(.clear).glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            Capsule().fill(Surface.raised)
-                .overlay(Capsule().strokeBorder(Line.hairline, lineWidth: Line.width))
-        }
-    }
-
-    /// The recessed track the indicator rides in. Content-layer, so a plain fill
-    /// rather than a second sheet of glass — the HIG warns against "layering
-    /// Liquid Glass elements on top of each other."
-    private var track: some View {
-        Capsule().fill(Surface.fillSubtle)
-            .overlay(Capsule().strokeBorder(Line.hairline.opacity(0.6), lineWidth: Line.width))
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 }
 
 // MARK: - Buttons
 
-/// The app's standard button. Glass on macOS 26, bordered below it.
+/// The app's standard macOS button.
 ///
-/// `role: .destructive` tints red; `prominent` uses `.glassProminent`, which the
-/// HIG limits to "one or two per view" — it is the call to action, not a style.
+/// `role: .destructive` tints red; `prominent` is reserved for the primary action.
 struct GlassButton: View {
     let title: String
     var systemImage: String? = nil
     var prominent: Bool = false
     var role: ButtonRole? = nil
-    /// The control size, because the style used to pin it and silently win.
-    ///
-    /// `GlassButtonLook` applies `.controlSize(.large)` to the button itself, which is *closer* to
-    /// it than anything a caller writes outside — `controlSize` is an environment value and the
-    /// innermost application is the one the control reads. So
-    /// `GlassButton(...).controlSize(.small)` compiled, read as intent, and did nothing: two call
-    /// sites in this app were inert. An API that discards a caller's instruction without a word is
-    /// worse than one that cannot express it, so the size is a parameter now and the outer
-    /// modifier is no longer the way to ask.
-    var size: ControlSize = .large
+    /// Native macOS sizing by default; screens opt into a larger primary control explicitly.
+    var size: ControlSize = .regular
     let action: () -> Void
 
     var body: some View {
@@ -166,51 +110,28 @@ struct GlassButton: View {
 
 private struct GlassButtonLook: ViewModifier {
     let prominent: Bool
-    /// Applied here rather than left to the caller — see `GlassButton.size` for why an outer
-    /// `.controlSize` could never have worked.
     let size: ControlSize
-    @ObservedObject private var motion = MotionPreference.shared
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *),
-           GlassSupport.active(reduceTransparency: motion.reduceTransparency) {
-            if prominent {
-                content.buttonStyle(.glassProminent).controlSize(size)
-            } else {
-                content.buttonStyle(.glass).controlSize(size)
-            }
+        if prominent {
+            content.buttonStyle(.borderedProminent).controlSize(size)
         } else {
-            if prominent {
-                content.buttonStyle(.borderedProminent).controlSize(size)
-            } else {
-                content.buttonStyle(.bordered).controlSize(size)
-            }
+            content.buttonStyle(.bordered).controlSize(size)
         }
     }
 }
 
-/// A compact icon-only glass button, for row actions and toolbars.
+/// A compact icon-only button, for row actions and toolbars.
 ///
-/// Note the 28pt frame with a larger `contentShape`: the HIG asks for a 44×44pt
-/// hit region, which a visually small control can still honour by extending its
-/// hit test beyond its artwork.
+/// The surface stays persistent: a control that is invisible
+/// until hovered has no affordance. Rows that only want the button on hover fade
+/// the whole button (`.opacity(isHovering ? 1 : 0)` at the row), which is a row
+/// decision, not this control's.
 ///
-/// The surface is **persistent**, and that is the fix for what this was before: a
-/// glass circle inserted only `if isHovering`, asking for `.regular.interactive()`.
-/// `Glass.interactive(_:)` *is* the system's own hover and press response — Apple
-/// describes it as applying "the same responsive and fluid reactions that `.glass`
-/// provides to standard buttons" — so a view that does not exist until the pointer
-/// arrives has already missed the event it was asking to handle. What actually
-/// happened was a hand-rolled `Motion.hoverIn` fade in front of a material that
-/// was never given the chance to do its own. One persistent surface, and the
-/// pointer response comes from the OS, which is also the only way to get the
-/// press-in and the specular reaction that make it read as native.
-///
-/// The pre-26 and Reduce Transparency branch is persistent too, for the same
-/// reason it is persistent above: a control that is invisible until hovered has no
-/// affordance. Rows that only want the button on hover fade the whole button
-/// (`.opacity(isHovering ? 1 : 0)` at the row), which is a row decision, not this
-/// control's.
+/// `tint` still colours the *glyph* rather than being handed to `.tint()`. On a
+/// bordered button `.tint` fills the bezel, so a destructive row action would
+/// become a red-filled button rather than a red glyph — louder than the six call
+/// sites intend, and the same collision `GlassChip` measured below.
 struct GlassIconButton: View {
     let systemName: String
     let label: String
@@ -218,35 +139,24 @@ struct GlassIconButton: View {
     let action: () -> Void
 
     var body: some View {
+        glyphButton.buttonStyle(.bordered)
+    }
+
+    private var glyphButton: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(tint ?? Ink.secondary)
-                .frame(width: 28, height: 28)
-                .modifier(IconButtonSurface())
+                // The HIG asks for a 44×44pt hit region, which a visually small
+                // control can still honour by extending its hit test beyond its
+                // artwork. Kept from the previous revision; whether a
+                // `PrimitiveButtonStyle` that wraps the label in its own bezel
+                // still reads an enlarged content shape from inside it is
+                // **unverified** — it needs a pointer on a device, not a build.
                 .contentShape(Rectangle().size(width: 44, height: 44))
         }
-        .buttonStyle(.plain)
         .help(label)
         .accessibilityLabel(label)
-    }
-}
-
-/// The icon button's material. A `ViewModifier` because `@ObservedObject` needs a
-/// view type to live in, and because `glassEffect` has to be applied *to* the
-/// glyph rather than composited behind it in a `.background`: a shape carrier in a
-/// `.background` with the effect on it is what collapsed the main window to ~133pt
-/// once already (see `UsageCard.cardBackground` in `FlowMainView.swift`).
-private struct IconButtonSurface: ViewModifier {
-    @ObservedObject private var motion = MotionPreference.shared
-
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *),
-           GlassSupport.active(reduceTransparency: motion.reduceTransparency) {
-            content.glassEffect(.regular.interactive(), in: Circle())
-        } else {
-            content.background(Circle().fill(Surface.fillMuted))
-        }
     }
 }
 
@@ -258,7 +168,22 @@ private struct IconButtonSurface: ViewModifier {
 /// while the user is dragging it, and that transient treatment is internal to
 /// the system — there is no `.glass` ToggleStyle to ask for, and hand-drawing a
 /// switch would lose the behaviour rather than gain it. What this adds is the
-/// surrounding row: a description, and a tappable area covering the whole width.
+/// surrounding row: a title and a description on the leading side.
+///
+/// The `HStack` + `labelsHidden()` is not a hand-built substitute for the
+/// `Toggle`'s own label, it is what pins the *order*. Outside a `Form`, a macOS
+/// `.switch` Toggle draws the switch **leading** of its label; inside a grouped
+/// `Form` it draws label-leading, switch-trailing. All 16 call sites sit in
+/// `SettingsCard`/`VStack`, so relying on the Toggle's own label would put the
+/// switch on the left at every one of them. If a screen moves to
+/// `Form`/`.formStyle(.grouped)`, this row should be replaced there by a plain
+/// `Toggle(title, isOn:)` and let the Form do the layout.
+///
+/// Not `LabeledContent`, which is the system component this row's shape otherwise
+/// matches: it restyles its label with `secondaryLabelColor`, and that colour
+/// measured **4.01:1** on this app's translucent tiles — under the 4.5:1 floor —
+/// which is the whole reason `Ink.secondary` exists (see `DesignTokens`). Keeping
+/// the row means keeping the measured ink.
 struct GlassToggle: View {
     let title: String
     var description: String? = nil
@@ -284,17 +209,32 @@ struct GlassToggle: View {
                 .labelsHidden()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+        // No `.contentShape(Rectangle())`. It was here under a doc comment
+        // claiming "a tappable area covering the whole width", and it never did
+        // that: `contentShape` sets a hit *shape*, and with no gesture attached to
+        // the row there was nothing to consume the hit. Only the switch was ever
+        // clickable. Click-anywhere-on-the-row is what a grouped `Form` gives a
+        // `Toggle` for free, which is the reason to move a screen to one rather
+        // than to add a tap gesture to a view that does not look like a button.
     }
 }
 
 // MARK: - Chip
 
-/// A small glass chip: keycaps, placeholder tokens, badges.
+/// A small chip: placeholder tokens, badges.
 ///
-/// `interactive` is opt-in because a chip is sometimes a label (a keycap showing
-/// which key to hold) and sometimes a button (a placeholder you insert). Only the
-/// latter should respond to the pointer.
+/// **Not a `Toggle(...).toggleStyle(.button)` and not a `Button`, because it is
+/// neither.** It has no action and no binding, and none of its six call sites is a
+/// filter or a selection: "dictated", "dynamic", "replaces"/"appends", "English",
+/// "Latest" are all read-only badges. The one call site that is clickable
+/// (`FeatureViews`, the placeholder tokens) supplies its own `Button` *around* the
+/// chip, so the interactivity — and the missing hover with it — lives in that
+/// file, not this one.
+///
+/// SwiftUI's badge component is `.badge(_:)`, which only renders inside a `List`
+/// row or a `TabView` item, so there is no system control to wrap here. This stays
+/// hand-drawn, and being hand-drawn is safe *because* it is not interactive: there
+/// is no hover, press or focus state for the system to have supplied.
 struct GlassChip: View {
     let text: String
     var systemImage: String? = nil
@@ -349,20 +289,32 @@ struct GlassChip: View {
 
 // MARK: - Text input
 
-/// A text field in a recessed well.
+/// A text field.
 ///
-/// The well is a *content-layer* surface, so it is a plain fill and not glass:
-/// text needs a stable, opaque-enough backdrop, and glass behind an editable
-/// field is exactly the "significant amount of text" case the HIG steers away
-/// from. The glass in this control is the focus ring.
+/// `.textFieldStyle(.roundedBorder)` — `NSTextField` in its rounded bezel. The
+/// well, the 30pt frame, the `@FocusState` and the hand-drawn focus ring
+/// (`Tint.accent.opacity(0.7)` at 1.5pt, animated on `Motion.hoverIn`) are all
+/// gone: the system bezel *is* the well, and it draws the real
+/// `keyboardFocusIndicatorColor` ring — which, unlike the accent imitation,
+/// follows the user's Increase Contrast and Full Keyboard Access settings and is
+/// the ring every other field on the machine draws. It also gets the text
+/// insertion cursor, the secondary-click services menu and the standard
+/// field-editor behaviours that a `.plain` field in a custom shape does not.
+///
+/// The height is now the control's own (~22pt at the default control size) rather
+/// than a fixed 30pt, and the bezel replaces `Surface.sunken`. Both are visible
+/// changes, and both are the point: a themed rectangle cannot hover, focus, or
+/// respond to Increase Contrast, and the bezel samples the themed window behind it.
+///
+/// `systemImage` renders *outside* the bezel. A rounded-border `NSTextField` has no
+/// leading-accessory slot, and reaching for one with an `.overlay` would put a
+/// glyph on top of the field's own text area. Two call sites pass one.
 struct GlassTextField: View {
     let placeholder: String
     @Binding var text: String
     var systemImage: String? = nil
     var mono: Bool = false
     var onSubmit: (() -> Void)? = nil
-
-    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: Space.x2) {
@@ -372,25 +324,27 @@ struct GlassTextField: View {
                     .foregroundStyle(Ink.tertiary)
             }
             TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
+                .textFieldStyle(.roundedBorder)
                 .font(mono ? .system(size: 13, design: .monospaced) : Typo.body.font)
-                .focused($isFocused)
                 .onSubmit { onSubmit?() }
         }
-        .padding(.horizontal, Space.x3)
-        .frame(height: 30)
-        .background(Radius.rect(Radius.field).fill(Surface.sunken))
-        .overlay(
-            Radius.rect(Radius.field).strokeBorder(
-                isFocused ? Tint.accent.opacity(0.7) : Line.hairline,
-                lineWidth: isFocused ? 1.5 : Line.width
-            )
-        )
-        .animation(Motion.hoverIn, value: isFocused)
     }
 }
 
-/// A multi-line editor in the same well as `GlassTextField`.
+/// A multi-line editor in a recessed well.
+///
+/// **The one input that stays hand-drawn, and the SDK is the reason.** There is no
+/// macOS `TextEditorStyle`: `.roundedBorder` is declared
+/// `@available(macOS, unavailable)` and `.plain` is macOS 14.0+ (verified in
+/// `SwiftUI.swiftinterface`), so a `TextEditor` on this app's 13.3 floor draws no
+/// bezel and no focus ring of its own. Deleting the well would leave a transparent
+/// scroll view with no edge, and deleting the ring would leave the only multi-line
+/// input in the app with **no visible keyboard focus at all** — which is an
+/// accessibility regression, not a simplification.
+///
+/// The well is a *content-layer* surface, so it is a plain fill and not glass:
+/// text needs a stable, opaque-enough backdrop, and glass behind an editable field
+/// is exactly the "significant amount of text" case the HIG steers away from.
 struct GlassTextEditor: View {
     @Binding var text: String
     var minHeight: CGFloat = 90
@@ -429,6 +383,20 @@ struct GlassTextEditor: View {
 /// `glassEffect` for it to modulate. This row deliberately has none (see the
 /// contrast measurement), so there is no system response to defer to and a fill
 /// that changes on hover is the whole mechanism, not a reimplementation of one.
+///
+/// **This type should not survive.** The system component for "a row you can pick"
+/// is `List` with a selection binding: it draws the hover wash, the selection fill
+/// in the correct appearance, the focus ring, arrow-key and type-select navigation,
+/// and the accessibility table role — none of which the code below has. It cannot
+/// be reached from here, though, because macOS has no row-selection style outside a
+/// `List` and both call sites are `VStack` + `ForEach`: `DiagnosticsView` (crash
+/// logs) and `NotesView.NoteRow`. Converting those two to
+/// `List(selection:)`/`.listStyle(.inset)` retires this whole type; until then it
+/// is what keeps the two of them consistent, so it stays as it is.
+///
+/// The hover wash is at least now *visible*: `Surface.fillHover` moved 0.06 → 0.10
+/// after 6% measured **1.142:1** on a light theme's card, which is the report this
+/// refactor came from. 10% measures 1.253:1, roughly AppKit's own list-row step.
 struct GlassSelectableRow<Content: View>: View {
     let isSelected: Bool
     let action: () -> Void

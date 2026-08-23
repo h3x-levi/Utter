@@ -203,6 +203,36 @@ struct SpritePack: Identifiable, Equatable {
         case .held: return "drag"
         }
     }
+
+    /// The side a pixel-art sprite is drawn at, snapped so nearest-neighbour stays on a
+    /// whole pixel grid. `SpritePackView.renderedSize` is the only caller.
+    ///
+    /// Two directions, and the second one is a bug fix. Where the canvas is *smaller* than
+    /// the box in device pixels, snap down to the largest whole multiple that fits — a 32px
+    /// cat in a 52pt box on a 2x display gets 1x rather than 1.625x, so no source pixel is
+    /// drawn 3 device pixels wide while its neighbour gets 4.
+    ///
+    /// Where the canvas is **larger** than the box, there is no whole multiple that fits at
+    /// all, and the previous `max(1, …)` clamped to 1x — which returns a side *bigger than
+    /// the box it was asked for*. That silently broke the invariant every other piece of the
+    /// companion's geometry is derived from: `CompanionGeometry` sizes the panel from the
+    /// requested `characterSize`, and a borderless panel clips its content, so the character
+    /// was sliced at the window edge mid-roam. It needed a 64px pack on a **1x** display to
+    /// show up — 64px in a 36pt box — which is why it shipped: every Retina display divides
+    /// the other way. So snap to the largest whole *divisor* instead: 1/2, 1/3, …, which is
+    /// just as exact under nearest-neighbour and always fits.
+    ///
+    /// Returns `box` unchanged for a canvas or scale that cannot be divided by, rather than
+    /// dividing by zero.
+    static func snappedSide(box: CGFloat, canvas: CGFloat, displayScale: CGFloat) -> CGFloat {
+        let devicePixels = box * displayScale
+        guard canvas >= 1, displayScale >= 1, devicePixels >= 1 else { return box }
+        let multiple = (devicePixels / canvas).rounded(.down)
+        guard multiple >= 1 else {
+            return canvas / (canvas / devicePixels).rounded(.up) / displayScale
+        }
+        return canvas * multiple / displayScale
+    }
 }
 
 /// Finds, validates and loads sprite packs from disk.
@@ -325,12 +355,12 @@ final class SpritePackStore: ObservableObject {
             )) ?? []
         }
 
-        // Bundled packs first, then the user's. A user folder with the same name as
-        // a bundled one wins — the dedupe below keeps the *last* load for an id, so
-        // someone can replace a shipped character with their own art without
-        // touching the bundle.
+        // Bundled packs first, then the user's. The code-drawn cats reserve their legacy
+        // ids so an old PNG folder cannot silently replace the built-in implementation.
         var entries = folders(in: Self.bundledDirectory ?? root)
         if Self.bundledDirectory != nil { entries += folders(in: root) }
+        let codePackIDs = Set(CodePixelCatStyle.allCases.map(\.rawValue))
+        entries.removeAll { codePackIDs.contains($0.lastPathComponent) }
 
         // The one place the drawn size enters the loader. Read here, on the main actor,
         // where reading a preference is safe and obvious.
@@ -339,7 +369,7 @@ final class SpritePackStore: ObservableObject {
         if !force, let lastScanSignature, lastScanSignature == signature,
            lastDecodedSize == characterSize { return }
 
-        var found: [SpritePack] = []
+        var found = CodePixelCatStyle.allCases.map(\.pack)
         var failed: [(id: String, reason: String)] = []
 
         for entry in entries {
@@ -353,8 +383,8 @@ final class SpritePackStore: ObservableObject {
             }
         }
 
-        // Dedupe by id, last-one-wins, so a user pack shadows a bundled pack of the
-        // same name rather than the grid showing two entries called "Dog".
+        // Dedupe by id, last-one-wins, so a user pack shadows a bundled image pack
+        // with the same name rather than the grid showing duplicates.
         var byID: [String: SpritePack] = [:]
         for pack in found { byID[pack.id] = pack }
 
@@ -363,7 +393,7 @@ final class SpritePackStore: ObservableObject {
         }
         // The memoised resolutions describe the *previous* set of packs. Dropping them here is what
         // keeps `pack(matching:)`'s cache honest: a pack installed, removed, renamed or repaired
-        // has to reach the drawn character without a relaunch, and a stale entry would either keep
+        // has to reach the companion without a relaunch, and a stale entry would either keep
         // rendering a pack that is gone or refuse to notice one that has arrived.
         resolved.removeAll()
         failures = failed
@@ -907,7 +937,7 @@ final class SpritePackStore: ObservableObject {
     ///
     /// It held only the original six, and the pet states plus the walk gait were added to
     /// `key(for:)` and `walkAnimation` without being added here. The result was silent because
-    /// `animation(for:)` falls back to `resting` by design: the shipped mochi packs each carried
+    /// `animation(for:)` falls back to `resting` by design: the shipped pixel packs each carried
     /// seven PNGs — `knead`, `walk`, `purr`, `hunt`, `drag`, `overheat`, `stretch` — that were
     /// never read, and the cat played its idle loop while "typing" or "walking". The typing
     /// animation could not appear even with the keystroke signal working and Accessibility
@@ -1091,16 +1121,20 @@ struct SpritePackView: View {
     /// rather than nearest, because rounding up can exceed the size the panel sized its
     /// padding from, and a companion clipped by its own window is a worse bug than one
     /// drawn slightly small. Measured cost at 32px: the four sizes render 32/48/64/80pt,
-    /// which is 5-11% under nominal and consistent enough that changing size still reads
-    /// as changing size.
+    /// which is 5-11% under nominal. At the 64px the pixel cats are drawn at, the same rule
+    /// gives 32/32/64/64pt — coarser, and the price of a canvas with room for articulated
+    /// legs.
+    ///
+    /// The arithmetic is a `static` on `SpritePack` so it can be tested: it is the one part
+    /// of this view that is pure, and it is also the part that had a live bug (see
+    /// `SpritePack.snappedSide`).
     private var renderedSize: CGFloat {
         guard pack.pixelArt else { return size }
-        let side = max(pack.frameSize.width, pack.frameSize.height)
-        // A pack whose frames failed to report a size, or a screen scale of zero, would
-        // divide by nothing. Fall back to the unsnapped box rather than to a crash.
-        guard side >= 1, displayScale >= 1 else { return size }
-        let multiple = max(1, (size * displayScale / side).rounded(.down))
-        return side * multiple / displayScale
+        return SpritePack.snappedSide(
+            box: size,
+            canvas: max(pack.frameSize.width, pack.frameSize.height),
+            displayScale: displayScale
+        )
     }
 
     /// How far the eye layer moves for a full deflection, in points.
@@ -1159,7 +1193,15 @@ struct SpritePackView: View {
             ? (pack.walkAnimation ?? pack.animation(for: mood))
             : pack.animation(for: mood)
         Group {
-            if let animation, !animation.frames.isEmpty {
+            if let style = CodePixelCatStyle(rawValue: pack.id) {
+                CodePixelCatView(
+                    style: style,
+                    mood: mood,
+                    pose: pose,
+                    size: renderedSize,
+                    elapsed: elapsed
+                )
+            } else if let animation, !animation.frames.isEmpty {
                 // The body-and-heat layer is memoised (`.equatable()`): its pixels change
                 // only when the drawn frame or the heat does, so on the ~3 of every 4 ticks
                 // that land on the *same* APNG frame, SwiftUI skips rebuilding the image, its
@@ -1180,7 +1222,25 @@ struct SpritePackView: View {
                 )
                 .equatable()
                 .overlay {
-                    if let eyes = pack.eyeOverlay {
+                    // No tracking eyes while walking, because the walk is drawn in profile.
+                    //
+                    // `eyes.png` is one shared overlay anchored to the front-on head: two eyes
+                    // at rows 8-12 of the canvas. The pixel cats' walk cycle is a side view — a
+                    // profile cat has *one* visible eye, further forward — so no anchor offset
+                    // can place this correctly. The problem is the eye count, not the position,
+                    // and `eyeAnchors` can only move the layer.
+                    //
+                    // So the walk frames bake their own eye and this layer stands down. The
+                    // cost is cursor tracking for the length of a walk, which is the right
+                    // thing to trade: an animal in motion looks where it is going. Every other
+                    // state keeps the overlay untouched — including `knead`, where the pointer
+                    // matters most and the anchor exists for exactly that reason.
+                    //
+                    // Keyed on the same condition that chose the animation above, so a pack
+                    // *without* a walk cycle — which falls back to the mood's front-on frames —
+                    // keeps its eyes. Only a pack that actually supplies `walk` gives them up.
+                    let walking = pose.gait == .walking && pack.walkAnimation != nil
+                    if let eyes = pack.eyeOverlay, !walking {
                         Image(nsImage: eyes)
                             .resizable()
                             .interpolation(pack.pixelArt ? .none : .high)

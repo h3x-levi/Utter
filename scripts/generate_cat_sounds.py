@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate Mochi's voice: the three cues the pixel-cat companion makes.
+Generate the cat's voice: the three cues the pixel-cat companion makes.
 
-Mochi meows when a reminder lands and when a coding agent finishes, and purrs while
+It meows when a reminder lands and when a coding agent finishes, and purrs while
 being stroked. Those are the only three sounds; a desktop pet that vocalises more than
 that stops being company and becomes an interruption.
 
@@ -27,7 +27,7 @@ WHAT MAKES EACH ONE READ AS A CAT
   bandpasses: F1 850 → 600 Hz, F2 1900 → 1100 Hz.
 
 * **The purr is amplitude modulation, not a note.** A purr is a 20-30 Hz pulsing of the
-  larynx, and the pulse *rate* is the cue. Mochi purrs at 26 Hz.
+  larynx, and the pulse *rate* is the cue. The companion purrs at 26 Hz.
 
   One honest deviation: the real fundamental sits near 25 Hz, and a laptop speaker
   cannot reproduce 25 Hz at all — a physically accurate purr is silent on the hardware
@@ -305,7 +305,7 @@ def build_meow_double():
 
 
 def main():
-    print("Generating Mochi's voice...")
+    print("Generating the cat's voice...")
     save_voice("cat-meow.wav", build_meow())
     save_voice("cat-meow-double.wav", build_meow_double())
     save_voice("cat-purr.wav", build_purr())

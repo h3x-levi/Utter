@@ -28,13 +28,9 @@ struct ShippedPackTests {
     /// Kept as a literal list rather than reading the directory, so deleting a pack by
     /// accident fails a test instead of quietly shrinking the set under it.
     ///
-    /// Two packs were removed from this list deliberately, and the reason is worth keeping:
-    /// they depicted recognisable characters from published anime. Generating the art did
-    /// not make it ours — copyright attaches to a character's visual expression, not to the
-    /// brush that drew it — so shipping them in a public repository would have been
-    /// infringement. The policy is stated on `SpritePack`; user-installed packs are the
-    /// supported route for art Utter cannot ship itself.
-    private let shipped = ["dog", "panda", "mochi-midnight", "mochi-cream"]
+    /// The pixel cats are code-rendered and tested separately; these are the image packs
+    /// copied into the production bundle.
+    private let shipped = ["dog", "panda"]
 
     private let moods: [CompanionMood] = [
         .resting, .alert, .thinking, .delighted, .startled, .sleepy,
@@ -58,40 +54,6 @@ struct ShippedPackTests {
                 let animation = pack.animations[SpritePack.key(for: mood)]
                 #expect(animation != nil, "\(id) is missing the \(mood) animation")
             }
-        }
-    }
-
-    /// The pixel packs draw the pet states and the walk gait; the photo packs deliberately do not.
-    ///
-    /// This pins the bug that made the typing animation impossible to see. `SpritePack.stateNames`
-    /// is the loader's entire vocabulary — `discoverByConvention` iterates it, and it populates
-    /// `animations` even for a pack that ships a `pack.json`. The pet states and the walk gait were
-    /// added to `key(for:)` and `walkAnimation` **without** being added to `stateNames`, so
-    /// `knead.png`, `walk.png`, `purr.png`, `hunt.png`, `drag.png` and `overheat.png` were never
-    /// read. Seven PNGs per mochi pack sat on disk unloaded.
-    ///
-    /// It was silent because `animation(for:)` falls back to `resting` by design, for the photo
-    /// packs that genuinely lack the art — so the cat played its idle loop while "typing", and no
-    /// test noticed. `allPacksLoad` above could not catch it either: it only walks the original six
-    /// moods. Hence a separate test that names the states the fallback would otherwise hide.
-    @Test("The pixel packs load the pet states and the walk gait, not a resting fallback")
-    func pixelPacksLoadPetStates() throws {
-        let petMoods: [CompanionMood] = [.kneading, .overheating, .purring, .hunting, .held]
-        for id in ["mochi-midnight", "mochi-cream"] {
-            let directory = Self.companionsDirectory.appendingPathComponent(id)
-            let pack = try SpritePackStore.loadPack(from: directory)
-
-            for mood in petMoods {
-                let key = SpritePack.key(for: mood)
-                let animation = pack.animations[key]
-                #expect(animation != nil,
-                        "\(id) drew \(key).png but the loader never read it — is \(key) in stateNames?")
-                #expect(animation?.frames.isEmpty == false, "\(id) loaded \(key) with no frames")
-            }
-
-            // The gait is not a mood, so it is resolved separately and would fail separately.
-            #expect(pack.walkAnimation != nil,
-                    "\(id) drew walk.png but walkAnimation found nothing — is \"walk\" in stateNames?")
         }
     }
 
@@ -188,13 +150,6 @@ struct ShippedPackTests {
     /// *under* the cap at `huge` means the source art has run out of resolution and the
     /// character will render soft.
     ///
-    /// **Pixel-art packs are exempt from that lower bound, and only that one.** Being
-    /// smaller than the cap is what pixel art *is*: Mochi is authored at 32px and drawn
-    /// with nearest-neighbour at a whole-number multiple, so 32px against a 91px cap is
-    /// the design rather than a shortfall. The upper bound still applies to them — the
-    /// memory ceiling this test exists to defend is not about art style — and the pixel
-    /// packs have their own resolution contract, enforced in the generator
-    /// (`tools/mochi/generate_mochi.py --verify`) and by the renderer's integer snapping.
     @Test("Every offered size decodes the shipped art at the size it is drawn",
           arguments: CompanionSize.allCases)
     func framesAreCapped(size: CompanionSize) throws {
@@ -209,7 +164,6 @@ struct ShippedPackTests {
                     let longest = max(frame.size.width, frame.size.height)
                     #expect(longest <= cap + 1,
                             "\(id)/\(mood) frame is \(longest)pt against a \(cap)pt cap at \(size)")
-                    if pack.pixelArt { continue }
                     #expect(longest >= cap - 1,
                             "\(id)/\(mood) decodes to \(longest)pt at \(size), under the \(cap)pt the renderer wants — the source art is too small")
                 }
@@ -217,56 +171,4 @@ struct ShippedPackTests {
         }
     }
 
-    /// The pixel packs' own contract, in place of the resolution floor above.
-    ///
-    /// A pixel pack is only crisp if three things hold, and all three are easy to break
-    /// with an innocent-looking edit to the generator: the canvas must be exactly 32px so
-    /// the renderer's integer snapping produces the intended 32/48/64/80pt ladder, every
-    /// frame must be that same size, and the eye layer must match the body exactly or the
-    /// loader discards it and the cat stops tracking the cursor.
-    @Test("Pixel packs are 32px square, with a matching eye layer")
-    func pixelPacksHoldTheirGrid() throws {
-        for id in shipped {
-            let pack = try SpritePackStore.loadPack(
-                from: Self.companionsDirectory.appendingPathComponent(id),
-                characterSize: UserData.defaultCompanionSize.points
-            )
-            guard pack.pixelArt else { continue }
-
-            #expect(pack.frameSize == CGSize(width: 32, height: 32),
-                    "\(id) is \(pack.frameSize) — the renderer's snapping assumes 32px")
-            #expect(pack.eyeOverlay != nil,
-                    "\(id) has no usable eyes.png, so it cannot track the cursor")
-            #expect(pack.eyeOverlay?.size == pack.frameSize,
-                    "\(id) eye layer does not match its frames")
-            #expect(pack.eyeTravel > 0, "\(id) declares no eye travel")
-
-            // The typing pose leans, so its head is not where the resting pose has it and
-            // the shared eye layer has to be told. Without this anchor the pupils stay
-            // behind and float beside the face — which is the bug that blocked the leaning
-            // pose from existing at all, so it is worth a test rather than a comment.
-            let kneadAnchor = pack.eyeAnchor(for: .kneading)
-            #expect(kneadAnchor.dx != 0 || kneadAnchor.dy != 0,
-                    "\(id) has no eye anchor for the leaning typing pose")
-            // Every other state keeps the resting head, so it must NOT be nudged.
-            for mood in [CompanionMood.resting, .alert, .thinking, .sleepy] {
-                let anchor = pack.eyeAnchor(for: mood)
-                #expect(anchor.dx == 0 && anchor.dy == 0,
-                        "\(id)/\(mood) should use the resting eye position")
-            }
-        }
-    }
-
-    /// A malformed or oversized anchor must not put the pupils outside the frame.
-    @Test("Eye anchors are clamped and bad ones ignored")
-    func eyeAnchorsAreDefensive() throws {
-        // The real pack, as a baseline: its one anchor is inside the clamp.
-        let pack = try SpritePackStore.loadPack(
-            from: Self.companionsDirectory.appendingPathComponent("mochi-midnight")
-        )
-        let anchor = pack.eyeAnchor(for: .kneading)
-        #expect(abs(anchor.dx) <= 12 && abs(anchor.dy) <= 12)
-        // A state nobody declared falls back to no offset rather than to nil-and-crash.
-        #expect(pack.eyeAnchor(for: .held).dx == 0)
-    }
 }

@@ -94,6 +94,28 @@ struct DictionaryView: View {
 
 /// One dictionary entry. The delete button only appears on hover, so a long list
 /// reads as words rather than as a column of trash icons.
+///
+/// Reveal-on-hover row actions are a genuine macOS convention — Mail and Notes both
+/// do it — but doing it with `.opacity` alone was a defect rather than a style.
+/// `.opacity(0)`, unlike `.hidden()`, removes neither hit-testing nor the
+/// accessibility element. So this row shipped a **destructive** button that was
+/// fully clickable, keyboard-focusable, and announced by VoiceOver as
+/// "Remove <word>, button" while drawing nothing at all: a click could delete a word
+/// from a target the user could not see.
+///
+/// `.allowsHitTesting` and `.accessibilityHidden` close both holes, and the
+/// `.contextMenu` gives the same action a route that does not require a pointer
+/// inside the row — which is what makes hiding it acceptable at all for anyone
+/// navigating by keyboard, VoiceOver or Switch Control. `Button(_:role:action:)` is
+/// macOS 12.0, under the 13.3 floor, and `.destructive` is what draws the item red
+/// and groups it where macOS puts destructive items.
+///
+/// The row *fill* stays hand-drawn deliberately. No system component supplies row
+/// hover outside a `List`, and a `List` is not available on this screen (it is a tab
+/// body inside `FlowMainView`'s `ScrollView`, and nesting scroll containers is what
+/// resized this app's window twice — see `BentoRow.body`). The fill it uses is also
+/// not the invisible kind: `Surface.fillSubtle → fillHover` measures **1.147:1**
+/// over an area this size, which does read.
 private struct WordRow: View {
     let word: String
     let onDelete: () -> Void
@@ -111,18 +133,30 @@ private struct WordRow: View {
                 tint: Tint.danger,
                 action: onDelete
             )
+            // Invisible has to also mean unreachable — see the note above. Opacity
+            // rather than `if isHovering` so the button keeps its width and the word
+            // beside it does not shift as the pointer crosses the row.
             .opacity(isHovering ? 1 : 0)
+            .allowsHitTesting(isHovering)
+            .accessibilityHidden(!isHovering)
         }
-        .padding(.horizontal, Space.x3)
+        .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x1)
         .frame(minHeight: 34)
-        .background(Radius.rect(Radius.control).fill(
-            isHovering ? Surface.fillHover : Surface.fillSubtle
-        ))
+        // `rowFill` rather than a hand-written fill: it is the one function all five of
+        // the app's hand-drawn rows now route through, and it adds the hover rim these
+        // three were missing. Fill and rim only — the padding above stays here, because
+        // this row and `CustomCommandRow` do not share it.
+        .rowFill(isHovering: isHovering)
         // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
         // so a square hit region accepted clicks in four corners where nothing is drawn.
         // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
         .contentShape(Radius.rect(Radius.control))
+        // The pointer-free route to the same action. Placed after `.contentShape` so
+        // the menu's hit region is the drawn row, not its square bounds.
+        .contextMenu {
+            Button("Remove \(word)", role: .destructive, action: onDelete)
+        }
         .onHover { hovering in
             withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
         }
@@ -164,40 +198,64 @@ struct SnippetsView: View {
                         .disabled(!canAdd)
                 }
 
-                // Placeholder chips — tap to insert into the expansion field.
+                // Placeholder buttons — click to insert into the expansion field.
+                //
+                // A real `Section`, because that is what this group already was: a
+                // header, a set of controls, and a line of prose explaining them. The
+                // prose used to be a third sibling `Text` in the stack — structurally
+                // indistinguishable from content — and is now the `footer:`, which is
+                // where macOS puts explanatory text for a group.
+                //
+                // The enclosing `VStack` stays and keeps its `Space.x2`. A `Section`
+                // outside a `List` is flattened into its parent's layout, so the
+                // parent's `spacing` is what lands between header, content and footer;
+                // dropping the `VStack` would hand that job to `BentoTile`'s
+                // `Space.x3` stack and space the group's own parts as widely as the
+                // tile spaces its groups. Same reason the history sections in
+                // `HomeView` sit inside their per-day stack.
+                //
+                // No `GlassCluster` around the buttons: it batches `glassEffect`
+                // calls, and `.bordered` is not glass below macOS 26 — there is
+                // nothing to batch. `FlowLayout` wraps, because a narrow window
+                // clipped the single `HStack` this used to be.
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    SectionHeader(title: "Placeholders")
-
-                    // No `GlassCluster` here.
-                    //
-                    // `GlassChip` deliberately is not glass. `GlassChip.chipBackground`
-                    // spells out why ("A standard material, deliberately *not*
-                    // `glassEffect`… glass here sits directly behind 11pt type") and its
-                    // background is `Capsule().fill(Surface.fillMuted)`. So the container
-                    // had five children and nothing to batch.
-                    //
-                    // Wraps instead of overflowing: the chip row used to be a
-                    // single HStack, so a narrow window clipped it.
-                    FlowLayout(spacing: Space.x2) {
-                        ForEach(SnippetTemplates.availablePlaceholders, id: \.token) { item in
-                            Button {
-                                newText.append(item.token)
-                                expansionFocused = true
-                            } label: {
-                                GlassChip(
-                                    text: item.token,
-                                    tint: Tint.accent,
-                                    mono: true
-                                )
+                    Section {
+                        FlowLayout(spacing: Space.x2) {
+                            ForEach(SnippetTemplates.availablePlaceholders, id: \.token) { item in
+                                // A real `Button`, not a chip wearing a `.plain` button.
+                                //
+                                // This was `Button { … } label: { GlassChip(…) }` with
+                                // `.buttonStyle(.plain)`, and `GlassChip` is deliberately
+                                // non-interactive — its own note describes it as a static
+                                // capsule of `Surface.fillMuted`. So six clickable
+                                // controls drew no hover and no pressed state at all,
+                                // which is the reported complaint word for word, on
+                                // controls whose only purpose is to be clicked.
+                                //
+                                // `.bordered` at `.controlSize(.small)` is the system's
+                                // small pill and the system owns its hover and press
+                                // feedback. `.monospaced()`
+                                // (macOS 13.0, under the floor) keeps what `mono: true`
+                                // was for: a bracketed token is read character by
+                                // character, not as a word.
+                                Button {
+                                    newText.append(item.token)
+                                    expansionFocused = true
+                                } label: {
+                                    Text(item.token).monospaced()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help(item.description)
                             }
-                            .buttonStyle(.plain)
-                            .help(item.description)
                         }
+                    } header: {
+                        SectionHeader(title: "Placeholders")
+                    } footer: {
+                        Text("Placeholders are filled in when the snippet runs. Text without [brackets] is typed as written.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-
-                    Text("Placeholders are filled in when the snippet runs. Text without [brackets] is typed as written.")
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, Space.x1)
             }
@@ -263,6 +321,9 @@ struct SnippetsView: View {
     }
 }
 
+/// One snippet. Same reveal-on-hover delete as `WordRow`, and the same fix — read
+/// that type's note for why `.opacity(0)` alone left a live invisible destructive
+/// button, and why the `.contextMenu` is the part that makes hiding it acceptable.
 private struct SnippetRow: View {
     let trigger: String
     let expansion: String
@@ -292,17 +353,24 @@ private struct SnippetRow: View {
                 action: onDelete
             )
             .opacity(isHovering ? 1 : 0)
+            .allowsHitTesting(isHovering)
+            .accessibilityHidden(!isHovering)
         }
-        .padding(.horizontal, Space.x3)
+        .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x1)
         .frame(minHeight: 34)
-        .background(Radius.rect(Radius.control).fill(
-            isHovering ? Surface.fillHover : Surface.fillSubtle
-        ))
+        // `rowFill` rather than a hand-written fill: it is the one function all five of
+        // the app's hand-drawn rows now route through, and it adds the hover rim these
+        // three were missing. Fill and rim only — the padding above stays here, because
+        // this row and `CustomCommandRow` do not share it.
+        .rowFill(isHovering: isHovering)
         // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
         // so a square hit region accepted clicks in four corners where nothing is drawn.
         // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
         .contentShape(Radius.rect(Radius.control))
+        .contextMenu {
+            Button("Remove \(trigger)", role: .destructive, action: onDelete)
+        }
         .onHover { hovering in
             withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
         }
@@ -554,6 +622,28 @@ struct CommandInfo {
     let description: String
 }
 
+/// A reference table of spoken phrases and what each one does.
+///
+/// **Deliberately still an `HStack`, not `LabeledContent`.** The pairing semantics
+/// were worth having, and are now supplied by `.accessibilityElement(children:
+/// .combine)` — VoiceOver reads "Make it concise, Removes filler words, shortens
+/// text" as one row instead of two unrelated strings that happen to share a line.
+/// What `LabeledContent` would have added on top of that is its own layout, and its
+/// default style is built for a *short trailing value*: it puts the content at the
+/// trailing edge of the row. The second column here is a wrapping paragraph, so it
+/// would either right-align or share the slack with the style's internal spacer, and
+/// which of those happens is not something reading the SDK settles — it needs the app
+/// on screen. The rows are static text with no hover and no control in them, so
+/// there is no interaction defect to fix and no reason to trade a known layout for an
+/// unknown one. The 210pt label column stays: it is what keeps four rows' phrases on
+/// one left rail.
+///
+/// The `Surface.fillSubtle` behind every row is gone. That was a 4% white wash on a
+/// near-white tile — roughly **1.06:1** on Paper, invisible in every light theme, and
+/// a fair share of the reported whitewashing on this screen. It separated nothing that
+/// 8pt of row padding does not separate, and it was the only reason the rows carried
+/// `Space.x3` of horizontal padding; without it the phrase column aligns to the tile's
+/// own content edge, like every other line in the tile.
 struct CommandSection: View {
     let title: String
     let icon: String
@@ -572,10 +662,9 @@ struct CommandSection: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, Space.x3)
                     .padding(.vertical, Space.x2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Radius.rect(Radius.control).fill(Surface.fillSubtle))
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -619,6 +708,14 @@ private struct HowToStep: View {
 
 /// One user-defined AI command. Edit and delete reveal on hover, so a list of
 /// commands reads as commands rather than as rows of buttons.
+///
+/// Same reveal-on-hover fix as `WordRow` (read that note), and the worse case of the
+/// two: this row hid *two* controls behind one `.opacity`, so an invisible Edit sat
+/// directly beside an invisible Delete. A click landing one button off did not
+/// silently open an editor — it silently deleted a command. Both are now
+/// hit-test-disabled and hidden from VoiceOver while not hovered, and both are in the
+/// context menu, `Divider()`-separated so the destructive item is not adjacent to the
+/// benign one.
 private struct CustomCommandRow: View {
     let command: CustomAICommand
     let onEdit: () -> Void
@@ -654,16 +751,25 @@ private struct CustomCommandRow: View {
                                 tint: Tint.danger, action: onDelete)
             }
             .opacity(isHovering ? 1 : 0)
+            .allowsHitTesting(isHovering)
+            .accessibilityHidden(!isHovering)
         }
-        .padding(.horizontal, Space.x3)
+        .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x2)
-        .background(Radius.rect(Radius.control).fill(
-            isHovering ? Surface.fillHover : Surface.fillSubtle
-        ))
+        // `rowFill` rather than a hand-written fill: it is the one function all five of
+        // the app's hand-drawn rows now route through, and it adds the hover rim these
+        // three were missing. Fill and rim only — the padding above stays here, because
+        // this row and `CustomCommandRow` do not share it.
+        .rowFill(isHovering: isHovering)
         // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
         // so a square hit region accepted clicks in four corners where nothing is drawn.
         // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
         .contentShape(Radius.rect(Radius.control))
+        .contextMenu {
+            Button("Edit \(command.trigger)", action: onEdit)
+            Divider()
+            Button("Delete \(command.trigger)", role: .destructive, action: onDelete)
+        }
         .onHover { hovering in
             withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
         }
@@ -677,6 +783,27 @@ private struct CustomCommandRow: View {
 }
 
 /// A labelled field with a hint beneath it, for the command editor.
+///
+/// A real `Section`: the label is the `header:` and the hint is the `footer:`, which
+/// is exactly what they are. Before this they were two anonymous `Text` siblings of
+/// the control, so nothing in the view tree said that the first line named the field
+/// and the last line explained it. The enclosing `VStack` and its `Space.x2` stay —
+/// a `Section` outside a `List` is flattened into its parent's layout, so the parent
+/// is what spaces header from content from footer, and this keeps the field's rhythm
+/// byte-identical to what it was. `Section` is macOS 10.15; the three-slot
+/// `Section(content:header:footer:)` initialiser likewise.
+///
+/// **Not `LabeledContent`, and not inside a `Form`** — the two things that would give
+/// the label a real control association. Both change the layout to horizontal:
+/// `LabeledContent`'s default style puts content at the trailing edge, and `Form`'s
+/// `.columns` style aligns labels into a right-aligned column. That is the correct
+/// macOS look for short fields, and it is a genuine improvement over what is here —
+/// but one of the three fields is an 84pt-tall `GlassTextEditor`, the sheet is a fixed
+/// `.frame(width: 540)` whose height comes from its content, and whether `Form`
+/// introduces a scroll container (and so stops publishing an intrinsic height) is not
+/// answerable from the SDK. This app has already resized its own window twice from an
+/// intrinsic size propagating through `NSHostingView` — see `BentoRow.body` — so that
+/// is not a change to make without the app on screen. Routed rather than guessed.
 private struct EditorField<Content: View>: View {
     let label: String
     var hint: String? = nil
@@ -684,12 +811,16 @@ private struct EditorField<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x2) {
-            Text(label).typo(.captionEmphasis, ink: Ink.primary)
-            content()
-            if let hint {
-                Text(hint)
-                    .typo(.caption, ink: Ink.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Section {
+                content()
+            } header: {
+                Text(label).typo(.captionEmphasis, ink: Ink.primary)
+            } footer: {
+                if let hint {
+                    Text(hint)
+                        .typo(.caption, ink: Ink.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

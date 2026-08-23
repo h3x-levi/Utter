@@ -87,8 +87,13 @@ private struct ThemeSwatch: View {
         }
         .frame(height: 46)
         .overlay(
+            // `hairlineHover`, not `Line.strong`: strong is `Color.primary` at 14% against a
+            // 13% warm hairline, so the old hover was a 0.01 alpha step measuring 1.070:1 —
+            // invisible, leaving the 0.02 scale below as the only cue. Same ramp at 0.26
+            // steps 1.32:1 in light, 1.55:1 in dark. No fill wash here on purpose: this tile
+            // previews the theme's own canvas, so tinting it would misreport the choice.
             Radius.rect(Radius.control).strokeBorder(
-                isSelected ? Tint.accent : (isHovering ? Line.strong : Line.hairline),
+                isSelected ? Tint.accent : (isHovering ? Line.hairlineHover : Line.hairline),
                 lineWidth: isSelected ? 2 : Line.width
             )
         )

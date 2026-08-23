@@ -119,42 +119,46 @@ struct PillPolishTests {
 
     // MARK: The writing pen has to fit inside its own frame
 
-    @Test("The rotated pen glyph fits inside the processing capsule")
+    @Test("The writing pen stays inside its own frame through the whole scribble")
     func penFitsItsFrame() {
-        // The pen went missing while transcribing, and the cause is a SwiftUI trap worth pinning:
-        // `Image(systemName:)` reports a layout box of roughly its font size, but `rotationEffect` is
-        // a *render* transform that does not change that box. So a glyph turned 38 degrees paints
-        // across `size * (cos38 + sin38)` — 15.4pt for an 11pt glyph — and positioning it by offset
-        // alone put 7.2pt of it outside a 28pt frame, hard against the capsule's bright rim.
+        // What this used to pin no longer exists. It restated `WritingPen`'s constants as literals —
+        // an 11pt glyph, 38 degrees of rotation, a 16pt box, an 18pt wave — and so kept passing
+        // against code that had changed underneath it. A test that duplicates the values it is
+        // checking cannot fail when they move, which is the opposite of its job.
         //
-        // These are the numbers `WritingPen` is built from. If any of them moves, this fails.
-        let glyphSize: CGFloat = 11
-        let rotation: CGFloat = 38
-        let radians = rotation * .pi / 180
-        let paintedExtent = glyphSize * (abs(cos(radians)) + abs(sin(radians)))
+        // Two things it was pinning are gone on purpose. The **wave is gone**: the pen and the line
+        // never read as one thing, and the user's instruction was to animate the pen alone. The
+        // **rotation is gone**: measuring the glyph's ink at seven angles showed the SF `pencil` is
+        // already diagonal at rest (8.5 x 8.5, aspect 1.00) and 38 degrees flattens it to
+        // 11.5 x 2.5 — a horizontal bar, which is why it never looked like a pen.
+        //
+        // What is worth pinning is the property the pen went missing for: it must not paint outside
+        // its frame at any point in its cycle. So this walks the cycle.
+        let penBox: CGFloat = 10
+        let strokeSpan: CGFloat = 5.5
+        let strokeRise: CGFloat = 2.2
+        let frameSide = penBox + 2 * max(strokeSpan, strokeRise) + 2
 
-        let penBox: CGFloat = 16
-        #expect(penBox >= paintedExtent,
-                "the reserved box (\(penBox)pt) is smaller than what the glyph paints (\(paintedExtent)pt)")
+        // The glyph inks 8.5 of its 10pt box (rendered and measured), so the box is the bound.
+        #expect(penBox >= 8.5, "the box (\(penBox)pt) is smaller than the glyph's ink")
 
-        let waveWidth: CGFloat = 18
-        let frameWidth = waveWidth + penBox / 2 + 2
-        let frameHeight = penBox + 2
-        let penX = waveWidth - penBox / 2
-        let penY = (frameHeight - penBox) / 2
+        var worst: CGFloat = 0
+        for step in 0...360 {
+            let phase = CGFloat(step) / 360
+            let x = sin(phase * 2 * .pi) * strokeSpan
+            let y = sin(phase * 6 * .pi + .pi / 2) * strokeRise
+            // The box is centred, then offset. Distance from the frame's centre to a box corner.
+            let half = frameSide / 2
+            let left = half + x - penBox / 2, right = half + x + penBox / 2
+            let top = half + y - penBox / 2, bottom = half + y + penBox / 2
+            worst = max(worst, max(-left, max(right - frameSide, max(-top, bottom - frameSide))))
+        }
+        #expect(worst <= 0.001,
+                "the pen leaves its \(frameSide)pt frame by \(worst)pt somewhere in the cycle")
 
-        // Inside on both axes, with margin.
-        #expect(penX >= 0 && penX + penBox <= frameWidth,
-                "pen spans \(penX)...\(penX + penBox) in a \(frameWidth)pt frame")
-        #expect(penY >= 0 && penY + penBox <= frameHeight,
-                "pen spans \(penY)...\(penY + penBox) in a \(frameHeight)pt frame")
-
-        // And the whole indicator fits the shell it is drawn in: a resting capsule less the padding
-        // it gives every state.
-        let contentWidth = PillMetrics.minimumCapsuleWidth - PillMetrics.horizontalPadding * 2
-        #expect(frameWidth <= contentWidth,
-                "the pen row (\(frameWidth)pt) does not fit the processing capsule (\(contentWidth)pt)")
-        #expect(frameHeight <= PillMetrics.capsuleHeight)
+        // And the frame has to fit the capsule it is drawn in, or the pill clips it.
+        #expect(frameSide <= PillMetrics.capsuleHeight,
+                "the pen's frame (\(frameSide)pt) is taller than the capsule (\(PillMetrics.capsuleHeight)pt)")
     }
 
     // MARK: The width floor

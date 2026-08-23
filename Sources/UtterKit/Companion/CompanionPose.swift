@@ -130,6 +130,25 @@ struct CompanionPose: Equatable {
         case walking
     }
 
+    /// How fast the character is actually crossing the screen, in points per second, signed.
+    ///
+    /// **The gait is derived from this rather than from which act is running, and that is a fix
+    /// for a defect that shipped twice in opposite directions.**
+    ///
+    /// Two acts translate the character and they do it through different mechanisms: `.walk` moves
+    /// the whole window via `walkStep`, while `.stroll` moves `offsetX`, an offset *inside* a panel
+    /// 2.1x the character's own size. Keying the walk cycle off `act == .walk` meant a stroll slid
+    /// a seated cat sideways — a decal on a conveyor. Keying it off `act == .walk || act ==
+    /// .stroll` fixed that and broke the other way: a stroll then played a full stride while the
+    /// character shuffled a few tens of points inside its own panel and came back, which reads as
+    /// running on the spot. Both were reported by the user, in that order.
+    ///
+    /// A speed cannot be wrong in either direction: legs cycle when the animal covers ground, at a
+    /// cadence matching how fast it covers it, and stop when it stops. It also gives a drawn
+    /// character what it needs to keep its planted paws still relative to the floor, which is the
+    /// whole difference between walking and skating.
+    var travelSpeed: CGFloat = 0
+
     /// The resting pose. Everything else is expressed as a deviation from this.
     static let neutral = CompanionPose()
 }

@@ -40,239 +40,336 @@ struct GeneralSettingsContent: View {
     @ObservedObject private var meeting = AppDelegate.current?.meetingSession ?? MeetingSession()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-                // App settings — grouped the way the user expects to find them:
-                // what the app does at the OS level, then sound, then per-screen
-                // behaviour. Speech settings moved to their own pane.
-                SettingsCard(title: "App") {
-                    GlassToggle(
-                        title: "Launch at login",
-                        description: "Start Utter automatically when you log in.",
-                        isOn: $launchAtLogin
-                    )
-                    .onChange(of: launchAtLogin) { val in
-                        if #available(macOS 13.0, *) {
-                            try? val ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                        }
+        // `Form` + `Section`, not a `VStack` of `SettingsCard`s.
+        //
+        // What this buys, and it is not decoration: `.formStyle(.grouped)` is the macOS settings
+        // group — the system's inset rounded container, its own row separators, its own row
+        // insets, and label/control alignment shared across every row in the group. The cards it
+        // replaces drew a `BentoTile` surface and then hand-placed a `HairlineDivider()` between
+        // each pair of rows; five of those divider calls are deleted from this pane and eight
+        // more from Speech, leaving none in the file. `SettingsCard` and `HairlineDivider` both
+        // stay defined below — Companion, Diagnostics and Home still call them.
+        //
+        // Section titles are the plain `Section("…")` string, so they are real headers to
+        // VoiceOver rather than a `Text` that happens to sit above the rows.
+        Form {
+            // App settings — grouped the way the user expects to find them:
+            // what the app does at the OS level, then sound, then per-screen
+            // behaviour. Speech settings moved to their own pane.
+            Section("App") {
+                SettingsToggle(
+                    title: "Launch at login",
+                    description: "Start Utter automatically when you log in.",
+                    isOn: $launchAtLogin
+                )
+                .onChange(of: launchAtLogin) { val in
+                    if #available(macOS 13.0, *) {
+                        try? val ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
                     }
-                    .onAppear {
-                        if #available(macOS 13.0, *) {
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
-                        }
-                    }
-
-                    HairlineDivider()
-
-                    GlassToggle(
-                        title: "Always show the pill",
-                        description: "Keep it on screen. When off, it appears only while dictating.",
-                        isOn: $userData.alwaysShowPill
-                    )
-                    .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
-
-                    HairlineDivider()
-
-                    GlassToggle(
-                        title: "Show in Dock",
-                        description: "Utter lives in the menu bar. Turn this on to add a Dock icon too.",
-                        isOn: $userData.showInDock
-                    )
-                    .onChange(of: userData.showInDock) { _ in userData.save() }
-
-                    HairlineDivider()
-
-                    // Here rather than under Speech or Notes: what it switches on is the app
-                    // watching the audio devices and putting a panel on screen by itself, which
-                    // is OS-level behaviour, and the permission it needs is in this same pane.
-                    GlassToggle(
-                        title: "Offer to transcribe calls",
-                        description: "When Utter notices you\u{2019}re in a call it offers to "
-                            + "transcribe it into a note. Nothing is recorded unless you accept. "
-                            + "Needs Screen Recording, below, to capture the other people and "
-                            + "not just you.",
-                        isOn: $userData.offerToTranscribeCalls
-                    )
-                    .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
                 }
-
-                SettingsCard(title: "Sound") {
-                    GlassToggle(
-                        title: "Dictation sounds",
-                        description: "Soft cues when recording starts, stops, and finishes.",
-                        isOn: $userData.soundsEnabled
-                    )
-                    .onChange(of: userData.soundsEnabled) { _ in
-                        userData.save()
-                        // Play one so the choice is audible immediately.
-                        if userData.soundsEnabled { SoundPlayer.playDone() }
-                    }
-
-                    HairlineDivider()
-
-                    GlassToggle(
-                        title: "Pause other audio while dictating",
-                        description: "Sends the play/pause key so music doesn\u{2019}t bleed into the microphone.",
-                        isOn: $userData.muteMusicWhileDictating
-                    )
-                    .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
-                }
-
-                SettingsCard(title: "Notes") {
-                    VStack(alignment: .leading, spacing: Space.x3) {
-                        // Replaces the old "when you open the Scratchpad" choice,
-                        // which stopped meaning anything once notes became a list:
-                        // every note persists and you pick the one you want. The
-                        // real question now is where dictated text lands.
-                        Text("When you dictate into Utter").typo(.body)
-                        GlassSegmentedControl(
-                            options: [true, false],
-                            label: { $0 ? "Add to the open note" : "Always start a new note" },
-                            selection: $userData.captureAppendsToOpenNote
-                        )
-                        .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
+                .onAppear {
+                    if #available(macOS 13.0, *) {
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
                 }
 
-                // Hotkey — a segmented control, not a pop-up menu.
+                SettingsToggle(
+                    title: "Always show the pill",
+                    description: "Keep it on screen. When off, it appears only while dictating.",
+                    isOn: $userData.alwaysShowPill
+                )
+                .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
+
+                SettingsToggle(
+                    title: "Show in Dock",
+                    description: "Utter lives in the menu bar. Turn this on to add a Dock icon too.",
+                    isOn: $userData.showInDock
+                )
+                .onChange(of: userData.showInDock) { _ in userData.save() }
+
+                // Here rather than under Speech or Notes: what it switches on is the app
+                // watching the audio devices and putting a panel on screen by itself, which
+                // is OS-level behaviour, and the permission it needs is in this same pane.
+                SettingsToggle(
+                    title: "Offer to transcribe calls",
+                    description: "When Utter notices you\u{2019}re in a call it offers to "
+                        + "transcribe it into a note. Nothing is recorded unless you accept. "
+                        + "Needs Screen Recording, below, to capture the other people and "
+                        + "not just you.",
+                    isOn: $userData.offerToTranscribeCalls
+                )
+                .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
+            }
+
+            Section("Sound") {
+                SettingsToggle(
+                    title: "Dictation sounds",
+                    description: "Soft cues when recording starts, stops, and finishes.",
+                    isOn: $userData.soundsEnabled
+                )
+                .onChange(of: userData.soundsEnabled) { _ in
+                    userData.save()
+                    // Play one so the choice is audible immediately.
+                    if userData.soundsEnabled { SoundPlayer.playDone() }
+                }
+
+                SettingsToggle(
+                    title: "Pause other audio while dictating",
+                    description: "Sends the play/pause key so music doesn\u{2019}t bleed into the microphone.",
+                    isOn: $userData.muteMusicWhileDictating
+                )
+                .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
+            }
+
+            Section("Notes") {
+                // A radio group, not `GlassSegmentedControl` — and the label is the sentence
+                // that used to be a separate `Text` row above it.
                 //
-                // Four short options fit comfortably, and the previous pop-up hid
-                // every alternative behind a click for no space saving. The
-                // description below updates with the selection, which is the real
-                // reason to show the choices: each key has a different trade-off.
-                SettingsCard(title: "Hotkey") {
-                    Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
+                // Two mutually exclusive options, one of them six words long: that is what a
+                // radio group is for, and a segmented control with "Always start a new note" in
+                // one segment either truncates or forces the two segments to unequal widths.
+                // The `Picker` also carries its own label to VoiceOver, which the stacked
+                // `Text` + control never did.
+                //
+                // Replaces the old "when you open the Scratchpad" choice, which stopped
+                // meaning anything once notes became a list: every note persists and you pick
+                // the one you want. The real question now is where dictated text lands.
+                Picker("When you dictate into Utter", selection: $userData.captureAppendsToOpenNote) {
+                    Text("Add to the open note").tag(true)
+                    Text("Always start a new note").tag(false)
+                }
+                .pickerStyle(.radioGroup)
+                .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
+            }
 
-                    GlassSegmentedControl(
-                        options: HotkeyOption.options.map(\.name),
-                        label: { $0 },
-                        selection: $userData.hotkeyName
-                    )
-                    .onChange(of: userData.hotkeyName) { _ in
-                        userData.save()
-                        NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
-                    }
+            // Hotkey — a radio group, not a segmented control and not a pop-up menu.
+            //
+            // The pop-up went first, and for the reason that still holds: it hid every
+            // alternative behind a click for no space saving, and the description below
+            // updates with the selection, which is the real reason to show the choices — each
+            // key has a different trade-off. The segmented control that replaced it goes now
+            // because the four labels are not equal-weight ("Fn" against "Right ⌘ Command"),
+            // and because a radio group is what macOS uses for a keyed choice with an
+            // explanation attached to it.
+            Section("Hotkey") {
+                Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
 
-                    let opt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
-                    VStack(alignment: .leading, spacing: Space.x1) {
-                        Text(opt.description)
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(opt.impact)
-                            .typo(.caption, ink: opt.impact.hasPrefix("Use with caution")
-                                  ? Tint.warningText : Ink.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    // The description block below changes height as the selection
-                    // moves between hotkeys, so this is layout travel, not a fade.
-                    .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
-                               value: userData.hotkeyName)
-
-                    HairlineDivider()
-
-                    // The other two ways into dictation, named here rather than only
-                    // in the status-item menu. Nothing on screen reveals them — the pill
-                    // shows the hold hotkey and that is all. Every shortcut comes from
-                    // `KeyChord` or `HoldTap`, the same values `KeyMonitor` matches on,
-                    // so this card cannot advertise a gesture that no longer fires.
-                    //
-                    // Hold-then-tap needs an event tap to swallow the tapped key, so it
-                    // is shown only when there is one. `axGranted` is both a precondition
-                    // for that tap and what makes this view re-render when it appears —
-                    // `HoldTap.isAvailable` alone would go stale on screen.
-                    let handsFreeHoldTap = (axGranted && HoldTap.isAvailable)
-                        ? HoldTap.binding(for: .handsFree) : nil
-
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        ShortcutHint(keys: KeyChord.handsFree.keycaps,
-                                     caption: ShortcutAction.handsFree.label,
-                                     spokenKeys: KeyChord.handsFree.spelled)
-                        if let handsFreeHoldTap {
-                            ShortcutHint(keys: handsFreeHoldTap.keycaps(holdKey: userData.hotkeyName),
-                                         caption: "while dictating",
-                                         spokenKeys: handsFreeHoldTap.spelled(holdKey: userData.hotkeyName))
-                        }
-                        Text("Starts recording without holding anything, and keeps "
-                             + "going until you press it again or stop speaking for "
-                             + "three seconds.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let handsFreeHoldTap {
-                            Text("Already dictating? Keep \(userData.hotkeyName) down and "
-                                 + "tap \(handsFreeHoldTap.keyLabel) — that recording keeps "
-                                 + "going after you let go. Tap it again to finish, or just "
-                                 + "stop talking.")
-                                .typo(.caption)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        ShortcutHint(keys: KeyChord.noteCapture.keycaps,
-                                     caption: ShortcutAction.noteCapture.label,
-                                     spokenKeys: KeyChord.noteCapture.spelled)
-                        Text("Press it, say what you want to keep, then press it again "
-                             + "\u{2014} or simply stop talking, as with hands-free. The "
-                             + "text goes to your notes instead of the app in front: "
-                             + "into the note that is open, or a new one, following the "
-                             + "Notes setting above. Pressing it while already dictating "
-                             + "redirects that recording into a note.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Or say \u{201C}start a new note\u{201D} or \u{201C}continue "
-                             + "the note\u{201D} while dictating: the phrase is the "
-                             + "command, and whatever you say next is filed there. "
-                             + "Needs Voice commands, under Speech.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        // Answers the obvious question the row above raises. Only worth
-                        // saying once hold-and-tap has been introduced, hence the same
-                        // condition.
-                        if handsFreeHoldTap != nil {
-                            Text("This one has no hold-and-tap spelling: macOS keeps "
-                                 + "Fn and N for Notification Center.")
-                                .typo(.caption)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                // `.labelsHidden()` because the sentence above is the label and it is two
+                // sentences long — too long to sit in a picker's leading label column, where
+                // the Notes picker's single phrase fits. The label is still the real word and
+                // not `""`: `labelsHidden()` suppresses only the visual label, so VoiceOver
+                // keeps naming the group — the same reason `GlassToggle` passes its title
+                // through. A hidden label is not an absent one.
+                Picker("Hotkey", selection: $userData.hotkeyName) {
+                    ForEach(HotkeyOption.options) { option in
+                        Text(option.name).tag(option.name)
                     }
                 }
-
-                SettingsCard(title: "Permissions") {
-                    PermRow(need: .core(granted: axGranted), label: "Accessibility",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-                    PermRow(need: .core(granted: micGranted), label: "Microphone",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-                    // Only meeting capture needs this, so it is listed last and it is
-                    // optional until meeting capture is in play — see `PermissionNeed`
-                    // for which signals count as "in play" and why.
-                    //
-                    // The label lost its "(meetings)" parenthetical: it named the
-                    // feature but never said the permission was optional, which was the
-                    // whole of the problem, and in the optional state it would now say
-                    // "meetings" twice over the reason line beneath. In the required
-                    // state the "Offer to transcribe calls" switch above already says
-                    // "Needs Screen Recording, below", so nothing is lost there either.
-                    PermRow(need: .screenRecording(granted: screenGranted,
-                                                   offersToTranscribeCalls: userData.offerToTranscribeCalls,
-                                                   meetingCaptureUnderway: meeting.state != .idle),
-                            label: "Screen Recording",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                .onChange(of: userData.hotkeyName) { _ in
+                    userData.save()
+                    NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
                 }
 
-                // What was a "How to use" card restating all three shortcuts now that
-                // the Hotkey card above carries them properly. This line was the only
-                // thing unique to it — and it said "this window", which stopped being
-                // true when Settings moved out of the main window: a long press opens
-                // Utter, not Settings.
-                SettingsCard(title: "The pill") {
-                    Text("Long-press the pill for two seconds to open the Utter window.")
+                let opt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text(opt.description)
                         .typo(.caption)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text(opt.impact)
+                        .typo(.caption, ink: opt.impact.hasPrefix("Use with caution")
+                              ? Tint.warningText : Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // The description block below changes height as the selection
+                // moves between hotkeys, so this is layout travel, not a fade.
+                .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
+                           value: userData.hotkeyName)
+
+            }
+
+            // The other two ways into dictation, named here rather than only
+            // in the status-item menu. Nothing on screen reveals them — the pill
+            // shows the hold hotkey and that is all. Every shortcut comes from
+            // `KeyChord` or `HoldTap`, the same values `KeyMonitor` matches on,
+            // so this section cannot advertise a gesture that no longer fires.
+            //
+            // Its own `Section` rather than the tail of "Hotkey" behind a
+            // `HairlineDivider()`: the divider was standing in for a group boundary, and
+            // a group boundary is what a `Section` is. The heading is the only new string
+            // in this pass — the divider it replaces said the same thing wordlessly, and
+            // a header is what VoiceOver's rotor can jump to.
+            Section("Other shortcuts") {
+                // Hold-then-tap needs an event tap to swallow the tapped key, so it
+                // is shown only when there is one. `axGranted` is both a precondition
+                // for that tap and what makes this view re-render when it appears —
+                // `HoldTap.isAvailable` alone would go stale on screen.
+                let handsFreeHoldTap = (axGranted && HoldTap.isAvailable)
+                    ? HoldTap.binding(for: .handsFree) : nil
+
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    ShortcutHint(keys: KeyChord.handsFree.keycaps,
+                                 caption: ShortcutAction.handsFree.label,
+                                 spokenKeys: KeyChord.handsFree.spelled)
+                    if let handsFreeHoldTap {
+                        ShortcutHint(keys: handsFreeHoldTap.keycaps(holdKey: userData.hotkeyName),
+                                     caption: "while dictating",
+                                     spokenKeys: handsFreeHoldTap.spelled(holdKey: userData.hotkeyName))
+                    }
+                    Text("Starts recording without holding anything, and keeps "
+                         + "going until you press it again or stop speaking for "
+                         + "three seconds.")
+                        .typo(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let handsFreeHoldTap {
+                        Text("Already dictating? Keep \(userData.hotkeyName) down and "
+                             + "tap \(handsFreeHoldTap.keyLabel) — that recording keeps "
+                             + "going after you let go. Tap it again to finish, or just "
+                             + "stop talking.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    ShortcutHint(keys: KeyChord.noteCapture.keycaps,
+                                 caption: ShortcutAction.noteCapture.label,
+                                 spokenKeys: KeyChord.noteCapture.spelled)
+                    Text("Press it, say what you want to keep, then press it again "
+                         + "\u{2014} or simply stop talking, as with hands-free. The "
+                         + "text goes to your notes instead of the app in front: "
+                         + "into the note that is open, or a new one, following the "
+                         + "Notes setting above. Pressing it while already dictating "
+                         + "redirects that recording into a note.")
+                        .typo(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Or say \u{201C}start a new note\u{201D} or \u{201C}continue "
+                         + "the note\u{201D} while dictating: the phrase is the "
+                         + "command, and whatever you say next is filed there. "
+                         + "Needs Voice commands, under Speech.")
+                        .typo(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // Answers the obvious question the row above raises. Only worth
+                    // saying once hold-and-tap has been introduced, hence the same
+                    // condition.
+                    if handsFreeHoldTap != nil {
+                        Text("This one has no hold-and-tap spelling: macOS keeps "
+                             + "Fn and N for Notification Center.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-            .onAppear { readiness.startPolling() }
-            .onDisappear { readiness.stopPolling() }
+
+            Section("Permissions") {
+                PermRow(need: .core(granted: axGranted), label: "Accessibility",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                PermRow(need: .core(granted: micGranted), label: "Microphone",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+                // Only meeting capture needs this, so it is listed last and it is
+                // optional until meeting capture is in play — see `PermissionNeed`
+                // for which signals count as "in play" and why.
+                //
+                // The label lost its "(meetings)" parenthetical: it named the
+                // feature but never said the permission was optional, which was the
+                // whole of the problem, and in the optional state it would now say
+                // "meetings" twice over the reason line beneath. In the required
+                // state the "Offer to transcribe calls" switch above already says
+                // "Needs Screen Recording, below", so nothing is lost there either.
+                PermRow(need: .screenRecording(granted: screenGranted,
+                                               offersToTranscribeCalls: userData.offerToTranscribeCalls,
+                                               meetingCaptureUnderway: meeting.state != .idle),
+                        label: "Screen Recording",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+            }
+
+            // What was a "How to use" card restating all three shortcuts now that
+            // the Hotkey section above carries them properly. This line was the only
+            // thing unique to it — and it said "this window", which stopped being
+            // true when Settings moved out of the main window: a long press opens
+            // Utter, not Settings.
+            //
+            // A titled `Section` with one prose row, not a `footer:` on the section above.
+            // A footer would have read better as a standing note, but "The pill" is a
+            // heading the user can see today and this is a presentation pass — dropping a
+            // visible string is a content change, and not one to make on the way past.
+            Section("The pill") {
+                Text("Long-press the pill for two seconds to open the Utter window.")
+                    .typo(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .settingsForm()
+        .onAppear { readiness.startPolling() }
+        .onDisappear { readiness.stopPolling() }
     }
 }
+
+// MARK: - Settings form style
+
+extension View {
+    /// The one place a Settings pane's `Form` is configured, applied by all four panes.
+    ///
+    /// `.formStyle(.grouped)` is the whole point of the pass: it is the macOS settings group —
+    /// the system's inset rounded container, its own separators between rows, its own row
+    /// insets, and one shared label/control alignment down the group. It is macOS 13.0
+    /// (`GroupedFormStyle` in the SDK swiftinterface), so it needs no availability gate at this
+    /// package's 13.3 floor.
+    ///
+    /// The two modifiers after it exist because these forms are **not** the pane's scroll view.
+    /// `SettingsDetail` in SettingsWindowView.swift already wraps every pane in a `ScrollView`,
+    /// which is what carries the window's measured 66pt top content inset and the macOS 26
+    /// scroll-edge pocket. A grouped `Form` brings its own scroll view, so without
+    /// `.scrollDisabled(true)` there are two nested scrollers: the inner one wins the wheel and
+    /// the outer one never moves, which strands the bottom of a long pane. `.fixedSize(vertical:)`
+    /// is the other half — a disabled scroll view still takes the height it is offered, so
+    /// without it the Form would clip its own content at the viewport instead of growing and
+    /// letting the outer `ScrollView` scroll it.
+    ///
+    /// `.scrollContentBackground(.hidden)` (also 13.0) is for the same reason it is on the
+    /// sidebar `List`: the pane sits on a themed `windowBackground`, and a form's default
+    /// content background would paint an opaque sheet over it and lose the theme.
+    ///
+    /// The grouped style's own margins do stack with the page column's `Space.pageInset`, so a
+    /// group sits further in than the heading above it — and **that is not a bug to fix here.**
+    /// Dropping the page inset is the wrong fix and would make three things worse: a grouped
+    /// `Form` *outdents* its section headers relative to its own group background (System
+    /// Settings does the same), so the element nearest the window's leading edge would become a
+    /// header pressed against the sidebar glass; Companion and Diagnostics are still bare
+    /// `VStack`s of `SettingsCard` and would go flush; and the page heading would lose its
+    /// margin. The inset is uniform, so it cannot change the gap it is blamed for. See the note
+    /// on `Space.pageInset`.
+    func settingsForm() -> some View {
+        formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+    }
+}
+
+/// A native form toggle with a two-line label.
+///
+/// `Form` owns the label/control alignment, row hit target, focus ring, keyboard
+/// behavior, and switch placement. Keep `GlassToggle` for card-based layouts
+/// outside a form, where macOS otherwise places the switch before its label.
+struct SettingsToggle: View {
+    let title: String
+    let description: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).typo(.body)
+                Text(description)
+                    .typo(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+    }
+}
+
+// MARK: - Rules and cards
 
 /// A horizontal rule between rows, in the app's own neutral ramp.
 ///
@@ -294,6 +391,11 @@ struct GeneralSettingsContent: View {
 ///
 /// Lives in `Screens/` rather than `DesignSystem/` only because that folder is owned
 /// by another change in flight; it belongs beside `Line` in DesignTokens.swift.
+///
+/// **No Settings pane calls this any more** — a grouped `Form` draws its own separators
+/// between rows, which deleted twelve calls from this file. It stays because `HomeView`,
+/// `DiagnosticsView` and `CompanionSettingsView` still use it, and it is still right
+/// there: a rule inside a hand-built stack has no system component to defer to.
 struct HairlineDivider: View {
     var body: some View {
         Rectangle()
@@ -307,6 +409,12 @@ struct HairlineDivider: View {
 
 /// Settings group, rendered as a bento tile so Settings matches the rest of
 /// the app. The uppercase header is gone — sentence case is the macOS convention.
+///
+/// The Settings panes in this file no longer use it: what it approximates — a titled group
+/// with rows inside it — is `Section` inside a `.grouped` `Form`, which additionally supplies
+/// the separators, the row insets, the shared label/control alignment and a header VoiceOver's
+/// rotor can navigate to. It is kept, with its signature unchanged, for the seven call sites in
+/// `DiagnosticsView` and `CompanionSettingsView`, which are not this change's to convert.
 struct SettingsCard<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
@@ -520,47 +628,28 @@ struct PermRow: View {
 /// states plainly what runs where instead of offering settings that don't exist —
 /// and it is where Reset Utter lives.
 ///
-/// This was a thin pane of live status, while a much fuller `PrivacyView` — five
-/// `PolicyCard`s **and the app's only Reset Utter button** — sat in the source with
-/// no caller anywhere: `SettingsGroup.privacy` routes here
-/// (`SettingsWindowView.detail`) and nothing routed there. So `clearAllData()` was
-/// unreachable, which means the reset the app promises could not be performed at
-/// all, and the copy describing it ("The button below erases all history, your
-/// notes…") named a button that was not on screen. The main window records the
-/// intent this restores — `SidebarItem.primary` in FlowMainView.swift: "they live in Settings only —
-/// which also puts 'Reset Utter' alongside the other settings instead of next to
-/// your snippets."
-///
-/// The cards run one per row rather than `PrivacyView`'s `BentoRow(columns: 2)`.
-/// This is the settings detail column, which is 152pt of group list out of
-/// `Layout.settingsMinWidth` 620 — so roughly 420pt of content, where two-up would
-/// leave each four-bullet card under 200pt.
+/// Reset Utter lives here so destructive data controls stay with the rest of Settings.
 struct PrivacySettingsContent: View {
     @ObservedObject private var readiness = ReadinessMonitor.shared
     private var aiState: LocalAIEngine.Availability { readiness.aiState }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-            SettingsCard(title: "AI commands") {
+        Form {
+            Section("AI commands") {
                 LockedRow(label: "Engine", value: "Apple Intelligence")
                 LockedRow(label: "Runs on", value: "This Mac")
-                HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
-                    // The glyph changes *shape* as well as hue, so the state survives
-                    // being read without colour vision. The point size is a symbol
-                    // metric, not the type scale — see the note on `AboutContent`.
-                    Image(systemName: aiState.isReady ? "checkmark.circle.fill"
-                                                      : "exclamationmark.circle.fill")
-                        .font(.system(size: 11))
-                        // The *text* variants, even though this is a glyph: the shape carries
-                        // the state, but a shape at 1.48:1 cannot be read either. 11pt is small
-                        // enough that the 3:1 non-text floor is the wrong bar anyway.
-                        .foregroundStyle(aiState.isReady ? Tint.successText : Tint.warningText)
+                Label {
                     Text(aiState.message)
                         .typo(.caption, ink: Ink.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: aiState.isReady ? "checkmark.circle.fill"
+                                                      : "exclamationmark.circle.fill")
+                        .foregroundStyle(aiState.isReady ? Tint.successText : Tint.warningText)
                 }
+
                 if case .appleIntelligenceOff = aiState {
-                    GlassButton(title: "Open Apple Intelligence Settings") {
+                    GlassButton(title: "Open Apple Intelligence Settings", size: .regular) {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?AppleIntelligence") {
                             NSWorkspace.shared.open(url)
                         }
@@ -568,17 +657,7 @@ struct PrivacySettingsContent: View {
                 }
             }
 
-            // The policy statements, no longer stranded in a view with no caller.
-            //
-            // Wording is carried over unchanged apart from the headings: this is what
-            // the app promises about the user's data, so it is not copy to reword in a
-            // styling pass. Headings drop to sentence case, the convention `SettingsCard`
-            // records above.
-            //
-            // The former bespoke "Network" card is gone rather than kept beside these:
-            // its text was the first bullet of "Nothing leaves this Mac" almost verbatim.
-            // Its one unique clause is preserved as the last bullet there.
-            PolicyCard(icon: "wifi.slash", title: "Nothing leaves this Mac", items: [
+            policySection("Nothing leaves this Mac", icon: "wifi.slash", items: [
                 "Downloading a larger speech model is the only time Utter uses the network, and only when you ask",
                 "Speech recognition runs on a Whisper model bundled inside the app",
                 "AI commands run on Apple’s on-device language model",
@@ -586,38 +665,50 @@ struct PrivacySettingsContent: View {
                 "Your voice and text never leave this Mac",
             ])
 
-            PolicyCard(icon: "waveform.badge.mic", title: "Audio recording", items: [
+            policySection("Audio recording", icon: "waveform.badge.mic", items: [
                 "Audio is captured in memory only while you hold the record key",
                 "No audio files are ever written to disk",
                 "Audio is discarded from memory immediately after transcription",
                 "The microphone is only active during recording — never in the background",
             ])
 
-            PolicyCard(icon: "lock.shield.fill", title: "Your data stays on your device", items: [
+            policySection("Your data stays on your device", icon: "lock.shield.fill", items: [
                 "Transcription history is stored locally, in your user Library folder",
                 "Dictionary words, snippets, and preferences are saved on-device only",
                 "No analytics, telemetry, or usage tracking of any kind",
                 "Nothing is synced to a cloud service or shared with third parties",
             ])
 
-            PolicyCard(icon: "hand.raised.fill", title: "Permissions", items: [
+            policySection("Permissions", icon: "hand.raised.fill", items: [
                 "Microphone: required to capture your voice for transcription",
                 "Accessibility: required to type text into other applications",
                 "Screen Recording: only if you record a meeting — it captures audio, never the screen",
                 "You can revoke permissions at any time in System Settings",
             ])
 
-            PolicyCard(icon: "trash.fill", title: "Reset", items: [
-                "The button below erases all history, your notes, installed companion packs, dictionary words, snippets, and preferences",
-                "Uninstalling the app removes the binary but leaves saved data behind",
-            ])
-
-            DataResetSection()
-
-            Spacer(minLength: 0)
+            Section("Reset") {
+                Text("Resetting erases all history, notes, installed companion packs, dictionary words, snippets, custom commands, and preferences.")
+                    .typo(.callout)
+                Text("Uninstalling the app removes the binary but leaves saved data behind.")
+                    .typo(.callout)
+                DataResetSection()
+            }
         }
+        .settingsForm()
         .onAppear { readiness.startPolling() }
         .onDisappear { readiness.stopPolling() }
+    }
+
+    private func policySection(_ title: String, icon: String, items: [String]) -> some View {
+        Section {
+            ForEach(items, id: \.self) { item in
+                Label(item, systemImage: "checkmark")
+                    .typo(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Label(title, systemImage: icon)
+        }
     }
 }
 
@@ -633,94 +724,96 @@ struct SpeechSettingsContent: View {
     @ObservedObject private var userData = UserData.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-            SettingsCard(title: "Model") {
+        Form {
+            Section("Model") {
                 ModelChooserView(compact: true)
             }
 
-            SettingsCard(title: "Recognition") {
-                GlassToggle(
+            // Eight `HairlineDivider()`s are gone from this section — seven between the switches
+            // and one above the language row: the group draws its own separator between every
+            // row, which is the thing they were imitating.
+            Section("Recognition") {
+                SettingsToggle(
                     title: "Fix sentence structure",
                     description: "Repunctuates what you dictate using the on-device language model. Whisper guesses punctuation from pauses, so it puts a comma at every breath; this splits run-on sentences properly. Words are never changed.",
                     isOn: $userData.sentencePolishEnabled
                 )
                 .onChange(of: userData.sentencePolishEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Spoken punctuation",
                     description: "Turns spoken \"period\" into \".\", \"comma\" into \",\", and so on.",
                     isOn: $userData.spokenPunctuationEnabled
                 )
                 .onChange(of: userData.spokenPunctuationEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Voice commands",
                     description: "Say a command name to run it instead of typing the words.",
                     isOn: $userData.voiceCommandsEnabled
                 )
                 .onChange(of: userData.voiceCommandsEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Prefer your dictionary words",
                     description: "Tells the speech model your dictionary words before it listens, so unusual names are heard correctly instead of being repaired afterwards. Only affects recognition once you have added words.",
                     isOn: $userData.speechBiasEnabled
                 )
                 .onChange(of: userData.speechBiasEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Match the app you’re writing in",
                     description: "Keeps chat messages short and email in full sentences. Adjusts punctuation and formality only — never your words.",
                     isOn: $userData.perAppToneEnabled
                 )
                 .onChange(of: userData.perAppToneEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Read text around the cursor",
                     description: "Uses the words just before your cursor as a hint, so names already on screen are recognised and new text continues the sentence properly. Read on-device only, never saved, never sent anywhere. Skipped in password fields.",
                     isOn: $userData.useSurroundingContext
                 )
                 .onChange(of: userData.useSurroundingContext) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Keep dictation history",
                     description: "Utter keeps a searchable log of what you dictated. Turn this off to stop recording it.",
                     isOn: $userData.keepHistory
                 )
                 .onChange(of: userData.keepHistory) { _ in userData.save() }
 
-                HairlineDivider()
-
-                GlassToggle(
+                SettingsToggle(
                     title: "Show words as you speak",
                     description: "Displays a rough live transcript in the pill while you talk. It is a preview only — the final text is transcribed properly when you stop. Uses noticeably more battery.",
                     isOn: $userData.livePreviewEnabled
                 )
                 .onChange(of: userData.livePreviewEnabled) { _ in userData.save() }
 
-                HairlineDivider()
-
-                HStack {
+                // `LabeledContent`, which is what a read-only label/value row is. The `HStack` +
+                // `Spacer()` this replaces was hand-building the one thing the row needed —
+                // label leading, value trailing — and getting it *only* visually: the chip and
+                // the label were two unrelated elements to VoiceOver, so "English" was
+                // announced with nothing to say what it was the language of.
+                //
+                // The label keeps its own `VStack` rather than passing two `Text`s to the
+                // builder. A title-plus-description label is not in `LabeledContent`'s
+                // interface (the SDK gives `label:` a plain `ViewBuilder`), so how it would lay
+                // two `Text`s out is not something this file can promise; a `VStack` is. The
+                // inks stay the app's measured tokens for the same reason they do elsewhere —
+                // `LabeledContent` styles one side of the row `secondaryLabelColor`, which
+                // measures 4.01:1 on these translucent tiles, under the 4.5:1 floor `Ink`
+                // exists to hold.
+                LabeledContent {
+                    GlassChip(text: "English")
+                } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Language").typo(.body)
                         Text("The bundled speech model is English-only.").typo(.caption)
                     }
-                    Spacer()
-                    GlassChip(text: "English")
                 }
             }
         }
+        .settingsForm()
     }
 }
 
@@ -743,20 +836,39 @@ struct SpeechSettingsContent: View {
 /// size their glyphs the same way — so they are deliberately left alone.
 struct AboutContent: View {
     var body: some View {
-        VStack(spacing: Space.x3) {
-            AppIconView(size: 64)
+        // A `Form` here too, for the version row and for the inset: this pane sits in the same
+        // detail column as the other three, and a bare centred stack was the one that did not
+        // line up with them.
+        Form {
+            // Headerless — the wordmark is the heading. The stack stays a stack because
+            // centring an icon over a wordmark is not a label/value relationship; what it
+            // gains from the section is the group's margin, in place of the hand-set
+            // `.padding(.top, Space.x5)`.
+            Section {
+                VStack(spacing: Space.x3) {
+                    AppIconView(size: 64)
 
-            Text("Utter").typo(.wordmark)
+                    Text("Utter").typo(.wordmark)
 
-            Text("Version \(ConfigManager.shared.appVersion)")
-                .typo(.caption, ink: Ink.secondary)
+                    Text("Private voice to text, powered by Whisper on your Mac")
+                        .typo(.caption, ink: Ink.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Space.x3)
+            }
 
-            Text("Private voice to text, powered by Whisper on your Mac")
-                .typo(.caption, ink: Ink.secondary)
-                .multilineTextAlignment(.center)
+            Section {
+                // Was `Text("Version \(…)")` centred under the wordmark. As a
+                // `LabeledContent` it is a real label/value row — the form pairs the two for
+                // VoiceOver, and it is how System Settings presents a version. `.enabled`
+                // selection because a version number's job is to be quoted into a bug report.
+                LabeledContent("Version", value: ConfigManager.shared.appVersion)
+                    .textSelection(.enabled)
+            }
         }
-        .padding(.top, Space.x5)
-        .frame(maxWidth: .infinity)
+        .settingsForm()
     }
 }
 
@@ -771,22 +883,29 @@ struct AboutContent: View {
 // screen needs one.
 
 /// Read-only label/value row, used by the Privacy pane.
+///
+/// `LabeledContent` is the system component for exactly this, and it deletes the parts that
+/// were only ever imitating it: a `.frame(width: 90)` hand-set label column and a trailing
+/// `Spacer()`. Inside the pane's grouped `Form` the label column is now the group's — shared
+/// with every other row in it, rather than a number that happened to fit two labels — and the
+/// pairing is real to VoiceOver instead of implied by position.
+///
+/// The value keeps `.typo(.mono)` rather than taking the row's own value styling, and that is
+/// deliberate: `LabeledContent` renders the value `secondaryLabelColor`, which measures 4.01:1
+/// on this app's translucent tiles, under the 4.5:1 floor `Ink` exists to hold. Passing the
+/// value as a view rather than through `init(_:value:)` is what makes that possible.
 struct LockedRow: View {
     let label: String
     let value: String
 
     var body: some View {
-        HStack {
-            Text(label)
-                .typo(.caption, ink: Ink.secondary)
-                .frame(width: 90, alignment: .leading)
+        LabeledContent(label) {
             // `Typo.mono` is 13pt, one point up from the 12pt this used. There is no
             // 12pt monospaced step on the scale, and a value the user may quote is the
             // wrong place to invent one.
             Text(value)
                 .typo(.mono)
                 .textSelection(.enabled)
-            Spacer()
         }
     }
 }

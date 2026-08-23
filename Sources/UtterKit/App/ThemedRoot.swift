@@ -37,6 +37,5 @@ struct ThemedRoot<Content: View>: View {
     var body: some View {
         content
             .preferredColorScheme(theme.current.colorScheme)
-            .tint(Tint.accent)
     }
 }

@@ -186,11 +186,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: NSWindow?
 
     private func showOnboarding() {
+        // Re-openable from the status menu now, so a second press must raise the window
+        // that is already on screen. Without this the old `NSWindow` was overwritten in
+        // the slot and left visible with nothing holding it, and the user got two
+        // welcome screens.
+        if let existing = onboardingWindow {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
         // Onboarding gets the same translucent backing and theming as every other
         // window. It used to be the one window without them, which would have
         // made the app's very first screen the odd one out.
         let hosting = NSHostingView(rootView: ThemedRoot {
-            OnboardingView(onFinish: { [weak self] in
+            OnboardingView(onFinish: { [weak self] skipped in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
                 // Hand the policy back to the preference — see the escalation at the
@@ -198,7 +209,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // `isAnyWindowVisible` no longer sees it and the demotion is not
                 // deferred.
                 self?.applyDockVisibility()
-                // Fall through to the standard permission requests once onboarding is done.
+                // Fall through to the standard permission requests only when the user
+                // actually walked the steps.
+                //
+                // `requestMicrophonePermission` calls `AVCaptureDevice.requestAccess`
+                // on a `.notDetermined` status, which raises macOS's own cold
+                // "Utter would like to access the microphone" modal. Firing that
+                // immediately after Skip put up the exact dialog onboarding exists to
+                // replace, one frame after the user declined the explanation for it.
+                // (`requestAccessibilityPermission` was never the problem — its
+                // once-ever cap lives in `AccessibilityPermission.promptOnce`, and
+                // opening the pane already counts as having asked — but a Skip should
+                // not trigger a permission sweep at all, so both are gated.)
+                //
+                // Nothing is lost by not asking: Settings > General has a Grant button
+                // for both, and Home reports the status either way.
+                guard !skipped else { return }
                 self?.requestAccessibilityPermission()
                 self?.requestMicrophonePermission()
             })
@@ -340,6 +366,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Show Pill", action: #selector(showPill), keyEquivalent: "p"))
         menu.addItem(NSMenuItem(title: "Settings\u{2026}", action: #selector(showSettingsWindow), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
+        // Setup, reachable again. Onboarding is where microphone, Accessibility, Screen
+        // Recording and the model choice are all explained in one place, and it was
+        // presented exactly once, on first launch — a user who pressed Skip, or who
+        // denied a permission and wanted the walkthrough back, had no route to it short
+        // of deleting a UserDefaults key. Every other window in this menu is reopenable;
+        // this was the one that was not.
+        menu.addItem(NSMenuItem(title: "Setup\u{2026}", action: #selector(showSetup), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "What\u{2019}s New in Utter", action: #selector(showWhatsNew), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Utter", action: #selector(quit), keyEquivalent: "q"))
@@ -363,6 +396,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .deletingLastPathComponent()
         return NSImage(contentsOf: root
             .appendingPathComponent("MenuBarIcon/menubar-icon.png"))
+    }
+
+    private func makeSidebarToolbar(identifier: NSToolbar.Identifier) -> NSToolbar {
+        let toolbar = NSToolbar(identifier: identifier)
+        toolbar.delegate = self
+        toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
+        return toolbar
     }
 
     @objc func showMainWindowAction() { showMainWindow() }
@@ -415,9 +456,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         //      split item on a `.fullSizeContentView` window gets `allowsFullHeightLayout` for free.
         //      The wordmark lands at y=74 and the close button ends at y=33. (Rects here and below
         //      are top-down window points, converted from AppKit's bottom-left origin.)
-        let sidebarController = NSHostingController(rootView: FlowSidebar(
-            onOpenSettings: { [weak self] in self?.showSettingsWindow() }
-        ))
+        let sidebarController = NSHostingController(rootView: FlowSidebar())
         sidebarController.sizingOptions = []
         let contentController = NSHostingController(rootView: FlowContent())
         contentController.sizingOptions = []
@@ -431,15 +470,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // it without the accessibility switch and a screen — so `FlowSidebar` keeps drawing its own
         // opaque fill on that path rather than trusting it.
         //
-        // Fixed thickness because this is a nav column with six fixed rows, not a resizable pane, and
-        // the app has no divider affordance or toggle anywhere. `canCollapse` false for the same
-        // reason: a collapsed sidebar here would be unrecoverable.
+        // `FlowSidebar`'s rows are a `List(selection:).listStyle(.sidebar)` inside this, i.e. an
+        // `NSTableView` inside the glass wrapper, which is where the rows' hover, selection, focus
+        // ring and keyboard traversal come from. The one thing that arrangement needs from the
+        // SwiftUI side is `.scrollContentBackground(.hidden)`: a list would otherwise draw its own
+        // `.sidebar` material *inside* the material this item already supplies.
+        //
+        // Let AppKit size, collapse, and restore the sidebar through the standard toolbar control.
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = Layout.sidebarWidth
-        sidebarItem.maximumThickness = Layout.sidebarWidth
-        sidebarItem.canCollapse = false
+        sidebarItem.minimumThickness = 150
+        sidebarItem.maximumThickness = 260
+        sidebarItem.preferredThicknessFraction = 0.16
+        sidebarItem.canCollapse = true
         // Setting `canCollapse` resets this, per the header, so it has to come second.
-        sidebarItem.canCollapseFromWindowResize = false
+        sidebarItem.canCollapseFromWindowResize = true
 
         let contentItem = NSSplitViewItem(viewController: contentController)
         if #available(macOS 26.0, *) {
@@ -478,61 +522,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // geometry to ~/Library/Saved Application State/ and re-creates the window
         // from it, overriding everything set here.
         window.isRestorable = false
-        // The titlebar is a real one now, and it is deliberately not painted.
-        //
-        // This was `titlebarAppearsTransparent = true`, which makes the band draw nothing, and the
-        // 30pt `Layout.toolbarBand` of SwiftUI padding existed to stand in for it. With a real band
-        // there is nothing to stand in for. A comment in the old `FlowMainView` claimed
-        // `backgroundColor = .clear` was what suppressed the automatic chrome; that is wrong, and the
-        // probe says so — `NSTitlebarBackgroundView` and the sidebar's glass are installed either way,
-        // with `isOpaque = false` and a clear background, because they are the split view's subviews
-        // and not the window's background. Only `titlebarAppearsTransparent` decides whether the band
-        // paints.
-        //
-        // `titleVisibility` stays hidden: the sidebar wordmark carries the app's identity and a title
-        // inline in the band would say "Utter" twice.
-        //
-        // **It read as a flat opaque strip, so the band does not paint.** This was left `false` on
-        // the expectation — from the view tree — that the band would be transparent at rest with the
-        // pocket blur fading in as content scrolled under it. On screen it was not: the band painted
-        // a solid plane with a hard bottom edge across the content pane, and the edge was the giveaway
-        // that no pocket was compositing. Only a screen could settle that, and it did.
-        //
-        // What this does **not** do is recover the space. Measured: the 66pt band and the 66pt content
-        // inset are byte-identical either way, and this only stops the band drawing (`NSHardPocketView`
-        // collapses to 0x0, the blur stays). Everything structural survives — the split view
-        // controller, the sidebar's `NSContainerConcentricGlassEffectView`, the content-under-sidebar
-        // inset, the two-section titlebar. Recovering the vertical space would mean dropping the
-        // `NSToolbar`, and that costs the full-height sidebar glass and the 58pt inset with it.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
+        // Use standard unified window chrome so title, traffic lights, and toolbar adapt with macOS.
+        window.titlebarAppearsTransparent = false
+        window.titleVisibility = .visible
         // Translucent surfaces need the desktop behind them to sample. Kept: `FlowContent`'s content
         // layer is still a `.behindWindow` `NSVisualEffectView`.
         window.isOpaque = false
         window.backgroundColor = .clear
-        // An `NSToolbar` with no items, and it is not decoration.
-        //
-        // Utter has no toolbar actions — every action lives in the content — so nothing goes in it.
-        // What it is *for* is the band: attaching a toolbar is what turns the titlebar into chrome
-        // the system draws and manages. Measured, all three effects arrive with it and none without:
-        //
-        //   band height ......... 66pt with a toolbar, 32pt without
-        //   sidebar top inset ... 58pt with, 10pt without — and the close button ends at y=33, so
-        //                         without it the wordmark needs a hand-tuned clearance again, which
-        //                         is the 46pt constant this change is removing
-        //   scroll pocket ....... `NSScrollPocket` / `PocketBlur` / `NSHardPocketView` over the
-        //                         content pane: the macOS 26 scroll-edge effect, applied to content
-        //                         scrolling under the band without being asked for
-        //
-        // No delegate, because none is needed: with a delegate declaring
-        // `.sidebarTrackingSeparator` and without any delegate at all, the measured band height,
-        // sidebar inset and split titlebar sections were identical. The tracking separator aligns
-        // toolbar *items* to the divider, and there are no items — the split comes from the sidebar
-        // item's full-height layout. `NSToolbarStyle` is left `.automatic` for the same reason
-        // everything else here is: the system's metric, not one of ours. (`.unifiedCompact` would cut
-        // the band to 40pt but measured a 0pt sidebar inset, putting the wordmark back on the window
-        // controls.)
-        window.toolbar = NSToolbar(identifier: "UtterMainToolbar")
+        window.toolbarStyle = .unified
+        window.titlebarSeparatorStyle = .automatic
+        window.toolbar = makeSidebarToolbar(identifier: .utterMain)
         window.contentViewController = splitController
         window.setContentSize(NSSize(width: Layout.windowIdealWidth,
                                      height: Layout.windowIdealHeight))
@@ -543,10 +542,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Restore any frame the user has chosen, then start autosaving. Order
         // matters: `setFrameAutosaveName` *writes* the current frame when no
         // stored one exists, so registering first would persist the default.
-        if !window.setFrameUsingName("UtterMain") {
+        //
+        // The name carries a size suffix (`.1380x960`) so that enlarging the default *takes
+        // effect*. `setFrameUsingName` restores the last saved frame, and every prior build wrote
+        // the old 1180x820 — so without changing the key, the bigger default would be shadowed by
+        // the stored small frame on every machine that ran an older build, and only a truly fresh
+        // install would ever see it. Bumping the key once abandons that stale frame; the user's
+        // own later resizes are saved under the new key and respected as before. Bump the suffix
+        // again if the default size changes again.
+        let mainFrameName = "UtterMain.1380x960"
+        if !window.setFrameUsingName(mainFrameName) {
             window.center()
         }
-        window.setFrameAutosaveName("UtterMain")
+        window.setFrameAutosaveName(mainFrameName)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
         // Re-assert the size across the first few runloop turns.
@@ -704,8 +712,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // pack the user added is available without a relaunch.
             SpritePackStore.shared.reload()
             // Only now is it known what is installed, so this is the first moment a
-            // selection naming a pack that is gone — including one of the code-drawn
-            // characters Utter used to ship — can be corrected and written back.
+            // selection naming a pack that is gone can be corrected and written back.
             UserData.shared.resolveCompanionCharacter(
                 against: SpritePackStore.shared.packs.map(\.id)
             )
@@ -927,7 +934,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Autosave key for the Settings window's frame. Distinct from the main
     /// window's "UtterMain" — AppKit refuses a duplicate autosave name and then
     /// silently stops remembering either window's geometry.
-    private static let settingsFrameName = "UtterSettings"
+    /// Suffixed with the size so enlarging the default is not shadowed by a frame saved at the
+    /// old size — see the note on the main window's autosave name.
+    private static let settingsFrameName = "UtterSettings.864x600"
 
     /// Open Settings in its own window.
     ///
@@ -983,17 +992,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // cannot be. Measured at x 8-160, y 8-492, with the SwiftUI content as its *subview*, so
         // the rows' white selection lift still composites on top of the material.
         //
-        // Fixed thickness because this is a nav column of six fixed rows, not a resizable pane, and
-        // the window has no divider affordance or toggle. `canCollapse` false for the same reason:
-        // a collapsed group list here would be unrecoverable. Measured: thickness held at exactly
-        // 152 and `isCollapsed` stayed false at 720x500, 620x420 and 400x300 — the last below the
-        // window's own minimum.
+        // Let AppKit size, collapse, and restore the sidebar through the standard toolbar control.
         let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = Layout.settingsSidebarWidth
-        sidebarItem.maximumThickness = Layout.settingsSidebarWidth
-        sidebarItem.canCollapse = false
+        sidebarItem.minimumThickness = 145
+        sidebarItem.maximumThickness = 230
+        sidebarItem.preferredThicknessFraction = 0.22
+        sidebarItem.canCollapse = true
         // Setting `canCollapse` resets this, per the header, so it has to come second.
-        sidebarItem.canCollapseFromWindowResize = false
+        sidebarItem.canCollapseFromWindowResize = true
 
         let detailItem = NSSplitViewItem(viewController: detailController)
         if #available(macOS 26.0, *) {
@@ -1020,52 +1026,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "Settings"
-        // The band does not paint — same finding as `showMainWindow`, seen on screen in the same
-        // pass. Left `false` first, on the view tree's promise of a transparent band with a pocket
-        // blur; what actually rendered was an opaque white strip across the top of the detail pane
-        // with a hard bottom edge. Worse here than in the main window, because a 500pt window shows
-        // the proportion: 66pt of solid plane over a 410pt content column.
-        //
-        // Costs no space to fix and gives none back: the 66pt band and content inset are unchanged
-        // (measured), only the painting stops. `titleVisibility` stays hidden — the column's
-        // "SETTINGS" header carries the identity and a title inline in the band would say it twice.
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
+        // Use standard unified window chrome so title, traffic lights, and toolbar adapt with macOS.
+        window.titlebarAppearsTransparent = false
+        window.titleVisibility = .visible
         window.isOpaque = false
         window.backgroundColor = .clear
         window.isRestorable = false
         window.isMovableByWindowBackground = true
-        // An `NSToolbar` with no items, exactly as in `showMainWindow`: Settings has no toolbar
-        // actions, and what the toolbar is *for* is the band. Measured on this window, all of it
-        // arriving with the toolbar and none of it without:
-        //
-        //   band height ......... 66pt with a toolbar, 32pt without
-        //   sidebar top inset ... 58pt with, 10pt without — and without it the column's glass no
-        //                         longer runs full height either (y 32-492 instead of 8-492), so
-        //                         the traffic lights sit in a painted strip crossing both panes
-        //   scroll pocket ....... `NSScrollPocket` / `PocketBlur` / `NSHardPocketView` over the
-        //                         detail pane at x 160-720, y 0-66: the macOS 26 scroll-edge
-        //                         effect, applied without being asked for
-        //
-        // No delegate, because none is needed — `.sidebarTrackingSeparator` aligns toolbar *items*
-        // to the divider and there are no items; the split in the titlebar comes from the sidebar
-        // item's full-height layout, and it arrives here too (two `NSTitlebarBackgroundView`s
-        // measured, x 160-720 and x 0-160, the second inside the column's own wrapper with the
-        // glass over it). `NSToolbarStyle` left `.automatic`.
-        //
-        // The cost is vertical and it is real: 66pt of band in a 500pt window, with the first
-        // heading moving from y=42 to y=90. **The escape hatch is smaller than it looks** —
-        // measured, `titlebarAppearsTransparent = true` keeps the 66pt band and the 66pt content
-        // inset exactly as they are and only stops the band *painting* (`NSHardPocketView` goes to
-        // 0x0, the blur stays). It recovers no space at all. Recovering the space means dropping
-        // the toolbar, which costs the full-height glass and the 58pt inset above.
-        window.toolbar = NSToolbar(identifier: "UtterSettingsToolbar")
+        window.toolbarStyle = .unified
+        window.titlebarSeparatorStyle = .automatic
+        window.toolbar = makeSidebarToolbar(identifier: .utterSettingsWindow)
         window.contentViewController = splitController
         window.setContentSize(NSSize(width: Layout.settingsIdealWidth,
                                      height: Layout.settingsIdealHeight))
-        // A floor the two-pane layout survives: the group list is a fixed
-        // `Layout.settingsSidebarWidth`, so every point below this comes off the detail column and
-        // its cards.
+        // A floor the two-pane layout survives with either sidebar width.
         window.contentMinSize = NSSize(width: Layout.settingsMinWidth,
                                        height: Layout.settingsMinHeight)
         // Remember the size the user picks, and refuse to reopen at a size they
@@ -1133,13 +1107,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.item(withTag: MenuHintTag.handsFree)?.title = handsFreeHintTitle
     }
 
+    /// Replay onboarding from the status menu.
+    @objc private func showSetup() { showOnboarding() }
+
     @objc private func showWhatsNew() {
         presentAuxWindow(
             &whatsNewWindow,
             title: "What\u{2019}s New in Utter",
             size: NSSize(width: 560, height: 620),
+            // No `ScrollView` here. `WhatsNewView` is a `List` now, which is itself a
+            // scroll view: nested, the inner one is handed unbounded height, never
+            // scrolls, and the outer one owns the wheel — so the release sections laid
+            // out at full height inside a second scroller.
             content: AnyView(
-                ScrollView { WhatsNewView() }
+                WhatsNewView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             )
         )
@@ -2125,4 +2106,58 @@ extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in self?.applyDockVisibility() }
     }
+}
+
+extension AppDelegate: NSToolbarDelegate {
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool
+    ) -> NSToolbarItem? {
+        if itemIdentifier == .utterSettings {
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.label = "Settings"
+            item.paletteLabel = item.label
+            item.toolTip = item.label
+            item.image = NSImage(
+                systemSymbolName: "gearshape",
+                accessibilityDescription: item.label
+            )
+            item.target = self
+            item.action = #selector(showSettingsWindow)
+            return item
+        }
+
+        guard itemIdentifier == .toggleSidebar else { return nil }
+
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.label = "Toggle Sidebar"
+        item.paletteLabel = item.label
+        item.toolTip = item.label
+        item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: item.label)
+        item.target = nil
+        item.action = #selector(NSSplitViewController.toggleSidebar(_:))
+        return item
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        var items: [NSToolbarItem.Identifier] = [
+            .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace,
+        ]
+        if toolbar.identifier == .utterMain { items.append(.utterSettings) }
+        return items
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+}
+
+private extension NSToolbar.Identifier {
+    static let utterMain = NSToolbar.Identifier("UtterMainToolbar")
+    static let utterSettingsWindow = NSToolbar.Identifier("UtterSettingsToolbar")
+}
+
+private extension NSToolbarItem.Identifier {
+    static let utterSettings = NSToolbarItem.Identifier("UtterSettings")
 }

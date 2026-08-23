@@ -140,6 +140,29 @@ struct DiagnosticsSettingsContent: View {
                     .typo(.caption)
                     .fixedSize(horizontal: false, vertical: true)
 
+                // **Not a `List(selection:)`, and this is the one place in this pane
+                // where that is a close call.** A single-selection list of reports
+                // with a detail view under it is what `List` is for, and it would
+                // bring row hover, keyboard arrow navigation and the system's
+                // selection highlight for free — all three of which
+                // `GlassSelectableRow` is hand-rolling. Three things stop it:
+                //
+                //   * `List` has no intrinsic content height on macOS. This pane is a
+                //     child of `SettingsWindowView`'s `ScrollView`, so a `List` here
+                //     is a scroll container inside a scroll container and would need a
+                //     hand-picked fixed height — a number that cannot be chosen
+                //     without the app on screen, and `.scrollDisabled(true)` does not
+                //     give a `List` an intrinsic height either.
+                //   * That outer `ScrollView` is being rewritten concurrently. Nesting
+                //     a `List` inside whatever replaces it is not a decision to take
+                //     from this file.
+                //   * `GlassSelectableRow` has a second call site, so converting this
+                //     one does not retire the type — it leaves the app with two
+                //     selection idioms instead of one.
+                //
+                // Routed rather than guessed. The rows keep their current behaviour
+                // exactly, which for a read-only crash-report pane is the safe half of
+                // the trade.
                 VStack(spacing: Space.x2) {
                     ForEach(logs) { log in
                         GlassSelectableRow(isSelected: log.id == selectedID) {
@@ -197,25 +220,39 @@ struct DiagnosticsSettingsContent: View {
                 }
             }
 
-            // A sunken well, not glass: this is a wall of 13pt monospaced text,
-            // and text composited onto Liquid Glass loses subpixel antialiasing.
-            // Thin mono stems are where that reads most plainly as blur.
-            ScrollView([.vertical, .horizontal]) {
-                Text(log.content)
-                    .typo(.mono)
-                    // Selectable so a stack frame can be pulled straight into a
-                    // bug report, and unwrapped so the trace keeps its columns.
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Space.x3)
+            // A well, not glass: this is a wall of 13pt monospaced text, and text
+            // composited onto Liquid Glass loses subpixel antialiasing. Thin mono
+            // stems are where that reads most plainly as blur. That reasoning
+            // survives `GroupBox` unchanged, because `GroupBox` is not glass — it is
+            // the system's own grouped container, which is what a well is.
+            //
+            // The hand-drawn version was `Surface.sunken` behind a
+            // `Line.hairline` stroke, and the hairline is the measured defect: it
+            // computes to **1.015:1** on Paper and **1.022:1** on Linen in light mode
+            // against ~1.55:1 in dark, so the well's edge was there in dark themes and
+            // simply absent in light ones. `DefaultGroupBoxStyle` draws the system's
+            // grouped background and border, which are appearance-aware by
+            // construction — the light-mode contrast stops being a number this file
+            // has to hit by hand.
+            //
+            // `.frame(height: 260)` stays and stays *inside* the group, so the well is
+            // still pinned and there is no intrinsic-height question to answer. The
+            // inner `Space.x3` also stays: it scrolls with the text, whereas
+            // `GroupBox`'s inset does not, and without it the first line of a trace
+            // would sit flush against the scroll edge.
+            GroupBox {
+                ScrollView([.vertical, .horizontal]) {
+                    Text(log.content)
+                        .typo(.mono)
+                        // Selectable so a stack frame can be pulled straight into a
+                        // bug report, and unwrapped so the trace keeps its columns.
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Space.x3)
+                }
+                .frame(height: 260)
+                .accessibilityLabel("Crash report contents")
             }
-            .frame(height: 260)
-            .background(Radius.rect(Radius.field).fill(Surface.sunken))
-            .overlay(
-                Radius.rect(Radius.field)
-                    .strokeBorder(Line.hairline, lineWidth: Line.width)
-            )
-            .accessibilityLabel("Crash report contents")
 
             if let revealProblem {
                 Text(revealProblem)

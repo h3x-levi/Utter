@@ -66,6 +66,19 @@ struct WindowSizeTests {
         #expect(Layout.onboardingIdealHeight >= Layout.onboardingMinHeight)
     }
 
+    @Test("The main window opens noticeably larger than its floor")
+    func idealIsAGenerousDefault() {
+        // The default opening size was raised ~17% (1180x820 -> 1380x960) because the window read
+        // as too small. Pinned so an accidental shrink back toward the old default is caught, and
+        // so the ratio to the minimum stays a real gap rather than opening near-collapsed.
+        #expect(Layout.windowIdealWidth == 1380)
+        #expect(Layout.windowIdealHeight == 960)
+        // A clear margin over the floor — at least 30% taller than the minimum, so "reset to
+        // default" is unmistakably bigger than the smallest a user can drag the window.
+        #expect(Layout.windowIdealWidth >= Layout.windowMinWidth * 1.3)
+        #expect(Layout.windowIdealHeight >= Layout.windowMinHeight * 1.3)
+    }
+
     @Test("The auxiliary minimums fit the smallest supported display")
     func minimumsFitASmallDisplay() {
         // 1280x800 is the smallest built-in display Utter runs on. `presentAuxWindow`

@@ -312,23 +312,19 @@ struct CompanionGeometry: Equatable {
     }
 
     // MARK: The speech bubble
-
-    /// How many lines the speech bubble may wrap to before it would leave the panel.
-    ///
-    /// The bubble is anchored `characterSize` above the panel centre and grows downward over
-    /// the character (see `CompanionWindow`'s `quipBubble`), so its vertical room is the
-    /// distance from there to the panel's bottom edge. A borderless panel clips its content,
-    /// so a message longer than fits is wrapped to as many lines as there is room for and
-    /// truncated past that: the panel is the character's reach envelope and cannot also be an
-    /// unbounded text box. Capped low so a long error does not bury the whole character.
-    ///
-    /// Takes the line height and padding rather than measuring text, so it stays a pure
-    /// function of the geometry and a test can assert the real error strings fit.
-    func quipBubbleMaxLines(lineHeight: CGFloat, verticalPadding: CGFloat, cap: Int = 4) -> Int {
-        guard lineHeight > 0 else { return 1 }
-        let room = panelSide / 2 + characterSize - verticalPadding
-        return max(1, min(cap, Int((room / lineHeight).rounded(.down))))
-    }
+    //
+    // `quipBubbleMaxLines(lineHeight:verticalPadding:cap:)` lived here. It measured the room
+    // from `characterSize` above the panel's centre *down to the panel's far edge* — i.e. it
+    // budgeted the whole panel below the anchor, because the bubble it sized deliberately grew
+    // downward over the character. That is the overlap the bubble was rebuilt to stop, so
+    // keeping the function would have left a doc comment describing behaviour the app no
+    // longer has.
+    //
+    // Its replacement is `bubbleHeadroom` / `bubbleMaxHeight` / `bubbleMaxWidth` in
+    // `CompanionBubble.swift`, which bound the strip *above* the character's resting frame
+    // instead, and `CompanionBubble.room(in:)`, which solves the type size and line budget
+    // from them. They live beside the view they serve because the answer now depends on the
+    // font as well as on the panel.
 
     // MARK: The saved position
 

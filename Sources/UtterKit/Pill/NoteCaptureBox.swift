@@ -32,7 +32,7 @@ struct NoteCaptureBox: View {
     @ObservedObject private var notes = NoteStore.shared
     @ObservedObject private var userData = UserData.shared
     /// Observed for the same reason `CompanionContainerView` observes it: a pack installed,
-    /// removed or switched has to reach the drawn character without a relaunch.
+    /// removed or switched has to reach the character without a relaunch.
     @ObservedObject private var packStore = SpritePackStore.shared
     @ObservedObject private var motion = MotionPreference.shared
 
@@ -58,11 +58,10 @@ struct NoteCaptureBox: View {
             // subtree is the expensive part of the card (a first APNG frame decode plus a
             // subscription to a 30 Hz ticker), and building it on the morph's first frame is what
             // made opening look hurried. See the flag's own doc for the measurements.
-            if model.noteCardSettled,
-               let behaviour = model.companionBehaviour,
-               let pack = packStore.pack(matching: userData.companionCharacter) {
+            if model.noteCardSettled, let behaviour = model.companionBehaviour,
+               hasCardCharacter {
                 HStack(alignment: .bottom, spacing: Space.x2) {
-                    CardCharacter(behaviour: behaviour, pack: pack)
+                    cardCharacter(behaviour: behaviour)
                     liveColumn
                 }
             } else {
@@ -220,6 +219,23 @@ private extension View {
 /// character would walk into the transcript. In practice the engine has already parked it:
 /// note capture puts the mood at `.alert`, which does not allow wandering, so the offsets
 /// are being eased back to zero anyway (`CompanionBehaviour.advanceAmbientAct`).
+/// The small character standing beside the note card's level meter.
+extension NoteCaptureBox {
+    /// Whether a character resolves, so the `HStack` is only built when there is something to
+    /// put in it. Separate from the builder below because a `@ViewBuilder` result is never
+    /// Optional and so cannot be tested with `if let`.
+    var hasCardCharacter: Bool {
+        packStore.pack(matching: userData.companionCharacter) != nil
+    }
+
+    @ViewBuilder
+    func cardCharacter(behaviour: CompanionBehaviour) -> some View {
+        if let pack = packStore.pack(matching: userData.companionCharacter) {
+            CardCharacter(behaviour: behaviour, pack: pack)
+        }
+    }
+}
+
 private struct CardCharacter: View {
     @ObservedObject var behaviour: CompanionBehaviour
     let pack: SpritePack

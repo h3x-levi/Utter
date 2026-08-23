@@ -93,6 +93,63 @@ struct TintContrastTests {
         }
     }
 
+    /// A selected row's label must clear the body-text floor on **every** theme's accent.
+    ///
+    /// This is the test that would have caught the bug it was written for. `NSTableView`
+    /// inverts a selected row's label to white unconditionally, which is right for the
+    /// system accents — `selectedContentBackgroundColor` carries white at 5.37:1 — and
+    /// wrong for six of these seven, where white measures between 1.92:1 and 4.02:1. So
+    /// hardcoding either ink fails: white fails Paper, Graphite, Violet, Pine, Ember and
+    /// the system accent; black fails Linen. Only the measured choice passes all seven,
+    /// and that is exactly what this asserts.
+    ///
+    /// `Tint.ink(on:)` rather than `Tint.onAccent` so no theme has to be installed into
+    /// `ThemeManager.shared` — the rule is a pure function of the fill.
+    @Test("Tint.ink(on:) clears 4.5:1 on every theme's accent, and neither ink alone would")
+    func selectedRowInkIsLegible() {
+        let accents: [(name: String, color: NSColor)] =
+            AppTheme.themes.compactMap { theme in
+                theme.accent.map { (theme.name, NSColor($0)) }
+            } + [("System", NSColor.controlAccentColor)]
+        #expect(accents.count >= 7, "expected every themed accent plus the system one")
+
+        var whiteFailures = 0
+        var blackFailures = 0
+        let black = NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.847)
+
+        for accent in accents {
+            // The chosen ink must clear the floor. Composited, because both candidate
+            // inks are translucent over the fill they sit on.
+            let chosen = Tint.ink(on: accent.color)
+            let ratio = Self.contrast(Self.composite(chosen, over: accent.color), accent.color)
+            #expect(ratio >= Self.floor,
+                    "Tint.ink(on:) gives \(String(format: "%.2f", ratio)):1 on \(accent.name)'s accent, under the \(Self.floor):1 floor")
+
+            if Self.contrast(.white, accent.color) < Self.floor { whiteFailures += 1 }
+            if Self.contrast(Self.composite(black, over: accent.color), accent.color) < Self.floor {
+                blackFailures += 1
+            }
+        }
+
+        // Records *why* the choice has to be measured. If either of these drops to zero
+        // the token could be replaced by a constant, and this is what says so.
+        #expect(whiteFailures > 0,
+                "white now clears \(Self.floor):1 on every accent — Tint.ink(on:) could be a constant")
+        #expect(blackFailures > 0,
+                "black now clears \(Self.floor):1 on every accent — Tint.ink(on:) could be a constant")
+    }
+
+    /// Flatten a translucent ink onto its backdrop, so the ratio is the one drawn.
+    private static func composite(_ ink: NSColor, over backdrop: NSColor) -> NSColor {
+        guard let top = ink.usingColorSpace(.sRGB),
+              let bottom = backdrop.usingColorSpace(.sRGB) else { return ink }
+        let alpha = top.alphaComponent
+        return NSColor(srgbRed: top.redComponent * alpha + bottom.redComponent * (1 - alpha),
+                       green: top.greenComponent * alpha + bottom.greenComponent * (1 - alpha),
+                       blue: top.blueComponent * alpha + bottom.blueComponent * (1 - alpha),
+                       alpha: 1)
+    }
+
     /// The fill variants are deliberately left alone, so this records *why* the text ones exist.
     ///
     /// If a future change makes the raw system colours pass as text, `Tint.*Text` becomes dead

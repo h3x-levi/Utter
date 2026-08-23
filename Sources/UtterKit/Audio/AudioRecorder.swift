@@ -413,6 +413,17 @@ class AudioRecorder: ObservableObject {
 
         guard end > start else { return pcmData }
 
+        // 0-based, and that is only safe because of `consume`'s contract.
+        //
+        // This buffer can have been front-trimmed: a meeting calls `consume` on this same
+        // recorder, and a later dictation `stop()` reads the remaining tail through here. A
+        // `Data` that had `removeFirst` applied would have a non-zero `startIndex`, and these
+        // indices would read below it and trap — the SIGTRAP in `MeetingSession` that
+        // `AudioRecorderConsumeTests` exists for. `consume` uses `subdata`, which returns a
+        // fresh zero-based tail, so `start * 2` is a real offset into this buffer.
+        //
+        // If anyone changes `consume` back to a slice or `removeFirst`, this line traps too —
+        // it is the second reader depending on that invariant, and the less obvious one.
         let startByte = start * 2
         let endByte = min((end + 1) * 2, pcmData.count)
         return pcmData.subdata(in: startByte..<endByte)

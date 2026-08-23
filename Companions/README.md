@@ -13,16 +13,37 @@ someone else's character is a pack the *user* installs, which is what the overri
 above is for. The policy is stated on `SpritePack` in
 `Sources/UtterKit/Companion/SpritePack.swift`.
 
+The two `mochi-*` packs were removed too, and for an unrelated reason: they were replaced
+by the 64px `pixel-cat-*` pair, which has articulated legs the 32px canvas had no room
+for. A `userdata.json` naming a removed pack is not a broken install —
+`UserData.resolveCompanionCharacter` maps any unknown id onto the default pack and writes
+the correction back, which `CompanionSelectionTests` pins for every retired id.
+
 A pack is a still per state (`resting.png`, `alert.png`, …), one folder of numbered frames
 per state, and a `pack.json` naming the display name and the per-state frame rate.
 
 Two shapes ship. The **photo packs** (`dog`, `panda`) draw the six original moods —
 `resting`, `alert`, `thinking`, `delighted`, `startled`, `sleepy`. The **pixel packs**
-(`mochi-midnight`, `mochi-cream`) add the pet states and the walk gait — `knead`,
+(`pixel-cat-gray`, `pixel-cat-orange`) add the pet states and the walk gait — `knead`,
 `overheat`, `purr`, `hunt`, `drag`, `walk` — plus an `eyes.png` sprite the renderer moves
 independently so the cat can track the cursor. A pack that omits a state still works:
 `SpritePack.animation(for:)` falls back to `resting`, which is what lets the photo packs
 ship six.
+
+> **`walk` is drawn in profile, and it is the only state that is.** Every mood is a
+> front-on sitting cat, because that is the pose you look at. A sitting animal cannot walk,
+> though: the old walk cycle was the sitting pose with a one-pixel paw raise, and across all
+> four frames only 21-42 pixels changed, all of them inside rows 26-29 — a shuffle at the hem
+> while the engine slid the whole window sideways at 42pt/s. `tools/newcat/cat_art.py` draws
+> a side view with two articulated legs instead; the art faces right only, and
+> `pose.facing` mirrors it for left.
+>
+> One consequence worth knowing before you author a pack: the profile head **bakes its own
+> eye**, and `SpritePackView` suppresses `eyes.png` while a pack with a `walk` cycle is
+> walking. A shared overlay anchored to a front-on head puts *two* eyes on a profile face, and
+> no `eyeAnchors` offset fixes that — the problem is the count, not the position. Cursor
+> tracking stops for the length of a walk, which is the right trade: an animal in motion looks
+> where it is going.
 
 > **The trap.** `SpritePack.stateNames` is the loader's entire vocabulary — a state is read
 > from disk only if it is named there, and that holds even for a pack with a `pack.json`,
@@ -38,18 +59,27 @@ ship six.
 worth avoiding: `build_pack.py` takes a photograph as input and there is no photograph
 behind the pixel cats.
 
-### The pixel packs (`mochi-midnight`, `mochi-cream`)
+### The pixel packs (`pixel-cat-gray`, `pixel-cat-orange`)
 
 Drawn from primitives in code, so both packs come out of one script and the art's
 provenance is the script itself:
 
 ```sh
-python3 tools/mochi/generate_mochi.py            # writes both packs
-python3 tools/mochi/generate_mochi.py --verify    # checks the art, exits non-zero on a fault
+python3 tools/newcat/generate_cat.py            # writes both coats
+python3 tools/newcat/generate_cat.py --verify    # checks the art, writes nothing, exits non-zero on a fault
 ```
 
 `--verify` is worth running on any change: it proves the pupil stays inside its white at
-every eye offset, and prints the coat contrast against a light and a dark desktop.
+every eye offset, prints the coat contrast against a light and a dark desktop, and checks that
+the **walk cycle actually moves its legs** — at least six frames, motion reaching above the
+ankle rows, and enough changed pixels to read at 64px. That last check exists because the
+previous walk failed all three and nothing noticed: the frames were present, correctly sized
+and alpha-clean, and still not a walk.
+
+The canvas is 64px, not the 32px the first pixel packs used, and the size ladder is the
+cost of that: the renderer snaps to a whole-number multiple of the canvas, so a 64px master
+draws at 32/32/64/64pt across the four size settings where a 32px one drew 32/48/64/80. The
+trade was taken deliberately — at 32px a leg is three pixels and cannot articulate.
 
 ### The photo packs (`dog`, `panda`)
 

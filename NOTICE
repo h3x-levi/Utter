@@ -127,7 +127,7 @@ dependencies, and an installed copy of Utter contains no part of them.
    Licence: MIT-CMU
 
    BUILD-TIME ONLY. Pillow is imported by the asset-generation scripts under
-   scripts/ and tools/mochi/ - the app icon, the menu-bar template image, the
+   scripts/ and tools/newcat/ - the app icon, the menu-bar template image, the
    DMG installer background, and the companion sprite packs. Those scripts run
    on the build machine and write PNG files; the PNGs are shipped, Pillow is
    not. See requirements.txt.

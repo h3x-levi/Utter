@@ -68,11 +68,7 @@ enum MeetingOfferMetrics {
     /// `NSButton(bezelStyle: .rounded, controlSize: .large).fittingSize` measured (92, 28) on this
     /// machine, which is where the number comes from — a large macOS control.
     ///
-    /// It is no longer only an *estimate* of what will draw. The card's buttons are
-    /// `OfferButtonStyle` rather than a system style, and that style pins its height to this
-    /// constant on every render path, so the row the window is sized for is the row that lays out.
-    /// A side benefit of the buttons no longer being `.glass`: a system button style's metrics are
-    /// the system's to change between releases, and this one's are ours.
+    /// The card uses large native macOS buttons, whose measured height is 28pt.
     static let buttonRowHeight: CGFloat = 28
 
     /// Head-room over the derived content height.
@@ -349,26 +345,16 @@ private struct MeetingOfferView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Not `GlassButton`. This card body is real Liquid Glass, and the app's standard button
-            // resolves to `.buttonStyle(.glass)` on macOS 26 (`GlassButtonLook`, in GlassControls),
-            // which put glass on glass — the one place in the app that did. See `OfferButtonStyle`.
-            //
-            // Symbol references rather than `file:line` for the design system, here and below: those
-            // files are being edited alongside this one and every line number in them has already
-            // moved once.
             HStack(spacing: Space.x2) {
                 Button(action: onAccept) {
-                    Label {
-                        Text("Transcribe")
-                    } icon: {
-                        // Accent on the glyph, never on the label — `OfferButtonStyle` says why.
-                        Image(systemName: "record.circle").foregroundStyle(Tint.accent)
-                    }
+                    Label("Transcribe", systemImage: "record.circle")
                 }
-                .buttonStyle(OfferButtonStyle(emphasis: true, isDark: colorScheme == .dark))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
 
                 Button("Not now", action: onDecline)
-                    .buttonStyle(OfferButtonStyle(emphasis: false, isDark: colorScheme == .dark))
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
             }
         }
         .padding(MeetingOfferMetrics.padding)
@@ -398,78 +384,5 @@ private struct MeetingOfferView: View {
         // light wallpaper on macOS 26. If its silhouette does dissolve there, the fix is the pill's —
         // one `shape.strokeBorder(contrast, lineWidth: 1)` at this exact point — and not the hairline
         // that was removed, which was tuned as a rim on an opaque surface.
-    }
-}
-
-/// The card's buttons: vibrant fills, because they sit on glass.
-///
-/// The prohibition, quoted in full in `SidebarRow.rowBackground` where the same call was made for
-/// the selected sidebar row: "avoid applying the material to both layers. Instead, use fills,
-/// transparency, and vibrancy for the top elements." `GlassButton` is `.buttonStyle(.glass)` on
-/// macOS 26, so the card was a sheet of glass carrying two more.
-///
-/// Two decisions taken from places in this app that already measured them, rather than made fresh:
-///
-///   * The lift is a wash toward **white in both appearances**, which is `rowBackground`'s finding:
-///     `Color.primary.opacity()` inverts per appearance and painted a near-black pill on a light
-///     surface, so a raised element needs one direction, not a semantic colour. The same 0.10 dark /
-///     0.75 light pair is used for that lift in three screens now.
-///   * Emphasis is an accent **rim and glyph**, never the label. `GlassChip` measured accent text on
-///     an accent surface at 1.18:1 against a 4.5:1 floor, because the accent then sets the label and
-///     the thing behind it at once.
-///
-/// What the *opacities* below are, stated plainly: derived, not measured. `fill(pressed:)` runs
-/// 0.12/0.55 at rest and 0.20/0.75 pressed. Light-mode rest is deliberately under the 0.75 the
-/// selected row uses — two buttons at selection strength on a small card would read as two
-/// selections rather than as controls — and press goes to it, so pressing lands where a selection
-/// does. Dark rest is a hair over that row's 0.10, because that value was measured against a
-/// translucent sidebar whereas these sit on glass over arbitrary wallpaper. Nobody has looked at
-/// either pair on screen; they are one plausible step off a measured one and are the first thing to
-/// re-tune if the buttons read as too faint or too heavy.
-///
-/// One treatment on all four render paths, not a branch. There is no glass to avoid below macOS 26
-/// or under Reduce Transparency — a fill is simply correct there too — and a card whose buttons
-/// changed shape with the material would be two designs to keep honest instead of one.
-///
-/// The height is `MeetingOfferMetrics.buttonRowHeight`, pinned rather than intrinsic. The window is
-/// created at a fixed size with `sizingOptions = []` and the content is top-aligned, so a button row
-/// taller than the metric allowed for lays out below the window's bottom edge where no click lands.
-/// That is how this card shipped unusable once, and it is why the metric no longer depends on what a
-/// system button style decides to draw.
-///
-/// Width stays intrinsic, and it fits: measured at 13pt, "Transcribe" + the 15pt `record.circle` +
-/// this padding is 106.9pt and "Not now" is 74.3pt, so the row is **189.1pt of the card's 236pt
-/// column** — 47pt spare. `.lineLimit(1)` below is therefore a guard against a future copy change,
-/// not something either of these labels reaches.
-private struct OfferButtonStyle: ButtonStyle {
-    /// The call to action, and there is exactly one — the HIG limits prominence to "one or two per
-    /// view", and a card offering to record other people should make plain which button starts it.
-    let emphasis: Bool
-    let isDark: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        let shape = Radius.rect(Radius.control)
-        return configuration.label
-            .typo(.callout, ink: Ink.primary)
-            .lineLimit(1)
-            .padding(.horizontal, Space.x3)
-            .frame(height: MeetingOfferMetrics.buttonRowHeight)
-            .background(shape.fill(Color.white.opacity(fill(pressed: configuration.isPressed))))
-            .overlay(
-                shape.strokeBorder(emphasis ? Tint.accent.opacity(0.55) : Line.hairline,
-                                   lineWidth: Line.width)
-            )
-            // The whole fill is the target, not just the glyphs — a card whose buttons were once
-            // off-window entirely has no business having a hit region smaller than it looks.
-            .contentShape(shape)
-            // `.glass`'s `.interactive()` supplied a press response for free and this has to replace
-            // it, or the button reads as dead on click. `Motion.hoverIn` is the token the rest of
-            // the app changes a fill with.
-            .animation(Motion.hoverIn, value: configuration.isPressed)
-    }
-
-    private func fill(pressed: Bool) -> Double {
-        if pressed { return isDark ? 0.20 : 0.75 }
-        return isDark ? 0.12 : 0.55
     }
 }

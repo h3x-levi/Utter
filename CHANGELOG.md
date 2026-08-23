@@ -4,6 +4,61 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [3.0.33] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.32] — August 2026
+
+- The companion is now a pixel cat. The two Mochi packs and the two code-drawn Persian cats were removed; the bundled characters are Golden Dog, Panda, Pixel Cat (Ginger) and Pixel Cat (Gray).
+- No character is drawn in code any more — a sprite pack is the only way one can exist, which is ~3,100 fewer lines to maintain.
+- An existing selection naming a removed character is migrated to the default pack on first launch and the correction saved, so nobody lands on an empty companion window.
+- Fixed: a pixel-art pack whose canvas is larger than the chosen character size was drawn at full canvas size, overflowing the panel that clips it, so the cat was sliced at the window edge while roaming. Only reproduced on a non-Retina display.
+
+## [3.0.31] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.30] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.29] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.28] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.27] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.26] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.25] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.24] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.23] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.22] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.21] — August 2026
+
+- Internal build — packaging and tooling updates
+
 ## [3.0.20] — August 2026
 
 - Internal build — packaging and tooling updates

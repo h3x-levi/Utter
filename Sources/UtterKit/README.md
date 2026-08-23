@@ -96,12 +96,13 @@ wide. `showMainWindow` re-asserts the size on the runloop as a backstop.
 user-initiated speech-model download in `Speech/ModelStore.swift`. Keep it that
 way: `scripts/build-app.sh` fails the build if a `.env` appears.
 
-**Every character is a sprite pack.** `Companion/SpritePack.swift` is the only source
-of a companion's art. Four characters drawn in code shipped alongside the packs until
-they were removed; a `userdata.json` that still names one of them is migrated by
-`UserData.resolveCompanionCharacter`, and with no pack installed the companion
-**cannot** be shown — `CompanionWindow.show()` declines rather than putting an empty
-panel on screen, and the Companion settings pane says so.
+**Every character is a sprite pack, and nothing is drawn in code.** `Companion/SpritePack.swift`
+is the only source of a companion's art. Characters drawn in code shipped alongside the packs
+twice — four originally, then two Persian cats — and both sets were removed, so a pack is now
+the *only* way a character can exist. A `userdata.json` that still names a removed character or
+a removed pack is migrated by `UserData.resolveCompanionCharacter`, and with no pack installed
+the companion **cannot** be shown — `CompanionWindow.show()` declines rather than putting an
+empty panel on screen, and the Companion settings pane says so.
 
 **Only art Utter is allowed to ship may be bundled.** The folders in `Companions/` are
 copied into the app bundle by `scripts/build-app.sh` as defaults, and a user folder of

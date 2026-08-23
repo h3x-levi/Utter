@@ -31,10 +31,19 @@ enum Surface {
     /// dark one. That is correct when it deepens a wash that already runs the same direction, and
     /// it is a bug anywhere the *selected* state is a white lift: the pointer then darkens the row
     /// on hover and the click jumps it light, so one control moves in two directions. That shipped
-    /// twice — the main window's sidebar and Settings' group rows — and both now use `SidebarLift`,
-    /// whose lifts are white in both appearances and provably ordered. Four remaining uses are
-    /// correct because rest is a `Color.primary` wash at 4% and hover is the same wash at 6%.
-    static let fillHover = Color.primary.opacity(0.06)
+    /// twice — the main window's sidebar and Settings' group rows — and **both are now real
+    /// `List(selection:)`s**, so AppKit owns hover and selection there and neither draws a wash at
+    /// all. (They briefly used a `SidebarLift` enum of white lifts instead; it is deleted. Its lifts
+    /// were provably *ordered* and still invisible in light mode, which is the lesson recorded at
+    /// `FlowMainView`'s deletion note: ordering is not contrast.) Remaining uses are correct because
+    /// rest is a `Color.primary` wash at 4% and hover is the same wash at 10%.
+    ///
+    /// **0.10, not 0.06.** At 6% over a light theme's card this measured **1.142:1** — a hover state
+    /// you cannot see is not feedback, and "hovering shows no indication, nothing in light themes"
+    /// was the report. 10% measures **1.253:1** against the same card, which is roughly the step
+    /// AppKit's own list-row hover makes. The 4% rest / 10% hover pair still runs in one direction
+    /// per appearance, so the invariant this doc-comment exists to protect is unchanged.
+    static let fillHover = Color.primary.opacity(0.10)
 }
 
 // MARK: - Veil (how translucent a surface is)
@@ -221,6 +230,64 @@ enum Tint {
     static var accentSoft: Color { accent.opacity(0.12) }
     static var accentRim: Color { accent.opacity(0.28) }
 
+    /// The ink that sits *on* a solid accent fill — a selected list row.
+    ///
+    /// Not white, and that is the whole point of the token. `NSTableView` inverts a
+    /// selected row's label to white unconditionally, which is right for the system
+    /// accents — `selectedContentBackgroundColor` carries white at **5.37:1** — and
+    /// wrong for these themes. Measured on a solid accent fill, white clears the
+    /// 4.5:1 body-text floor on **one** of the seven accents:
+    ///
+    ///     theme      white     black
+    ///     paper      3.02 ✗    5.99 ✓
+    ///     linen      5.77 ✓    3.32 ✗
+    ///     graphite   2.27 ✗    7.65 ✓
+    ///     violet     2.95 ✗    6.10 ✓
+    ///     pine       1.92 ✗    8.83 ✓
+    ///     ember      2.19 ✗    7.90 ✓
+    ///     system     4.02 ✗    4.66 ✓
+    ///
+    /// So the ink is *measured* rather than assumed: whichever of the two has the
+    /// larger WCAG ratio against the accent actually in force. Every theme clears
+    /// 4.5:1 that way, and Linen — the only accent dark enough to carry white —
+    /// gets white without being special-cased.
+    ///
+    /// Keyed on the accent's own luminance, **not** on the appearance. Four of the
+    /// six themed accents are light colours sitting in a dark theme, so
+    /// `labelColor` would resolve to white on exactly the fills that need black.
+    /// That inversion is the bug this token exists to avoid, which is why it does
+    /// not use `Ink.primary`.
+    static var onAccent: Color {
+        Color(nsColor: NSColor(name: nil) { _ in
+            ink(on: NSColor(ThemeManager.shared.current.accent
+                            ?? Color(nsColor: .controlAccentColor)))
+        })
+    }
+
+    /// The higher-contrast of black and white against `fill`, by WCAG 2.x.
+    ///
+    /// Split out of `onAccent` as a pure function of its argument so the rule can be
+    /// checked against every theme's accent without a test having to mutate
+    /// `ThemeManager.shared`.
+    static func ink(on fill: NSColor) -> NSColor {
+        guard let srgb = fill.usingColorSpace(.sRGB) else { return .white }
+        func channel(_ raw: CGFloat) -> Double {
+            let value = Double(raw)
+            return value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * channel(srgb.redComponent)
+            + 0.7152 * channel(srgb.greenComponent)
+            + 0.0722 * channel(srgb.blueComponent)
+        // Contrast against white (relative luminance 1) and against black (0).
+        let againstWhite = 1.05 / (luminance + 0.05)
+        let againstBlack = (luminance + 0.05) / 0.05
+        // 0.847 is `labelColor`'s own alpha, so a selected row's label carries the same
+        // weight as every other label in the app rather than jumping to full black.
+        return againstBlack > againstWhite
+            ? NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.847)
+            : .white
+    }
+
     // NSColor.system* are appearance-aware (they lighten in dark mode).
     // Color.red and friends are not.
     static let recording = Color(nsColor: .systemRed)
@@ -303,11 +370,36 @@ enum Line {
     /// macOS's `separatorColor` is cool blue-gray. Mixing the two is the single
     /// fastest way to make a warm layout look wrong, so the hairline is built
     /// warm and adapts per appearance.
-    static let hairline = Color(nsColor: NSColor(name: nil) { appearance in
+    /// The warm neutral the hairline is *made of*, at full strength.
+    ///
+    /// Split out from `hairline` so a caller that needs the same edge at a different weight does not
+    /// have to restate the recipe and risk drifting off the ramp — which is what happened to the
+    /// content card's rim, where a locally hand-written white gradient measured 1.015:1 in light mode
+    /// (see `ContentGlass.rim`). One ink, many weights.
+    static let hairlineInk = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDark
-            ? NSColor(srgbRed: 1, green: 0.97, blue: 0.93, alpha: 0.13)
-            : NSColor(srgbRed: 0.16, green: 0.13, blue: 0.08, alpha: 0.13)
+            ? NSColor(srgbRed: 1, green: 0.97, blue: 0.93, alpha: 1)
+            : NSColor(srgbRed: 0.16, green: 0.13, blue: 0.08, alpha: 1)
     })
+    static let hairline = hairlineInk.opacity(0.13)
+
+    /// The hairline under the pointer, for the few tiles that cannot use a system control.
+    ///
+    /// This exists because `hairline` -> `strong` was not a hover. `strong` is
+    /// `Color.primary` at 14% and `hairline` is `hairlineInk` at 13%, so the step was a
+    /// 0.01 alpha change *and* a hue change on a 1pt border. Measured over this app's
+    /// light canvases that is **1.070:1** — below the perceptual threshold, which is why
+    /// the theme swatches and companion tiles did not respond to the pointer at all.
+    /// The same ramp at 0.26 measures a **1.32:1** step in light and **1.55:1** in dark,
+    /// and lands at 1.71:1 against the canvas — the same edge strength as
+    /// `ContentGlass.rim`, so the two agree instead of drifting.
+    ///
+    /// Reach for a system control first; it brings its own hover. This is only for a tile
+    /// whose fill is content that must not be washed over — a theme swatch previews the
+    /// theme's own canvas colour, so tinting it on hover would misreport the thing being
+    /// chosen.
+    static let hairlineHover = hairlineInk.opacity(0.26)
+
     static let strong = Color.primary.opacity(0.14)
     static let focus = Color(nsColor: .keyboardFocusIndicatorColor)
     static let width: CGFloat = 1
@@ -331,7 +423,19 @@ enum Space {
     static let rowPaddingV = x3
     static let rowPaddingH = x4
     static let cardPadding = x5
-    static let screenPadding = x8
+
+    /// The page rail — the only horizontal inset a *page column* sets.
+    ///
+    /// A container inside a page must not add a second one. If it draws a visible surface it
+    /// may inset its own contents from its own visible edge (that is what `rowPaddingH` is
+    /// for), but a system container's *header slot* is not a visible surface: `GroupBox` and
+    /// grouped `Form` inset their label slot and their content slot by different amounts, and
+    /// neither number is readable from app code, so a header in one lines up with nothing.
+    ///
+    /// This replaced `screenPadding = x8`, which had **zero** call sites while the two real
+    /// page columns each wrote `Space.x6` as a literal. A dead 32 sitting next to a live 24 is
+    /// how the next reader "fixes" the alignment by moving the wrong rail.
+    static let pageInset = x6
     static let stackGap = x3
     static let groupGap = x5
     static let headerToContent = x3
@@ -366,8 +470,8 @@ enum Space {
 // Every container/child pair in this app sits at or beyond its container's corner, so
 // `.concentric` resolves to 0 at all of them:
 //
-//   BentoTile / SettingsCard / card()   panel 16   child inset 20 (Space.cardPadding)
-//   GlassSelectableRow, ModelRow        card 12    child inset 12 (Space.x3)
+//   card()                              panel 16   child inset 20 (Space.cardPadding)
+//   GlassSelectableRow                  card 12    child inset 12 (Space.x3)
 //   WordRow / SnippetRow / CommandRow   control 8  child inset 12 h, 4 v
 //   MeetingOfferPanel card              panel 16   button row inset 16 (Space.x4)
 //
@@ -511,20 +615,6 @@ enum Layout {
     /// The detail column.
     static let contentWidth: CGFloat = 840
 
-    /// Sidebar width.
-    ///
-    /// 168pt, not the reference's 140. The reference's labels are single short
-    /// words; Utter's include "Dictionary" and "Transforms", and the usage card at
-    /// the foot of the column wrapped to three lines in the ~100pt of text space
-    /// 140pt left it. 168pt gives the card two comfortable lines and the labels
-    /// room to breathe, while still keeping the content card clearly dominant.
-    ///
-    /// Consumed by AppKit, not SwiftUI: the column stopped setting its own `.frame(width:)` when
-    /// the window became an `NSSplitViewController`, and this is now the sidebar item's
-    /// `minimumThickness` *and* `maximumThickness` (`App.swift`). Equal bounds are what pin the
-    /// width and keep the divider undraggable. Value unchanged.
-    static let sidebarWidth: CGFloat = 168
-
     // MARK: Content card
     //
     // `cardInset` (8) and `cardRadius` (12) lived here, for a rounded content card inset into
@@ -541,41 +631,51 @@ enum Layout {
     // references it, and a hand-guessed 30 is not interchangeable with a laid-out 66, so it is
     // deleted rather than left for someone to reach for.
 
-    /// Sidebar row pitch — 28pt, from the reference's 26px at 0.9x.
-    static let sidebarRowHeight: CGFloat = 28
+    /// Sidebar row pitch.
+    ///
+    /// Was 28pt (the reference's 26px at 0.9x), which measured — offscreen probe, top-down window
+    /// points — the six main-window nav rows clustered from y=109 to y=287, i.e. 178pt jammed at the
+    /// top of an 804pt glass column with a Spacer's worth of emptiness below them before the pinned
+    /// footer at y=772. 36pt gives each tab real presence and, with the wider `navRows` spacing,
+    /// spreads the block to ~246pt without disturbing the bottom-pinned utilities.
+    ///
+    /// Shared with Settings' nav column — deliberately, so the two nav columns stay one design.
+    /// Verified safe there: six group rows in two sections end at ~y=360 at 36pt, comfortably
+    /// inside its 420pt minimum height (measured at 28pt they ended at y=312).
+    ///
+    /// Both columns are real `List(selection:)`s now, so this is applied through
+    /// `.environment(\.defaultMinListRowHeight, …)` rather than a row's own `.frame`: it is a
+    /// *floor* the system row honours, not a fixed height, so AppKit is still free to grow a row
+    /// for a longer label or a larger Dynamic Type setting.
+    ///
+    static let sidebarRowHeight: CGFloat = 36
     /// Standard control height. The reference runs notably compact: 26pt buttons
     /// and toggles against 13pt labels.
     static let buttonHeight: CGFloat = 26
 
     static let windowMinWidth: CGFloat = 1000
     static let windowMinHeight: CGFloat = 680
-    static let windowIdealWidth: CGFloat = 1180
-    static let windowIdealHeight: CGFloat = 820
-
-    /// Settings' group list — 152pt, deliberately not the main window's 168.
-    ///
-    /// Kept as its own number rather than converged. The main window's 168 exists for
-    /// "Dictionary"/"Transforms" and for a usage card that wrapped to three lines below it; this
-    /// column's longest label is "Diagnostics" and it has no card, so the extra 16pt would buy
-    /// nothing — and it would come straight off a detail column that is only 460pt wide at
-    /// `settingsMinWidth` (measured: 620 less a 160pt leading safe-area inset), which is the
-    /// figure that number was chosen against.
-    ///
-    /// Consumed by AppKit, not SwiftUI: the column stopped setting its own `.frame(width:)` when
-    /// the window became an `NSSplitViewController`, and this is now the sidebar item's
-    /// `minimumThickness` *and* `maximumThickness` (`showSettingsWindow`). Equal bounds are what
-    /// pin the width and keep the divider undraggable. Value unchanged from the old
-    /// `.frame(width: 152)`.
-    static let settingsSidebarWidth: CGFloat = 152
+    /// Opening size. Raised ~17% from the shipped 1180x820 (1380x960) because the window read as
+    /// too small by default — 200pt wider and 140pt taller. The minimum floor stays 1000x680, so a
+    /// small-display user still resizes down to it and `showMainWindow`'s collapse re-assert loop
+    /// (which restores exactly these values) still fires only below that floor. The ideal is allowed
+    /// to exceed the 1280x800 smallest display, as the old 820 already did — only the *minimum* has
+    /// to fit a small screen, which `WindowSizeTests.minimumsFitASmallDisplay` pins.
+    static let windowIdealWidth: CGFloat = 1380
+    static let windowIdealHeight: CGFloat = 960
 
     /// Settings. Resizable, so it needs a floor as well as an opening size: the
-    /// group list is a fixed `settingsSidebarWidth`, so the minimum width is what
-    /// leaves the detail column enough for a card and its rows rather than what the
-    /// window can technically draw.
+    /// minimum width leaves the detail column enough room for its controls.
     static let settingsMinWidth: CGFloat = 620
     static let settingsMinHeight: CGFloat = 420
-    static let settingsIdealWidth: CGFloat = 720
-    static let settingsIdealHeight: CGFloat = 500
+    /// The size Settings opens at, consumed by `showSettingsWindow` for both the opening
+    /// `contentRect` and `setContentSize`. Raised 20% from 720x500 to 864x600 to open with more
+    /// room by default, matching the main window's enlargement — still well above the min floor
+    /// and inside the 1280x710 smallest-display allowance (`WindowSizeTests`). The chrome geometry
+    /// measured at the old 720x500 (band 66pt, the 58/66/160pt safe-area insets, concentric glass)
+    /// is size-independent, so those probe notes in `SettingsWindowView` still hold at this size.
+    static let settingsIdealWidth: CGFloat = 864
+    static let settingsIdealHeight: CGFloat = 600
 
     /// Onboarding. The height floor is the tallest step (welcome, with the live pill
     /// demo, ~491pt) plus the progress dots and the nav row; below it the step
@@ -618,9 +718,56 @@ extension View {
             .modifier(CardSurface(radius: radius))
     }
 
-    /// Quiet grouping without a rim — for rows inside a list.
-    func rowFill(radius: CGFloat = Radius.control) -> some View {
-        self.background(Radius.rect(radius).fill(Surface.fillSubtle))
+    /// Quiet grouping for a row inside a list, plus the row's hover response.
+    ///
+    /// Rimless at rest — that is what "quiet" means here, and adding a resting rim
+    /// would put a permanent hairline on every one of the 300+ history rows. The rim
+    /// appears **only** under the pointer, which is the cue these rows were missing.
+    ///
+    /// **Why an edge and not a shadow.** Depth is read from a *bounded* plane: a
+    /// tone change tells the eye something is different, an edge tells it where that
+    /// something stops. These rows had at most the tone half, so a hovered row was a
+    /// faint wash with no boundary — no figure to separate from ground, which is
+    /// precisely "no depth". The edge is also the bigger of the two cues: measured on
+    /// Paper's `Surface.raised` with `Line.hairlineInk`, `Line.hairline` @0.13 reads
+    /// 1.291:1 against the card and `Line.hairlineHover` @0.26 reads 1.713:1 — a
+    /// **1.327:1** step, against **1.148:1** for the whole fill change it is added
+    /// to. `Line.hairlineHover` was measured correctly when it was written and had
+    /// simply never reached a row; it reached two tiles only
+    /// (`ThemeSwatchGrid`, `CompanionSettingsView`).
+    ///
+    /// A shadow stays out, and `Elevation.flat`'s "No shadow, ever" stands. Apple
+    /// shadows a *floating* control — the pill — and gives a row inside a pane a
+    /// bounded fill instead; the pill's contact+ambient pair on a 34pt row reads as a
+    /// torn-off card. There is also an arithmetic reason: SwiftUI derives a drop
+    /// shadow from the source view's alpha mask, so a shadow cast by a 10%-alpha
+    /// hover fill measures **1.0176:1** — seven times weaker than the same shadow
+    /// over an opaque fill, and below anything the eye resolves.
+    ///
+    /// **The fill step is weaker than this file claims elsewhere.** `Surface.fillHover`
+    /// is justified as 1.253:1 in four places, but that figure is 0.10 over a *bare*
+    /// card. Every caller of this function steps `fillSubtle` → `fillHover`, i.e.
+    /// 0.04 → 0.10, which is **1.1477:1** — within 0.006 of the 1.142:1 that
+    /// `Surface.fillHover`'s own note calls "a hover state you cannot see". So the
+    /// fill alone was never going to carry this, whatever it was tuned to, and that
+    /// is the second reason the rim is here rather than a larger wash.
+    ///
+    /// Fill and rim only. Padding and any `minHeight` stay at the call site, because
+    /// the rows are not interchangeable: `WordRow` and `SnippetRow` use `Space.x1`
+    /// vertical with a 34pt floor, `CustomCommandRow` uses `Space.x2` and no floor.
+    /// A modifier that owned padding too would silently reflow the commands list.
+    func rowFill(radius: CGFloat = Radius.control, isHovering: Bool = false) -> some View {
+        let shape = Radius.rect(radius)
+        return self.background(
+            shape.fill(isHovering ? Surface.fillHover : Surface.fillSubtle)
+                // `.overlay` on the shape rather than the chained
+                // `.fill(_:).strokeBorder(_:)` form: that spelling resolves to the
+                // macOS 14 `ShapeView` overloads and does not compile at this
+                // package's 13.3 floor.
+                .overlay(shape.strokeBorder(Line.hairlineHover, lineWidth: Line.width)
+                    .opacity(isHovering ? 1 : 0))
+                .animation(isHovering ? Motion.hoverIn : Motion.hoverOut, value: isHovering)
+        )
     }
 
     /// Constrain prose to a readable measure.

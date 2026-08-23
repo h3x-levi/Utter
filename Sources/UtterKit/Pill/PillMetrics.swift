@@ -100,8 +100,9 @@ enum PillMetrics {
     ///     one layout pass that made the pill snap wide before it grew tall.
     ///   * `.idle` — a `mic` glyph, intrinsically ~33pt, so `minimumCapsuleWidth` decides it
     ///     outright and no font metric can move it.
-    ///   * `.processing` — `WritingPen` is an explicit 28x14 frame, 48pt with padding, so
-    ///     `minimumCapsuleWidth` decides that one too.
+    ///   * `.processing` — `WritingPen` is an explicit square frame (23pt: a 10pt glyph box plus
+    ///     its scribble envelope), so `minimumCapsuleWidth` decides that one too. It was 28x14
+    ///     while the pen was paired with a drawn line; the line is gone and the frame shrank.
     ///
     /// and `nil` for the four that carry text of a length nothing here can know:
     /// `.recording`/`.handsFree` grow with the level meter and a live transcript,

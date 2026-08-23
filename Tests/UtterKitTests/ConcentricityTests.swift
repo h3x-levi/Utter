@@ -36,9 +36,9 @@ struct ConcentricityTests {
     /// outside the container's corner on both.
     private static let pairs: [(container: CGFloat, inset: CGFloat, label: String)] = [
         (Radius.panel, Space.cardPadding,
-         "BentoTile / SettingsCard / card() → its content"),
+         "card() → its content"),
         (Radius.card, Space.x3,
-         "GlassSelectableRow, ModelRow → their content"),
+         "GlassSelectableRow → its content"),
         (Radius.control, Space.x3,
          "WordRow / SnippetRow / CustomCommandRow → their content"),
         (Radius.panel, Space.x4,
