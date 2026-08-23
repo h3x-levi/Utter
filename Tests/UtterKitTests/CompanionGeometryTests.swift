@@ -229,6 +229,18 @@ struct CompanionGeometryTests {
         #expect(abs(origin.y - once.y) < 0.001)
     }
 
+    @Test("Absolute dragging preserves the point where the character was grabbed",
+          arguments: sizes)
+    func absoluteDragPreservesGrabPoint(size: CompanionSize) {
+        let geometry = CompanionGeometry(size)
+        let cursor = CGPoint(x: Self.visible.midX, y: Self.visible.midY)
+        let grab = CGSize(width: 40, height: 30)
+        let origin = geometry.draggedOrigin(cursor: cursor, grabOffset: grab, visible: Self.visible)
+
+        #expect(abs((origin.x + grab.width) - cursor.x) < 0.001)
+        #expect(abs((origin.y + grab.height) - cursor.y) < 0.001)
+    }
+
     @Test("Dragging hard into an edge keeps the character on screen, not jittering past it",
           arguments: sizes)
     func dragClampsAtTheEdges(size: CompanionSize) {

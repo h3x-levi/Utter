@@ -372,6 +372,13 @@ class PillWindow: NSPanel {
         return rect.intersection(NSRect(origin: .zero, size: content.bounds.size))
     }
 
+    /// The pill's visible shell in global screen coordinates.
+    var drawnShellScreenRect: NSRect? {
+        guard let contentView else { return nil }
+        let windowRect = contentView.convert(drawnShellRect, to: nil)
+        return convertToScreen(windowRect)
+    }
+
     /// The most recent state any caller has asked for, applied or not.
     ///
     /// `setState` is called from 20-odd places and more than one of them fires twice in a

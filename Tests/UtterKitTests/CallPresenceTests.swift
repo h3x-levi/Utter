@@ -90,6 +90,21 @@ struct CallPresenceTests {
         #expect(!run(samples).isInCall)
     }
 
+    @Test("Unrelated microphone and playback processes are not a call")
+    func unrelatedTwoWayAudioIsNotACall() {
+        var presence = CallPresence()
+        for second in 0...Int(CallPresence.confirmAfter + 2) {
+            presence.update(
+                inputByOthers: true,
+                outputByOthers: true,
+                plausibleCall: false,
+                selfIsCapturing: false,
+                at: TimeInterval(second)
+            )
+        }
+        #expect(!presence.isInCall)
+    }
+
     @Test("Utter's own recording is never mistaken for a call")
     func selfCaptureIsSuppressed() {
         // A meeting capture takes the far side through ScreenCaptureKit, which is not a HAL client

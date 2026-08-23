@@ -143,8 +143,9 @@ final class CompanionWindow: NSPanel {
         let hosting = ShapedHostingView(rootView: CompanionContainerView(
             behaviour: behaviour,
             onPoke: { [weak self] in self?.behaviour.poke() },
-            onDragBy: { [weak self] translation in self?.dragBy(translation) },
+            onDragTo: { [weak self] cursor in self?.drag(to: cursor) },
             onDragEnded: { [weak self] in
+                self?.dragGrabOffset = nil
                 self?.behaviour.isBeingDragged = false
                 self?.savePosition()
             }
@@ -870,26 +871,23 @@ final class CompanionWindow: NSPanel {
 
     // MARK: Dragging
 
+    private var dragGrabOffset: CGSize?
+
     /// Dragging the character moves the companion, and nothing else.
     ///
     /// It used to move the *pill* and let the companion follow, on the reasoning that
     /// they were one unit on screen. They are not one unit any more: the two windows
     /// have separate positions the user sets separately, which is the whole point of
     /// the change.
-    private func dragBy(_ translation: CGSize) {
+    private func drag(to cursor: CGPoint) {
         var origin = frame.origin
 
-        // Rising edge of a drag: fold any ambient offset into the window origin, so the
-        // character does not jump when the offset is suppressed for the length of the drag.
-        // This is half of the jitter fix — the other half is `advanceAmbientAct` holding the
-        // offset at zero. Together they make the character track the cursor 1:1: without the
-        // freeze, a stroll or the return-home animation kept mutating the offset, and because
-        // the offset is applied inside the view under a live `DragGesture`, that shifted the
-        // gesture's own coordinate space and the character oscillated against the pointer.
-        if !behaviour.isBeingDragged {
+        if dragGrabOffset == nil {
             let carried = behaviour.takeAmbientOffsetForDrag()
             origin.x += carried.width
             origin.y -= carried.height
+            if carried != .zero { setFrameOrigin(origin) }
+            dragGrabOffset = CGSize(width: cursor.x - origin.x, height: cursor.y - origin.y)
         }
 
         // Told, not inferred. The character also moves during a stroll, so deriving "held"
@@ -899,18 +897,9 @@ final class CompanionWindow: NSPanel {
         behaviour.isBeingDragged = true
         behaviour.wakeIfSleeping()
 
-        // Clamped on every step rather than only on release: this panel sits above the menu
-        // bar's own window level, so an unclamped drag paints the character *over* the menu
-        // bar for the length of the gesture instead of being clipped by it. Routed through
-        // the same pure `draggedOrigin` a test drives, so the sign convention and the 1:1
-        // tracking are the shipped behaviour.
-        guard let visible = visibleFrame(forPanelOrigin: origin) else {
-            setFrameOrigin(NSPoint(x: origin.x + translation.width,
-                                   y: origin.y - translation.height))
-            return
-        }
-        setFrameOrigin(geometry.draggedOrigin(from: origin, translation: translation,
-                                              visible: visible))
+        guard let grab = dragGrabOffset,
+              let visible = visibleFrame(forPanelOrigin: origin) else { return }
+        setFrameOrigin(geometry.draggedOrigin(cursor: cursor, grabOffset: grab, visible: visible))
     }
 
     // MARK: Context menu
@@ -977,7 +966,7 @@ private struct CompanionContainerView: View {
     @ObservedObject private var packStore = SpritePackStore.shared
 
     let onPoke: () -> Void
-    let onDragBy: (CGSize) -> Void
+    let onDragTo: (CGPoint) -> Void
     let onDragEnded: () -> Void
 
     /// Read from the preference rather than passed in, so the drawn character follows a
@@ -986,16 +975,6 @@ private struct CompanionContainerView: View {
     /// The *panel* is resized separately, by the window that owns it.
     private var characterSize: CGFloat { userData.companionSize.points }
 
-    /// Drag deltas arrive cumulatively, so the previous translation is subtracted
-    /// to get the per-event movement.
-    @State private var lastTranslation: CGSize = .zero
-    /// Whether the current gesture has delivered its first `onChanged`.
-    ///
-    /// `lastTranslation` used to be reset only in `onEnded`, but SwiftUI does not
-    /// guarantee `onEnded` runs — a gesture that loses the recognition race to the
-    /// tap above, or is cancelled, ends silently. The stale value then made the next
-    /// drag's first delta `firstTranslation - staleTotal`, so after an interrupted
-    /// 60pt drag the window jumped ~58pt backwards on the next touch.
     @State private var isDragging = false
     @State private var isHovering = false
 
@@ -1016,26 +995,13 @@ private struct CompanionContainerView: View {
                 .onHover { hovering in isHovering = hovering }
                 .onTapGesture { onPoke() }
                 .gesture(
-                    DragGesture(minimumDistance: 2)
-                        .onChanged { value in
-                            // Establish the reference on the first event of each
-                            // gesture rather than trusting the previous one to have
-                            // cleaned up after itself.
-                            if !isDragging {
-                                isDragging = true
-                                lastTranslation = value.translation
-                                return
-                            }
-                            let delta = CGSize(
-                                width: value.translation.width - lastTranslation.width,
-                                height: value.translation.height - lastTranslation.height
-                            )
-                            lastTranslation = value.translation
-                            onDragBy(delta)
+                    DragGesture(minimumDistance: 1)
+                        .onChanged { _ in
+                            isDragging = true
+                            onDragTo(NSEvent.mouseLocation)
                         }
                         .onEnded { _ in
                             isDragging = false
-                            lastTranslation = .zero
                             onDragEnded()
                         }
                 )
@@ -1144,10 +1110,11 @@ private struct CompanionContainerView: View {
                 // the peak of a hop the character still rises into this strip, and no placement
                 // inside this panel avoids it.
                 .frame(height: geometry.bubbleHeadroom, alignment: .bottom)
-                .transition(.opacity)
-                // A fade either way, and the same curve under Reduce Motion: the bubble's only
-                // movement is its own height changing as the text changes, which is layout, not
-                // travel. Read unobserved, exactly as the hover lift above does.
+                .transition(
+                    MotionPreference.shared.reduceMotion
+                        ? .opacity
+                        : .scale(scale: 0.96, anchor: .bottom).combined(with: .opacity)
+                )
                 .animation(MotionPreference.shared.reduceMotion ? Motion.reduced : Motion.layout,
                            value: notice)
                 // The bubble is a label, so it must not eat clicks meant for the

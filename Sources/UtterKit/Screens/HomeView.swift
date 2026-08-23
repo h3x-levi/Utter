@@ -35,13 +35,13 @@ struct HomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.groupGap) {
-            GroupBox("Activity") {
-                VStack(spacing: 0) {
-                    LabeledContent("Words dictated", value: history.totalWords.formatted())
+            BentoTile(title: "Activity") {
+                VStack(alignment: .leading, spacing: 0) {
+                    activityRow("Words dictated", value: history.totalWords.formatted())
                     Divider()
-                    LabeledContent("Dictations", value: history.entries.count.formatted())
+                    activityRow("Dictations", value: history.entries.count.formatted())
                     Divider()
-                    LabeledContent(
+                    activityRow(
                         "Day streak",
                         value: history.streakDays > 0
                             ? history.streakDays.formatted()
@@ -187,6 +187,20 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func activityRow(_ label: String, value: String) -> some View {
+        Color.clear
+            .overlay(alignment: .leading) {
+                Text(label)
+            }
+            .overlay(alignment: .trailing) {
+                Text(value)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 27)
     }
 
     // MARK: - Export

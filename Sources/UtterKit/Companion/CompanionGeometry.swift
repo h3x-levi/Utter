@@ -311,6 +311,14 @@ struct CompanionGeometry: Equatable {
                 y: clampedY(desired: origin.y - translation.height, visible: visible))
     }
 
+    /// Keep the exact point the user grabbed under the global cursor.
+    func draggedOrigin(cursor: CGPoint, grabOffset: CGSize, visible: CGRect) -> CGPoint {
+        CGPoint(
+            x: clampedX(desired: cursor.x - grabOffset.width, visible: visible),
+            y: clampedY(desired: cursor.y - grabOffset.height, visible: visible)
+        )
+    }
+
     // MARK: The speech bubble
     //
     // `quipBubbleMaxLines(lineHeight:verticalPadding:cap:)` lived here. It measured the room

@@ -64,6 +64,9 @@ struct VersionEntry: Identifiable {
 /// `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "3.0.34", version: "3.0.34", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
         VersionEntry(id: "3.0.33", version: "3.0.33", date: "August 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),

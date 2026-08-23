@@ -80,6 +80,7 @@ struct CallPresence: Equatable {
     @discardableResult
     mutating func update(inputByOthers: Bool,
                          outputByOthers: Bool,
+                         plausibleCall: Bool = true,
                          selfIsCapturing: Bool,
                          at now: TimeInterval) -> Bool {
         // Our own capture makes the surrounding audio state meaningless. Reset rather than hold a
@@ -92,7 +93,7 @@ struct CallPresence: Equatable {
             return changed
         }
 
-        let qualified = inputByOthers && outputByOthers
+        let qualified = inputByOthers && outputByOthers && plausibleCall
         if qualified != lastQualified {
             lastQualified = qualified
             since = now

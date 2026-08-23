@@ -189,6 +189,7 @@ final class CallDetector {
         // should not count towards "held open for five seconds".
         let changed = presence.update(inputByOthers: io.input,
                                       outputByOthers: io.output,
+                                      plausibleCall: io.source != nil,
                                       selfIsCapturing: selfIsCapturing(),
                                       at: ProcessInfo.processInfo.systemUptime)
         guard changed else { return }
@@ -258,8 +259,7 @@ final class CallDetector {
         // true. Falling back to a recognised bundle ID among the output processes is the only place
         // the name table is allowed to influence anything, and even there it picks between
         // candidates rather than creating one.
-        var bothDirections: [CallSource] = []
-        var outputOnly: [CallSource] = []
+        var activities: [CallProcessActivity] = []
         // Whether anything at all answered. A machine where the only process doing audio IO is
         // Utter itself is entirely ordinary — nothing playing, a dictation running — so "no other
         // process reported anything" must not be read as "this API does not work". The probe is
@@ -297,19 +297,13 @@ final class CallDetector {
             // idle daemon on the machine is never read.
             guard somebodyElse, let pid, runsInput || runsOutput else { continue }
             let candidate = source(process: process, pid: pid)
-            if runsInput, runsOutput {
-                bothDirections.append(candidate)
-            } else if runsOutput {
-                outputOnly.append(candidate)
-            }
+            activities.append(
+                CallProcessActivity(source: candidate, runsInput: runsInput, runsOutput: runsOutput)
+            )
         }
 
         guard answered else { return nil }
-        // A recognised bundle ID breaks a tie; it never creates a candidate. With nothing recognised,
-        // the first process holding both directions wins, which is the list-free answer.
-        let chosen = bothDirections.first(where: \.isRecognised)
-            ?? bothDirections.first
-            ?? outputOnly.first(where: \.isRecognised)
+        let chosen = CallAudioEvidence.candidate(from: activities)
         return (input, output, chosen)
     }
 
@@ -404,5 +398,42 @@ final class CallDetector {
             return nil
         }
         return value
+    }
+}
+
+struct CallProcessActivity: Equatable {
+    let source: CallSource
+    let runsInput: Bool
+    let runsOutput: Bool
+}
+
+enum CallAudioEvidence {
+    /// A call requires both directions to belong to one plausible application.
+    ///
+    /// One process holding both directions works for native clients. Chromium-style apps split
+    /// input and output across helpers, so recognized bundle families may join two processes.
+    /// Unrelated microphone and playback apps are never combined.
+    static func candidate(from activities: [CallProcessActivity]) -> CallSource? {
+        let both = activities.filter { $0.runsInput && $0.runsOutput }
+        if let recognized = both.first(where: { $0.source.isRecognised }) {
+            return recognized.source
+        }
+        if let any = both.first {
+            return any.source
+        }
+
+        let inputs = activities.filter(\.runsInput)
+        let outputs = activities.filter(\.runsOutput)
+        for input in inputs {
+            guard let family = CallSource.knownName(bundleID: input.source.bundleID) else {
+                continue
+            }
+            if let output = outputs.first(where: {
+                CallSource.knownName(bundleID: $0.source.bundleID) == family
+            }) {
+                return output.source
+            }
+        }
+        return nil
     }
 }

@@ -314,11 +314,6 @@ struct CompanionBubbleView: View {
     let notice: CompanionNotice
     let geometry: CompanionGeometry
 
-    @ObservedObject private var motion = MotionPreference.shared
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isDark: Bool { colorScheme == .dark }
-
     var body: some View {
         let room = CompanionBubble.room(in: geometry)
         let budget = room.split(hasDetail: !(notice.detail ?? "").isEmpty)
@@ -342,53 +337,13 @@ struct CompanionBubbleView: View {
         }
         .padding(.horizontal, CompanionBubble.horizontalPadding)
         .padding(.vertical, CompanionBubble.verticalPadding)
-        // The measured legibility lift. See `CompanionBubble.veilLift`.
-        .background(CompanionBubble.shape.fill(Surface.raised.opacity(CompanionBubble.veilLift(isDark: isDark))))
-        // `.content`, not `.chrome`, and `GlassSurface.swift`'s own stated test is what
-        // decides it: the surface floats above what it acts on (yes) *and* what sits on it is
-        // a control rather than a paragraph (no) — either one missing, `.content`. It is also
-        // the HIG's explicit instruction: "Don't use Liquid Glass in the content layer…
-        // Instead, use Standard materials." The bubble is prose.
-        //
-        // The practical half of the same decision: `.content` is the only role with **one
-        // behaviour on every OS**. `.chrome` would give macOS 26 real lensed glass and give
-        // everyone from the 13.3 floor up a 0.22 canvas wash, i.e. the users with the least
-        // adaptive compositor would get the least opaque surface. This way there are two
-        // configurations to reason about (translucent, and Reduce Transparency) instead of
-        // four, and both are measured.
-        .glassSurface(.content,
-                      in: CompanionBubble.shape,
-                      reduceTransparency: motion.reduceTransparency,
-                      isDark: isDark)
-        // The two-tone edge, lifted wholesale from `PillWindow.border(for:)`, which solved
-        // exactly this problem on exactly this backdrop: a small floating surface over an
-        // arbitrary wallpaper has no fixed contrast against it, so **neither stroke may depend
-        // on the appearance** — in dark appearance both of the pill's strokes came out white
-        // and it dissolved into any pale window. A dark hairline outside and a top-lit
-        // highlight just inside it: one of the two always registers.
-        //
-        // `ContentGlass` draws its own white rim underneath these. It is redundant rather than
-        // harmful — the surface it sits on is already near-white in light appearance, so it
-        // shifts the composited dark ring by well under the ~2:1 step the ring makes against
-        // the surface.
+        .background(.regularMaterial, in: CompanionBubble.shape)
         .overlay {
-            ZStack {
-                CompanionBubble.shape.strokeBorder(.black.opacity(0.30), lineWidth: 1)
-                CompanionBubble.shape.inset(by: 0.6)
-                    .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.60), .white.opacity(0.14)],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 0.8
-                    )
-            }
+            CompanionBubble.shape.strokeBorder(
+                Color(nsColor: .separatorColor).opacity(0.65),
+                lineWidth: 0.5
+            )
         }
-        // No shadow, and geometry decides it rather than taste: `Elevation.floating` draws a
-        // 10pt blur, and the bubble's top edge is 1pt from a panel that clips. A shadow here
-        // would be sliced off along its own top edge.
-        //
-        // One element to VoiceOver, not three. The glyph carries no label of its own — the
-        // kind is spoken in words by `accessibilityLabel` instead, which is the only form a
-        // screen reader can use.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(notice.accessibilityLabel)
     }

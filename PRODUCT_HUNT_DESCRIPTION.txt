@@ -1,0 +1,110 @@
+UTTER — PRODUCT HUNT DETAILS
+
+TAGLINE
+Private, on-device voice dictation for every Mac app.
+
+SHORT DESCRIPTION
+Utter is a native macOS menu-bar app that turns speech into text wherever your
+cursor is. Hold a key, speak, and release—the result is typed into Mail, Slack,
+Notes, a browser, a terminal, or almost any other Mac app.
+
+Speech recognition runs locally with whisper.cpp. The default model ships with
+the app, so everyday dictation works offline with no account, cloud processing,
+telemetry, subscription, API key, or usage limit.
+
+WHY UTTER
+Most dictation tools send your voice to a server. Utter is designed around a
+simpler promise: your recordings, transcripts, notes, history, and custom words
+stay on your Mac.
+
+CURRENT FEATURES
+
+- Push-to-talk anywhere: hold Fn, Right Option, Right Command, or Right Control;
+  speak; then release to transcribe into the active app.
+- A native main workspace with dedicated Dictation, Dictionary, Snippets,
+  Transforms, Notes, and Companion sections.
+- Hands-free dictation: start from a keyboard shortcut, the floating pill, or by
+  tapping Space while holding the dictation key. Recording stops after silence.
+- Fully on-device speech recognition using bundled Whisper models.
+- Speech-model selector with speed, memory, and accuracy guidance for your Mac.
+- Live microphone level, elapsed time, status, transcript preview, and useful
+  errors inside a compact floating pill.
+- Context-aware formatting that adapts punctuation and tone for chat, email,
+  documents, and code without changing the words you spoke.
+- Optional sentence-structure repair and spoken punctuation.
+- Optional surrounding-text hints for better continuity and recognition. Context
+  is processed locally, never saved, and skipped in password fields.
+- Custom dictionary for names, acronyms, product names, and technical terms.
+- Voice snippets: speak a trigger phrase to insert reusable text with dynamic
+  date, time, day, and clipboard placeholders.
+- On-device voice transforms for selected or recently dictated text: make it
+  professional, concise, casual, formal, shorter, longer, polite, or direct;
+  translate, fix grammar, summarize, and draft replies.
+- Custom voice commands that can replace or append transformed text.
+- Built-in notes: dictate directly into Utter, create or continue notes by voice,
+  search notes, edit titles, and export individual notes to Markdown.
+- On-device note actions including summarize, extract action items, clean up
+  dictation, format as a document, and suggest a title.
+- Meeting transcription that captures your microphone and call audio, processes
+  both locally, and saves the transcript as “You” and “Others.”
+- Optional call detection that offers to transcribe but never records until the
+  user explicitly accepts.
+- The call-transcription offer expands spatially from the floating pill and
+  returns to it when dismissed, preserving the relationship between both states.
+- Searchable dictation history with word count, dictation count, streaks,
+  reinsertion, and Markdown, CSV, or plain-text export. History can be disabled.
+- Clipboard-safe insertion that preserves existing rich text, images, and files.
+- Optional animated desktop companion that reacts to dictation, microphone
+  levels, cursor movement, and typing speed without reading what you type.
+- Smoothly draggable companion with multiple sizes, cat sounds, stretch and
+  water reminders, Pomodoro timing, pinned notes, and custom character packs.
+- Native macOS windows, controls, materials, light/dark appearance, menu-bar
+  operation, optional Dock icon, launch at login, and Reduce Motion support.
+- Dedicated General, Speech, Appearance, Privacy, Diagnostics, and About settings
+  using native macOS forms, toggles, radio groups, and sidebar navigation.
+- Local persistent storage with atomic writes and recovery protection for notes
+  and history.
+- Open-source under the Apache 2.0 license.
+
+PRIVACY
+
+- Audio and text processing happen on the Mac.
+- No account or sign-in.
+- No telemetry or advertising.
+- No cloud API keys.
+- No uploaded recordings or transcripts.
+- No usage limits.
+- Network access is only needed when the user chooses to download an optional
+  speech model.
+
+REQUIREMENTS
+
+- macOS 13.3 or later.
+- Apple silicon or Intel Mac.
+- Microphone and Accessibility permission for global dictation.
+- Meeting capture requires additional system-audio or Screen Recording access.
+- AI text transforms require macOS 26 with Apple Intelligence enabled; core
+  dictation works without it.
+- Current beta builds are signed but not yet notarized.
+
+ROADMAP DIRECTION
+These are planned directions, not shipped features or committed release dates:
+
+- Notarized distribution and a simpler update experience.
+- Broader multilingual dictation and improved language controls.
+- Better chronological meeting transcripts and optional remote-speaker
+  separation.
+- More precise browser-call detection and meeting-source labeling.
+- Customizable hands-free and note-capture shortcuts.
+- Hash-verified, resumable speech-model downloads and easier model updates.
+- More companion characters, behaviors, animation states, and authoring tools.
+- Richer note organization, bulk export, backup, and restore.
+
+MAKER NOTE
+I built Utter because I wanted fast Mac dictation without sending my voice,
+documents, or selected text to a server. It started as a simple push-to-talk
+utility and grew into an on-device workspace for dictation, reusable snippets,
+voice-powered text editing, notes, meetings, and a small desktop companion.
+
+The goal is not to replace the keyboard. It is to make speaking a private,
+reliable input method that works naturally alongside it.

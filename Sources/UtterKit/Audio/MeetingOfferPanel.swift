@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// The offer card's geometry.
@@ -174,6 +175,7 @@ final class MeetingOfferPanel: NSPanel {
     private static let gap: CGFloat = 10
 
     private weak var pill: PillWindow?
+    private let pillWasVisible: Bool
 
     /// Why the capture could not start, once that has happened.
     private let model = MeetingOfferModel()
@@ -190,6 +192,7 @@ final class MeetingOfferPanel: NSPanel {
          onAccept: @escaping () -> Void,
          onDecline: @escaping () -> Void) {
         self.pill = pill
+        self.pillWasVisible = pill.isVisible
         self.cardTitle = title
         super.init(contentRect: NSRect(origin: .zero, size: MeetingOfferMetrics.size(title: title)),
                    styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
@@ -229,17 +232,15 @@ final class MeetingOfferPanel: NSPanel {
     ///
     /// Reads its own `frame.size` rather than a static, because a failure message makes the card
     /// taller and it grows upwards from the same anchor.
-    func positionAbovePill() {
-        guard let pill else { return }
-        let size = frame.size
+    private func positionedFrame(size: NSSize? = nil) -> NSRect {
+        let size = size ?? frame.size
+        guard let pill else { return NSRect(origin: frame.origin, size: size) }
         let pillFrame = pill.frame
         let capsuleTop = pillFrame.minY + PillMetrics.capsuleCentreAboveBottom
             + PillMetrics.capsuleHeight / 2
         var origin = NSPoint(x: pillFrame.midX - size.width / 2,
                              y: capsuleTop + Self.gap)
 
-        // Keep it on screen. A pill parked near the top of the display has no room above it, so the
-        // card goes below the capsule instead of off the edge.
         if let visible = (pill.screen ?? NSScreen.main)?.visibleFrame {
             if origin.y + size.height > visible.maxY {
                 let capsuleBottom = pillFrame.minY + PillMetrics.capsuleCentreAboveBottom
@@ -249,13 +250,76 @@ final class MeetingOfferPanel: NSPanel {
             origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - size.width - 8)
             origin.y = max(origin.y, visible.minY + 8)
         }
-        setFrameOrigin(origin)
+        return NSRect(origin: origin, size: size)
+    }
+
+    func positionAbovePill() {
+        guard let pill else { return }
+        setFrame(positionedFrame(), display: false)
     }
 
     func show() {
-        positionAbovePill()
+        let destination = positionedFrame()
+        guard let pill, let source = pill.drawnShellScreenRect else {
+            setFrame(destination, display: false)
+            model.contentVisible = true
+            orderFront(nil)
+            refreshShadow()
+            return
+        }
+
+        if !pill.isVisible { pill.orderFront(nil) }
+        setFrame(source, display: false)
+        model.contentVisible = false
         orderFront(nil)
+        pill.alphaValue = 0
         refreshShadow()
+
+        if MotionPreference.shared.reduceMotion {
+            setFrame(destination, display: true)
+            withAnimation(.easeOut(duration: 0.16)) { model.contentVisible = true }
+            return
+        }
+
+        withAnimation(.easeOut(duration: 0.16)) { model.contentVisible = true }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.24
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.23, 1, 0.32, 1
+            )
+            animator().setFrame(destination, display: true)
+        }
+    }
+
+    func dismiss(completion: @escaping () -> Void) {
+        guard let pill else {
+            orderOut(nil)
+            completion()
+            return
+        }
+
+        let finish = {
+            pill.alphaValue = 1
+            if !self.pillWasVisible { pill.orderOut(nil) }
+            self.orderOut(nil)
+            completion()
+        }
+        withAnimation(.easeOut(duration: 0.12)) { model.contentVisible = false }
+
+        guard !MotionPreference.shared.reduceMotion,
+              let destination = pill.drawnShellScreenRect else {
+            finish()
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.20
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.23, 1, 0.32, 1
+            )
+            animator().setFrame(destination, display: true)
+        } completionHandler: {
+            finish()
+        }
     }
 
     /// Give the card a shadow on the render paths where nothing else supplies one.
@@ -297,8 +361,10 @@ final class MeetingOfferPanel: NSPanel {
     /// the window cannot grow by itself.
     func showFailure(_ message: String) {
         model.failure = message
-        setContentSize(MeetingOfferMetrics.size(title: cardTitle, message: message))
-        positionAbovePill()
+        setFrame(
+            positionedFrame(size: MeetingOfferMetrics.size(title: cardTitle, message: message)),
+            display: true
+        )
         // The card just changed shape, and the window shadow is cached from the old one.
         refreshShadow()
     }
@@ -308,6 +374,7 @@ final class MeetingOfferPanel: NSPanel {
 @MainActor
 private final class MeetingOfferModel: ObservableObject {
     @Published var failure: String?
+    @Published var contentVisible = false
 }
 
 /// The offer's contents.
@@ -321,49 +388,59 @@ private struct MeetingOfferView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MeetingOfferMetrics.rowSpacing) {
-            HStack(spacing: Space.x2) {
-                Image(systemName: "person.wave.2.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Tint.accent)
+        ZStack(alignment: .topLeading) {
+            Color.clear
+
+            VStack(alignment: .leading, spacing: MeetingOfferMetrics.rowSpacing) {
+                HStack(spacing: Space.x2) {
+                    Image(systemName: "person.wave.2.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
                 // Incompressible, like the caption below, so what it wraps to is what
                 // `MeetingOfferMetrics.titleHeight` measured. Left free to truncate, an app with a
                 // long name would draw one line where the window allowed two — harmless — but a
                 // future width change would silently put the difference the other way round.
-                Text(title)
-                    .typo(.bodyEmphasis)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(MeetingOfferMetrics.caption)
-                .typo(.caption, ink: Ink.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            // Above the buttons, so the try-again stays at the bottom edge where it was.
-            if let failure = model.failure {
-                Text(failure)
-                    .typo(.caption, ink: Tint.dangerText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: Space.x2) {
-                Button(action: onAccept) {
-                    Label("Transcribe", systemImage: "record.circle")
+                    Text(title)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                Text(MeetingOfferMetrics.caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Button("Not now", action: onDecline)
-                    .buttonStyle(.bordered)
+                if let failure = model.failure {
+                    Text(failure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: Space.x2) {
+                    Button(action: onAccept) {
+                        Label("Transcribe", systemImage: "record.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+
+                    Button("Not now", action: onDecline)
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                }
             }
+            .padding(MeetingOfferMetrics.padding)
+            .opacity(model.contentVisible ? 1 : 0)
+            .scaleEffect(model.contentVisible ? 1 : 0.97, anchor: .bottom)
         }
-        .padding(MeetingOfferMetrics.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .glassSurface(.chrome,
-                      in: RoundedRectangle(cornerRadius: Radius.panel, style: .continuous),
-                      reduceTransparency: motion.reduceTransparency,
-                      isDark: colorScheme == .dark,
-                      tint: nil)
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 0.5)
+        }
 
         // No rim overlay on the card, and no outer contrast ring.
         //

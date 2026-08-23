@@ -56,7 +56,7 @@ struct CodePixelCatFrame: Equatable {
             let cadence = min(12, max(6, Double(abs(travelSpeed)) / 8))
             phase = Int(safeElapsed * cadence) % 4
         } else {
-            phase = Int(safeElapsed * 5) % 24
+            phase = Int(safeElapsed * 8) % 24
         }
 
         if gait == .walking {
@@ -298,7 +298,7 @@ private enum CodePixelCatRenderer {
         fill(18, 27 + bodyY, 3, 1, palette.marking)
 
         drawFrontHead(
-            y: 4 + headY,
+            y: 2 + headY,
             eyesClosed: frame.eyesClosed,
             wideEyes: mood == .alert || mood == .startled,
             pose: pose,
@@ -334,34 +334,51 @@ private enum CodePixelCatRenderer {
         palette: Palette,
         fill: Fill
     ) {
-        fill(7, y + 2, 18, 12, palette.rim)
-        fill(8, y, 6, 6, palette.rim)
-        fill(19, y, 6, 6, palette.rim)
-        fill(8, y + 3, 16, 10, palette.outline)
-        fill(9, y + 1, 4, 5, palette.outline)
-        fill(20, y + 1, 4, 5, palette.outline)
-        fill(9, y + 4, 14, 8, palette.coat)
-        fill(10, y + 2, 3, 4, palette.coat)
-        fill(20, y + 2, 3, 4, palette.coat)
-        fill(11, y + 3, 1, 2, palette.ear)
-        fill(21, y + 3, 1, 2, palette.ear)
-        fill(13, y + 9, 7, 4, palette.marking)
+        // Tall stepped ears, broad cheeks, a small muzzle and whiskers make the front
+        // silhouette unmistakably feline at every integer scale.
+        fill(6, y + 3, 20, 12, palette.rim)
+        fill(7, y + 1, 7, 7, palette.rim)
+        fill(8, y, 3, 4, palette.rim)
+        fill(19, y + 1, 7, 7, palette.rim)
+        fill(22, y, 3, 4, palette.rim)
+
+        fill(7, y + 4, 18, 10, palette.outline)
+        fill(8, y + 2, 5, 6, palette.outline)
+        fill(9, y + 1, 2, 4, palette.outline)
+        fill(20, y + 2, 5, 6, palette.outline)
+        fill(22, y + 1, 2, 4, palette.outline)
+
+        fill(8, y + 5, 16, 8, palette.coat)
+        fill(9, y + 3, 3, 5, palette.coat)
+        fill(21, y + 3, 3, 5, palette.coat)
+        fill(10, y + 3, 1, 3, palette.ear)
+        fill(22, y + 3, 1, 3, palette.ear)
+        fill(14, y + 10, 5, 4, palette.marking)
 
         if eyesClosed {
-            fill(11, y + 7, 4, 1, palette.outline)
-            fill(18, y + 7, 4, 1, palette.outline)
+            fill(10, y + 8, 4, 1, palette.outline)
+            fill(19, y + 8, 4, 1, palette.outline)
         } else {
-            let eyeHeight = wideEyes ? 4 : 3
-            fill(11, y + 6, 4, eyeHeight, Color.white)
-            fill(18, y + 6, 4, eyeHeight, Color.white)
+            let eyeHeight = wideEyes ? 3 : 2
+            fill(10, y + 7, 4, eyeHeight, Color.white)
+            fill(19, y + 7, 4, eyeHeight, Color.white)
             let gazeX = max(-1, min(1, Int(pose.eyeAim.dx.rounded())))
             let gazeY = max(-1, min(1, -Int(pose.eyeAim.dy.rounded())))
-            fill(12 + gazeX, y + 7 + gazeY, 2, 2, palette.eye)
-            fill(19 + gazeX, y + 7 + gazeY, 2, 2, palette.eye)
+            fill(12 + gazeX, y + 7 + gazeY, 1, 2, palette.eye)
+            fill(21 + gazeX, y + 7 + gazeY, 1, 2, palette.eye)
         }
-        fill(16, y + 10, 2, 1, palette.nose)
-        fill(15, y + 11, 1, 1, palette.outline)
-        fill(18, y + 11, 1, 1, palette.outline)
+
+        fill(16, y + 11, 2, 1, palette.nose)
+        fill(15, y + 12, 1, 1, palette.outline)
+        fill(18, y + 12, 1, 1, palette.outline)
+        fill(3, y + 10, 5, 1, palette.rim)
+        fill(4, y + 12, 4, 1, palette.rim)
+        fill(25, y + 10, 5, 1, palette.rim)
+        fill(25, y + 12, 4, 1, palette.rim)
+        fill(4, y + 10, 4, 1, palette.outline)
+        fill(5, y + 12, 3, 1, palette.outline)
+        fill(25, y + 10, 4, 1, palette.outline)
+        fill(25, y + 12, 3, 1, palette.outline)
     }
 
     private static func drawWalking(
@@ -399,8 +416,10 @@ private enum CodePixelCatRenderer {
 
         // Round profile head with two ears and one clear forward eye.
         fill(20, y - 5, 11, 12, palette.rim)
-        fill(21, y - 8, 5, 6, palette.rim)
-        fill(27, y - 7, 4, 6, palette.rim)
+        fill(21, y - 9, 5, 7, palette.rim)
+        fill(22, y - 10, 2, 3, palette.rim)
+        fill(27, y - 8, 4, 7, palette.rim)
+        fill(29, y - 9, 2, 3, palette.rim)
         fill(21, y - 4, 9, 10, palette.outline)
         fill(22, y - 7, 3, 5, palette.outline)
         fill(28, y - 6, 2, 4, palette.outline)
@@ -411,6 +430,7 @@ private enum CodePixelCatRenderer {
         fill(26, y + 1, 1, 1, palette.eye)
         fill(28, y + 3, 3, 3, palette.marking)
         fill(30, y + 4, 1, 1, palette.nose)
+        fill(27, y + 5, 4, 1, palette.outline)
     }
 
     private static func drawHunting(
@@ -460,7 +480,7 @@ private enum CodePixelCatRenderer {
 
         // Head stays near the pointer while the soft body stretches beneath it.
         drawFrontHead(
-            y: 2,
+            y: 0,
             eyesClosed: false,
             wideEyes: true,
             pose: pose,

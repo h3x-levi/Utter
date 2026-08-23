@@ -823,8 +823,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func dismissMeetingOffer() {
-        meetingOfferPanel?.orderOut(nil)
-        meetingOfferPanel = nil
+        guard let panel = meetingOfferPanel else { return }
+        panel.dismiss { [weak self, panel] in
+            guard self?.meetingOfferPanel === panel else { return }
+            self?.meetingOfferPanel = nil
+        }
     }
 
     /// Begin a meeting capture from the offer, filing it into a note.
