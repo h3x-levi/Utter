@@ -64,6 +64,65 @@ struct VersionEntry: Identifiable {
 /// `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "3.0.50", version: "3.0.50", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.49", version: "3.0.49", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.48", version: "3.0.48", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.47", version: "3.0.47", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.46", version: "3.0.46", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.45", version: "3.0.45", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.44", version: "3.0.44", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.43", version: "3.0.43", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.42", version: "3.0.42", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.41", version: "3.0.41", date: "August 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "3.0.40", version: "3.0.40", date: "August 2026", highlights: [
+            "Companion is now organized into native Today, Remember, Rewards, and Customize tabs.",
+            "Type or speak private memories and reminders; review them before saving, edit them later, or erase them all.",
+            "Dictation milestones now unlock companion objects, animations, and original cat sounds without purchases or expiring rewards.",
+            "Pill symbols remain visible on light or dark backgrounds, and the processing pencil now draws a continuous handwriting stroke.",
+            "Memory files recover their previous saved generation after corruption and roll back cleanly when a disk write fails.",
+        ]),
+        VersionEntry(id: "3.0.39", version: "3.0.39", date: "August 2026", highlights: [
+            "Companion now uses the full settings width instead of a narrow centered form.",
+            "Both pixel cats have longer bodies plus new grooming, rolling, and loaf animations.",
+            "The cat can play with its ball, box, yarn, and cushion by itself, and reacts to double-clicking, tossing, feeding, and brushing.",
+            "Local relationship memory, daily goals, earned animations, window-edge avoidance, and automatic quiet behavior are now available.",
+        ]),
+        VersionEntry(id: "3.0.38", version: "3.0.38", date: "August 2026", highlights: [
+            "Fixed the standard Settings command and Command-, opening an empty window instead of Utter Settings.",
+            "Settings sections now open at the top instead of inheriting another section’s scroll position.",
+            "Fixed Home activity labels and values collapsing into a centered cluster on wide windows.",
+            "Settings are now written atomically, failures are reported, and an unreadable settings file is preserved for recovery instead of being overwritten.",
+        ]),
+        VersionEntry(id: "3.0.37", version: "3.0.37", date: "August 2026", highlights: [
+            "Expanded local automatic call detection beyond Zoom and Teams to Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Amazon Chime, Jitsi Meet, LINE, WeChat, and KakaoTalk.",
+        ]),
+        VersionEntry(id: "3.0.36", version: "3.0.36", date: "August 2026", highlights: [
+            "The resting pill’s microphone is now solid black in light themes and solid white in dark themes.",
+        ]),
+        VersionEntry(id: "3.0.35", version: "3.0.35", date: "August 2026", highlights: [
+            "Fixed automatic meeting offers appearing for browser playback such as YouTube.",
+            "Automatic offers now require an active call in Zoom, Microsoft Teams, FaceTime, Slack, or Discord. Browser meetings can still be started manually from Notes.",
+        ]),
         VersionEntry(id: "3.0.34", version: "3.0.34", date: "August 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),

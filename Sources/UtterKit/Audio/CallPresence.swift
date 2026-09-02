@@ -7,11 +7,10 @@ import Foundation
 /// this can: everything that decides *whether to interrupt the user* lives here, as a value type
 /// fed timestamps, and `CallDetector` is the thin shim that reads the properties.
 ///
-/// **Why device state rather than which app is running.** The obvious implementation is to look for
-/// Zoom or Teams in `NSWorkspace.runningApplications`, and it is the wrong one: the most common way
-/// to be in a meeting is Google Meet in a browser tab, which is indistinguishable from any other
-/// Chrome window. Asking the audio system what is *in use* catches every app including ones that
-/// did not exist when this shipped.
+/// **Why app identity and audio state.** Merely seeing Zoom or Teams in
+/// `NSWorkspace.runningApplications` says only that the app is open. The detector instead requires
+/// a supported calling app to be actively using both input and output. Browsers are excluded because
+/// their process-level audio cannot distinguish a meeting from YouTube.
 ///
 /// **Why both directions.** Input alone lights up for a voice memo, a Siri query, or another
 /// dictation tool. A call is the only ordinary thing that has a microphone open *and* audio coming

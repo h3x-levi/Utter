@@ -99,11 +99,17 @@ struct PillPolishTests {
                 "the two strokes are the same tone, so one backdrop has no edge at all")
     }
 
+    @Test("Pill glyphs carry both light and dark contrast edges")
+    func glyphsUseAdaptiveContrastInk() {
+        #expect(luminance(AdaptivePillGlyph.outerInk) > 0.99)
+        #expect(luminance(AdaptivePillGlyph.innerInk) < 0.01)
+    }
+
     @Test("A tinted state's ring is a hue, so it does not depend on appearance either")
     func tintedRingsAreHues() {
         // These were already appearance-independent and must stay that way — they are the states
         // where the ring is also the state's identity.
-        for state in [PillState.recording, .handsFree, .capturingNote,
+        for state in [PillState.recording, .handsFree, .capturingNote, .capturingMemory,
                       .error("x"), .notice("y"), .preparing, .processing(.typing)] {
             let ring = PillContent.border(for: state)
             // Saturated rather than a grey: a hue reads against both light and dark backdrops.
@@ -121,44 +127,16 @@ struct PillPolishTests {
 
     @Test("The writing pen stays inside its own frame through the whole scribble")
     func penFitsItsFrame() {
-        // What this used to pin no longer exists. It restated `WritingPen`'s constants as literals —
-        // an 11pt glyph, 38 degrees of rotation, a 16pt box, an 18pt wave — and so kept passing
-        // against code that had changed underneath it. A test that duplicates the values it is
-        // checking cannot fail when they move, which is the opposite of its job.
-        //
-        // Two things it was pinning are gone on purpose. The **wave is gone**: the pen and the line
-        // never read as one thing, and the user's instruction was to animate the pen alone. The
-        // **rotation is gone**: measuring the glyph's ink at seven angles showed the SF `pencil` is
-        // already diagonal at rest (8.5 x 8.5, aspect 1.00) and 38 degrees flattens it to
-        // 11.5 x 2.5 — a horizontal bar, which is why it never looked like a pen.
-        //
-        // What is worth pinning is the property the pen went missing for: it must not paint outside
-        // its frame at any point in its cycle. So this walks the cycle.
-        let penBox: CGFloat = 10
-        let strokeSpan: CGFloat = 5.5
-        let strokeRise: CGFloat = 2.2
-        let frameSide = penBox + 2 * max(strokeSpan, strokeRise) + 2
-
-        // The glyph inks 8.5 of its 10pt box (rendered and measured), so the box is the bound.
-        #expect(penBox >= 8.5, "the box (\(penBox)pt) is smaller than the glyph's ink")
-
-        var worst: CGFloat = 0
+        let size = WritingPen.canvasSize
+        var previousX = -CGFloat.infinity
         for step in 0...360 {
-            let phase = CGFloat(step) / 360
-            let x = sin(phase * 2 * .pi) * strokeSpan
-            let y = sin(phase * 6 * .pi + .pi / 2) * strokeRise
-            // The box is centred, then offset. Distance from the frame's centre to a box corner.
-            let half = frameSide / 2
-            let left = half + x - penBox / 2, right = half + x + penBox / 2
-            let top = half + y - penBox / 2, bottom = half + y + penBox / 2
-            worst = max(worst, max(-left, max(right - frameSide, max(-top, bottom - frameSide))))
+            let point = WritingPen.writingPoint(at: Double(step) / 360, in: size)
+            #expect(point.x >= 0 && point.x <= size.width)
+            #expect(point.y >= 0 && point.y <= size.height)
+            #expect(point.x >= previousX, "the pen jumped backward instead of writing forward")
+            previousX = point.x
         }
-        #expect(worst <= 0.001,
-                "the pen leaves its \(frameSide)pt frame by \(worst)pt somewhere in the cycle")
-
-        // And the frame has to fit the capsule it is drawn in, or the pill clips it.
-        #expect(frameSide <= PillMetrics.capsuleHeight,
-                "the pen's frame (\(frameSide)pt) is taller than the capsule (\(PillMetrics.capsuleHeight)pt)")
+        #expect(size.height <= PillMetrics.capsuleHeight)
     }
 
     // MARK: The width floor
@@ -173,7 +151,7 @@ struct PillPolishTests {
         // Simulated by asking for the width with a *stale* measurement, which is exactly what the
         // first frame has.
         let stale = PillMetrics.minimumCapsuleWidth
-        for state in [PillState.recording, .handsFree] {
+        for state in [PillState.recording, .handsFree, .capturingMemory] {
             let first = PillMetrics.shellWidth(for: state, measured: stale)
             #expect(first > PillMetrics.minimumCapsuleWidth + 30,
                     "\(state) still starts at the resting width, so it will jump")

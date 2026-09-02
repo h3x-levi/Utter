@@ -139,12 +139,19 @@ final class CompanionWindow: NSPanel {
         // can do (the engine owns no frame). The engine asks; this clamps to the screen and
         // reports back how far it actually went, so the engine can turn at an edge.
         behaviour.walkStep = { [weak self] dx in self?.applyWalkStep(dx) ?? 0 }
+        behaviour.objectSource = {
+            let object = UserData.shared.companionObject
+            return UserData.shared.companionObjectUnlocked(object) ? object : .none
+        }
+        behaviour.unlockSource = { UserData.shared.companionAnimationUnlocked($0) }
 
         let hosting = ShapedHostingView(rootView: CompanionContainerView(
             behaviour: behaviour,
             onPoke: { [weak self] in self?.behaviour.poke() },
+            onDoubleClick: { [weak self] in self?.behaviour.doubleClick() },
             onDragTo: { [weak self] cursor in self?.drag(to: cursor) },
-            onDragEnded: { [weak self] in
+            onDragEnded: { [weak self] velocity in
+                self?.beginToss(velocity: velocity)
                 self?.dragGrabOffset = nil
                 self?.behaviour.isBeingDragged = false
                 self?.savePosition()
@@ -183,7 +190,7 @@ final class CompanionWindow: NSPanel {
         // Only the character takes the mouse. The panel is 2.1x its size so a hop or a
         // stroll is not clipped, and all of that margin used to swallow clicks meant for
         // whatever is behind it.
-        hosting.interactiveRect = { [weak self] in self?.drawnCharacterRect ?? .zero }
+        hosting.interactiveRect = { [weak self] in self?.interactiveContentRect ?? .zero }
         contentView = hosting
 
         observeSizePreference()
@@ -237,6 +244,28 @@ final class CompanionWindow: NSPanel {
                       y: (content.bounds.height - side) / 2 + behaviour.offsetY,
                       width: side,
                       height: side)
+    }
+
+    /// Character plus selected prop. The old hit region covered only the character, so the
+    /// visible half of a ball, box, yarn or cushion outside that square could never receive
+    /// the click its accessibility hint promised.
+    private var interactiveContentRect: NSRect {
+        let character = drawnCharacterRect
+        let selected = UserData.shared.companionObject
+        guard selected != .none, UserData.shared.companionObjectUnlocked(selected),
+              let content = contentView
+        else { return character }
+
+        let side = geometry.characterSize * 0.42
+        let object = NSRect(
+            x: (content.bounds.width - side) / 2
+                + behaviour.offsetX + geometry.characterSize * 0.48,
+            y: (content.bounds.height - side) / 2
+                + behaviour.offsetY + geometry.characterSize * 0.38,
+            width: side,
+            height: side
+        )
+        return character.union(object)
     }
 
     // MARK: Visibility
@@ -361,6 +390,7 @@ final class CompanionWindow: NSPanel {
     private func petHeartbeat() {
         checkForReturningUser()
         updatePeek()
+        updateWindowEdge()
 
         let data = UserData.shared
         // Read the preferences every beat rather than observing them. Once a second is
@@ -371,13 +401,18 @@ final class CompanionWindow: NSPanel {
         logTypingDiagnostic(petEnabled: data.companionPetBehaviours)
         // Minutes to seconds, and 0 means off.
         reminders.stretchEvery = data.companionStretchMinutes > 0
-            ? TimeInterval(data.companionStretchMinutes) * 60 : nil
+            ? TimeInterval(data.companionStretchMinutes
+                + data.companionExtraDelay(for: .stretch)) * 60 : nil
         reminders.waterEvery = data.companionWaterMinutes > 0
-            ? TimeInterval(data.companionWaterMinutes) * 60 : nil
+            ? TimeInterval(data.companionWaterMinutes
+                + data.companionExtraDelay(for: .water)) * 60 : nil
         reminders.pomodoroFocus = data.companionPomodoroFocusMinutes > 0
             ? TimeInterval(data.companionPomodoroFocusMinutes) * 60 : nil
         reminders.pomodoroBreak = data.companionPomodoroBreakMinutes > 0
             ? TimeInterval(data.companionPomodoroBreakMinutes) * 60 : nil
+        behaviour.setQuietMode(data.companionQuietMode || (
+            data.companionAutomaticQuietMode && automaticQuietModeIsActive
+        ))
 
         guard data.companionPetBehaviours else {
             behaviour.setPomodoroCountdown(nil)
@@ -388,6 +423,52 @@ final class CompanionWindow: NSPanel {
         if let due = reminders.due(at: now) {
             behaviour.announce(due, name: data.companionUserName)
         }
+    }
+
+    private var automaticQuietModeIsActive: Bool {
+        if behaviour.isPeeking { return true }
+        if let state = AppDelegate.current?.meetingSession.state, state != .idle { return true }
+
+        let applications = NSWorkspace.shared.runningApplications
+        if applications.contains(where: { application in
+            let name = application.localizedName?.lowercased() ?? ""
+            return name.contains("screen sharing")
+                || name.contains("cpt host")
+                || name.contains("webex share")
+                || name.contains("slideshow")
+        }) {
+            return true
+        }
+
+        guard let frontmost = NSWorkspace.shared.frontmostApplication else { return false }
+        let presentationApps: Set<String> = [
+            "com.apple.iwork.keynote",
+            "com.microsoft.Powerpoint",
+        ]
+        guard let bundleID = frontmost.bundleIdentifier,
+              presentationApps.contains(bundleID)
+        else { return false }
+        let title = Self.focusedWindowTitle(pid: frontmost.processIdentifier).lowercased()
+        return title.contains("slide show") || title.contains("presentation")
+    }
+
+    private static func focusedWindowTitle(pid: pid_t) -> String {
+        guard AXIsProcessTrusted() else { return "" }
+        let application = AXUIElementCreateApplication(pid)
+        var windowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            application, kAXFocusedWindowAttribute as CFString, &windowValue
+        ) == .success,
+              let windowValue,
+              CFGetTypeID(windowValue) == AXUIElementGetTypeID()
+        else { return "" }
+        let window = windowValue as! AXUIElement
+        var titleValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            window, kAXTitleAttribute as CFString, &titleValue
+        ) == .success
+        else { return "" }
+        return titleValue as? String ?? ""
     }
 
     private func stopPetMonitors() {
@@ -406,6 +487,7 @@ final class CompanionWindow: NSPanel {
 
     /// Where the character was before it went to peek, so it can be put back exactly.
     private var positionBeforePeek: NSPoint?
+    private var windowEdgeAnchor: (pid: pid_t, frame: CGRect, origin: NSPoint)?
 
     /// Whether a full-screen window is currently in front.
     ///
@@ -509,6 +591,85 @@ final class CompanionWindow: NSPanel {
             behaviour.isPeeking = false
             setFrameOrigin(clamped(origin: restore))
         }
+    }
+
+    /// If the companion overlaps the focused app window, park it just outside the nearest
+    /// vertical edge. This keeps it visible without covering title-bar controls or content.
+    private func updateWindowEdge() {
+        let data = UserData.shared
+        guard data.companionWindowEdges, !behaviour.isPeeking, !behaviour.isBeingDragged,
+              let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              let windowFrame = Self.focusedWindowFrame(pid: app.processIdentifier)
+        else {
+            if let anchor = windowEdgeAnchor {
+                windowEdgeAnchor = nil
+                setFrameOrigin(clamped(origin: anchor.origin))
+            }
+            return
+        }
+
+        if let anchor = windowEdgeAnchor,
+           anchor.pid == app.processIdentifier,
+           anchor.frame.equalTo(windowFrame) {
+            return
+        }
+        if let anchor = windowEdgeAnchor {
+            setFrameOrigin(clamped(origin: anchor.origin))
+            windowEdgeAnchor = nil
+        }
+
+        let character = characterScreenRect.insetBy(dx: -12, dy: -12)
+        guard character.intersects(windowFrame) else { return }
+        let original = frame.origin
+        let leftDistance = abs(character.midX - windowFrame.minX)
+        let rightDistance = abs(windowFrame.maxX - character.midX)
+        let characterInset = (geometry.panelSide - geometry.characterSize) / 2
+        let targetX = leftDistance <= rightDistance
+            ? windowFrame.minX - geometry.panelSide + characterInset
+            : windowFrame.maxX - characterInset
+        setFrameOrigin(clamped(origin: NSPoint(x: targetX, y: original.y)))
+        windowEdgeAnchor = (app.processIdentifier, windowFrame, original)
+    }
+
+    private static func focusedWindowFrame(pid: pid_t) -> CGRect? {
+        guard AXIsProcessTrusted() else { return nil }
+        let application = AXUIElementCreateApplication(pid)
+        var windowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            application, kAXFocusedWindowAttribute as CFString, &windowValue
+        ) == .success,
+              let windowValue,
+              CFGetTypeID(windowValue) == AXUIElementGetTypeID()
+        else { return nil }
+        let window = windowValue as! AXUIElement
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            window, kAXPositionAttribute as CFString, &positionValue
+        ) == .success,
+              AXUIElementCopyAttributeValue(
+                window, kAXSizeAttribute as CFString, &sizeValue
+              ) == .success,
+              let positionValue, let sizeValue,
+              CFGetTypeID(positionValue) == AXValueGetTypeID(),
+              CFGetTypeID(sizeValue) == AXValueGetTypeID()
+        else { return nil }
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &position),
+              AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        else { return nil }
+        // Accessibility coordinates use the primary display's top-left origin.
+        // Using the highest attached screen breaks conversion when a display sits above
+        // the primary one, parking the companion on the wrong edge.
+        let desktopTop = NSScreen.screens.first?.frame.maxY ?? 0
+        return CGRect(
+            x: position.x,
+            y: desktopTop - position.y - size.height,
+            width: size.width,
+            height: size.height
+        )
     }
 
     /// Wake a sleeping character if the user has typed or moved the pointer.
@@ -872,6 +1033,7 @@ final class CompanionWindow: NSPanel {
     // MARK: Dragging
 
     private var dragGrabOffset: CGSize?
+    private var tossTimer: Timer?
 
     /// Dragging the character moves the companion, and nothing else.
     ///
@@ -880,6 +1042,8 @@ final class CompanionWindow: NSPanel {
     /// have separate positions the user sets separately, which is the whole point of
     /// the change.
     private func drag(to cursor: CGPoint) {
+        tossTimer?.invalidate()
+        tossTimer = nil
         var origin = frame.origin
 
         if dragGrabOffset == nil {
@@ -902,9 +1066,36 @@ final class CompanionWindow: NSPanel {
         setFrameOrigin(geometry.draggedOrigin(cursor: cursor, grabOffset: grab, visible: visible))
     }
 
+    private func beginToss(velocity: CGVector) {
+        guard !MotionPreference.shared.reduceMotion else { return }
+        var velocity = velocity
+        guard hypot(velocity.dx, velocity.dy) > 80 else { return }
+        tossTimer?.invalidate()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let next = NSPoint(
+                x: self.frame.origin.x + velocity.dx / 60,
+                y: self.frame.origin.y - velocity.dy / 60
+            )
+            let clamped = self.clamped(origin: next)
+            self.setFrameOrigin(clamped)
+            if clamped.x != next.x { velocity.dx *= -0.35 }
+            if clamped.y != next.y { velocity.dy *= -0.35 }
+            velocity.dx *= 0.9
+            velocity.dy *= 0.9
+            if hypot(velocity.dx, velocity.dy) < 20 {
+                timer.invalidate()
+                self.tossTimer = nil
+                self.savePosition()
+            }
+        }
+        tossTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
     // MARK: Context menu
 
-    private lazy var companionMenu: NSMenu = {
+    private func makeCompanionMenu() -> NSMenu {
         let menu = NSMenu()
 
         // Every item needs an explicit `target`.
@@ -924,16 +1115,39 @@ final class CompanionWindow: NSPanel {
         // the companion stopped sitting on a side of the pill. It is the same item the
         // pill's own menu carries, and for the same reason: a window the user can drag
         // anywhere needs a way back.
+        if behaviour.currentReminder != nil {
+            menu.addItem(item("Done", #selector(completeReminder)))
+            menu.addItem(item("Not Now", #selector(dismissReminder)))
+            menu.addItem(NSMenuItem.separator())
+        }
+        menu.addItem(item("Feed", #selector(feedCompanion)))
+        menu.addItem(item("Brush", #selector(brushCompanion)))
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Reset Position", #selector(resetPosition)))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(item("Companion Settings\u{2026}", #selector(openSettings)))
         menu.addItem(item("Hide Companion", #selector(hideCompanion)))
         return menu
-    }()
+    }
 
     override func rightMouseDown(with event: NSEvent) {
         guard let contentView else { return }
-        NSMenu.popUpContextMenu(companionMenu, with: event, for: contentView)
+        NSMenu.popUpContextMenu(makeCompanionMenu(), with: event, for: contentView)
+    }
+
+    @objc private func feedCompanion() { behaviour.feed() }
+    @objc private func brushCompanion() { behaviour.brush() }
+
+    @objc private func completeReminder() {
+        guard let reminder = behaviour.respondToCurrentReminder(completed: true) else { return }
+        if let celebration = UserData.shared.recordCompanionReminder(reminder, completed: true) {
+            behaviour.celebrateGoal(celebration)
+        }
+    }
+
+    @objc private func dismissReminder() {
+        guard let reminder = behaviour.respondToCurrentReminder(completed: false) else { return }
+        UserData.shared.recordCompanionReminder(reminder, completed: false)
     }
 
     @objc private func resetPosition() {
@@ -964,10 +1178,12 @@ private struct CompanionContainerView: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var themeManager = ThemeManager.shared
     @ObservedObject private var packStore = SpritePackStore.shared
+    @ObservedObject private var motion = MotionPreference.shared
 
     let onPoke: () -> Void
+    let onDoubleClick: () -> Void
     let onDragTo: (CGPoint) -> Void
-    let onDragEnded: () -> Void
+    let onDragEnded: (CGVector) -> Void
 
     /// Read from the preference rather than passed in, so the drawn character follows a
     /// size change immediately: this body already observes `userData`, where a value
@@ -979,13 +1195,34 @@ private struct CompanionContainerView: View {
     @State private var isHovering = false
 
     var body: some View {
+        let selectedObject = userData.companionObjectUnlocked(userData.companionObject)
+            ? userData.companionObject : .none
+        let play = behaviour.pose.objectPlay?.object == selectedObject
+            ? behaviour.pose.objectPlay : nil
+        let movingPlay = motion.reduceMotion ? nil : play
+        let usesArticulatedRenderer =
+            CodePixelCatStyle(rawValue: userData.companionCharacter) != nil
+
         ZStack {
             // Explicitly non-interactive: `Color.clear` still takes hits in a
             // ZStack, which would make the whole invisible panel a click target.
             Color.clear.allowsHitTesting(false)
 
+            if play?.objectSitsBehindCharacter == true {
+                object(selectedObject, play: play)
+            }
+
             character
-                .offset(x: behaviour.offsetX, y: behaviour.offsetY)
+                .rotationEffect(.degrees(
+                    usesArticulatedRenderer ? 0 : movingPlay?.characterRotation ?? 0
+                ))
+                .scaleEffect(movingPlay?.characterScale ?? 1)
+                .offset(
+                    x: behaviour.offsetX
+                        + (movingPlay?.characterOffset.width ?? 0) * characterSize,
+                    y: behaviour.offsetY
+                        + (movingPlay?.characterOffset.height ?? 0) * characterSize
+                )
                 // A hover lift, so the character acknowledges the pointer before
                 // it is even clicked.
                 .scaleEffect(isHovering ? CompanionGeometry.hoverScale : 1)
@@ -993,18 +1230,36 @@ private struct CompanionContainerView: View {
                            value: isHovering)
                 .contentShape(Circle())
                 .onHover { hovering in isHovering = hovering }
-                .onTapGesture { onPoke() }
                 .gesture(
+                    TapGesture(count: 2)
+                        .exclusively(before: TapGesture(count: 1))
+                        .onEnded { result in
+                            switch result {
+                            case .first: onDoubleClick()
+                            case .second: onPoke()
+                            }
+                        }
+                )
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 1)
                         .onChanged { _ in
                             isDragging = true
                             onDragTo(NSEvent.mouseLocation)
                         }
-                        .onEnded { _ in
+                        .onEnded { value in
                             isDragging = false
-                            onDragEnded()
+                            let predicted = value.predictedEndTranslation
+                            let actual = value.translation
+                            onDragEnded(CGVector(
+                                dx: (predicted.width - actual.width) * 4,
+                                dy: (predicted.height - actual.height) * 4
+                            ))
                         }
                 )
+
+            if play?.objectSitsBehindCharacter != true {
+                object(selectedObject, play: play)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The bubble hangs off the **panel**, not off the character, and that is load-bearing
@@ -1020,6 +1275,20 @@ private struct CompanionContainerView: View {
         // with no `.id(theme.id)`: keying on the theme rebuilds the subtree, which
         // restarts every material fade and reads as a pulse.
         .preferredColorScheme(themeManager.current.colorScheme)
+    }
+
+    private func object(_ selectedObject: CompanionObject,
+                        play: CompanionObjectPlay?) -> some View {
+        CompanionObjectView(
+            object: selectedObject,
+            size: characterSize * 0.42,
+            play: play,
+            onInteract: { behaviour.play(with: selectedObject) }
+        )
+        .offset(
+            x: behaviour.offsetX + characterSize * 0.48,
+            y: behaviour.offsetY + characterSize * 0.38
+        )
     }
 
     /// The character, or nothing at all.

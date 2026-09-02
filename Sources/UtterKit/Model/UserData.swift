@@ -135,6 +135,17 @@ class UserData: ObservableObject {
     /// asked the app to do something; the cat's fire when you touch it or when a timer goes
     /// off, which is a different bargain — so silencing one should not silence the other.
     @Published var companionSounds: Bool = true
+    @Published var companionObject: CompanionObject = .none
+    @Published var companionMemoryEnabled: Bool = true
+    @Published var companionGoalsEnabled: Bool = true
+    @Published var companionWindowEdges: Bool = true
+    @Published var companionQuietMode: Bool = false
+    @Published var companionAutomaticQuietMode: Bool = true
+    @Published var companionHydrationGoal: Int = 4
+    @Published var companionStretchGoal: Int = 3
+    @Published var companionFocusGoal: Int = 2
+    @Published var companionDictationGoal: Int = 500
+    @Published var companionProgress = CompanionProgress.today()
 
     /// The character selected on a fresh install. The pixel cat is drawn in code, so it is
     /// available in both app bundles and plain `swift run` development builds.
@@ -260,9 +271,12 @@ class UserData: ObservableObject {
         ("continue note", "Add to the note already open", .continueNote),
     ]
 
-    private let storageDir: URL = AppDirectory.support
+    private let storageDir: URL
 
-    init() { load() }
+    init(storageDir: URL = AppDirectory.support) {
+        self.storageDir = storageDir
+        load()
+    }
 
     func applySnippets(to text: String) -> String {
         var result = text
@@ -326,17 +340,41 @@ class UserData: ObservableObject {
             "companionPomodoroBreakMinutes": companionPomodoroBreakMinutes,
             "companionPinnedMessage": companionPinnedMessage,
             "companionSounds": companionSounds,
+            "companionObject": companionObject.rawValue,
+            "companionMemoryEnabled": companionMemoryEnabled,
+            "companionGoalsEnabled": companionGoalsEnabled,
+            "companionWindowEdges": companionWindowEdges,
+            "companionQuietMode": companionQuietMode,
+            "companionAutomaticQuietMode": companionAutomaticQuietMode,
+            "companionHydrationGoal": companionHydrationGoal,
+            "companionStretchGoal": companionStretchGoal,
+            "companionFocusGoal": companionFocusGoal,
+            "companionDictationGoal": companionDictationGoal,
+            "companionProgress": companionProgress.jsonObject,
         ]
         let url = storageDir.appendingPathComponent("userdata.json")
         if let json = try? JSONSerialization.data(withJSONObject: data, options: .prettyPrinted) {
-            try? json.write(to: url)
+            do { try json.write(to: url, options: .atomic) }
+            catch { print("⚠️ Could not write settings: \(error.localizedDescription)") }
         }
     }
 
     private func load() {
         let url = storageDir.appendingPathComponent("userdata.json")
-        guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        guard let data = try? Data(contentsOf: url) else { return }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let salvage = storageDir.appendingPathComponent(
+                "userdata-unreadable-\(Int(Date().timeIntervalSince1970)).json"
+            )
+            do {
+                try FileManager.default.moveItem(at: url, to: salvage)
+                print("⚠️ Settings file unreadable; moved aside to \(salvage.lastPathComponent)")
+            } catch {
+                print("⚠️ Settings file unreadable and could not be moved aside: "
+                      + error.localizedDescription)
+            }
+            return
+        }
 
         if let words = json["words"] as? [String] { dictionaryWords = words }
         if let snips = json["snippets"] as? [[String: String]] {
@@ -405,11 +443,266 @@ class UserData: ObservableObject {
         }
         if let v = json["companionPinnedMessage"] as? String { companionPinnedMessage = v }
         if let v = json["companionSounds"] as? Bool { companionSounds = v }
+        if let v = json["companionObject"] as? String {
+            companionObject = CompanionObject(rawValue: v) ?? .none
+        }
+        if let v = json["companionMemoryEnabled"] as? Bool { companionMemoryEnabled = v }
+        if let v = json["companionGoalsEnabled"] as? Bool { companionGoalsEnabled = v }
+        if let v = json["companionWindowEdges"] as? Bool { companionWindowEdges = v }
+        if let v = json["companionQuietMode"] as? Bool { companionQuietMode = v }
+        if let v = json["companionAutomaticQuietMode"] as? Bool {
+            companionAutomaticQuietMode = v
+        }
+        if let v = json["companionHydrationGoal"] as? Int {
+            companionHydrationGoal = min(20, max(0, v))
+        }
+        if let v = json["companionStretchGoal"] as? Int {
+            companionStretchGoal = min(20, max(0, v))
+        }
+        if let v = json["companionFocusGoal"] as? Int {
+            companionFocusGoal = min(20, max(0, v))
+        }
+        if let v = json["companionDictationGoal"] as? Int {
+            companionDictationGoal = min(10_000, max(0, v))
+        }
+        if let v = json["companionProgress"] as? [String: Any] {
+            companionProgress = CompanionProgress(jsonObject: v)
+        }
         if let cmds = json["customAICommands"] as? [[String: Any]],
            let raw = try? JSONSerialization.data(withJSONObject: cmds),
            let decoded = try? JSONDecoder().decode([CustomAICommand].self, from: raw) {
             customAICommands = decoded
         }
+    }
+
+    @discardableResult
+    func recordCompanionDictation(words: Int, at date: Date = Date()) -> String? {
+        guard words > 0 else { return nil }
+        var progress = companionProgress(for: date)
+        progress.dictationWords += words
+        progress.lifetimeWords += words
+        progress.dictations += 1
+        grantCompanionRewards(in: &progress)
+        companionProgress = progress
+        save()
+        guard companionGoalsEnabled, companionDictationGoal > 0,
+              progress.dictationWords - words < companionDictationGoal,
+              progress.dictationWords >= companionDictationGoal
+        else { return nil }
+        return "Dictation goal complete"
+    }
+
+    @discardableResult
+    func recordCompanionReminder(
+        _ reminder: CompanionReminder,
+        completed: Bool,
+        at date: Date = Date()
+    ) -> String? {
+        var progress = companionProgress(for: date)
+        let key = reminder.memoryKey
+        if companionMemoryEnabled {
+            if completed {
+                progress.preferredHours[key] = Calendar.current.component(.hour, from: date)
+            } else {
+                progress.dismissed[key, default: 0] += 1
+                progress.extraDelayMinutes[key] =
+                    min(30, progress.extraDelayMinutes[key, default: 0] + 5)
+            }
+        }
+
+        var celebration: String?
+        if completed, companionGoalsEnabled {
+            switch reminder {
+            case .water:
+                progress.hydration += 1
+                if companionHydrationGoal > 0,
+                   progress.hydration == companionHydrationGoal {
+                    celebration = "Hydration goal complete"
+                }
+            case .stretch:
+                progress.stretches += 1
+                if companionStretchGoal > 0,
+                   progress.stretches == companionStretchGoal {
+                    celebration = "Stretch goal complete"
+                }
+            case .pomodoro(let focus) where focus:
+                progress.focusBlocks += 1
+                if companionFocusGoal > 0,
+                   progress.focusBlocks == companionFocusGoal {
+                    celebration = "Focus goal complete"
+                }
+            case .pomodoro, .message:
+                break
+            }
+        }
+        companionProgress = progress
+        save()
+        return celebration
+    }
+
+    func forgetCompanionMemory() {
+        var progress = companionProgress
+        progress.dismissed = [:]
+        progress.preferredHours = [:]
+        progress.extraDelayMinutes = [:]
+        companionProgress = progress
+        save()
+    }
+
+    func recordCompanionMemoryCreated() {
+        var progress = companionProgress
+        progress.memoriesCreated += 1
+        companionProgress = progress
+        save()
+    }
+
+    func recordCompanionMemoryCompleted() {
+        var progress = companionProgress
+        progress.memoriesCompleted += 1
+        companionProgress = progress
+        save()
+    }
+
+    @discardableResult
+    func syncCompanionLifetimeWords(_ totalWords: Int) -> [CompanionReward] {
+        var progress = companionProgress
+        progress.lifetimeWords = max(progress.lifetimeWords, max(0, totalWords))
+        let before = progress.unlocked
+        grantCompanionRewards(in: &progress)
+        guard progress != companionProgress else { return [] }
+        companionProgress = progress
+        save()
+        return CompanionReward.allCases.filter {
+            progress.unlocked.contains($0.rawValue) && !before.contains($0.rawValue)
+        }
+    }
+
+    func companionRewardUnlocked(_ reward: CompanionReward) -> Bool {
+        companionProgress.unlocked.contains(reward.rawValue)
+    }
+
+    func companionObjectUnlocked(_ object: CompanionObject) -> Bool {
+        object.reward.map(companionRewardUnlocked) ?? true
+    }
+
+    func companionAnimationUnlocked(_ unlock: CompanionUnlock) -> Bool {
+        companionRewardUnlocked(unlock.reward)
+    }
+
+    func companionExtraDelay(for reminder: CompanionReminder) -> Int {
+        guard companionMemoryEnabled else { return 0 }
+        return companionProgress.extraDelayMinutes[reminder.memoryKey, default: 0]
+    }
+
+    private func companionProgress(for date: Date) -> CompanionProgress {
+        var progress = companionProgress
+        let stamp = CompanionProgress.dayStamp(date)
+        guard progress.day != stamp else { return progress }
+        progress.day = stamp
+        progress.hydration = 0
+        progress.stretches = 0
+        progress.focusBlocks = 0
+        progress.dictationWords = 0
+        return progress
+    }
+
+    private func grantCompanionRewards(in progress: inout CompanionProgress) {
+        for reward in CompanionReward.allCases
+        where progress.lifetimeWords >= reward.wordRequirement {
+            progress.unlocked.insert(reward.rawValue)
+        }
+    }
+}
+
+enum CompanionUnlock: String, CaseIterable {
+    case grooming, rolling, loaf
+
+    var label: String {
+        switch self {
+        case .grooming: return "Grooming"
+        case .rolling: return "Roll over"
+        case .loaf: return "Cozy loaf"
+        }
+    }
+
+    var requirement: String {
+        "\(reward.wordRequirement.formatted()) dictated words"
+    }
+
+    var reward: CompanionReward {
+        switch self {
+        case .grooming: return .grooming
+        case .rolling: return .rolling
+        case .loaf: return .loaf
+        }
+    }
+}
+
+struct CompanionProgress: Equatable {
+    var day: Int
+    var hydration = 0
+    var stretches = 0
+    var focusBlocks = 0
+    var dictationWords = 0
+    var dismissed: [String: Int] = [:]
+    var preferredHours: [String: Int] = [:]
+    var extraDelayMinutes: [String: Int] = [:]
+    var unlocked: Set<String> = []
+    var lifetimeWords = 0
+    var dictations = 0
+    var memoriesCreated = 0
+    var memoriesCompleted = 0
+
+    static func today() -> CompanionProgress {
+        CompanionProgress(day: dayStamp(Date()))
+    }
+
+    static func dayStamp(_ date: Date) -> Int {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return (parts.year ?? 0) * 10_000 + (parts.month ?? 0) * 100 + (parts.day ?? 0)
+    }
+
+    init(day: Int) {
+        self.day = day
+    }
+
+    init(jsonObject json: [String: Any]) {
+        day = json["day"] as? Int ?? Self.dayStamp(Date())
+        hydration = json["hydration"] as? Int ?? 0
+        stretches = json["stretches"] as? Int ?? 0
+        focusBlocks = json["focusBlocks"] as? Int ?? 0
+        dictationWords = json["dictationWords"] as? Int ?? 0
+        dismissed = Self.intDictionary(json["dismissed"])
+        preferredHours = Self.intDictionary(json["preferredHours"])
+        extraDelayMinutes = Self.intDictionary(json["extraDelayMinutes"])
+        unlocked = Set(json["unlocked"] as? [String] ?? [])
+        lifetimeWords = json["lifetimeWords"] as? Int ?? 0
+        dictations = json["dictations"] as? Int ?? 0
+        memoriesCreated = json["memoriesCreated"] as? Int ?? 0
+        memoriesCompleted = json["memoriesCompleted"] as? Int ?? 0
+    }
+
+    var jsonObject: [String: Any] {
+        [
+            "day": day,
+            "hydration": hydration,
+            "stretches": stretches,
+            "focusBlocks": focusBlocks,
+            "dictationWords": dictationWords,
+            "dismissed": dismissed,
+            "preferredHours": preferredHours,
+            "extraDelayMinutes": extraDelayMinutes,
+            "unlocked": unlocked.sorted(),
+            "lifetimeWords": lifetimeWords,
+            "dictations": dictations,
+            "memoriesCreated": memoriesCreated,
+            "memoriesCompleted": memoriesCompleted,
+        ]
+    }
+
+    private static func intDictionary(_ value: Any?) -> [String: Int] {
+        guard let raw = value as? [String: Any] else { return [:] }
+        return raw.compactMapValues { ($0 as? NSNumber)?.intValue }
     }
 }
 

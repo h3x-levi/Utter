@@ -35,7 +35,7 @@ struct CompanionHandoverTests {
         // lean in front of — the companion sits one window level above the pill for exactly
         // that — and it hides nothing, where the card is 292x124pt of text.
         let capsuleStates: [PillState] = [
-            .preparing, .idle, .recording, .handsFree,
+            .preparing, .idle, .recording, .handsFree, .capturingMemory,
             .processing(.transcribing), .processing(.rewriting), .processing(.typing),
             .notice("New note — keep talking"), .error("No speech detected"),
         ]

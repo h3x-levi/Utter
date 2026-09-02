@@ -201,6 +201,9 @@ struct SpritePack: Identifiable, Equatable {
         case .purring: return "purr"
         case .hunting: return "hunt"
         case .held: return "drag"
+        case .grooming: return "grooming"
+        case .rolling: return "rolling"
+        case .loaf: return "loaf"
         }
     }
 
@@ -950,7 +953,7 @@ final class SpritePackStore: ObservableObject {
     nonisolated static let stateNames = [
         "resting", "alert", "thinking", "delighted", "startled", "sleepy",
         "knead", "overheat", "purr", "hunt", "drag",
-        "walk",
+        "walk", "grooming", "rolling", "loaf",
     ]
 
     /// Extensions tried for a convention-named file, best format first.
@@ -1130,6 +1133,10 @@ struct SpritePackView: View {
     /// `SpritePack.snappedSide`).
     private var renderedSize: CGFloat {
         guard pack.pixelArt else { return size }
+        // Code-rendered companions snap every rectangle to the display's device-pixel
+        // grid themselves. Applying sprite-sheet integer scaling here would shrink the
+        // 64-cell procedural canvas to 32pt at the default 52pt setting.
+        if CodePixelCatStyle(rawValue: pack.id) != nil { return size }
         return SpritePack.snappedSide(
             box: size,
             canvas: max(pack.frameSize.width, pack.frameSize.height),

@@ -57,6 +57,7 @@ struct HotkeyOption: Identifiable {
 enum ShortcutAction: Equatable {
     case handsFree
     case noteCapture
+    case memoryCapture
 
     /// What the shortcut is called on screen and in the log. Lives here so both
     /// spellings are captioned from one string.
@@ -64,6 +65,7 @@ enum ShortcutAction: Equatable {
         switch self {
         case .handsFree: return "Hands-free"
         case .noteCapture: return "Take a note"
+        case .memoryCapture: return "Remember"
         }
     }
 }
@@ -95,6 +97,12 @@ struct KeyChord {
                                       flags: [.control, .option],
                                       keyLabel: "N",
                                       action: .noteCapture)
+
+    /// Speak a private memory or reminder. R for remember.
+    static let memoryCapture = KeyChord(keyCode: UInt16(kVK_ANSI_R),
+                                        flags: [.control, .option],
+                                        keyLabel: "R",
+                                        action: .memoryCapture)
 
     /// Each modifier's flag, glyph and spelled name, in the order macOS prints them
     /// in a menu — Control, Option, Shift, Command — rather than the order the flags
@@ -370,6 +378,7 @@ class KeyMonitor {
     private let onRecordStop: () -> Void
     private let onHandsFreeToggle: () -> Void
     private let onNoteCaptureToggle: () -> Void
+    private let onMemoryCaptureToggle: () -> Void
     private var globalFlagsMonitor: Any?
     private var localFlagsMonitor: Any?
     private var globalKeyDownMonitor: Any?
@@ -389,12 +398,14 @@ class KeyMonitor {
         onRecordStart: @escaping () -> Void,
         onRecordStop: @escaping () -> Void,
         onHandsFreeToggle: @escaping () -> Void = {},
-        onNoteCaptureToggle: @escaping () -> Void = {}
+        onNoteCaptureToggle: @escaping () -> Void = {},
+        onMemoryCaptureToggle: @escaping () -> Void = {}
     ) {
         self.onRecordStart = onRecordStart
         self.onRecordStop = onRecordStop
         self.onHandsFreeToggle = onHandsFreeToggle
         self.onNoteCaptureToggle = onNoteCaptureToggle
+        self.onMemoryCaptureToggle = onMemoryCaptureToggle
     }
 
     func start() {
@@ -432,7 +443,8 @@ class KeyMonitor {
 
         var gestures = ["hold \(hotkeyName) to record",
                         "\(KeyChord.handsFree.symbols) hands-free",
-                        "\(KeyChord.noteCapture.symbols) note"]
+                        "\(KeyChord.noteCapture.symbols) note",
+                        "\(KeyChord.memoryCapture.symbols) remember"]
         if HoldTap.isAvailable {
             gestures += HoldTap.all.map { "\($0.spelled(holdKey: hotkeyName)) → \($0.action.label)" }
         }
@@ -508,6 +520,7 @@ class KeyMonitor {
         switch event.keyCode {
         case KeyChord.handsFree.keyCode: chord = .handsFree
         case KeyChord.noteCapture.keyCode: chord = .noteCapture
+        case KeyChord.memoryCapture.keyCode: chord = .memoryCapture
         default: return
         }
         // Mask out unrelated flags (caps lock, numeric pad, etc.) before checking.
@@ -530,6 +543,8 @@ class KeyMonitor {
             DispatchQueue.main.async { self.onHandsFreeToggle() }
         case .noteCapture:
             DispatchQueue.main.async { self.onNoteCaptureToggle() }
+        case .memoryCapture:
+            DispatchQueue.main.async { self.onMemoryCaptureToggle() }
         }
     }
 

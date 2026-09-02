@@ -636,19 +636,58 @@ enum Layout {
     /// Was 28pt (the reference's 26px at 0.9x), which measured — offscreen probe, top-down window
     /// points — the six main-window nav rows clustered from y=109 to y=287, i.e. 178pt jammed at the
     /// top of an 804pt glass column with a Spacer's worth of emptiness below them before the pinned
-    /// footer at y=772. 36pt gives each tab real presence and, with the wider `navRows` spacing,
-    /// spreads the block to ~246pt without disturbing the bottom-pinned utilities.
+    /// footer at y=772. 40pt gives each tab the slightly looser vertical rhythm used by current
+    /// macOS sidebars without disturbing the bottom-pinned utilities.
     ///
-    /// Shared with Settings' nav column — deliberately, so the two nav columns stay one design.
-    /// Verified safe there: six group rows in two sections end at ~y=360 at 36pt, comfortably
+    /// This is **Settings'** pitch, and only Settings' — the main window's nav column reads
+    /// `mainSidebarRowHeight` now. The claim that the two shared it "so the two nav columns stay one
+    /// design" was not true at the time of writing: `FlowMainView.navRows` wrote `Space.x12` (48)
+    /// inline under a comment saying 40.
+    ///
+    /// Verified safe here: six group rows in two sections remain comfortably
     /// inside its 420pt minimum height (measured at 28pt they ended at y=312).
     ///
-    /// Both columns are real `List(selection:)`s now, so this is applied through
-    /// `.environment(\.defaultMinListRowHeight, …)` rather than a row's own `.frame`: it is a
-    /// *floor* the system row honours, not a fixed height, so AppKit is still free to grow a row
-    /// for a longer label or a larger Dynamic Type setting.
+    /// **This value is currently not reaching the rows.** `SettingsWindowView` applies it as
+    /// `.environment(\.defaultMinListRowHeight, …)`, and that key was measured — screenshot of the
+    /// running app on macOS 26.5, sidebar label centres — to have no effect under
+    /// `.listStyle(.sidebar)`: the main window set the same key to 56 and got a **31.7pt** pitch, i.e.
+    /// well under the floor it was asking for. So Settings' group rows are at the system's own pitch,
+    /// not 40. `mainSidebarRowHeight` records what does work. Not changed here, because Settings' nav
+    /// column is outside the change that found this, and moving it needs the y=312 arithmetic above
+    /// re-run against its 420pt floor.
+    static let sidebarRowHeight: CGFloat = 40
+
+    /// The main window's nav row spacing — the one knob that moves those six rows apart.
     ///
-    static let sidebarRowHeight: CGFloat = 36
+    /// A **minimum height on the row's own content**, applied in `FlowMainView.navRows`, not a row
+    /// pitch. The list adds its own insets on top, so read the two numbers together: 44 here measured
+    /// a **52.2pt pitch** (label centres at 78 / 131 / 183 / 233.8 / 286 / 339pt), i.e. ~8pt of
+    /// overhead. Change this to change the spacing; expect pitch ≈ value + 8.
+    ///
+    /// It is a content frame because the modifier that reads like the right place for it does not
+    /// work. Every candidate was checked rather than assumed:
+    ///
+    ///   * `.environment(\.defaultMinListRowHeight, …)` — **ignored** under `.listStyle(.sidebar)`.
+    ///     Set to 56 it produced a 31.7pt pitch (centres 68 / 101 / 133 / 164 / 196.2 / 227.8pt),
+    ///     under the floor it was asking for. Both sidebars in this app were driving their pitch
+    ///     through this key, which is why both sat at the system's own spacing however the number was
+    ///     tuned. See `sidebarRowHeight`.
+    ///   * `.listRowSpacing` and `.listSectionSpacing` — `@available(macOS, unavailable)`, read from
+    ///     the SDK's own `SwiftUI.swiftinterface`. They do not exist to be called here.
+    ///   * `.listRowInsets` — compiles on macOS, measured as ignored.
+    ///
+    /// Its own constant rather than a raised `sidebarRowHeight` because the shared one cannot take
+    /// it: Settings' last row bottom was measured at y=312 with a 28pt pitch, so each +1pt of pitch
+    /// costs that column 6pt, and a 52pt pitch would put it near y=456 against a 420pt minimum
+    /// height. The main window has no such ceiling — six rows at 52.2pt plus `bottomBlock` sit well
+    /// inside the 680pt minimum window height, and `navRows` is a `List`, so it would scroll rather
+    /// than clip if that ever stopped being true.
+    ///
+    /// What this cannot do: the rows separate by each row growing, and the selection pill fills the
+    /// row, so the pill grows with it. The gap *between* two pills is NSTableView's and is not
+    /// reachable from app code without going back to hand-drawn rows, which is what `navRows`
+    /// deliberately stopped doing.
+    static let mainSidebarRowHeight: CGFloat = 44
     /// Standard control height. The reference runs notably compact: 26pt buttons
     /// and toggles against 13pt labels.
     static let buttonHeight: CGFloat = 26

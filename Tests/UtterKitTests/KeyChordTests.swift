@@ -24,6 +24,13 @@ struct KeyChordTests {
         #expect(KeyChord.handsFree.spelled == "Control-Option-Space")
     }
 
+    @Test("The memory chord reads as ⌃⌥R")
+    func memoryCaptureText() {
+        #expect(KeyChord.memoryCapture.symbols == "\u{2303}\u{2325}R")
+        #expect(KeyChord.memoryCapture.spelled == "Control-Option-R")
+        #expect(KeyChord.memoryCapture.keycaps == ["\u{2303}", "\u{2325}", "R"])
+    }
+
     @Test("Keycaps are one string per key")
     func keycapsSplitPerKey() {
         // `ShortcutHint` draws a chip per element, so a joined string would render as
@@ -50,13 +57,15 @@ struct KeyChordTests {
         #expect(KeyChord.handsFree.keyLabel == "Space")
         #expect(KeyChord.noteCapture.keyCode == UInt16(kVK_ANSI_N))
         #expect(KeyChord.noteCapture.keyLabel == "N")
+        #expect(KeyChord.memoryCapture.keyCode == UInt16(kVK_ANSI_R))
+        #expect(KeyChord.memoryCapture.keyLabel == "R")
     }
 
     @Test("Both chords require Control and Option and nothing else")
     func sharedModifiers() {
         // `KeyMonitor.handleKeyDown` rejects an event carrying Command or Shift, so a
         // chord that declared either could never fire.
-        for chord in [KeyChord.handsFree, KeyChord.noteCapture] {
+        for chord in [KeyChord.handsFree, KeyChord.noteCapture, KeyChord.memoryCapture] {
             #expect(chord.flags == [.control, .option])
         }
     }
@@ -66,6 +75,8 @@ struct KeyChordTests {
         // They share their modifiers, so the key code is the only thing separating
         // "start hands-free" from "dictate into a note".
         #expect(KeyChord.handsFree.keyCode != KeyChord.noteCapture.keyCode)
+        #expect(KeyChord.memoryCapture.keyCode != KeyChord.handsFree.keyCode)
+        #expect(KeyChord.memoryCapture.keyCode != KeyChord.noteCapture.keyCode)
     }
 }
 
@@ -100,6 +111,12 @@ struct HoldTapTests {
         // here would fight the system, so ⌃⌥N stays the only route to a note.
         #expect(HoldTap.binding(for: .noteCapture) == nil)
         #expect(HoldTap.binding(forKeyCode: UInt16(kVK_ANSI_N)) == nil)
+    }
+
+    @Test("Memory capture has no hold-then-tap spelling")
+    func memoryCaptureIsChordOnly() {
+        #expect(HoldTap.binding(for: .memoryCapture) == nil)
+        #expect(HoldTap.binding(forKeyCode: UInt16(kVK_ANSI_R)) == nil)
     }
 
     @Test("A bound key does nothing unless the hotkey is held")

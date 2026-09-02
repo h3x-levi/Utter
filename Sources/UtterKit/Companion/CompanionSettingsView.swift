@@ -7,15 +7,16 @@ import AppKit
 /// is. The character grid previews live characters rather than listing names, for the
 /// same reason `ThemeSwatchGrid` does — the choice is a visual one, so a list of
 /// words is the one representation that shows nothing about it.
-struct CompanionSettingsContent: View {
+struct CompanionCustomizeView: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var packStore = SpritePackStore.shared
     /// Live Accessibility state. The typing reactions are inert without it — see the row below.
     @ObservedObject private var readiness = ReadinessMonitor.shared
 
     var body: some View {
-        Form {
-            Section("Desktop companion") {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.groupGap) {
+            SettingsCard(title: "Desktop companion") {
                 SettingsToggle(
                     title: "Show a companion",
                     description: "A small character that reacts while you dictate and wanders when idle. It appears beside the pill and can then be dragged anywhere.",
@@ -56,6 +57,18 @@ struct CompanionSettingsContent: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    VStack(alignment: .leading, spacing: Space.x3) {
+                        Text("Interactive object").typo(.body)
+                        CompanionObjectPicker(
+                            options: availableObjects,
+                            selection: $userData.companionObject
+                        )
+                        .onChange(of: userData.companionObject) { _ in userData.save() }
+                        Text("Click the object beside your companion to play now. It also starts a short play sequence after about 12 idle seconds, then occasionally.")
+                            .typo(.caption)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                     Text("Drag the character to move it. It has a place on screen of its own, so moving it leaves the pill where it is. Right-click it to put it back beside the pill or to hide it.")
                         .typo(.caption)
                         .fixedSize(horizontal: false, vertical: true)
@@ -63,7 +76,7 @@ struct CompanionSettingsContent: View {
             }
 
             if userData.companionEnabled {
-                Section("Reactions") {
+                SettingsCard(title: "Reactions") {
                     SettingsToggle(
                         title: "React to typing and the cursor",
                         // Says exactly what is observed and what is not, because "reacts to
@@ -77,8 +90,8 @@ struct CompanionSettingsContent: View {
 
                     if userData.companionPetBehaviours {
                         SettingsToggle(
-                            title: "Cat sounds",
-                            description: "A meow when you tap it, a purr while you stroke it, and a chirp when a reminder lands. Separate from the dictation sounds, so you can have one without the other.",
+                            title: "Companion sounds",
+                            description: "Cats meow and purr; the dog barks and pants. Reminder cues stay short. Separate from dictation sounds, so you can silence either family.",
                             isOn: $userData.companionSounds
                         )
                         .onChange(of: userData.companionSounds) { _ in userData.save() }
@@ -128,9 +141,20 @@ struct CompanionSettingsContent: View {
                             }
                         }
                     }
+
+                    SettingsToggle(
+                        title: "Use window edges",
+                        description: "If the companion overlaps the focused window, it peeks around the nearest side instead of covering the window’s controls or content.",
+                        isOn: $userData.companionWindowEdges
+                    )
+                    .onChange(of: userData.companionWindowEdges) { _ in userData.save() }
+
+                    Text("Click once for a hop, double-click for a playful roll, drag and release to gently toss it, or right-click for Feed and Brush.")
+                        .typo(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section("Reminders") {
+                SettingsCard(title: "Reminders") {
                     // Minutes, as steppers rather than free text: these are intervals with a
                     // sensible range, and a text field invites "0.5" and "45 min" which then
                     // have to be parsed and rejected.
@@ -142,7 +166,7 @@ struct CompanionSettingsContent: View {
                     )
                     MinuteRow(
                         title: "Drink water",
-                        description: "A short reminder and a meow.",
+                        description: "A short reminder and the selected companion’s cue.",
                         minutes: $userData.companionWaterMinutes,
                         onChange: { userData.save() }
                     )
@@ -173,9 +197,91 @@ struct CompanionSettingsContent: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+
+                SettingsCard(title: "Relationship memory") {
+                    SettingsToggle(
+                        title: "Remember reminder timing",
+                        description: "Stored only on this Mac. When you choose Not Now, that reminder waits five minutes longer next time, up to 30 minutes. Completing a reminder records the hour you usually respond.",
+                        isOn: $userData.companionMemoryEnabled
+                    )
+                    .onChange(of: userData.companionMemoryEnabled) { _ in userData.save() }
+
+                    if userData.companionMemoryEnabled {
+                        memoryLine(title: "Stretch", key: "stretch")
+                        memoryLine(title: "Water", key: "water")
+                        Button("Forget learned timing", role: .destructive) {
+                            userData.forgetCompanionMemory()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                SettingsCard(title: "Daily goals") {
+                    SettingsToggle(
+                        title: "Celebrate small goals",
+                        description: "Hydration, stretching, completed focus blocks, and dictated words reset each day. The cat celebrates only when a target is reached.",
+                        isOn: $userData.companionGoalsEnabled
+                    )
+                    .onChange(of: userData.companionGoalsEnabled) { _ in userData.save() }
+
+                    if userData.companionGoalsEnabled {
+                        GoalRow(
+                            title: "Hydration",
+                            progress: userData.companionProgress.hydration,
+                            unit: "breaks",
+                            target: $userData.companionHydrationGoal,
+                            range: 0...20,
+                            step: 1,
+                            onChange: { userData.save() }
+                        )
+                        GoalRow(
+                            title: "Stretching",
+                            progress: userData.companionProgress.stretches,
+                            unit: "breaks",
+                            target: $userData.companionStretchGoal,
+                            range: 0...20,
+                            step: 1,
+                            onChange: { userData.save() }
+                        )
+                        GoalRow(
+                            title: "Focus",
+                            progress: userData.companionProgress.focusBlocks,
+                            unit: "blocks",
+                            target: $userData.companionFocusGoal,
+                            range: 0...20,
+                            step: 1,
+                            onChange: { userData.save() }
+                        )
+                        GoalRow(
+                            title: "Dictation",
+                            progress: userData.companionProgress.dictationWords,
+                            unit: "words",
+                            target: $userData.companionDictationGoal,
+                            range: 0...10_000,
+                            step: 100,
+                            onChange: { userData.save() }
+                        )
+                    }
+                }
+
+                SettingsCard(title: "Quiet mode") {
+                    SettingsToggle(
+                        title: "Quiet mode now",
+                        description: "The companion curls up, stops wandering and playing, and suppresses its reminder bubble until you turn this off.",
+                        isOn: $userData.companionQuietMode
+                    )
+                    .onChange(of: userData.companionQuietMode) { _ in userData.save() }
+
+                    SettingsToggle(
+                        title: "Automatic quiet mode",
+                        description: "Sleeps during full-screen presentations, Utter meeting capture, and detected screen-sharing or slideshow helpers. macOS does not expose the active Focus mode through a public Mac API, so use Quiet mode now for Focus.",
+                        isOn: $userData.companionAutomaticQuietMode
+                    )
+                    .onChange(of: userData.companionAutomaticQuietMode) { _ in userData.save() }
+                }
             }
 
-            Section("Character") {
+            SettingsCard(title: "Character") {
                 if packStore.packs.isEmpty {
                     // Not an empty picker. Every character is a sprite pack now, so
                     // with none installed the companion cannot be shown at all,
@@ -200,7 +306,7 @@ struct CompanionSettingsContent: View {
                 }
             }
 
-            Section("Your own characters") {
+            SettingsCard(title: "Your own characters") {
                 VStack(alignment: .leading, spacing: Space.x3) {
                     Text("Utter ships its own characters. To use art of your own, put a folder of animated PNGs in the Companions folder and it appears above.")
                         .typo(.caption)
@@ -251,8 +357,10 @@ struct CompanionSettingsContent: View {
                     .typo(.caption)
                 }
             }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, Space.pageInset)
         }
-        .settingsForm()
         .onAppear {
             packStore.reload()
             // Correct a selection that names a pack which is not there — a folder the
@@ -263,6 +371,10 @@ struct CompanionSettingsContent: View {
             userData.resolveCompanionCharacter(
                 against: packStore.packs.map(\.id)
             )
+            if !userData.companionObjectUnlocked(userData.companionObject) {
+                userData.companionObject = .none
+                userData.save()
+            }
             // Without this the Accessibility row above shows whatever `axGranted` last
             // happened to be — which at launch is `false` — so a user who HAS granted it
             // would be told their typing reactions are broken. Polling is reference-counted,
@@ -323,9 +435,90 @@ struct CompanionSettingsContent: View {
     drew it with.
     """
     }
+
+    private var availableObjects: [CompanionObject] {
+        CompanionObject.allCases
+    }
+
+    @ViewBuilder
+    private func memoryLine(title: String, key: String) -> some View {
+        let dismissed = userData.companionProgress.dismissed[key, default: 0]
+        let delay = userData.companionProgress.extraDelayMinutes[key, default: 0]
+        let hour = userData.companionProgress.preferredHours[key]
+        HStack {
+            Text(title).typo(.body)
+            Spacer()
+            Text(memorySummary(dismissed: dismissed, delay: delay, hour: hour))
+                .typo(.caption)
+                .monospacedDigit()
+        }
+    }
+
+    private func memorySummary(dismissed: Int, delay: Int, hour: Int?) -> String {
+        var parts = ["\(dismissed) dismissed", "+\(delay) min"]
+        if let hour {
+            let date = Calendar.current.date(
+                from: DateComponents(hour: hour)
+            ) ?? Date()
+            parts.append(date.formatted(date: .omitted, time: .shortened))
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 // MARK: - Character grid
+
+private struct CompanionObjectPicker: View {
+    let options: [CompanionObject]
+    @Binding var selection: CompanionObject
+    @ObservedObject private var userData = UserData.shared
+
+    var body: some View {
+        HStack(spacing: Space.x2) {
+            ForEach(options) { object in
+                CompanionObjectChoice(
+                    object: object,
+                    isSelected: selection == object,
+                    isUnlocked: userData.companionObjectUnlocked(object),
+                    action: { selection = object }
+                )
+            }
+        }
+        .frame(maxWidth: 720)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Interactive object")
+    }
+}
+
+private struct CompanionObjectChoice: View {
+    let object: CompanionObject
+    let isSelected: Bool
+    let isUnlocked: Bool
+    let action: () -> Void
+
+    var body: some View {
+        if isSelected {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
+    }
+
+    private var button: some View {
+        Button(action: action) {
+            Label(object.label, systemImage: isUnlocked ? object.systemImage : "lock.fill")
+                .frame(maxWidth: .infinity)
+                .lineLimit(1)
+        }
+        .controlSize(.large)
+        .disabled(!isUnlocked)
+        .accessibilityHint(
+            isUnlocked ? "Select \(object.label)"
+                : "\(object.reward?.wordRequirement.formatted() ?? "More") dictated words required"
+        )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
 
 /// The character picker. Every tile shows the pack's own first resting frame, so the
 /// control previews the thing it selects.
@@ -369,6 +562,33 @@ private struct MinuteRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+private struct GoalRow: View {
+    let title: String
+    let progress: Int
+    let unit: String
+    @Binding var target: Int
+    let range: ClosedRange<Int>
+    let step: Int
+    let onChange: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: Space.x1) {
+                Text(title).typo(.body)
+                Text(target == 0 ? "Off" : "\(progress) of \(target) \(unit)")
+                    .typo(.caption)
+                    .monospacedDigit()
+            }
+            Spacer()
+            Stepper(title, value: $target, in: range, step: step)
+                .labelsHidden()
+                .onChange(of: target) { _ in onChange() }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(target == 0 ? "off" : "\(progress) of \(target) \(unit)")")
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 import AVFoundation
 import ApplicationServices
@@ -92,8 +93,11 @@ struct GeneralSettingsContent: View {
                 // is OS-level behaviour, and the permission it needs is in this same pane.
                 SettingsToggle(
                     title: "Offer to transcribe calls",
-                    description: "When Utter notices you\u{2019}re in a call it offers to "
-                        + "transcribe it into a note. Nothing is recorded unless you accept. "
+                    description: "Offers when a supported calling app is actively using your "
+                        + "microphone and speakers. Includes Zoom, Teams, FaceTime, Webex, Slack, "
+                        + "Discord, WhatsApp, Signal, and more. Start browser meetings manually "
+                        + "from Notes. "
+                        + "Nothing is recorded unless you accept. "
                         + "Needs Screen Recording, below, to capture the other people and "
                         + "not just you.",
                     isOn: $userData.offerToTranscribeCalls
@@ -122,23 +126,27 @@ struct GeneralSettingsContent: View {
             }
 
             Section("Notes") {
-                // A radio group, not `GlassSegmentedControl` — and the label is the sentence
-                // that used to be a separate `Text` row above it.
+                // Native AppKit radio buttons, not `GlassSegmentedControl`.
                 //
                 // Two mutually exclusive options, one of them six words long: that is what a
                 // radio group is for, and a segmented control with "Always start a new note" in
                 // one segment either truncates or forces the two segments to unequal widths.
-                // The `Picker` also carries its own label to VoiceOver, which the stacked
-                // `Text` + control never did.
+                // Each option is its own row so macOS cannot reflow the pair horizontally.
                 //
                 // Replaces the old "when you open the Scratchpad" choice, which stopped
                 // meaning anything once notes became a list: every note persists and you pick
                 // the one you want. The real question now is where dictated text lands.
-                Picker("When you dictate into Utter", selection: $userData.captureAppendsToOpenNote) {
-                    Text("Add to the open note").tag(true)
-                    Text("Always start a new note").tag(false)
-                }
-                .pickerStyle(.radioGroup)
+                Text("When you dictate into Utter").typo(.body)
+                SettingsRadioButton(
+                    title: "Add to the open note",
+                    value: true,
+                    selection: $userData.captureAppendsToOpenNote
+                )
+                SettingsRadioButton(
+                    title: "Always start a new note",
+                    value: false,
+                    selection: $userData.captureAppendsToOpenNote
+                )
                 .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
             }
 
@@ -154,19 +162,17 @@ struct GeneralSettingsContent: View {
             Section("Hotkey") {
                 Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
 
-                // `.labelsHidden()` because the sentence above is the label and it is two
-                // sentences long — too long to sit in a picker's leading label column, where
-                // the Notes picker's single phrase fits. The label is still the real word and
-                // not `""`: `labelsHidden()` suppresses only the visual label, so VoiceOver
-                // keeps naming the group — the same reason `GlassToggle` passes its title
-                // through. A hidden label is not an absent one.
-                Picker("Hotkey", selection: $userData.hotkeyName) {
+                // Explicit rows preserve both the native radio appearance and predictable
+                // vertical rhythm for labels of very different lengths.
+                VStack(alignment: .leading, spacing: Space.x2) {
                     ForEach(HotkeyOption.options) { option in
-                        Text(option.name).tag(option.name)
+                        SettingsRadioButton(
+                            title: option.name,
+                            value: option.name,
+                            selection: $userData.hotkeyName
+                        )
                     }
                 }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
                 .onChange(of: userData.hotkeyName) { _ in
                     userData.save()
                     NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
@@ -366,6 +372,50 @@ struct SettingsToggle: View {
             }
         }
         .toggleStyle(.switch)
+    }
+}
+
+/// A genuine AppKit radio button whose parent controls the vertical layout.
+///
+/// SwiftUI's macOS `RadioGroupPickerStyle` is free to lay a short group out
+/// horizontally, even when its content is inside a vertical stack. Settings
+/// needs one predictable row per option, so the system radio control is bridged
+/// directly instead of redrawing it with an SF Symbol.
+private struct SettingsRadioButton<Value: Hashable>: NSViewRepresentable {
+    let title: String
+    let value: Value
+    @Binding var selection: Value
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(
+            radioButtonWithTitle: title,
+            target: context.coordinator,
+            action: #selector(Coordinator.selectValue(_:))
+        )
+        button.controlSize = .regular
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.parent = self
+        button.title = title
+        button.state = selection == value ? .on : .off
+    }
+
+    final class Coordinator: NSObject {
+        var parent: SettingsRadioButton
+
+        init(parent: SettingsRadioButton) {
+            self.parent = parent
+        }
+
+        @objc func selectValue(_ sender: NSButton) {
+            parent.selection = parent.value
+        }
     }
 }
 

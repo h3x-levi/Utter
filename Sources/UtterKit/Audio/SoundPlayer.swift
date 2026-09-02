@@ -137,9 +137,9 @@ struct SoundPlayer {
 
     // MARK: The companion's voice
     //
-    // Synthesised, not sampled — `scripts/generate_cat_sounds.py` builds all four from
-    // arithmetic, so there is no third party's recording in the bundle and the assets are
-    // kilobytes rather than megabytes.
+    // Cats and dogs use the licensed, trimmed cues documented in
+    // `Sounds/ATTRIBUTION.md`; the panda and reward fallbacks use the original synthesized
+    // assets from `scripts/generate_cat_sounds.py`. Raw downloads are never bundled.
     //
     // Gated on `companionSounds`, NOT on `soundsEnabled`. They shared one switch at first,
     // on the reasoning that no cue should bypass the user's choice — but they are different
@@ -154,10 +154,74 @@ struct SoundPlayer {
     // Matched on RMS rather than peak (see the generator): a sustained meow at the same
     // peak as a struck chime measured 3.3 dB louder, and the loudest thing a dictation app
     // does should not be the cat.
-    static func playMeow() { play("cat-meow", companion: true) }
+    static func tapAsset(characterID: String) -> String {
+        switch CodePixelCatStyle(rawValue: characterID)?.species {
+        case .dog: "dog-bark"
+        case .panda: "cat-trill"
+        case .cat: "cat-meow-natural"
+        case nil: "cat-meow-natural"
+        }
+    }
+
+    static func comfortAsset(characterID: String, warmUnlocked: Bool) -> String {
+        switch CodePixelCatStyle(rawValue: characterID)?.species {
+        case .dog: "dog-pant"
+        case .panda: "cat-purr"
+        case .cat: warmUnlocked ? "cat-purr-natural" : "cat-purr"
+        case nil: warmUnlocked ? "cat-purr-natural" : "cat-purr"
+        }
+    }
+
+    static func reminderAsset(characterID: String, trillUnlocked: Bool) -> String {
+        switch CodePixelCatStyle(rawValue: characterID)?.species {
+        case .dog: "dog-bark"
+        case .panda: trillUnlocked ? "cat-trill" : "cat-meow"
+        case .cat, nil: trillUnlocked ? "cat-trill" : "cat-meow-natural"
+        }
+    }
+
+    static func playMeow() {
+        play(tapAsset(characterID: UserData.shared.companionCharacter), companion: true)
+    }
+
+    static func doubleMeowAsset(unlocked: Bool) -> String {
+        unlocked ? "cat-meow-double" : "cat-meow"
+    }
+
+    static func purrAsset(unlocked: Bool) -> String {
+        unlocked ? "cat-purr-warm" : "cat-purr"
+    }
+
+    static func trillAsset(unlocked: Bool) -> String {
+        unlocked ? "cat-trill" : "cat-meow"
+    }
+
     /// Two calls, for a moment that would be easy to miss while reading.
-    static func playMeowDouble() { play("cat-meow-double", companion: true) }
-    static func playPurr() { play("cat-purr", companion: true) }
+    static func playMeowDouble() {
+        play(
+            doubleMeowAsset(
+                unlocked: UserData.shared.companionRewardUnlocked(.doubleMeow)
+            ),
+            companion: true
+        )
+    }
+    static func playPurr() {
+        play(
+            comfortAsset(
+                characterID: UserData.shared.companionCharacter,
+                warmUnlocked: UserData.shared.companionRewardUnlocked(.warmPurr)
+            ),
+            companion: true
+        )
+    }
     /// The short greeting chirp. Rising, so it reads as a question — used for reminders.
-    static func playTrill() { play("cat-trill", companion: true) }
+    static func playTrill() {
+        play(
+            reminderAsset(
+                characterID: UserData.shared.companionCharacter,
+                trillUnlocked: UserData.shared.companionRewardUnlocked(.curiousTrill)
+            ),
+            companion: true
+        )
+    }
 }

@@ -254,7 +254,7 @@ final class MeetingOfferPanel: NSPanel {
     }
 
     func positionAbovePill() {
-        guard let pill else { return }
+        guard pill != nil else { return }
         setFrame(positionedFrame(), display: false)
     }
 

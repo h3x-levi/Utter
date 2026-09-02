@@ -56,9 +56,8 @@ final class CallDetector {
 
     private var presence = CallPresence()
 
-    /// Which app the call in progress is coming out of, when that could be told. Nil both when no
-    /// call is in progress and when one is but the app behind it is not identifiable — see
-    /// `CallSource`, where the browser-tab case makes the second of those ordinary.
+    /// Which supported calling app the current call is coming from. Nil when there is no qualified
+    /// call or the detector is not watching.
     ///
     /// Captured once, at the transition, and then left alone for the life of the call. A mute closes
     /// the meeting client's input stream on some clients, which would make the same call stop looking
@@ -249,16 +248,8 @@ final class CallDetector {
         let own = ProcessInfo.processInfo.processIdentifier
         var input = false
         var output = false
-        // Processes with *both* directions open, and those with output alone. The first list is the
-        // real candidate: a single process holding a microphone and playing audio at the same time is
-        // the strongest per-process evidence of a call there is, and it needs no list of app names to
-        // work — an app nobody has heard of lands in it exactly like Zoom does.
-        //
-        // The second exists because Chrome splits the two directions across *different* helper
-        // processes, so a browser meeting can leave the first list empty while both booleans are
-        // true. Falling back to a recognised bundle ID among the output processes is the only place
-        // the name table is allowed to influence anything, and even there it picks between
-        // candidates rather than creating one.
+        // Keep every active process because Electron calling apps may split microphone and output
+        // across helpers. `CallAudioEvidence` joins only helpers from the same supported app family.
         var activities: [CallProcessActivity] = []
         // Whether anything at all answered. A machine where the only process doing audio IO is
         // Utter itself is entirely ordinary — nothing playing, a dictation running — so "no other
@@ -370,9 +361,8 @@ final class CallDetector {
     /// `CFRelease` on top would be a release over a retain, and the crash it caused would land
     /// somewhere else entirely.
     ///
-    /// An unreadable bundle ID is harmless by construction: the caller treats nil as "not
-    /// identifiable", which is already the ordinary case for a meeting in a browser tab, and nothing
-    /// about detection depends on it.
+    /// An unreadable bundle ID cannot safely qualify for an automatic offer. The explicit meeting
+    /// recorder remains available in Notes.
     private nonisolated static func bundleID(of process: AudioObjectID) -> String? {
         var address = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyBundleID,
                                                  mScope: kAudioObjectPropertyScopeGlobal,
@@ -408,28 +398,20 @@ struct CallProcessActivity: Equatable {
 }
 
 enum CallAudioEvidence {
-    /// A call requires both directions to belong to one plausible application.
+    /// A call requires both directions to belong to one supported calling application.
     ///
-    /// One process holding both directions works for native clients. Chromium-style apps split
-    /// input and output across helpers, so recognized bundle families may join two processes.
-    /// Unrelated microphone and playback apps are never combined.
+    /// Native clients may hold both directions in one process; Electron clients may split them
+    /// across helpers. Browsers and unknown apps never qualify because their audio cannot distinguish
+    /// a meeting from ordinary playback.
     static func candidate(from activities: [CallProcessActivity]) -> CallSource? {
-        let both = activities.filter { $0.runsInput && $0.runsOutput }
-        if let recognized = both.first(where: { $0.source.isRecognised }) {
-            return recognized.source
-        }
-        if let any = both.first {
-            return any.source
-        }
-
         let inputs = activities.filter(\.runsInput)
         let outputs = activities.filter(\.runsOutput)
         for input in inputs {
-            guard let family = CallSource.knownName(bundleID: input.source.bundleID) else {
+            guard let family = CallSource.automaticCallFamily(bundleID: input.source.bundleID) else {
                 continue
             }
             if let output = outputs.first(where: {
-                CallSource.knownName(bundleID: $0.source.bundleID) == family
+                CallSource.automaticCallFamily(bundleID: $0.source.bundleID) == family
             }) {
                 return output.source
             }

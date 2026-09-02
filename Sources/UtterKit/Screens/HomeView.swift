@@ -190,17 +190,15 @@ struct HomeView: View {
     }
 
     private func activityRow(_ label: String, value: String) -> some View {
-        Color.clear
-            .overlay(alignment: .leading) {
-                Text(label)
-            }
-            .overlay(alignment: .trailing) {
-                Text(value)
-                .foregroundStyle(.secondary)
+        HStack {
+            Text(label)
+            Spacer()
+            Text(value)
+                .foregroundStyle(Ink.secondary)
                 .monospacedDigit()
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 27)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 27)
     }
 
     // MARK: - Export

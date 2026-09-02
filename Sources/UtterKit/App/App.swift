@@ -2,6 +2,7 @@ import SwiftUI
 import Cocoa
 import AVFoundation
 import Combine
+import UserNotifications
 
 /// The SwiftUI app.
 ///
@@ -23,15 +24,22 @@ public struct UtterApp: App {
         // An empty Settings scene.
         //
         // The app is a menu-bar app driven entirely by AppDelegate, but SwiftUI
-        // requires at least one Scene. This one exists only to satisfy that and to
-        // keep the standard Cmd-, menu item alive; the real Settings window is an
-        // NSWindow created by `showSettingsWindow()`, because it needs the same
-        // glass chrome and sizing control as the main window.
+        // requires at least one Scene. This one exists only to satisfy that; the
+        // standard Settings command is replaced below so every route opens the real
+        // AppKit window rather than presenting this empty scene.
         Settings { EmptyView() }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings\u{2026}") {
+                        appDelegate.showSettingsWindow()
+                    }
+                    .keyboardShortcut(",", modifiers: .command)
+                }
+            }
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// The running delegate, for the few views that need app-owned services
     /// (meeting capture needs the single shared recorder and transcriber).
     static private(set) var current: AppDelegate?
@@ -63,6 +71,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.current = self
         NSApp.setActivationPolicy(.accessory)
+        UNUserNotificationCenter.current().delegate = self
+        CompanionNotificationScheduler.shared.registerCategory()
+        CompanionMemoryStore.shared.restoreScheduledNotifications()
+        Task { await CompanionNotificationScheduler.shared.refreshState() }
 
         // Read the version first: the crash reporter caches it as raw bytes so its
         // signal handler can write it without allocating, and a handler installed
@@ -101,7 +113,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // the store is only needed when a window opens, and the pill has to come up first.
         // `--open-window` (below) still pays it inline, since that opens a window in this same
         // call — a dev flag, and no worse than before.
-        DispatchQueue.main.async { _ = TranscriptionHistory.shared }
+        DispatchQueue.main.async {
+            let history = TranscriptionHistory.shared
+            _ = UserData.shared.syncCompanionLifetimeWords(history.totalWords)
+        }
 
         transcriptionService = TranscriptionService()
         audioRecorder = AudioRecorder()
@@ -139,7 +154,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onRecordStart: { [weak self] in self?.startRecording() },
             onRecordStop: { [weak self] in self?.stopRecording() },
             onHandsFreeToggle: { [weak self] in self?.toggleHandsFree() },
-            onNoteCaptureToggle: { [weak self] in self?.toggleNoteCapture() }
+            onNoteCaptureToggle: { [weak self] in self?.toggleNoteCapture() },
+            onMemoryCaptureToggle: { [weak self] in self?.toggleMemoryCapture() }
         )
         keyMonitor.start()
         // The menu was built before the monitor existed, so its hands-free hint was
@@ -360,6 +376,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         noteHint.isEnabled = false
         menu.addItem(noteHint)
+
+        let memoryHint = NSMenuItem(
+            title: "\(KeyChord.memoryCapture.symbols) to remember something",
+            action: nil, keyEquivalent: ""
+        )
+        memoryHint.isEnabled = false
+        menu.addItem(memoryHint)
 
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Open Utter", action: #selector(showMainWindowAction), keyEquivalent: "o"))
@@ -598,6 +621,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Activation alone, no policy change: see `applyDockVisibility`.
         NSApp.activate(ignoringOtherApps: true)
         mainWindow = window
+    }
+
+    @MainActor
+    func showCompanion(section: CompanionSection) {
+        SidebarSelection.shared.item = .companion
+        CompanionSectionSelection.shared.section = section
+        showMainWindow()
     }
 
     @objc private func showPill() {
@@ -1213,12 +1243,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// rule: a new exit path must not be able to leave the flag stuck on, or every
     /// later dictation would silently land in a note.
     private var captureToNote = false
+    /// When true, the finished transcript becomes a private companion memory.
+    private var captureToMemory = false
+
+    private var recordingPillState: PillState {
+        if captureToNote { return .capturingNote }
+        if captureToMemory { return .capturingMemory }
+        return isHandsFree ? .handsFree : .recording
+    }
 
     /// Reset per-turn state. Call from every path that ends a dictation turn,
     /// success or failure.
     private func finishTurn() {
         isProcessing = false
         captureToNote = false
+        captureToMemory = false
     }
 
     private func startRecording() {
@@ -1260,7 +1299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Nothing below needs the state to be set late. `captureToNote` is already decided, and the
         // failure path a few lines down re-sets the state anyway — `setState` coalesces repeats
         // inside one runloop turn, which is exactly what `requestedState` exists for.
-        pillWindow.setState(captureToNote ? .capturingNote : .recording)
+        pillWindow.setState(recordingPillState)
 
         // Pause other audio so music doesn't bleed into the microphone.
         MediaControl.pauseIfPlaying()
@@ -1375,6 +1414,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // refusing, so the user can decide mid-thought that this belongs in a note.
         if isHandsFree {
             captureToNote = true
+            captureToMemory = false
             pillWindow.setState(.capturingNote)
             // The card is about to appear over a recording that started without a preview.
             startLivePreviewIfNeeded()
@@ -1383,6 +1423,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         captureToNote = true
+        captureToMemory = false
 
         // Same reasoning as `toggleHandsFree`: ask the recorder whether a tap is
         // open rather than reading it off the pill's state.
@@ -1412,6 +1453,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // landed in one runloop turn, so the pill ran two morph transactions for one state
         // change and the second one started inside the first's window resize. That is what
         // made opening the note card look jittery while closing it looked correct.
+        installHandsFreeVAD()
+    }
+
+    /// Toggle voice capture into the companion's private memory store.
+    ///
+    /// This uses the same recorder and transcription service as dictation, but it
+    /// never injects text into another app and never enters transcription history.
+    func toggleMemoryCapture() {
+        if isHandsFree, captureToMemory {
+            print("🧠 Memory capture: manual stop")
+            isHandsFree = false
+            keyMonitor.suppressReleaseStop = false
+            stopRecording()
+            return
+        }
+
+        guard !isProcessing else {
+            print("⚠️ Memory capture ignored: still processing previous transcription")
+            return
+        }
+        guard !meetingIsRecording else {
+            showPillError("Recording a meeting — stop it first")
+            return
+        }
+
+        captureToNote = false
+        captureToMemory = true
+
+        if isHandsFree {
+            pillWindow.setState(.capturingMemory)
+            startLivePreviewIfNeeded()
+            return
+        }
+
+        if audioRecorder.isRecording {
+            isHandsFree = true
+            keyMonitor.suppressReleaseStop = true
+            pillWindow.setState(.capturingMemory)
+            startLivePreviewIfNeeded()
+            installHandsFreeVAD()
+            return
+        }
+
+        isHandsFree = true
+        keyMonitor.suppressReleaseStop = true
+        startRecording()
+        guard audioRecorder.isRecording else {
+            isHandsFree = false
+            keyMonitor.suppressReleaseStop = false
+            captureToMemory = false
+            return
+        }
         installHandsFreeVAD()
     }
 
@@ -1468,7 +1561,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var processed = DictionaryCorrector.correct(text, using: UserData.shared.dictionaryWords)
         processed = UserData.shared.applySnippets(to: processed)
 
-        if captureToNote {
+        if captureToMemory {
+            saveSpokenMemory(processed, elapsed: elapsed)
+            return
+        } else if captureToNote {
             deliverToNote(processed)
         } else {
             // Context formatting is destination formatting, so it only applies on the path
@@ -1484,6 +1580,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             TextInjector.typeText(processed)
         }
         UserData.shared.lastTranscription = processed
+        if let celebration = UserData.shared.recordCompanionDictation(
+            words: processed.split(whereSeparator: \.isWhitespace).count
+        ) {
+            companionWindow?.behaviour.celebrateGoal(celebration)
+        }
         // Recording the searchable log is opt-out (`keepHistory`, default on). Off
         // → the transcript is typed but never written to `history.json`. The
         // language detection only feeds the history entry, so it is skipped too.
@@ -1498,6 +1599,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         SoundPlayer.playDone()
         finishTurn()
         pillWindow.setState(.idle)
+    }
+
+    @MainActor
+    private func saveSpokenMemory(_ text: String, elapsed: TimeInterval) {
+        pillWindow.setState(.processing(.rewriting))
+        Task {
+            do {
+                let proposal = try await CompanionMemoryParser.parse(text)
+                try await MainActor.run {
+                    _ = try CompanionMemoryStore.shared.add(
+                        proposal: proposal,
+                        source: .spoken
+                    )
+                    _ = UserData.shared.recordCompanionDictation(
+                        words: proposal.text.split(whereSeparator: \.isWhitespace).count
+                    )
+                    print("🧠 Saved spoken memory in \(String(format: "%.1f", elapsed))s")
+                    SoundPlayer.playDone()
+                    finishTurn()
+                    showPillNotice(
+                        proposal.remindAt == nil ? "Remembered" : "Reminder saved"
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    SoundPlayer.playError()
+                    finishTurn()
+                    showPillError(error.localizedDescription)
+                }
+            }
+        }
     }
 
     /// File a finished transcript into the notes store.
@@ -1558,7 +1690,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("🔒 Hands-free: upgrading active push-to-talk recording")
             isHandsFree = true
             keyMonitor.suppressReleaseStop = true
-            pillWindow.setState(captureToNote ? .capturingNote : .handsFree)
+            pillWindow.setState(recordingPillState)
             installHandsFreeVAD()
             return
         }
@@ -1573,7 +1705,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("📎 Pre-captured selection: \(capturedSelection.count) chars")
         }
         SoundPlayer.playStart()
-        pillWindow.setState(captureToNote ? .capturingNote : .handsFree)
+        pillWindow.setState(recordingPillState)
         startPillTelemetry()
         // Install the VAD callback at start time so we don't have to attach it later.
         let started = audioRecorder.startRecording { [weak self] in
@@ -1708,7 +1840,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             // it would delete a sentence from the only copy the user
                             // has. Treating them as ordinary text puts them in the
                             // note, which is where the user was speaking.
-                            if let action = UserData.shared.checkVoiceCommand(text),
+                            if self.captureToMemory {
+                                self.deliverTranscript(text, elapsed: elapsed)
+                            } else if let action = UserData.shared.checkVoiceCommand(text),
                                !self.captureToNote || action.isNoteRouting {
                                 // Log the matched action, not the spoken text it came from.
                                 print("🗣️ Voice command: \(action)")
@@ -1932,7 +2066,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Ordinary dictation keeps honouring the preference: there the preview is a
         // nicety over text that is about to be typed anyway, so paying for inference
         // twice is the user's call. Here it is the feature.
-        guard UserData.shared.livePreviewEnabled || captureToNote else { return }
+        guard UserData.shared.livePreviewEnabled || captureToNote || captureToMemory else { return }
         guard let local = transcriptionService.localProvider else { return }
 
         pillWindow.stateModel.previewText = ""
@@ -2153,6 +2287,59 @@ extension AppDelegate: NSToolbarDelegate {
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         toolbarDefaultItemIdentifiers(toolbar)
+    }
+}
+
+extension AppDelegate {
+    private static func memoryID(from response: UNNotificationResponse) -> UUID? {
+        let raw = response.notification.request.content.userInfo[
+            CompanionNotificationPayload.memoryIDKey
+        ] as? String
+        return raw.flatMap(UUID.init(uuidString:))
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if let raw = notification.request.content.userInfo[
+            CompanionNotificationPayload.memoryIDKey
+        ] as? String,
+           let id = UUID(uuidString: raw) {
+            Task { @MainActor in
+                _ = CompanionMemoryStore.shared.markDelivered(id: id)
+                SoundPlayer.playTrill()
+            }
+        }
+        // The system banner is the native Apple notification surface and remains
+        // actionable even while Utter's main window is open.
+        completionHandler([.banner])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        guard let id = Self.memoryID(from: response) else {
+            completionHandler()
+            return
+        }
+
+        Task { @MainActor in
+            switch response.actionIdentifier {
+            case CompanionNotificationScheduler.doneAction:
+                CompanionMemoryStore.shared.complete(id: id)
+            case CompanionNotificationScheduler.snoozeAction:
+                CompanionMemoryStore.shared.snooze(id: id)
+            default:
+                _ = CompanionMemoryStore.shared.markDelivered(id: id)
+                showCompanion(section: .remember)
+            }
+            completionHandler()
+        }
     }
 }
 

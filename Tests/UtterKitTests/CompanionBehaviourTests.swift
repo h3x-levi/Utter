@@ -445,6 +445,54 @@ struct CompanionBehaviourTests {
         #expect(engine.mood == .alert)
         #expect(engine.tickingSlowly == false)
     }
+
+    // MARK: Interactive objects and quiet mode
+
+    @Test("Object play drives both the prop and an unlocked cat animation")
+    func objectPlayIsOneSynchronizedEvent() {
+        let engine = makeEngine()
+        engine.unlockSource = { $0 == .rolling }
+        engine.play(with: .yarn)
+        engine.step(0.2)
+        #expect(engine.pose.objectPlay?.object == .yarn)
+        #expect((engine.pose.objectPlay?.progress ?? 0) > 0)
+        #expect(engine.mood == .hunting)
+        engine.stop()
+    }
+
+    @Test("The cat plays with a selected object after settling")
+    func objectPlayStartsAutomatically() {
+        let engine = makeEngine()
+        engine.objectSource = { .ball }
+        engine.step(12.2)
+        #expect(engine.pose.objectPlay?.object == .ball)
+        #expect(engine.mood == .delighted)
+        engine.stop()
+    }
+
+    @Test("Quiet mode sleeps through local activity and suppresses object play")
+    func quietModeStaysQuiet() {
+        let engine = makeEngine()
+        engine.objectSource = { .ball }
+        engine.setQuietMode(true)
+        engine.wakeIfSleeping()
+        engine.step(20)
+        #expect(engine.mood == .sleepy)
+        #expect(engine.pose.objectPlay == nil)
+        #expect(engine.tickingSlowly)
+        engine.setQuietMode(false)
+        #expect(engine.mood == .resting)
+        engine.stop()
+    }
+
+    @Test("A reminder response is consumed exactly once")
+    func reminderResponseIsConsumed() {
+        let engine = makeEngine()
+        engine.announce(.water, name: "")
+        #expect(engine.respondToCurrentReminder(completed: true) == .water)
+        #expect(engine.respondToCurrentReminder(completed: true) == nil)
+        engine.stop()
+    }
 }
 
 /// A deterministic `RandomNumberGenerator`, so tests of the companion's ambient behaviour

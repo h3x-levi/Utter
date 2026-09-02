@@ -37,6 +37,15 @@ struct ZZProductShotPreview {
             MotionPreference.shared.reduceMotion = previousReduceMotion
         }
 
+        if ProcessInfo.processInfo.environment["UTTER_RENDER_COMPANIONS_ONLY"] != "1" {
+            try captureWindowProductShots()
+            try captureSettingsWindows()
+        }
+
+        try renderCompanionProductShots()
+    }
+
+    private func captureWindowProductShots() throws {
         let pill = PillWindow(onLongPress: {}, onStartHandsFree: {})
         if let screen = NSScreen.main {
             pill.setFrameOrigin(NSPoint(
@@ -45,11 +54,11 @@ struct ZZProductShotPreview {
             ))
         }
         pill.orderFrontRegardless()
-
         let states: [(String, PillState, Int, Float, String, Bool)] = [
             ("pill-idle", .idle, 0, 0, "", false),
             ("pill-recording", .recording, 12, 0.72, "", false),
             ("pill-hands-free", .handsFree, 38, 0.48, "", true),
+            ("pill-memory", .capturingMemory, 8, 0.55, "buy oat milk", false),
             ("pill-processing", .processing(.transcribing), 0, 0, "", false),
             ("pill-error", .error("No speech detected"), 0, 0, "", false),
             (
@@ -93,35 +102,35 @@ struct ZZProductShotPreview {
         try capture(window: offer, name: "transcribe-offer")
         offer.orderOut(nil)
         pill.orderOut(nil)
+    }
 
-        try captureSettingsWindows()
-
-        try render(
-            CodePixelCatView(
-                style: .gray,
-                mood: .resting,
-                pose: .neutral,
-                size: 512,
-                elapsed: 0
-            ),
-            name: "pixel-cat-gray"
-        )
-        try render(
-            CodePixelCatView(
-                style: .orange,
-                mood: .delighted,
-                pose: .neutral,
-                size: 512,
-                elapsed: 0
-            ),
-            name: "pixel-cat-orange"
-        )
+    private func renderCompanionProductShots() throws {
+        for style in CodePixelCatStyle.allCases {
+            try render(
+                CodePixelCatView(
+                    style: style,
+                    mood: style == .orange ? .delighted : .resting,
+                    pose: .neutral,
+                    size: 512,
+                    elapsed: 0
+                ),
+                name: "pixel-companion-\(style.rawValue)"
+            )
+        }
+        try render(CodeCompanionGallery(), name: "pixel-companion-gallery")
         try render(CatPoseStrip(), name: "pixel-cat-poses")
+        try render(CatActionAtlas(), name: "pixel-cat-actions")
+        MotionPreference.shared.reduceMotion = false
+        try render(ObjectPlayStrip(), name: "companion-object-play")
     }
 
     private func captureSettingsWindows() throws {
         let previousGroup = SettingsSelection.shared.group
-        defer { SettingsSelection.shared.group = previousGroup }
+        let previousCompanionSection = CompanionSectionSelection.shared.section
+        defer {
+            SettingsSelection.shared.group = previousGroup
+            CompanionSectionSelection.shared.section = previousCompanionSection
+        }
 
         let sidebar = NSHostingController(rootView: SettingsSidebar())
         sidebar.sizingOptions = []
@@ -167,6 +176,15 @@ struct ZZProductShotPreview {
             SettingsSelection.shared.group = group
             settleLayout()
             try capture(window: window, name: name)
+        }
+        SettingsSelection.shared.group = .companion
+        for section in CompanionSection.allCases {
+            CompanionSectionSelection.shared.section = section
+            settleLayout()
+            try capture(
+                window: window,
+                name: "companion-\(section.rawValue.lowercased())"
+            )
         }
         window.orderOut(nil)
     }
@@ -238,6 +256,93 @@ struct ZZProductShotPreview {
     }
 }
 
+private struct CodeCompanionGallery: View {
+    var body: some View {
+        HStack(spacing: 28) {
+            ForEach(CodePixelCatStyle.allCases, id: \.rawValue) { style in
+                VStack(spacing: 12) {
+                    CodePixelCatView(
+                        style: style,
+                        mood: .resting,
+                        pose: .neutral,
+                        size: 192,
+                        elapsed: 0.25
+                    )
+                    Text(style.name)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .padding(36)
+        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+}
+
+private struct ObjectPlayStrip: View {
+    private let objects: [CompanionObject] = [.ball, .box, .yarn, .cushion]
+
+    var body: some View {
+        HStack(spacing: 24) {
+            ForEach(objects) { object in
+                VStack(spacing: 12) {
+                    ObjectPlayPreview(object: object)
+                    Text(object.label)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(18)
+                .background(
+                    Color.white.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+            }
+        }
+        .padding(32)
+        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
+    }
+}
+
+private struct ObjectPlayPreview: View {
+    let object: CompanionObject
+    private let size: CGFloat = 164
+
+    var body: some View {
+        let play = CompanionObjectPlay(object: object, progress: 0.58)
+        ZStack {
+            if play.objectSitsBehindCharacter {
+                prop(play)
+            }
+            CodePixelCatView(
+                style: .orange,
+                mood: object == .yarn || object == .box ? .hunting : .delighted,
+                pose: CompanionPose(objectPlay: play),
+                size: size,
+                elapsed: 0.58
+            )
+            .scaleEffect(play.characterScale)
+            .offset(
+                x: play.characterOffset.width * size,
+                y: play.characterOffset.height * size
+            )
+            if !play.objectSitsBehindCharacter {
+                prop(play)
+            }
+        }
+        .frame(width: 230, height: 230)
+    }
+
+    private func prop(_ play: CompanionObjectPlay) -> some View {
+        CompanionObjectView(
+            object: object,
+            size: size * 0.42,
+            play: play,
+            onInteract: {}
+        )
+        .offset(x: size * 0.48, y: size * 0.38)
+    }
+}
+
 private enum ProductShotError: Error {
     case captureFailed(String)
     case renderFailed(String)
@@ -285,5 +390,45 @@ private struct CatPoseStrip: View {
                 endPoint: .bottomTrailing
             )
         )
+    }
+}
+
+private struct CatActionAtlas: View {
+    private let actions: [(String, CompanionMood)] = [
+        ("Rest", .resting), ("Alert", .alert), ("Think", .thinking),
+        ("Delight", .delighted), ("Startled", .startled), ("Sleep", .sleepy),
+        ("Knead", .kneading), ("Hot", .overheating), ("Purr", .purring),
+        ("Hunt", .hunting), ("Held", .held), ("Groom", .grooming),
+        ("Roll", .rolling), ("Loaf", .loaf),
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(210)), count: 4), spacing: 18) {
+            ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
+                VStack(spacing: 8) {
+                    HStack(spacing: 0) {
+                        ForEach([0.0, 0.14, 1.55], id: \.self) { elapsed in
+                            CodePixelCatView(
+                                style: .orange,
+                                mood: action.1,
+                                pose: .neutral,
+                                size: 62,
+                                elapsed: elapsed
+                            )
+                        }
+                    }
+                    Text(action.0)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(10)
+                .background(
+                    Color.white.opacity(index.isMultiple(of: 2) ? 0.08 : 0.055),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
+            }
+        }
+        .padding(28)
+        .background(Color(red: 0.07, green: 0.08, blue: 0.10))
     }
 }

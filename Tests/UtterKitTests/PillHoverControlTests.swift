@@ -20,7 +20,7 @@ struct PillHoverControlTests {
     /// Every state the pill can be in, so a new one cannot be added without a decision
     /// about the pointer route being made for it here.
     private static let allStates: [PillState] = [
-        .preparing, .idle, .recording, .handsFree, .capturingNote,
+        .preparing, .idle, .recording, .handsFree, .capturingNote, .capturingMemory,
         .processing(.transcribing), .processing(.rewriting), .processing(.typing),
         .notice("New note — keep talking"), .error("No speech detected"),
     ]

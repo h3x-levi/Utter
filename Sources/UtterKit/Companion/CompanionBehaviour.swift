@@ -94,6 +94,7 @@ final class CompanionBehaviour: ObservableObject {
 
     /// A brief speech bubble, or empty. Only ever set from real events.
     @Published private(set) var quip: String = ""
+    @Published private(set) var currentReminder: CompanionReminder?
 
     // MARK: Configuration
 
@@ -271,6 +272,13 @@ final class CompanionBehaviour: ObservableObject {
     /// default is inert (`0`), so a headless engine — every test that does not wire a window
     /// — simply never walks anywhere, exactly as before.
     var walkStep: (CGFloat) -> CGFloat = { _ in 0 }
+    var objectSource: () -> CompanionObject = { .none }
+    var unlockSource: (CompanionUnlock) -> Bool = { _ in false }
+    private var nextObjectPlayAt: TimeInterval = 12
+    private var playingObject: CompanionObject?
+    private var objectPlayStartedAt: TimeInterval = 0
+    private var objectPlayEndsAt: TimeInterval = 0
+    private var quietMode = false
 
     /// Hand the window the character's current ambient offset and zero it, at the start of a
     /// drag.
@@ -396,6 +404,8 @@ final class CompanionBehaviour: ObservableObject {
     func stop() {
         ticker?.invalidate()
         ticker = nil
+        playingObject = nil
+        frame.pose.objectPlay = nil
         // Clear any speech bubble on the way out.
         //
         // A quip expires in `tick()`, and stopping the ticker freezes the clock it is
@@ -411,6 +421,13 @@ final class CompanionBehaviour: ObservableObject {
     /// what the app is doing.
     func apply(pillState: PillState) {
         switch pillState {
+        case .idle, .notice:
+            break
+        case .preparing, .recording, .handsFree, .capturingNote, .capturingMemory,
+             .processing, .error:
+            playingObject = nil
+        }
+        switch pillState {
         case .preparing:
             set(mood: .thinking)
         case .idle:
@@ -422,7 +439,7 @@ final class CompanionBehaviour: ObservableObject {
             } else if mood != .sleepy {
                 set(mood: .resting)
             }
-        case .recording, .handsFree, .capturingNote:
+        case .recording, .handsFree, .capturingNote, .capturingMemory:
             set(mood: .alert)
         case .notice:
             // A transient confirmation is not a mood: the character keeps whatever
@@ -462,6 +479,7 @@ final class CompanionBehaviour: ObservableObject {
     /// sitting still, which is exactly when it is asleep with its ticker stopped.
     func announce(_ reminder: CompanionReminder, name: String) {
         wake()
+        currentReminder = reminder
         // A stretch reminder is the character stretching *with* you — the point is to model
         // the behaviour, not to nag. The rest just get its attention.
         switch reminder {
@@ -516,7 +534,7 @@ final class CompanionBehaviour: ObservableObject {
     /// low rate while asleep and calls this; everything else the engine can see for
     /// itself.
     func wakeIfSleeping() {
-        guard mood == .sleepy else { return }
+        guard mood == .sleepy, !quietMode else { return }
         wake()
     }
 
@@ -530,6 +548,88 @@ final class CompanionBehaviour: ObservableObject {
         // And it answers. Rate-limited inside `SoundPlayer`, so tapping repeatedly does not
         // stack overlapping meows.
         SoundPlayer.playMeow()
+    }
+
+    /// Both a click and autonomous idle play route through here so the prop and cat stay in sync.
+    func play(with object: CompanionObject) {
+        guard petBehavioursEnabled, object != .none, !quietMode else { return }
+        wake()
+        playingObject = object
+        objectPlayStartedAt = clock
+        objectPlayEndsAt = clock + object.playDuration
+        nextObjectPlayAt = clock + .random(in: 45...75, using: &rng)
+        act = .idle
+        frame.offsetX = 0
+        frame.offsetY = 0
+        switch object {
+        case .none:
+            break
+        case .ball:
+            set(mood: .delighted, for: object.playDuration)
+        case .box:
+            set(mood: .hunting, for: object.playDuration)
+        case .yarn:
+            set(mood: .hunting, for: object.playDuration)
+        case .cushion:
+            set(mood: unlockSource(.loaf) ? .loaf : .purring, for: object.playDuration)
+        }
+    }
+
+    func feed() {
+        guard !quietMode else { return }
+        wake()
+        set(mood: .delighted, for: 1.8)
+        SoundPlayer.playMeow()
+    }
+
+    func brush() {
+        guard !quietMode else { return }
+        wake()
+        set(mood: unlockSource(.grooming) ? .grooming : .purring, for: 2.6)
+        SoundPlayer.playPurr()
+    }
+
+    func doubleClick() {
+        guard !quietMode else { return }
+        wake()
+        set(mood: unlockSource(.rolling) ? .rolling : .delighted, for: 2.2)
+    }
+
+    func celebrateGoal(_ line: String) {
+        wake()
+        set(mood: .delighted, for: 2.2)
+        say(line, for: 4)
+        SoundPlayer.playTrill()
+    }
+
+    func respondToCurrentReminder(completed: Bool) -> CompanionReminder? {
+        guard let reminder = currentReminder else { return nil }
+        currentReminder = nil
+        quip = ""
+        quipExpiresAt = nil
+        set(mood: completed ? .delighted : .resting, for: completed ? 1.5 : nil)
+        return reminder
+    }
+
+    func setQuietMode(_ enabled: Bool) {
+        guard quietMode != enabled || (enabled && mood != .sleepy) else { return }
+        quietMode = enabled
+        if enabled {
+            playingObject = nil
+            currentReminder = nil
+            quip = ""
+            quipExpiresAt = nil
+            mood = .sleepy
+            moodExpiresAt = nil
+            moodStartedAt = clock
+            frame.offsetX = 0
+            frame.offsetY = 0
+            frame.pose = sleepingPose()
+            frame.moodElapsed = 0
+            if !tickingSlowly { retick(interval: sleepTickInterval) }
+        } else if mood == .sleepy {
+            wake()
+        }
     }
 
     private func set(mood newMood: CompanionMood, for duration: TimeInterval? = nil) {
@@ -632,6 +732,7 @@ final class CompanionBehaviour: ObservableObject {
         if let expiry = quipExpiresAt, clock >= expiry {
             quipExpiresAt = nil
             quip = ""
+            currentReminder = nil
         }
 
         if let expiry = moodExpiresAt, clock >= expiry {
@@ -643,6 +744,10 @@ final class CompanionBehaviour: ObservableObject {
             moodStartedAt = clock
             frame.moodElapsed = 0
             restingSince = clock
+        }
+
+        if playingObject != nil, clock >= objectPlayEndsAt {
+            playingObject = nil
         }
 
         // Fall asleep after a long rest, and drop to a fraction of the CPU for a character
@@ -674,6 +779,22 @@ final class CompanionBehaviour: ObservableObject {
             frame.pose = sleepingPose()
             frame.moodElapsed = clock - moodStartedAt
             return
+        }
+
+        if quietMode {
+            frame.pose = sleepingPose()
+            frame.moodElapsed = clock - moodStartedAt
+            return
+        }
+
+        if petBehavioursEnabled, mood == .resting, !isBeingDragged, !isPeeking,
+           clock >= nextObjectPlayAt {
+            let object = objectSource()
+            if object == .none {
+                nextObjectPlayAt = clock + 15
+            } else {
+                play(with: object)
+            }
         }
 
         samplePetSignals()
@@ -1103,6 +1224,12 @@ final class CompanionBehaviour: ObservableObject {
             // could clip over the menu bar.
             pose.squash = 1.1
             pose.lean = 0
+        case .grooming:
+            pose.lean = -2 * CGFloat(sin(clock * 4))
+        case .rolling:
+            pose.squash = 1 + 0.04 * abs(CGFloat(sin(clock * 8)))
+        case .loaf:
+            pose.squash = 1 + 0.012 * CGFloat(sin(clock * 1.4))
         }
 
         // Where the eyes look. Layered over every mood rather than set inside them,
@@ -1110,6 +1237,13 @@ final class CompanionBehaviour: ObservableObject {
         // both watch the pointer.
         pose.eyeAim = eyeAimNow()
         pose.heat = heat
+        if let playingObject {
+            let duration = max(playingObject.playDuration, tickInterval)
+            pose.objectPlay = CompanionObjectPlay(
+                object: playingObject,
+                progress: CGFloat((clock - objectPlayStartedAt) / duration)
+            )
+        }
 
         // Ambient acts layer on top of the mood, never replace it.
         applyActPose(to: &pose)

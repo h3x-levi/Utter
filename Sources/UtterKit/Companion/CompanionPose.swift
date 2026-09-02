@@ -50,6 +50,12 @@ enum CompanionMood: Equatable {
     case hunting
     /// The character is being dragged, and hangs from the pointer.
     case held
+    /// A calm unlocked self-care animation.
+    case grooming
+    /// A playful unlocked double-click animation.
+    case rolling
+    /// A quiet resting pose used for cushions and quiet mode.
+    case loaf
 
     /// Whether ambient wandering is allowed.
     ///
@@ -66,8 +72,11 @@ enum CompanionMood: Equatable {
     /// noticing the mouse.
     var isPetMood: Bool {
         switch self {
-        case .kneading, .overheating, .purring, .hunting, .held: return true
-        case .resting, .alert, .thinking, .delighted, .startled, .sleepy: return false
+        case .kneading, .overheating, .purring, .hunting, .held,
+             .grooming, .rolling, .loaf:
+            return true
+        case .resting, .alert, .thinking, .delighted, .startled, .sleepy:
+            return false
         }
     }
 }
@@ -148,6 +157,11 @@ struct CompanionPose: Equatable {
     /// character what it needs to keep its planted paws still relative to the floor, which is the
     /// whole difference between walking and skating.
     var travelSpeed: CGFloat = 0
+
+    /// The selected prop interaction currently playing, sampled from the same clock as the
+    /// character pose. Keeping it in the pose makes the prop and body advance on one frame
+    /// boundary instead of two independent SwiftUI animations that can drift apart.
+    var objectPlay: CompanionObjectPlay?
 
     /// The resting pose. Everything else is expressed as a deviation from this.
     static let neutral = CompanionPose()

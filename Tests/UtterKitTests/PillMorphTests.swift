@@ -59,7 +59,7 @@ struct PillMorphTests {
     /// Every state the pill can be in. One list, because three tests need it and a fourth
     /// that forgets to add a new state is how a state gets shipped un-sized.
     private static let everyState: [PillState] = [
-        .preparing, .idle, .recording, .handsFree, .capturingNote,
+        .preparing, .idle, .recording, .handsFree, .capturingNote, .capturingMemory,
         .processing(.transcribing), .processing(.rewriting), .processing(.typing),
         .notice("New note — keep talking"), .error("No speech detected"),
     ]

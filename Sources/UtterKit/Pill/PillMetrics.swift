@@ -122,7 +122,8 @@ enum PillMetrics {
         switch state {
         case .capturingNote: return noteContentWidth + horizontalPadding * 2
         case .idle, .processing: return minimumCapsuleWidth
-        case .preparing, .recording, .handsFree, .notice, .error: return nil
+        case .preparing, .recording, .handsFree, .capturingMemory, .notice, .error:
+            return nil
         }
     }
 
@@ -152,6 +153,7 @@ enum PillMetrics {
         switch state {
         case .recording: return row
         case .handsFree: return row + 10 + Space.x2
+        case .capturingMemory: return row + 11 + Space.x2
         default: return minimumCapsuleWidth
         }
     }

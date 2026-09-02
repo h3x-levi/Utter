@@ -305,6 +305,11 @@ struct FlowSidebar: View {
         List(selection: route) {
             ForEach(SidebarItem.primary) { item in
                 Label(item.rawValue, systemImage: item.icon)
+                    // The row pitch lives here, on the row's own content, because the modifier that
+                    // reads like the place for it does not work — see `Layout.mainSidebarRowHeight`
+                    // for the measurement. `minHeight`, not a fixed height, so a longer label or a
+                    // larger Dynamic Type setting still grows the row instead of clipping inside it.
+                    .frame(minHeight: Layout.mainSidebarRowHeight)
                     .tag(item)
             }
         }
@@ -313,9 +318,12 @@ struct FlowSidebar: View {
         // of it by default, which is the glass-on-material the HIG rules out and, on the pre-26
         // path, a second copy of a material this file already placed.
         .scrollContentBackground(.hidden)
-        // Keeps the measured 36pt row pitch through the style change. `minHeight`, not a fixed
-        // frame, so a Dynamic Type size that needs more than 36pt gets it instead of clipping.
-        .environment(\.defaultMinListRowHeight, Layout.sidebarRowHeight)
+        // `.environment(\.defaultMinListRowHeight, Space.x12)` was here, under a comment claiming it
+        // kept a 40pt pitch while passing 48. It kept neither: measured on the running app, the rows
+        // came out at 31.7pt — below the value it was setting, so the environment key was not being
+        // read at all under `.listStyle(.sidebar)`. Deleted rather than left next to the frame that
+        // does the work, because a dead knob is how the next person "adjusts" the spacing and sees
+        // nothing move. The full measurement is on `Layout.mainSidebarRowHeight`.
     }
 
     /// Selection as the list wants it, with `select(_:)`'s animation kept — see `navRows`.

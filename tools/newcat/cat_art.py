@@ -404,7 +404,7 @@ WALK_FRAMES = 8
 
 # Torso, profile. Top (back) and bottom (belly) lines over x; belly tucks up toward the rear.
 # Sits low and deep so the cat reads as a sturdy animal, not a leggy one.
-TORSO_X0, TORSO_X1 = 15, 47
+TORSO_X0, TORSO_X1 = 7, 47
 
 
 def _torso_top(x):
@@ -432,7 +432,7 @@ WALK_EYE = (56, 23)
 # the belly so the limb roots INTO the body — the "back leg disconnected" failure is a hip
 # drawn in mid-air, so both anchors sit on solid fur.
 SHOULDER = (43, 38)
-HIP = (21, 38)
+HIP = (13, 38)
 
 # Bone lengths (upper, lower). Lower a touch longer than upper, as in a real cat (tibia>femur,
 # reference §1.2), which also puts the knee high where it reads. Short enough that the cat is
@@ -514,8 +514,8 @@ def walk_frame(i):
     # 2) tail (rear/left), before the body so the body covers its root — a raised, hooked tail
     #    that sways gently fore/aft (a walking cat's tail is near-parallel/up, reference §4.9).
     sway = math.sin(2 * math.pi * t) * 2.0
-    tail = [(15, 31 + bob), (13, 27 + bob), (11, 22), (11, 16),
-            (13 + sway, 13), (16 + sway, 14)]
+    tail = [(TORSO_X0, 31 + bob), (5, 27 + bob), (3, 22), (3, 16),
+            (5 + sway, 13), (8 + sway, 14)]
     stroke_path(grid, tail, BODY, radius=1.9)
 
     # 3) torso, neck, head.

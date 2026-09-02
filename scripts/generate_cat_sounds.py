@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Generate the cat's voice: the three cues the pixel-cat companion makes.
+Generate the cat's voice: five original cues for the pixel-cat companion.
 
-It meows when a reminder lands and when a coding agent finishes, and purrs while
-being stroked. Those are the only three sounds; a desktop pet that vocalises more than
-that stops being company and becomes an interruption.
+The small set covers a meow, a double meow, two purr timbres, and a greeting
+trill. They are reused across interactions so the desktop pet stays expressive
+without becoming noisy.
 
 Written as synthesis rather than shipped as recordings for two reasons. A real cat
 recording is someone's copyrighted audio, and a sampled meow is emotionally fixed — it
@@ -288,6 +288,31 @@ def build_trill():
                     attack=0.018, hold=0.06, tau=0.09)
 
 
+def build_warm_purr():
+    """A longer, warmer unlocked purr with a lower pulse and richer body."""
+    length = 1.55
+    count = int(RATE * length)
+    out = [0.0] * count
+    phase = 0.0
+    for i in range(count):
+        t = i / RATE
+        phase += 2 * math.pi * 64.0 / RATE
+        carrier = (math.sin(phase)
+                   + 0.55 * math.sin(phase * 2)
+                   + 0.22 * math.sin(phase * 3))
+        cycle = (t * 24.0) % 1.0
+        duty = 0.74
+        pulse = 0.5 - 0.5 * math.cos(2 * math.pi * cycle / duty) if cycle < duty else 0.0
+        depth = 0.84 + 0.16 * math.sin(2 * math.pi * 2.4 * t)
+        out[i] = carrier * (0.26 + depth * pulse) * 0.46
+    edge = int(RATE * 0.22)
+    for i in range(edge):
+        fade = 0.5 - 0.5 * math.cos(math.pi * i / edge)
+        out[i] *= fade
+        out[count - 1 - i] *= fade
+    return out
+
+
 def build_meow_double():
     """Two meows, the second lower and quieter — "mrow-mow".
 
@@ -309,8 +334,9 @@ def main():
     save_voice("cat-meow.wav", build_meow())
     save_voice("cat-meow-double.wav", build_meow_double())
     save_voice("cat-purr.wav", build_purr())
+    save_voice("cat-purr-warm.wav", build_warm_purr())
     save_voice("cat-trill.wav", build_trill())
-    print("\nDone. Four cues in Sounds/.")
+    print("\nDone. Five cues in Sounds/.")
 
 
 if __name__ == "__main__":

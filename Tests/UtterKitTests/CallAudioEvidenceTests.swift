@@ -17,19 +17,39 @@ struct CallAudioEvidenceTests {
         )
     }
 
-    @Test("One process using input and output qualifies")
-    func oneProcessBothDirections() {
+    @Test("An unknown app using input and output does not qualify")
+    func unknownAppDoesNotQualify() {
         let unknown = source(1, bundleID: "com.example.calls", name: "Calls")
         let candidate = CallAudioEvidence.candidate(from: [
             CallProcessActivity(source: unknown, runsInput: true, runsOutput: true),
         ])
-        #expect(candidate == unknown)
+        #expect(candidate == nil)
     }
 
-    @Test("Chrome helpers may split input and output")
-    func recognizedFamilyMaySplitDirections() {
+    @Test("Browser audio never qualifies")
+    func browserDoesNotQualify() {
         let input = source(2, bundleID: "com.google.Chrome.helper.audio")
         let output = source(3, bundleID: "com.google.Chrome.helper.renderer")
+        let candidate = CallAudioEvidence.candidate(from: [
+            CallProcessActivity(source: input, runsInput: true, runsOutput: false),
+            CallProcessActivity(source: output, runsInput: false, runsOutput: true),
+        ])
+        #expect(candidate == nil)
+    }
+
+    @Test("A supported app using input and output qualifies")
+    func supportedAppQualifies() {
+        let zoom = source(8, bundleID: "us.zoom.xos", name: "Zoom")
+        let candidate = CallAudioEvidence.candidate(from: [
+            CallProcessActivity(source: zoom, runsInput: true, runsOutput: true),
+        ])
+        #expect(candidate == zoom)
+    }
+
+    @Test("Supported app helpers may split input and output")
+    func supportedFamilyMaySplitDirections() {
+        let input = source(9, bundleID: "Cisco-Systems.Spark.helper.audio")
+        let output = source(10, bundleID: "Cisco-Systems.Spark.helper.renderer")
         let candidate = CallAudioEvidence.candidate(from: [
             CallProcessActivity(source: input, runsInput: true, runsOutput: false),
             CallProcessActivity(source: output, runsInput: false, runsOutput: true),
@@ -48,9 +68,9 @@ struct CallAudioEvidenceTests {
         #expect(candidate == nil)
     }
 
-    @Test("Different recognized app families do not qualify")
+    @Test("Different supported app families do not qualify")
     func differentKnownFamiliesDoNotQualify() {
-        let input = source(6, bundleID: "com.google.Chrome.helper.audio")
+        let input = source(6, bundleID: "us.zoom.xos")
         let output = source(7, bundleID: "com.tinyspeck.slackmacgap.helper")
         let candidate = CallAudioEvidence.candidate(from: [
             CallProcessActivity(source: input, runsInput: true, runsOutput: false),

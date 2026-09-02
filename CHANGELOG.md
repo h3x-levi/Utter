@@ -4,6 +4,85 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [3.0.50] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.49] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.48] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.47] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.46] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.45] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.44] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.43] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.42] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.41] — August 2026
+
+- Internal build — packaging and tooling updates
+
+## [3.0.40] — August 2026
+
+- Organized Companion into native Today, Remember, Rewards, and Customize tabs.
+- Added local typed and spoken memory capture with review-before-save, editing, completion, snoozing, deletion, and native actionable notifications.
+- Added cumulative dictation milestones that unlock companion objects, animations, and five original synthesized cat sounds without purchases or expiring rewards.
+- Made pill glyphs legible over both light and dark backgrounds and replaced the bouncing pencil with a continuous handwriting stroke.
+- Added durable memory rollback and previous-generation recovery for failed writes or corrupted files.
+
+## [3.0.39] — August 2026
+
+- Rebuilt Companion as a full-width native macOS settings page instead of a narrow centered form.
+- Redrew both pixel cats with longer bodies and added grooming, rolling, and loaf animations.
+- Added autonomous play with the ball, box, yarn, and cushion, plus click, double-click, toss, feed, and brush reactions.
+- Added local relationship memory with visible privacy controls, daily goals, and animations earned through normal use.
+- Added focused-window edge avoidance and quiet behavior for presentations, screen sharing, full-screen apps, and Utter meeting capture.
+
+## [3.0.38] — August 2026
+
+- Fixed the standard Settings command and Command-, opening an empty window instead of Utter Settings.
+- Settings sections now open at the top instead of inheriting another section's scroll position.
+- Fixed Home activity labels and values collapsing into a centered cluster on wide windows.
+- Settings are now written atomically, failures are reported, and an unreadable settings file is preserved for recovery instead of being overwritten.
+
+## [3.0.37] — August 2026
+
+- Expanded local automatic call detection beyond Zoom and Teams to major dedicated calling apps,
+  including Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Amazon Chime,
+  Jitsi Meet, LINE, WeChat, and KakaoTalk.
+
+## [3.0.36] — August 2026
+
+- The resting pill’s microphone is now solid black in light themes and solid white in dark themes.
+
+## [3.0.35] — August 2026
+
+- Fixed automatic meeting offers appearing for browser playback such as YouTube.
+- Automatic offers now require active microphone and speaker use from Zoom, Microsoft Teams,
+  FaceTime, Slack, or Discord. Browser meetings remain available through “Record a meeting” in Notes.
+
 ## [3.0.34] — August 2026
 
 - Internal build — packaging and tooling updates

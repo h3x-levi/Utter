@@ -290,6 +290,18 @@ if [ "$CAT_SOUNDS_STALE" -eq 1 ]; then
     python3 scripts/generate_cat_sounds.py
 fi
 
+for companion_sound in \
+    Sounds/cat-meow-natural.wav \
+    Sounds/cat-purr-natural.wav \
+    Sounds/dog-bark.wav \
+    Sounds/dog-pant.wav \
+    Sounds/ATTRIBUTION.md; do
+    if [ ! -f "$companion_sound" ]; then
+        echo "❌ Required companion sound missing: $companion_sound"
+        exit 1
+    fi
+done
+
 if [ "$SOUNDS_STALE" -eq 1 ]; then
     echo "🔊 Generating sounds..."
     python3 scripts/generate_sounds.py
@@ -380,9 +392,8 @@ fi
 if [ "$MENUBAR_STALE" -eq 1 ]; then
     python3 scripts/generate_menubar_icon.py >/dev/null
 fi
-# Companion packs. Shipped as defaults so a fresh install has characters without
-# the user creating anything; SpritePackStore scans this alongside the user's own
-# Companions folder in Application Support.
+# User-authored companion packs. The four built-ins are rendered in Swift and must not
+# be copied as PNG packs; SpritePackStore reserves those ids and always uses the code path.
 if [ -d "Companions" ]; then
     # Copy the pack folders only. `Companions/README.md` documents how the packs are
     # regenerated, which belongs in the repository and not inside a shipped app — the
@@ -390,10 +401,20 @@ if [ -d "Companions" ]; then
     # paths and read as an oversight in the bundle.
     mkdir -p "$RESOURCES/Companions"
     find Companions -mindepth 1 -maxdepth 1 -type d \
-        ! -name pixel-cat-gray ! -name pixel-cat-orange \
+        ! -name dog \
+        ! -name panda \
+        ! -name pixel-cat-gray \
+        ! -name pixel-cat-orange \
+        ! -name 'Dog sound' \
+        ! -name 'Cat Sound effects' \
         -exec cp -R {} "$RESOURCES/Companions/" \;
     PACK_COUNT=$(find "$RESOURCES/Companions" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-    echo "   ✓ Companion packs bundled ($PACK_COUNT)"
+    echo "   ✓ Code-rendered companions: 4; optional image packs bundled: $PACK_COUNT"
+fi
+
+if find "$RESOURCES" -type f -iname '*.mp3' -print -quit | grep -q .; then
+    echo "❌ Raw MP3 source audio reached the app bundle"
+    exit 1
 fi
 
 if [ -d "MenuBarIcon" ]; then

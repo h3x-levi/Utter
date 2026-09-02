@@ -30,13 +30,12 @@ struct CallSourceTests {
     @Test("A recognised prefix overrides a name the system reports badly")
     func tableCorrectsKnownBadNames() {
         // Both of these were read off this machine's process list. Zoom's own `localizedName` is
-        // "zoom.us", and the process actually doing Chrome's audio is a helper whose name is either
-        // nil or "Google Chrome Helper".
+        // "zoom.us", while Slack's audio helper has no useful system name.
         #expect(CallSource.appName(bundleID: "us.zoom.xos", systemName: "zoom.us") == "Zoom")
-        #expect(CallSource.appName(bundleID: "com.google.Chrome.helper",
-                                   systemName: "Google Chrome Helper") == "Chrome")
         #expect(CallSource.appName(bundleID: "com.tinyspeck.slackmacgap.helper",
                                    systemName: nil) == "Slack")
+        #expect(CallSource.appName(bundleID: "com.microsoft.teams2.helper",
+                                   systemName: nil) == "Microsoft Teams")
     }
 
     @Test("Nothing usable means no name, never a guess from the bundle ID")
@@ -56,12 +55,32 @@ struct CallSourceTests {
         #expect(CallSource.knownName(bundleID: "com.apple.WebKit.GPU") == nil)
     }
 
-    @Test("The table stays small")
-    func theTableIsSmall() {
-        // Not a style rule. A pretty-name table is the part of this that goes stale, and it is only
-        // allowed to exist for names the system itself reports unusably. If this ever needs to grow
-        // past a handful, the precedence rule above is the thing that is wrong, not the size.
-        #expect(CallSource.renamed.count <= 8)
+    @Test("Only dedicated calling apps may trigger automatic offers")
+    func automaticCallFamilies() {
+        #expect(CallSource.automaticCallFamily(bundleID: "us.zoom.xos") == "Zoom")
+        #expect(CallSource.automaticCallFamily(bundleID: "com.microsoft.teams2.helper")
+                == "Microsoft Teams")
+        #expect(CallSource.automaticCallFamily(bundleID: "com.apple.FaceTime")
+                == "FaceTime")
+        #expect(CallSource.automaticCallFamily(bundleID: "Cisco-Systems.Spark.helper")
+                == "Webex")
+        #expect(CallSource.automaticCallFamily(bundleID: "org.whispersystems.signal-desktop.helper")
+                == "Signal")
+        #expect(CallSource.automaticCallFamily(bundleID: "net.whatsapp.WhatsApp")
+                == "WhatsApp")
+        #expect(CallSource.automaticCallFamily(bundleID: "com.ringcentral.glip.helper")
+                == "RingCentral")
+        #expect(CallSource.automaticCallFamily(bundleID: "org.jitsi.jitsi-meet")
+                == "Jitsi Meet")
+        #expect(CallSource.automaticCallFamily(bundleID: "com.google.Chrome.helper") == nil)
+        #expect(CallSource.automaticCallFamily(bundleID: "com.microsoft.Edge.helper") == nil)
+        #expect(CallSource.automaticCallFamily(bundleID: "com.apple.WebKit.GPU") == nil)
+    }
+
+    @Test("The supported app table has no duplicate prefixes")
+    func supportedPrefixesAreUnique() {
+        let prefixes = CallSource.automaticCallApps.map(\.prefix)
+        #expect(Set(prefixes).count == prefixes.count)
     }
 
     // MARK: The trust boundary
@@ -108,8 +127,7 @@ struct CallSourceTests {
     @Test("The card's title names the app when there is one")
     func offerTitle() {
         #expect(CallSource.offerTitle(appName: "Zoom") == "You\u{2019}re in a Zoom call")
-        // The unnamed case is not a failure: a meeting in a browser tab reports the browser, and a
-        // browser is not evidence of a call, so plenty of real calls arrive here.
+        // A supported app's helper can still lack a usable display name.
         #expect(CallSource.offerTitle(appName: nil) == "You\u{2019}re in a call")
         #expect(MeetingOfferMetrics.defaultTitle == CallSource.offerTitle(appName: nil))
     }

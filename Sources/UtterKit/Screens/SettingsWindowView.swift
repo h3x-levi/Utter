@@ -355,6 +355,10 @@ struct SettingsDetail: View {
                         .padding(.horizontal, Space.pageInset)
                         .padding(.bottom, Space.pageInset)
                 }
+                // A pane is a new destination, not another document at the previous pane's
+                // absolute scroll offset. Recreate the scroller with the selection so Speech
+                // cannot open halfway through its model list after leaving a long General pane.
+                .id(group)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

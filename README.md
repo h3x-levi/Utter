@@ -298,8 +298,11 @@ plainer and it is right more of the time.
 is by audio source — your microphone versus your speakers — not by voice. There is
 no speaker identification. The two streams are also written source-major rather than
 interleaved chronologically, because the only clocks available are per-stream sample
-counts and the two captures start at an offset nothing measures. A meeting held in a
-browser tab additionally cannot be distinguished from an ordinary video playing.
+counts and the two captures start at an offset nothing measures. Automatic offers support
+dedicated calling clients including Zoom, Teams, FaceTime, Webex, Slack, Discord, Skype,
+WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Amazon Chime, Jitsi Meet, LINE,
+WeChat, and KakaoTalk. Start browser meetings manually from Notes because process-level
+browser audio cannot distinguish Meet from YouTube.
 
 **Downloaded speech models are not hash-verified.** The default model is bundled so
 most installs download nothing, but an optional larger tier is fetched from a

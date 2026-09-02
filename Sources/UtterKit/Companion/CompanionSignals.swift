@@ -380,6 +380,15 @@ enum CompanionReminder: Equatable {
         case .message(let text): return text
         }
     }
+
+    var memoryKey: String {
+        switch self {
+        case .stretch: return "stretch"
+        case .water: return "water"
+        case .pomodoro(let focus): return focus ? "focus" : "break"
+        case .message: return "message"
+        }
+    }
 }
 
 /// Decides when the character should speak up, against the **wall clock**.

@@ -14,6 +14,8 @@ enum PillState: Equatable {
     /// *destination* is the one thing the user cannot otherwise see — the
     /// recording itself looks identical either way.
     case capturingNote
+    /// Hands-free speech whose destination is the private companion memory store.
+    case capturingMemory
     /// The pipeline has three distinct phases; naming the current one is real
     /// feedback, where the old wiggling pencil carried no information.
     case processing(Phase)
@@ -30,13 +32,14 @@ enum PillState: Equatable {
     }
 
     var isRecordingLike: Bool {
-        self == .recording || self == .handsFree || self == .capturingNote
+        self == .recording || self == .handsFree
+            || self == .capturingNote || self == .capturingMemory
     }
 
     /// Hands-free variants keep recording until explicitly stopped, rather than ending when
     /// a held hotkey is released.
     var isHandsFreeLike: Bool {
-        self == .handsFree || self == .capturingNote
+        self == .handsFree || self == .capturingNote || self == .capturingMemory
     }
 }
 
@@ -683,9 +686,10 @@ struct PillContainerView: View {
         case .recording: return 2
         case .handsFree: return 3
         case .capturingNote: return 4
-        case .processing: return 5
-        case .notice: return 6
-        case .error: return 7
+        case .capturingMemory: return 5
+        case .processing: return 6
+        case .notice: return 7
+        case .error: return 8
         }
     }
 
@@ -1309,9 +1313,7 @@ struct PillContent: View {
             // telling the user something they only need once. The hint lives in
             // the menu-bar item, Settings, and onboarding; the resting pill's
             // whole job is to say "ready" and otherwise stay out of the way.
-            Image(systemName: "mic")
-                .font(.system(size: 13))
-                .foregroundStyle(Ink.secondary)
+            AdaptivePillGlyph(systemName: "mic", size: 13)
         case .capturingNote:
             // The one state that is not a row of glyphs in a capsule. The shell above — glass,
             // border, frame — is the same view either way; only what sits inside is swapped.
@@ -1322,7 +1324,7 @@ struct PillContent: View {
             // `.identity` now sits on the switch itself (see `content`), which covers both.
             NoteCaptureBox(model: model, liveTint: dotTint)
 
-        case .recording, .handsFree:
+        case .recording, .handsFree, .capturingMemory:
             // Static dot: the meter beside it already says "live". A pulsing
             // ring plus animating bars is two things saying the same thing.
             Circle()
@@ -1356,6 +1358,8 @@ struct PillContent: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Tint.handsFree)
+            } else if model.state == .capturingMemory {
+                AdaptivePillGlyph(systemName: "brain.head.profile", size: 11)
             }
 
         case .processing:
@@ -1399,7 +1403,7 @@ struct PillContent: View {
     /// the recording itself cannot convey.
     private var dotTint: Color {
         switch model.state {
-        case .capturingNote: return Tint.accent
+        case .capturingNote, .capturingMemory: return Tint.accent
         case .handsFree: return Tint.handsFree
         default: return Tint.recording
         }
@@ -1442,7 +1446,7 @@ struct PillContent: View {
         case .preparing, .processing, .notice: return Tint.accent.opacity(0.45)
         case .recording: return Tint.recording.opacity(0.50)
         case .handsFree: return Tint.handsFree.opacity(0.52)
-        case .capturingNote: return Tint.accent.opacity(0.52)
+        case .capturingNote, .capturingMemory: return Tint.accent.opacity(0.52)
         case .error: return Tint.danger.opacity(0.52)
         }
     }
@@ -1483,7 +1487,7 @@ struct PillContent: View {
             return Tint.recording.opacity(0.75)
         case .handsFree:
             return Tint.handsFree.opacity(0.75)
-        case .capturingNote:
+        case .capturingNote, .capturingMemory:
             return Tint.accent.opacity(0.75)
         case .error:
             return Tint.danger.opacity(0.75)
@@ -1521,6 +1525,7 @@ struct PillContent: View {
         case .recording: return "Utter, recording"
         case .handsFree: return "Utter, recording hands-free"
         case .capturingNote: return "Utter, dictating into a note"
+        case .capturingMemory: return "Utter, listening for a memory"
         case .processing(let phase): return "Utter, \(phase.rawValue.lowercased())"
         case .error: return "Utter, error"
         }
@@ -1552,11 +1557,41 @@ struct PillContent: View {
                 .captureDestination(appendsToOpenNote: userData.captureAppendsToOpenNote)
             return "\(model.elapsed) seconds. \(destination.label). "
                 + "Press \(KeyChord.noteCapture.spelled) to finish."
+        case .capturingMemory:
+            return "\(model.elapsed) seconds. Saving privately in Companion. "
+                + "Press \(KeyChord.memoryCapture.spelled) to finish."
         case .processing:
             return "Please wait"
         case .error(let reason):
             return reason
         }
+    }
+}
+
+/// A symbol that remains legible over either extreme of an arbitrary desktop.
+///
+/// The pill floats over wallpaper and other apps, so the app's light/dark
+/// appearance cannot tell us whether the pixels behind a glyph are light or
+/// dark. A white outer symbol and smaller black inner symbol provide both
+/// contrast edges at once: the black core carries it on light content and the
+/// white rim carries it on dark content.
+struct AdaptivePillGlyph: View {
+    static let outerInk = Color.white
+    static let innerInk = Color.black
+
+    let systemName: String
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Image(systemName: systemName)
+                .font(.system(size: size + 2, weight: .semibold))
+                .foregroundStyle(Self.outerInk)
+            Image(systemName: systemName)
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(Self.innerInk)
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -1692,101 +1727,67 @@ struct BreathingDot: View {
 struct WritingPen: View {
     let reduceMotion: Bool
 
-    // MARK: Geometry
-    //
-    // **There is no line, and that is the design now.** This drew a scrolling sine wave with the
-    // pencil parked at its right-hand end, and the two never read as one thing: the pen had to be
-    // anchored to the stroke's final point in *both* axes to look connected, the frame had to grow
-    // tall enough for the nib to track the wave's full travel, and growing it is what pushed the
-    // whole assembly low and off-centre in the capsule.
-    //
-    // A pencil moving as a hand moves says "writing" on its own. Removing the wave removes the
-    // coupling problem, the frame can shrink back to the pen's own motion, and it re-centres.
-
-    /// The glyph's box. It inks 8.5 x 8.5 (measured by rendering it alone), so 10 is enough.
-    private let penBox: CGFloat = 10
-    /// How far the pen travels across the page, and how far it rides up and down while it does.
-    private let strokeSpan: CGFloat = 5.5
-    private let strokeRise: CGFloat = 2.2
-    /// How far the pencil tips as it works. A hand writing rocks a little; it does not stay rigid.
-    private let tipDegrees: CGFloat = 5
-
-    /// Sized to the motion envelope, so the pen cannot paint outside its own frame and the frame is
-    /// no larger than it needs — which is what puts it back in the middle of the capsule.
-    private var frameSide: CGFloat { penBox + 2 * max(strokeSpan, strokeRise) + 2 }
-
-    // MARK: Motion
-    //
-    // Driven by a clock, not by `withAnimation` on a `@State` phase — and that distinction is the
-    // whole of the "pen is stale, nothing happens" defect this replaced.
-    //
-    // The old code did `withAnimation(.linear(duration: 1.1).repeatForever()) { phase = 1 }` and
-    // read `sin(phase * ...)` out of the three properties below. That cannot work, because
-    // `withAnimation` does not animate the *state*: it sets `phase` to its final value at once,
-    // evaluates the body at the old value and the new one, and interpolates the **animatable
-    // attributes those two evaluations returned** — here one `.offset` and one `.rotationEffect`.
-    // `sin()` is never sampled in between, so the curve's shape is invisible to SwiftUI; only its
-    // endpoints matter. And every motion here spans a whole number of half-turns over 0 -> 1, so
-    // the two endpoints are identical:
-    //
-    //     phase 0  ->  offsetX  0.0    offsetY  2.2    tilt  0.0
-    //     phase 1  ->  offsetX -0.0    offsetY  2.2    tilt -0.0
-    //
-    // Interpolating 2.2 to 2.2 for 1.1 seconds, forever, is a motionless pencil parked 2.2pt below
-    // centre. The sweep the geometry describes — +/-5.5pt across, +/-5 degrees of rock — exists only
-    // at phase 0.25 / 0.5 / 0.75, the samples that were never taken.
-    //
-    // A `TimelineView` is the fix rather than a different curve or duration, because this motion is
-    // a *function of time* rather than a transition between two states: it re-runs the body per tick
-    // so the sine is genuinely sampled. It also ticks only while the view is on screen, and the pen
-    // is on screen only while a transcription is in flight. 30 Hz matches the rate the companion
-    // already runs its character at, and is well past what a 5.5pt oscillation can show.
-
-    /// One scribble cycle, in seconds. Was the old animation's `duration`.
-    private let cycle: Double = 1.1
-    private let tickRate: Double = 1.0 / 30.0
-
-    /// Horizontal travel: one smooth sweep out and back, so there is no reset to jump at.
-    private func offsetX(_ phase: CGFloat) -> CGFloat {
-        reduceMotion ? 0 : sin(phase * 2 * .pi) * strokeSpan
-    }
-
-    /// Vertical travel at **three times** the horizontal rate.
-    ///
-    /// That ratio is the whole effect. Equal rates trace a diagonal line and read as sliding; three
-    /// to one traces a tight Lissajous loop, which is what a hand forming letters actually does —
-    /// several short up-and-down strokes while drifting along the line.
-    private func offsetY(_ phase: CGFloat) -> CGFloat {
-        reduceMotion ? 0 : sin(phase * 6 * .pi + .pi / 2) * strokeRise
-    }
-
-    /// The tip rocks with the vertical stroke, since that is the motion a wrist makes.
-    private func tilt(_ phase: CGFloat) -> CGFloat {
-        reduceMotion ? 0 : sin(phase * 6 * .pi) * tipDegrees
-    }
+    static let canvasSize = CGSize(width: 30, height: 20)
+    private static let cycle = 1.45
+    private static let writingFraction = 0.78
 
     var body: some View {
-        // `paused:` rather than a branch to a static `Image`: the still pose is already what the
-        // three `reduceMotion` guards return, so pausing the clock keeps one code path and one
-        // centred pencil.
-        TimelineView(.animation(minimumInterval: tickRate, paused: reduceMotion)) { context in
-            let phase = CGFloat(
-                context.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: cycle) / cycle
-            )
-            Image(systemName: "pencil")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Ink.primary)
-                .rotationEffect(.degrees(tilt(phase)))
-                .frame(width: penBox, height: penBox)
-                .offset(x: offsetX(phase), y: offsetY(phase))
-                // Centred in its frame, which is the fix for "off centre towards the bottom": the
-                // previous version placed the pen by an absolute offset from `.topLeading` because
-                // it had to meet a wave drawn at a fixed height. With nothing to meet, centring is
-                // correct and cannot drift.
-                .frame(width: frameSide, height: frameSide)
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+            let phase = reduceMotion ? 0.55 : context.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: Self.cycle) / Self.cycle
+            let raw = min(1, phase / Self.writingFraction)
+            let progress = raw * raw * (3 - 2 * raw)
+            let opacity = phase <= Self.writingFraction
+                ? 1
+                : max(0, 1 - (phase - Self.writingFraction) / (1 - Self.writingFraction))
+            let point = Self.writingPoint(at: progress, in: Self.canvasSize)
+
+            ZStack(alignment: .topLeading) {
+                Canvas { context, canvasSize in
+                    let path = Self.writingPath(upTo: progress, in: canvasSize)
+                    context.stroke(
+                        path,
+                        with: .color(.white),
+                        style: StrokeStyle(lineWidth: 2.7, lineCap: .round, lineJoin: .round)
+                    )
+                    context.stroke(
+                        path,
+                        with: .color(.black),
+                        style: StrokeStyle(lineWidth: 1.1, lineCap: .round, lineJoin: .round)
+                    )
+                }
+                AdaptivePillGlyph(systemName: "pencil.tip", size: 8)
+                    .rotationEffect(.degrees(-26))
+                    .position(point)
+            }
+            .opacity(opacity)
+            .frame(width: Self.canvasSize.width, height: Self.canvasSize.height)
         }
         .accessibilityHidden(true)
+    }
+
+    static func writingPoint(at progress: Double, in size: CGSize) -> CGPoint {
+        let p = min(max(progress, 0), 1)
+        return CGPoint(
+            x: 3 + p * (size.width - 9),
+            y: size.height * 0.57
+                + sin(p * .pi * 4) * 2.25
+                + sin(p * .pi * 8 + 0.6) * 0.65
+        )
+    }
+
+    static func writingPath(upTo progress: Double, in size: CGSize) -> Path {
+        let clamped = min(max(progress, 0), 1)
+        let samples = max(2, Int(36 * clamped))
+        var path = Path()
+        path.move(to: writingPoint(at: 0, in: size))
+        for index in 1...samples {
+            path.addLine(to: writingPoint(
+                at: clamped * Double(index) / Double(samples),
+                in: size
+            ))
+        }
+        return path
     }
 }
 

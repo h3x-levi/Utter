@@ -7,29 +7,22 @@ import Foundation
 /// tested on this machine, while the HAL reads cannot. Everything here is a value and a function of
 /// its arguments.
 ///
-/// **This names a call; it never decides there is one.** `kAudioProcessPropertyBundleID` is one
-/// extra property read on process objects the detector already enumerates, so it is cheap — but it
-/// is not evidence. The most common way to be in a meeting is Google Meet or Teams in a browser tab,
-/// which reports the *browser's* bundle ID and is indistinguishable from a YouTube video in another
-/// window. So a bundle ID may only ever add a name to a call that
-/// `kAudioProcessPropertyIsRunningInput`/`IsRunningOutput` already established, and a call in an app
-/// nobody has heard of is detected exactly as before, just called "a call".
+/// Automatic offers are deliberately limited to dedicated calling apps. A browser reports the same
+/// bundle ID for Meet and YouTube, so its audio activity cannot safely distinguish a call from media
+/// playback. `automaticCallFamily` is therefore the allowlist used by the detector; browser meetings
+/// remain available through the explicit "Record a meeting" action in Notes.
 ///
-/// **Where the name comes from, and why not from a table.** A hardcoded pretty-name list goes stale
-/// the moment a new conferencing app ships, so the first choice is always the app's own
-/// `NSRunningApplication.localizedName` — an app nobody listed still gets named correctly. `renamed`
-/// below exists only to override the handful of names the system itself reports unusably, which is a
-/// closed set that does not grow with the market:
+/// **Where the name comes from.** Supported apps are identified by bundle family because helper
+/// processes often have no `NSRunningApplication.localizedName` at all. The same table supplies the
+/// stable display name, while an unlisted process still falls back to the name macOS reports:
 ///
 ///   * The process doing the audio is often a *helper*, which is not an `NSRunningApplication` at
-///     all. Read off this machine: `com.google.Chrome.helper` and
-///     `com.tinyspeck.slackmacgap.helper`, whose `localizedName` is either nil or the literally
-///     unhelpful "Google Chrome Helper".
+///     all. Read off this machine: `com.tinyspeck.slackmacgap.helper`, whose `localizedName` is nil
+///     or the literally unhelpful "Slack Helper".
 ///   * Some apps have a bad name of their own. `us.zoom.xos` reports `localizedName` "zoom.us".
 ///
-/// So the rule is: a recognised prefix wins (it is a correction), otherwise the system's own name,
-/// otherwise no name at all. Guessing a name out of a bundle ID is not attempted — "You're in a
-/// com.google.Chrome.helper call" is worse than "You're in a call".
+/// So the rule is: a supported prefix wins, otherwise the system's own name, otherwise no name at
+/// all. Browsers are intentionally absent.
 ///
 /// **On Zoom's and Teams' virtual audio devices.** Both install one ("ZoomAudioDevice", "Microsoft
 /// Teams Audio" — both were enumerated on this machine even with neither app in a meeting). They are
@@ -54,37 +47,49 @@ struct CallSource: Equatable {
     /// What to call it on screen, already sanitised, or nil when nothing usable was found.
     let appName: String?
 
-    /// Whether the bundle ID is one of the few `renamed` knows. Used only to break a tie between
-    /// candidate processes and to name one; never to qualify a call.
-    var isRecognised: Bool { Self.knownName(bundleID: bundleID) != nil }
 }
 
 extension CallSource {
 
-    // MARK: - The one small table
+    // MARK: - Supported calling apps
 
-    /// Bundle-ID prefixes whose own reported name is unusable, and what to call them instead.
+    /// Dedicated app bundle families allowed to trigger an automatic offer.
     ///
-    /// Prefixes rather than exact IDs because the audio nearly always comes from a helper process:
-    /// Chrome's is `com.google.Chrome.helper`, Edge's `com.microsoft.Edge.helper`. Kept to the cases
-    /// actually observed rather than padded out with every conferencing app on the market — an
-    /// unlisted app is named from `localizedName`, which is the whole reason this can stay short.
-    ///
-    /// Not here on purpose: Safari. Its audio comes out of `com.apple.WebKit.GPU`, which is shared
-    /// with every other WebKit host on the machine (this machine had two, for Zoom and Outlook), so
-    /// mapping that prefix to "Safari" would confidently name the wrong app. Unnamed is better.
-    static let renamed: [(prefix: String, name: String)] = [
-        ("us.zoom", "Zoom"),                    // localizedName is "zoom.us"
-        ("com.google.Chrome", "Chrome"),        // audio is com.google.Chrome.helper
-        ("com.microsoft.Edge", "Edge"),         // same helper shape as Chrome
-        ("com.tinyspeck.slackmacgap", "Slack"), // localizedName is "Slack Helper"
-        ("com.hnc.Discord", "Discord"),         // audio is com.hnc.Discord.helper
+    /// These are bundle-family prefixes because Electron clients often put input and output in
+    /// separate helpers. Browsers are intentionally absent: no local audio signal can tell a Meet
+    /// tab from YouTube without inspecting private browser state.
+    static let automaticCallApps: [(prefix: String, name: String)] = [
+        ("us.zoom", "Zoom"),
+        ("com.microsoft.teams", "Microsoft Teams"),
+        ("com.apple.FaceTime", "FaceTime"),
+        ("com.tinyspeck.slackmacgap", "Slack"),
+        ("com.hnc.Discord", "Discord"),
+        ("Cisco-Systems.Spark", "Webex"),
+        ("com.cisco.webex", "Webex"),
+        ("com.skype.skype", "Skype"),
+        ("net.whatsapp.WhatsApp", "WhatsApp"),
+        ("org.whispersystems.signal-desktop", "Signal"),
+        ("ru.keepcoder.Telegram", "Telegram"),
+        ("com.viber.osx", "Viber"),
+        ("com.ringcentral.glip", "RingCentral"),
+        ("com.logmein.GoToMeeting", "GoTo Meeting"),
+        ("com.goto.GoTo", "GoTo"),
+        ("com.amazon.Amazon-Chime", "Amazon Chime"),
+        ("com.amazon.Chime", "Amazon Chime"),
+        ("org.jitsi.jitsi-meet", "Jitsi Meet"),
+        ("jp.naver.line.mac", "LINE"),
+        ("com.tencent.xinWeChat", "WeChat"),
+        ("com.kakao.KakaoTalkMac", "KakaoTalk"),
     ]
 
-    /// The corrected name for a bundle ID, if it is one of the few in `renamed`.
+    /// The stable display name for a supported calling app.
     static func knownName(bundleID: String?) -> String? {
         guard let bundleID, !bundleID.isEmpty else { return nil }
-        return renamed.first { bundleID.hasPrefix($0.prefix) }?.name
+        return automaticCallApps.first { bundleID.hasPrefix($0.prefix) }?.name
+    }
+
+    static func automaticCallFamily(bundleID: String?) -> String? {
+        knownName(bundleID: bundleID)
     }
 
     // MARK: - Naming
@@ -110,8 +115,8 @@ extension CallSource {
     /// to a single line of printable characters and capped, and a name with nothing left after that
     /// is treated as no name.
     static func appName(bundleID: String?, systemName: String?) -> String? {
-        // A recognised prefix is a deliberate correction of a name the system reports badly, so it
-        // outranks `systemName`. Everything else prefers what the app calls itself.
+        // A supported prefix provides a stable name even for helper processes; everything else
+        // prefers what the app calls itself.
         let raw = knownName(bundleID: bundleID) ?? systemName
         guard let raw else { return nil }
         return sanitised(raw)
@@ -142,8 +147,8 @@ extension CallSource {
 
     // MARK: - Copy
 
-    /// The offer card's title: "You're in a Zoom call", or "You're in a call" when the app is not
-    /// identifiable — which is the ordinary case for a meeting in a browser tab, not a failure.
+    /// The offer card's title: "You're in a Zoom call", or "You're in a call" when a supported
+    /// app's helper process has no usable name.
     static func offerTitle(appName: String?) -> String {
         guard let appName else { return "You\u{2019}re in a call" }
         return "You\u{2019}re in a \(appName) call"
