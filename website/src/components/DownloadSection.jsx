@@ -1,70 +1,68 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { Download, Github, Shield, Sparkles, Cpu } from 'lucide-react';
+import { Download, Github, Shield, Sparkles, Cpu, Check } from 'lucide-react';
 
 export default function DownloadSection() {
   return (
-    <section className="py-28 px-4 relative z-20 border-t border-white/10 bg-[#09090b]">
-      <div className="max-w-5xl mx-auto text-center relative">
-        {/* Subtle Ambient Radial Glow */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-20"
-          style={{
-            background: 'radial-gradient(ellipse 60% 50% at 50% 35%, rgba(95, 97, 237, 0.4), transparent 70%)',
-          }}
-        />
+    <section className="py-24 px-4 bg-colorful-mesh border-t border-black/[0.06]">
+      <div className="max-w-4xl mx-auto text-center">
+        <div className="card-opaque p-10 sm:p-16 shadow-2xl relative overflow-hidden bg-white">
+          {/* Subtle colorful aura */}
+          <div
+            className="absolute inset-0 pointer-events-none opacity-40"
+            style={{
+              background: 'radial-gradient(ellipse 60% 40% at 50% 15%, rgba(99, 102, 241, 0.15), transparent 70%)',
+            }}
+          />
 
-        <div className="relative z-10 glass-panel p-10 sm:p-16 rounded-[36px] shadow-2xl border border-white/10">
-          {/* App Icon */}
-          <div className="mb-8 flex justify-center">
+          <div className="relative z-10 flex flex-col items-center">
             <img
               src="/assets/app-icon.png"
-              alt="Utter Icon"
-              className="w-20 h-20 rounded-2xl shadow-2xl border border-white/15"
+              alt="Utter App Icon"
+              className="w-20 h-20 rounded-2xl shadow-lg border border-black/10 mb-6"
             />
-          </div>
 
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6">
-            Ready to speak at the speed of thought?
-          </h2>
+            <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-zinc-900 mb-4 max-w-xl">
+              Ready to speak at the speed of thought?
+            </h2>
 
-          <p className="text-lg text-zinc-400 max-w-xl mx-auto mb-10 leading-relaxed">
-            Download Utter for macOS today. 100% on-device, fully open source, and completely air-gapped.
-          </p>
+            <p className="text-base sm:text-lg text-zinc-600 max-w-lg mb-8 leading-relaxed">
+              Install Utter on your Mac today. Free, open-source, and runs 100% on your device with zero monthly fees.
+            </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-10">
-            <a
-              href="https://github.com/h3x-levi/Utter/releases/latest"
-              className="flex items-center gap-2.5 bg-white text-black px-9 py-4 rounded-full font-bold text-base hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
-            >
-              <Download size={19} />
-              Download for Mac
-              <span className="text-xs font-mono opacity-60 ml-1">v1.1.56</span>
-            </a>
+            <div className="flex flex-wrap items-center justify-center gap-3.5 mb-8">
+              <a
+                href="https://github.com/h3x-levi/Utter/releases/latest"
+                className="flex items-center gap-2.5 bg-zinc-900 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-lg hover:shadow-xl transition-all active:scale-95"
+              >
+                <Download size={18} />
+                Download for Mac
+                <span className="text-xs font-mono opacity-60 ml-1">v1.1.56</span>
+              </a>
 
-            <a
-              href="https://github.com/h3x-levi/Utter"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2.5 border border-white/15 bg-white/5 text-white px-8 py-4 rounded-full font-semibold text-base hover:bg-white/10 transition-all active:scale-95 shadow-sm"
-            >
-              <Github size={19} />
-              View Source on GitHub
-            </a>
-          </div>
+              <a
+                href="https://github.com/h3x-levi/Utter"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 bg-zinc-100 text-zinc-800 hover:text-black hover:bg-zinc-200/80 px-7 py-4 rounded-full font-semibold text-sm transition-all active:scale-95"
+              >
+                <Github size={18} />
+                View Source on GitHub
+              </a>
+            </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-zinc-500 font-mono">
-            <span className="flex items-center gap-1.5">
-              <Shield size={13} className="text-emerald-400" /> Zero Telemetry
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1.5">
-              <Cpu size={13} className="text-indigo-400" /> Apple Silicon & Intel
-            </span>
-            <span>•</span>
-            <span>macOS 14+ Sonoma & Sequoia</span>
-            <span>•</span>
-            <span>MIT License</span>
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <Check size={14} className="text-emerald-500 stroke-[3]" /> macOS 14 & 15 Native
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5">
+                <Check size={14} className="text-emerald-500 stroke-[3]" /> Apple Silicon Unified RAM
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1.5">
+                <Check size={14} className="text-emerald-500 stroke-[3]" /> MIT License
+              </span>
+            </div>
           </div>
         </div>
       </div>

@@ -1,63 +1,53 @@
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { Download } from 'lucide-react';
-import SkiperCssLink from './SkiperCssLink';
+import { Download, Github, Sparkles } from 'lucide-react';
 
-export default function Navbar({ onSelectStage }) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
-  const navRef = useRef(null);
-
-  const handleMouseMove = (e) => {
-    if (!navRef.current) return;
-    const rect = navRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
+export default function Navbar() {
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-5 px-4 pointer-events-none">
+    <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4 pointer-events-none">
       <motion.nav
-        ref={navRef}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setOpacity(1)}
-        onMouseLeave={() => setOpacity(0)}
-        initial={{ y: -40, opacity: 0 }}
+        initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative obsidian-glass flex items-center justify-between px-3 py-2 rounded-full shadow-2xl pointer-events-auto border border-white/15 overflow-hidden"
+        transition={{ duration: 0.3 }}
+        className="white-glass flex items-center justify-between px-3.5 py-2.5 rounded-full pointer-events-auto border border-black/[0.08] shadow-lg max-w-4xl w-full"
       >
-        {/* Radial Spotlight Tracker (Vengeance UI Pattern) */}
-        <div
-          className="pointer-events-none absolute -inset-px transition-opacity duration-300"
-          style={{
-            opacity,
-            background: `radial-gradient(180px circle at ${position.x}px ${position.y}px, rgba(95, 97, 237, 0.25), transparent 70%)`,
-          }}
-        />
-
         {/* Brand */}
-        <a href="#" className="flex items-center gap-2.5 px-3 relative z-10">
-          <img src="/assets/app-icon.png" alt="Utter macOS" className="w-6 h-6 rounded-lg shadow-sm" />
-          <span className="font-bold text-sm tracking-tight text-white">Utter</span>
-          <span className="font-mono-sm text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">macOS</span>
+        <a href="#" className="flex items-center gap-2.5 pl-2">
+          <img src="/assets/app-icon.png" alt="Utter" className="w-7 h-7 rounded-lg shadow-sm" />
+          <span className="font-bold text-sm tracking-tight text-zinc-900">Utter</span>
+          <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+            macOS Native
+          </span>
         </a>
 
-        {/* Navigation Links with Skiper UI CssLink */}
-        <div className="hidden md:flex items-center gap-6 px-4 text-xs font-medium relative z-10">
-          <SkiperCssLink href="#features" onClick={() => onSelectStage?.(1)}>Features</SkiperCssLink>
-          <SkiperCssLink href="#models" onClick={() => onSelectStage?.(2)}>Whisper Models</SkiperCssLink>
-          <SkiperCssLink href="#meetings" onClick={() => onSelectStage?.(3)}>Meeting Studio</SkiperCssLink>
-          <SkiperCssLink href="#privacy" onClick={() => onSelectStage?.(5)}>Privacy Vault</SkiperCssLink>
+        {/* Links */}
+        <div className="hidden md:flex items-center gap-6 text-xs font-medium text-zinc-600">
+          <a href="#demo" className="hover:text-zinc-900 transition-colors">Interactive Demo</a>
+          <a href="#models" className="hover:text-zinc-900 transition-colors">Speech Models</a>
+          <a href="#features" className="hover:text-zinc-900 transition-colors">Features</a>
+          <a href="#privacy" className="hover:text-zinc-900 transition-colors">Air-Gapped Privacy</a>
         </div>
 
-        {/* Direct Download CTA */}
-        <a
-          href="https://github.com/h3x-levi/Utter/releases/latest"
-          className="relative z-10 flex items-center gap-1.5 bg-white text-black hover:bg-zinc-200 transition-colors text-xs font-bold px-4 py-2 rounded-full shadow-md active:scale-95"
-        >
-          <Download size={13} />
-          Download
-        </a>
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <a
+            href="https://github.com/h3x-levi/Utter"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full text-zinc-700 hover:text-black hover:bg-black/5 transition-colors"
+          >
+            <Github size={14} />
+            GitHub
+          </a>
+
+          <a
+            href="https://github.com/h3x-levi/Utter/releases/latest"
+            className="flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black transition-all text-xs font-bold px-4 py-2 rounded-full shadow-sm active:scale-95"
+          >
+            <Download size={13} />
+            Download
+          </a>
+        </div>
       </motion.nav>
     </div>
   );

@@ -1,40 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Navbar from './components/Navbar';
-import DynamicBackground3D from './components/DynamicBackground3D';
-import PinnedStageExperience from './components/PinnedStageExperience';
+import Hero from './components/Hero';
+import FeatureBento from './components/FeatureBento';
+import PrivacySection from './components/PrivacySection';
 import DownloadSection from './components/DownloadSection';
 import Footer from './components/Footer';
-import SplashCursor from './components/SplashCursor';
-import PillPreloader from './components/PillPreloader';
 
 function App() {
-  const [activeStage, setActiveStage] = useState(0);
-  const [isPreloaderDone, setIsPreloaderDone] = useState(false);
-
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans selection:bg-indigo-600 selection:text-white relative">
-      {/* Interactive Canvas Splash Cursor */}
-      <SplashCursor />
+    <div className="min-h-screen bg-[#fafafa] text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative">
+      {/* Floating Single Navbar */}
+      <Navbar />
 
-      {/* Pill Loading Screen Intro Animation */}
-      <PillPreloader onComplete={() => setIsPreloaderDone(true)} />
-
-      {/* Live Three.js 3D WebGL Background Scene */}
-      <DynamicBackground3D activeStage={activeStage} />
-
-      {/* Floating Centered Spotlight Navbar */}
-      <Navbar onSelectStage={setActiveStage} />
-
-      {/* Main Pinned 3D Scrollytelling Stage */}
-      <main className="relative z-10">
-        <PinnedStageExperience onStageChange={setActiveStage} />
+      {/* Main Content */}
+      <main>
+        <Hero />
+        <FeatureBento />
+        <PrivacySection />
+        <DownloadSection />
       </main>
 
-      {/* Grounding Download Section & Footer */}
-      <div className="relative z-20 bg-[#09090b]">
-        <DownloadSection />
-        <Footer />
-      </div>
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

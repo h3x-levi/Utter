@@ -1,198 +1,98 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Download, Github } from 'lucide-react';
+import { Download, Github, Sparkles, ArrowRight, Shield, Zap, Cpu } from 'lucide-react';
+import InteractiveMacStudio from './InteractiveMacStudio';
 
-const Hero = () => {
+export default function Hero() {
   return (
-    <section className="relative pt-40 pb-20 px-4 overflow-visible">
-      {/* Animated radial spotlight */}
-      <motion.div
-        animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.1, 1] }}
-        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full pointer-events-none z-0"
-        style={{ background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, transparent 60%)' }}
-      />
-      {/* Atmospheric top vignette — fades hero into canvas */}
-      <div
-        className="absolute inset-x-0 top-0 h-[200px] pointer-events-none z-0"
-        style={{ background: 'linear-gradient(#edeceb 0%, transparent 100%)' }}
-      />
-
-      <div className="max-w-5xl mx-auto text-center flex flex-col items-center relative z-10">
-        {/* Badge */}
+    <section className="pt-32 pb-20 px-4 relative overflow-hidden bg-colorful-mesh">
+      <div className="max-w-6xl mx-auto flex flex-col items-center text-center">
+        {/* Colorful Badge */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="font-mono-sm text-xs font-medium px-4 py-1.5 rounded-full border border-black/10 bg-white/40 backdrop-blur-sm mb-8 text-black/50 inline-flex items-center gap-2"
+          transition={{ duration: 0.3 }}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-black/10 shadow-sm text-xs font-semibold text-zinc-800 mb-6"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-          100% On-Device · Zero Telemetry · MIT License
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>macOS 14+ Sonoma & Sequoia</span>
+          <span className="text-zinc-300">•</span>
+          <span className="text-indigo-600 font-bold">Apple Silicon Metal GPU</span>
         </motion.div>
 
         {/* Headline */}
         <motion.h1
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-5xl sm:text-6xl md:text-[76px] font-black leading-[1.06] tracking-tight mb-6 max-w-4xl"
+          transition={{ duration: 0.35 }}
+          className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-zinc-900 mb-6 max-w-4xl leading-[1.05]"
         >
-          Voice dictation that stays on your Mac.
+          Voice dictation that{' '}
+          <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+            stays on your Mac.
+          </span>
         </motion.h1>
 
         {/* Subtitle */}
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="text-lg md:text-xl text-[#0d0d0d]/60 max-w-2xl mb-10 leading-relaxed"
+          transition={{ duration: 0.4 }}
+          className="text-lg sm:text-xl text-zinc-600 max-w-2xl mb-8 leading-relaxed font-normal"
         >
-          Hold a key, speak, let go. Utter transcribes at 180 WPM using local Whisper models
-          on Apple Silicon — no cloud, no subscription, no data leaves your device.
+          Hold a key, speak naturally, release. Utter transcribes at 180 WPM using local Whisper models in unified memory — zero cloud, zero telemetry, zero latency.
         </motion.p>
 
-        {/* Buttons */}
+        {/* Action Buttons */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center gap-4 mb-6"
+          transition={{ duration: 0.45 }}
+          className="flex flex-wrap items-center justify-center gap-4 mb-10"
         >
-          <motion.a
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+          <a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="flex items-center gap-2.5 bg-[#0d0d0d] text-white px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/80 transition-colors shadow-lg"
+            className="flex items-center gap-2.5 bg-zinc-900 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-lg hover:shadow-xl transition-all active:scale-95"
           >
-            <Download size={18} />
+            <Download size={17} />
             Download for Mac
-          </motion.a>
-          <motion.a
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            <span className="text-xs font-mono opacity-60 ml-1">v1.1.56</span>
+          </a>
+
+          <a
             href="https://github.com/h3x-levi/Utter"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2.5 border-2 border-black/10 text-[#0d0d0d] px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/5 transition-colors"
+            className="flex items-center gap-2.5 bg-white text-zinc-800 hover:text-black border border-black/10 px-7 py-4 rounded-full font-semibold text-sm shadow-sm hover:bg-zinc-50 transition-all active:scale-95"
           >
-            <Github size={18} />
+            <Github size={17} />
             View on GitHub
-          </motion.a>
+          </a>
         </motion.div>
 
-        {/* Integration micro-chips */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="flex flex-wrap justify-center gap-4 text-[13px] text-black/40 font-medium mb-16"
-        >
-          {['Xcode', 'Cursor', 'VS Code', 'Slack', 'Obsidian', 'Notion', 'Terminal', 'Pages'].map((app) => (
-            <span key={app}>{app}</span>
-          ))}
-        </motion.div>
+        {/* Key Metrics Chips */}
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs font-semibold text-zinc-600 mb-14">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/[0.06] shadow-sm">
+            <Zap size={14} className="text-amber-500" />
+            <span>168ms Latency</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/[0.06] shadow-sm">
+            <Shield size={14} className="text-emerald-500" />
+            <span>0 Network Sockets</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/[0.06] shadow-sm">
+            <Cpu size={14} className="text-indigo-500" />
+            <span>whisper.cpp Metal GPU</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/[0.06] shadow-sm">
+            <Sparkles size={14} className="text-purple-500" />
+            <span>100% Free & Open Source</span>
+          </div>
+        </div>
 
-        {/* ===================== */}
-        {/* 3D GLASS DISPLAY FRAME */}
-        {/* ===================== */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8, y: 100 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 1.4, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-[948px] mx-auto z-10"
-        >
-          <motion.div 
-            whileHover={{ scale: 1.02 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className="glass-panel p-2 md:p-3 relative group overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.15)]" 
-            style={{ aspectRatio: '16 / 9' }}
-          >
-            {/* macOS Menu Bar */}
-            <div className="absolute top-4 left-0 right-0 px-5 md:px-6 flex items-center justify-between z-20 text-[11px] font-medium text-black/50">
-              <div className="flex items-center gap-2">
-                <div className="w-[10px] h-[10px] rounded-full bg-[#ff5f56]" />
-                <div className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
-                <div className="w-[10px] h-[10px] rounded-full bg-[#27c93f]" />
-              </div>
-              <span className="font-mono-sm text-[10px] text-black/30">Utter v1.1.56</span>
-            </div>
-
-            {/* Screenshot */}
-            <motion.img
-              initial={{ scale: 1.1 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 2, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ scale: 1.04 }}
-              src="/assets/screenshots/hero-main.png"
-              alt="Utter — macOS Voice Dictation App"
-              className="rounded-[22px] w-full h-full object-cover relative z-10"
-            />
-
-            {/* Obsidian Glass Dock Capsule */}
-            <motion.div
-              initial={{ opacity: 0, y: 30, x: '-50%' }}
-              animate={{ opacity: 1, y: 0, x: '-50%' }}
-              transition={{ duration: 1, delay: 1, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute bottom-6 md:bottom-8 left-1/2 z-30 flex items-center gap-3 p-3 rounded-[30px] obsidian-glass shadow-2xl origin-bottom border border-white/10"
-            >
-              {[
-                { icon: '🎙️', label: 'Dictate' },
-                { icon: '✨', label: 'Magic' },
-                { icon: '⌘', label: 'Macros' },
-                { icon: '⚙️', label: 'Settings' }
-              ].map((widget, i) => (
-                <motion.div
-                  key={i}
-                  whileHover={{ scale: 1.15, y: -8 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  className="w-[70px] h-[70px] md:w-[80px] md:h-[80px] rounded-[20px] bg-white/10 border border-white/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-white/20 shadow-inner"
-                >
-                  <div className="text-2xl drop-shadow-md">{widget.icon}</div>
-                  <span className="text-[10px] font-medium text-white/90">{widget.label}</span>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
-
-          {/* Left floating 3D side card */}
-          <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute -left-16 top-1/4 w-[220px] hidden lg:block z-20"
-            style={{ transform: 'rotateY(12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
-          >
-            <motion.div 
-              whileHover={{ scale: 1.05, y: -5 }}
-              className="glass-panel-sm p-1.5 shadow-2xl cursor-pointer"
-            >
-              <img src="/assets/screenshots/06_model_chooser.png" alt="Model Chooser" className="rounded-[14px] w-full" />
-            </motion.div>
-          </motion.div>
-
-          {/* Right floating 3D side card */}
-          <motion.div
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute -right-16 bottom-1/4 w-[220px] hidden lg:block z-20"
-            style={{ transform: 'rotateY(-12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
-          >
-            <motion.div 
-              whileHover={{ scale: 1.05, y: -5 }}
-              className="glass-panel-sm p-1.5 shadow-2xl cursor-pointer"
-            >
-              <img src="/assets/screenshots/04_notes_studio.png" alt="Notes Studio" className="rounded-[14px] w-full" />
-            </motion.div>
-          </motion.div>
-        </motion.div>
-
-        {/* Bottom atmospheric vignette */}
-        <div
-          className="absolute inset-x-0 bottom-0 h-[250px] pointer-events-none z-0"
-          style={{ background: 'linear-gradient(transparent 0%, #edeceb 100%)' }}
-        />
+        {/* The Interactive Centerpiece Studio */}
+        <InteractiveMacStudio />
       </div>
     </section>
   );
-};
-
-export default Hero;
+}
