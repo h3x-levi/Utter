@@ -2,6 +2,7 @@ import React from 'react';
 import ScrollProgress from './components/ScrollProgress';
 import NavbarPill from './components/NavbarPill';
 import MacDisplayHero from './components/MacDisplayHero';
+import AssetTransitionShowcase from './components/AssetTransitionShowcase';
 import InteractiveWidgetsGrid from './components/InteractiveWidgetsGrid';
 import WorkflowSteps from './components/WorkflowSteps';
 import PillStateShowcase from './components/PillStateShowcase';
@@ -30,6 +31,7 @@ export default function App() {
       {/* Main Content */}
       <main className="relative z-10">
         <MacDisplayHero />
+        <AssetTransitionShowcase />
         <InteractiveWidgetsGrid />
         <WorkflowSteps />
         <PillStateShowcase />
