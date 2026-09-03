@@ -1,10 +1,10 @@
 import React from 'react';
 import ScrollProgress from './components/ScrollProgress';
-import Navbar from './components/Navbar';
-import Hero from './components/Hero';
+import NavbarPill from './components/NavbarPill';
+import MacDisplayHero from './components/MacDisplayHero';
+import InteractiveWidgetsGrid from './components/InteractiveWidgetsGrid';
 import WorkflowSteps from './components/WorkflowSteps';
 import PillStateShowcase from './components/PillStateShowcase';
-import BentoFeatures from './components/BentoFeatures';
 import MeetingStudio from './components/MeetingStudio';
 import AITransformsPlayground from './components/AITransformsPlayground';
 import CompanionPlayground from './components/CompanionPlayground';
@@ -24,15 +24,15 @@ export default function App() {
       {/* Top Scroll Indicator */}
       <ScrollProgress />
 
-      {/* Sticky Glass Navbar */}
-      <Navbar />
+      {/* Floating Centered Pill Navbar (Inspired by dock.cool) */}
+      <NavbarPill />
 
-      {/* Rich Scrollable Multi-Section Story Flow */}
+      {/* Main Content */}
       <main className="relative z-10">
-        <Hero />
+        <MacDisplayHero />
+        <InteractiveWidgetsGrid />
         <WorkflowSteps />
         <PillStateShowcase />
-        <BentoFeatures />
         <MeetingStudio />
         <AITransformsPlayground />
         <CompanionPlayground />
@@ -46,7 +46,7 @@ export default function App() {
         <FAQ />
       </main>
 
-      {/* Cinematic Footer */}
+      {/* Clean Apple Footer */}
       <Footer />
     </div>
   );
