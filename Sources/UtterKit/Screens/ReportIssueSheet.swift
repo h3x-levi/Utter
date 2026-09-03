@@ -162,13 +162,6 @@ public struct ReportIssueSheet: View {
                 }
 
                 Spacer()
-
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Ink.tertiary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 18)
