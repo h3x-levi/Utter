@@ -15,3 +15,7 @@ venv/
 .buildid
 Utter.xcodeproj/
 *.dmg
+
+# Node / Website
+website/node_modules/
+website/dist/
