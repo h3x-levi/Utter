@@ -38,7 +38,9 @@ struct TextInjector {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        usleep(10_000) // 10ms
+        // 2ms yield is sufficient for NSPasteboard system daemon synchronization
+        // without introducing perceptible UI micro-stalls.
+        usleep(2_000)
         simulateKeyCombo(key: kVK_ANSI_V, flags: .maskCommand)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -62,7 +64,7 @@ struct TextInjector {
             simulateKeyCombo(key: kVK_Return, flags: [])
         case .newParagraph:
             simulateKeyCombo(key: kVK_Return, flags: [])
-            usleep(20_000)
+            usleep(3_000)
             simulateKeyCombo(key: kVK_Return, flags: [])
         case .goToEnd:
             simulateKeyCombo(key: kVK_End, flags: .maskCommand)

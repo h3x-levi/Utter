@@ -121,40 +121,20 @@ enum PillMetrics {
     static func shellWidth(for state: PillState) -> CGFloat? {
         switch state {
         case .capturingNote: return noteContentWidth + horizontalPadding * 2
-        case .idle, .processing: return minimumCapsuleWidth
-        case .preparing, .recording, .handsFree, .capturingMemory, .notice, .error:
-            return nil
+        case .idle, .preparing, .processing, .recording, .notice, .error:
+            return minimumCapsuleWidth
+        case .handsFree, .capturingMemory:
+            return minimumCapsuleWidth + 16
         }
     }
 
-    /// The shell's width for a state, resolved against the last measured content width.
-    ///
-    /// The one expression, so the drawn shell (`PillContent`), the bead's glyph
-    /// (`PillContainerView`) and the hit region (`PillWindow.drawnShellRect`) cannot come to
-    /// three different answers about where the pill ends. Two answers to one question is what
-    /// made the stop button visible and inert; see `drawnShellRect`.
     /// The narrowest a state may draw, before its content has been measured.
-    ///
-    /// **This is what stops the pill widening in two steps when you start dictating.** The four
-    /// content-driven states resolve their width from `capsuleWidth`, which `idealWidthProbe`
-    /// publishes one layout pass *after* the state changes — so on the frame the hotkey is pressed the
-    /// shell is still the 56pt resting width while the content inside it is already a dot, a meter and
-    /// a timer. It drew narrow, then jumped to the real width a pass later, which reads as the pill
-    /// stretching open rather than simply being the right size.
-    ///
-    /// A floor fixes it without freezing the width: frame one is at least this wide, so nothing is
-    /// clipped and nothing jumps, and the live transcript can still grow the pill past it as words
-    /// arrive. Sized from the row rather than guessed — `horizontalPadding` at both ends, the 8pt dot,
-    /// `Space.x2` either side of the meter, the meter's seven 3pt bars with 2.5pt between them, and
-    /// room for the m:ss timer; `.handsFree` adds the lock glyph and its gap.
     static func widthFloor(for state: PillState) -> CGFloat {
-        let meter = CGFloat(LevelMeter.barCount) * 3 + CGFloat(LevelMeter.barCount - 1) * 2.5
-        let row = horizontalPadding * 2 + 8 + Space.x2 + meter + Space.x2 + 30
         switch state {
-        case .recording: return row
-        case .handsFree: return row + 10 + Space.x2
-        case .capturingMemory: return row + 11 + Space.x2
-        default: return minimumCapsuleWidth
+        case .handsFree, .capturingMemory:
+            return minimumCapsuleWidth + 16
+        default:
+            return minimumCapsuleWidth
         }
     }
 

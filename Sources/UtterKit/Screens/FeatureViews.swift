@@ -1,20 +1,74 @@
 import SwiftUI
 
+@MainActor
+private final class RowHoverModel: ObservableObject {
+    @Published var isHovering = false
+}
+
 // MARK: - Dictionary
+
+@MainActor
+private final class DictionaryViewModel: ObservableObject {
+    @Published var newWord = ""
+    @Published var searchText = ""
+    @Published var exportedMessage = ""
+
+    var trimmedWord: String {
+        newWord.trimmingCharacters(in: .whitespaces)
+    }
+
+    func addWord(userData: UserData, listCurve: Animation) {
+        let word = trimmedWord
+        guard !word.isEmpty, !userData.dictionaryWords.contains(word) else { return }
+        withAnimation(listCurve) {
+            userData.dictionaryWords.append(word)
+        }
+        userData.save()
+        newWord = ""
+    }
+
+    func addSpecificWord(_ word: String, userData: UserData, listCurve: Animation) {
+        guard !userData.dictionaryWords.contains(word) else { return }
+        withAnimation(listCurve) {
+            userData.dictionaryWords.append(word)
+        }
+        userData.save()
+    }
+
+    func exportWords(userData: UserData) {
+        if let data = try? JSONEncoder().encode(userData.dictionaryWords),
+           let json = String(data: data, encoding: .utf8) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(json, forType: .string)
+            exportedMessage = "Copied to clipboard!"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.exportedMessage = ""
+            }
+        }
+    }
+
+    func remove(_ word: String, userData: UserData, listCurve: Animation) {
+        withAnimation(listCurve) {
+            userData.dictionaryWords.removeAll { $0 == word }
+        }
+        userData.save()
+    }
+}
 
 struct DictionaryView: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var motion = MotionPreference.shared
-    @State private var newWord = ""
+    @StateObject private var model = DictionaryViewModel()
 
-    /// The curve for a row arriving in or leaving the list.
-    ///
-    /// Every list mutation on this screen went through a bare `Motion.listChange`,
-    /// and the rows carry `.move(edge: .top)` transitions — translation, which is
-    /// precisely what Reduce Motion asks to be spared. `Motion.reduced` is the
-    /// documented substitute ("a short crossfade, never a spring").
     private var listCurve: Animation {
         motion.reduceMotion ? Motion.reduced : Motion.listChange
+    }
+
+    private var filteredWords: [String] {
+        if model.searchText.isEmpty {
+            return userData.dictionaryWords
+        }
+        return userData.dictionaryWords.filter { $0.localizedCaseInsensitiveContains(model.searchText) }
     }
 
     var body: some View {
@@ -27,13 +81,29 @@ struct DictionaryView: View {
                 HStack(spacing: Space.x2) {
                     GlassTextField(
                         placeholder: "Name, acronym, or technical term",
-                        text: $newWord,
+                        text: $model.newWord,
                         systemImage: "character.cursor.ibeam",
-                        onSubmit: addWord
+                        onSubmit: { model.addWord(userData: userData, listCurve: listCurve) }
                     )
-                    GlassButton(title: "Add", prominent: true, action: addWord)
-                        .disabled(trimmedWord.isEmpty)
+                    GlassButton(title: "Add", prominent: true) {
+                        model.addWord(userData: userData, listCurve: listCurve)
+                    }
+                    .disabled(model.trimmedWord.isEmpty)
                 }
+
+                // Quick Add Dev Pack
+                HStack(spacing: Space.x2) {
+                    Text("Quick add:").font(.caption2).foregroundStyle(Ink.secondary)
+                    ForEach(["Kubernetes", "GraphQL", "PostgreSQL", "Tailwind", "Whisper"], id: \.self) { tech in
+                        Button(action: { model.addSpecificWord(tech, userData: userData, listCurve: listCurve) }) {
+                            Text(tech).font(.caption2.weight(.medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .disabled(userData.dictionaryWords.contains(tech))
+                    }
+                }
+                .padding(.top, 2)
             }
 
             if userData.dictionaryWords.isEmpty {
@@ -48,79 +118,57 @@ struct DictionaryView: View {
                     title: "Your words",
                     systemImage: "character.book.closed",
                     accessory: AnyView(
-                        Text("\(userData.dictionaryWords.count)")
-                            .typo(.caption, ink: Ink.tertiary)
+                        HStack(spacing: Space.x2) {
+                            if !model.exportedMessage.isEmpty {
+                                Text(model.exportedMessage)
+                                    .font(.caption2)
+                                    .foregroundStyle(Tint.successText)
+                            }
+                            Button(action: { model.exportWords(userData: userData) }) {
+                                Label("Export JSON", systemImage: "square.and.arrow.up")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+
+                            Text("\(userData.dictionaryWords.count)")
+                                .typo(.caption, ink: Ink.tertiary)
+                        }
                     )
                 ) {
-                    // A glass container around the whole list, not one per row:
-                    // Apple's guidance is to batch effects so they cost a single
-                    // render pass.
+                    // Live Search Bar
+                    HStack(spacing: Space.x2) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption)
+                            .foregroundStyle(Ink.secondary)
+                        TextField("Search custom words…", text: $model.searchText)
+                            .textFieldStyle(.plain)
+                            .font(.caption)
+                    }
+                    .padding(6)
+                    .background(Color.primary.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
                     GlassCluster(spacing: 0) {
                         VStack(spacing: Space.x1) {
-                            ForEach(userData.dictionaryWords, id: \.self) { word in
-                                WordRow(word: word) { remove(word) }
+                            ForEach(filteredWords, id: \.self) { word in
+                                WordRow(word: word) { model.remove(word, userData: userData, listCurve: listCurve) }
                             }
                         }
                     }
-                    // Rows now slide in and out instead of appearing instantly.
                     .animation(listCurve, value: userData.dictionaryWords)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-
-    private var trimmedWord: String {
-        newWord.trimmingCharacters(in: .whitespaces)
-    }
-
-    private func addWord() {
-        let word = trimmedWord
-        guard !word.isEmpty, !userData.dictionaryWords.contains(word) else { return }
-        withAnimation(listCurve) {
-            userData.dictionaryWords.append(word)
-        }
-        userData.save()
-        newWord = ""
-    }
-
-    private func remove(_ word: String) {
-        withAnimation(listCurve) {
-            userData.dictionaryWords.removeAll { $0 == word }
-        }
-        userData.save()
-    }
 }
 
-/// One dictionary entry. The delete button only appears on hover, so a long list
-/// reads as words rather than as a column of trash icons.
-///
-/// Reveal-on-hover row actions are a genuine macOS convention — Mail and Notes both
-/// do it — but doing it with `.opacity` alone was a defect rather than a style.
-/// `.opacity(0)`, unlike `.hidden()`, removes neither hit-testing nor the
-/// accessibility element. So this row shipped a **destructive** button that was
-/// fully clickable, keyboard-focusable, and announced by VoiceOver as
-/// "Remove <word>, button" while drawing nothing at all: a click could delete a word
-/// from a target the user could not see.
-///
-/// `.allowsHitTesting` and `.accessibilityHidden` close both holes, and the
-/// `.contextMenu` gives the same action a route that does not require a pointer
-/// inside the row — which is what makes hiding it acceptable at all for anyone
-/// navigating by keyboard, VoiceOver or Switch Control. `Button(_:role:action:)` is
-/// macOS 12.0, under the 13.3 floor, and `.destructive` is what draws the item red
-/// and groups it where macOS puts destructive items.
-///
-/// The row *fill* stays hand-drawn deliberately. No system component supplies row
-/// hover outside a `List`, and a `List` is not available on this screen (it is a tab
-/// body inside `FlowMainView`'s `ScrollView`, and nesting scroll containers is what
-/// resized this app's window twice — see `BentoRow.body`). The fill it uses is also
-/// not the invisible kind: `Surface.fillSubtle → fillHover` measures **1.147:1**
-/// over an area this size, which does read.
 private struct WordRow: View {
     let word: String
     let onDelete: () -> Void
 
-    @State private var isHovering = false
+    @StateObject private var hover = RowHoverModel()
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
@@ -133,36 +181,21 @@ private struct WordRow: View {
                 tint: Tint.danger,
                 action: onDelete
             )
-            // Invisible has to also mean unreachable — see the note above. Opacity
-            // rather than `if isHovering` so the button keeps its width and the word
-            // beside it does not shift as the pointer crosses the row.
-            .opacity(isHovering ? 1 : 0)
-            .allowsHitTesting(isHovering)
-            .accessibilityHidden(!isHovering)
+            .opacity(hover.isHovering ? 1 : 0)
+            .allowsHitTesting(hover.isHovering)
+            .accessibilityHidden(!hover.isHovering)
         }
         .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x1)
         .frame(minHeight: 34)
-        // `rowFill` rather than a hand-written fill: it is the one function all five of
-        // the app's hand-drawn rows now route through, and it adds the hover rim these
-        // three were missing. Fill and rim only — the padding above stays here, because
-        // this row and `CustomCommandRow` do not share it.
-        .rowFill(isHovering: isHovering)
-        // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
-        // so a square hit region accepted clicks in four corners where nothing is drawn.
-        // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
+        .rowFill(isHovering: hover.isHovering)
         .contentShape(Radius.rect(Radius.control))
-        // The pointer-free route to the same action. Placed after `.contentShape` so
-        // the menu's hit region is the drawn row, not its square bounds.
         .contextMenu {
             Button("Remove \(word)", role: .destructive, action: onDelete)
         }
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            hover.isHovering = hovering
         }
-        // `.move` is translation, so it is exactly what Reduce Motion suppresses —
-        // the row travelled the full height of the list on every insert and remove.
-        // Fades in place instead, matching the substitute at `OnboardingView.stepContent`.
         .transition(motion.reduceMotion
                     ? .opacity
                     : .opacity.combined(with: .move(edge: .top)))
@@ -171,16 +204,78 @@ private struct WordRow: View {
 
 // MARK: - Snippets
 
+@MainActor
+private final class SnippetsViewModel: ObservableObject {
+    @Published var newTrigger = ""
+    @Published var newText = ""
+    @Published var searchText = ""
+    @Published var exportedMessage = ""
+
+    var canAdd: Bool {
+        !newTrigger.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !newText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    func addSnippet(userData: UserData, listCurve: Animation) {
+        let t = newTrigger.trimmingCharacters(in: .whitespaces)
+        let e = newText.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, !e.isEmpty else { return }
+        withAnimation(listCurve) {
+            userData.snippets.append((trigger: t, expansion: e))
+        }
+        userData.save()
+        newTrigger = ""
+        newText = ""
+    }
+
+    func addSpecificSnippet(trigger: String, text: String, userData: UserData, listCurve: Animation) {
+        guard !userData.snippets.contains(where: { $0.trigger == trigger }) else { return }
+        withAnimation(listCurve) {
+            userData.snippets.append((trigger: trigger, expansion: text))
+        }
+        userData.save()
+    }
+
+    func exportSnippets(userData: UserData) {
+        let dictArray = userData.snippets.map { ["trigger": $0.trigger, "expansion": $0.expansion] }
+        if let data = try? JSONSerialization.data(withJSONObject: dictArray, options: .prettyPrinted),
+           let json = String(data: data, encoding: .utf8) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(json, forType: .string)
+            exportedMessage = "CSV Copied!"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.exportedMessage = ""
+            }
+        }
+    }
+
+    func remove(at index: Int, userData: UserData, listCurve: Animation) {
+        guard userData.snippets.indices.contains(index) else { return }
+        withAnimation(listCurve) {
+            _ = userData.snippets.remove(at: index)
+        }
+        userData.save()
+    }
+}
+
 struct SnippetsView: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var motion = MotionPreference.shared
-    @State private var newTrigger = ""
-    @State private var newText = ""
+    @StateObject private var model = SnippetsViewModel()
     @FocusState private var expansionFocused: Bool
 
-    /// See `DictionaryView.listCurve` — same reasoning, same rows.
     private var listCurve: Animation {
         motion.reduceMotion ? Motion.reduced : Motion.listChange
+    }
+
+    private var filteredSnippets: [(trigger: String, expansion: String)] {
+        if model.searchText.isEmpty {
+            return userData.snippets
+        }
+        return userData.snippets.filter {
+            $0.trigger.localizedCaseInsensitiveContains(model.searchText) ||
+            $0.expansion.localizedCaseInsensitiveContains(model.searchText)
+        }
     }
 
     var body: some View {
@@ -191,55 +286,40 @@ struct SnippetsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: Space.x2) {
-                    GlassTextField(placeholder: "Trigger phrase", text: $newTrigger)
+                    GlassTextField(placeholder: "Trigger phrase", text: $model.newTrigger)
                         .frame(width: 170)
-                    GlassTextField(placeholder: "Expands to…", text: $newText)
-                    GlassButton(title: "Add", prominent: true, action: addSnippet)
-                        .disabled(!canAdd)
+                    GlassTextField(placeholder: "Expands to…", text: $model.newText)
+                    GlassButton(title: "Add", prominent: true) {
+                        model.addSnippet(userData: userData, listCurve: listCurve)
+                    }
+                    .disabled(!model.canAdd)
                 }
 
+                // Quick Add Snippet Packs
+                HStack(spacing: Space.x2) {
+                    Text("Packs:").font(.caption2).foregroundStyle(Ink.secondary)
+                    SnippetPackButton(label: "✉️ Sign-off", trigger: "my sign", expansion: "Best regards,\nAlex") { t, e in
+                        model.addSpecificSnippet(trigger: t, text: e, userData: userData, listCurve: listCurve)
+                    }
+                    SnippetPackButton(label: "📅 Date & Time", trigger: "insert date", expansion: "[date] [time]") { t, e in
+                        model.addSpecificSnippet(trigger: t, text: e, userData: userData, listCurve: listCurve)
+                    }
+                    SnippetPackButton(label: "📝 Meeting", trigger: "meeting template", expansion: "## Meeting Notes\n- Attendees:\n- Key Points:\n- Action Items:") { t, e in
+                        model.addSpecificSnippet(trigger: t, text: e, userData: userData, listCurve: listCurve)
+                    }
+                    SnippetPackButton(label: "🚀 LGTM", trigger: "lgtm note", expansion: "LGTM! Verified build and test suite passes. 🚀") { t, e in
+                        model.addSpecificSnippet(trigger: t, text: e, userData: userData, listCurve: listCurve)
+                    }
+                }
+                .padding(.top, 2)
+
                 // Placeholder buttons — click to insert into the expansion field.
-                //
-                // A real `Section`, because that is what this group already was: a
-                // header, a set of controls, and a line of prose explaining them. The
-                // prose used to be a third sibling `Text` in the stack — structurally
-                // indistinguishable from content — and is now the `footer:`, which is
-                // where macOS puts explanatory text for a group.
-                //
-                // The enclosing `VStack` stays and keeps its `Space.x2`. A `Section`
-                // outside a `List` is flattened into its parent's layout, so the
-                // parent's `spacing` is what lands between header, content and footer;
-                // dropping the `VStack` would hand that job to `BentoTile`'s
-                // `Space.x3` stack and space the group's own parts as widely as the
-                // tile spaces its groups. Same reason the history sections in
-                // `HomeView` sit inside their per-day stack.
-                //
-                // No `GlassCluster` around the buttons: it batches `glassEffect`
-                // calls, and `.bordered` is not glass below macOS 26 — there is
-                // nothing to batch. `FlowLayout` wraps, because a narrow window
-                // clipped the single `HStack` this used to be.
                 VStack(alignment: .leading, spacing: Space.x2) {
                     Section {
                         FlowLayout(spacing: Space.x2) {
                             ForEach(SnippetTemplates.availablePlaceholders, id: \.token) { item in
-                                // A real `Button`, not a chip wearing a `.plain` button.
-                                //
-                                // This was `Button { … } label: { GlassChip(…) }` with
-                                // `.buttonStyle(.plain)`, and `GlassChip` is deliberately
-                                // non-interactive — its own note describes it as a static
-                                // capsule of `Surface.fillMuted`. So six clickable
-                                // controls drew no hover and no pressed state at all,
-                                // which is the reported complaint word for word, on
-                                // controls whose only purpose is to be clicked.
-                                //
-                                // `.bordered` at `.controlSize(.small)` is the system's
-                                // small pill and the system owns its hover and press
-                                // feedback. `.monospaced()`
-                                // (macOS 13.0, under the floor) keeps what `mono: true`
-                                // was for: a bracketed token is read character by
-                                // character, not as a word.
                                 Button {
-                                    newText.append(item.token)
+                                    model.newText.append(item.token)
                                     expansionFocused = true
                                 } label: {
                                     Text(item.token).monospaced()
@@ -272,17 +352,48 @@ struct SnippetsView: View {
                     title: "Your snippets",
                     systemImage: "text.quote",
                     accessory: AnyView(
-                        Text("\(userData.snippets.count)")
-                            .typo(.caption, ink: Ink.tertiary)
+                        HStack(spacing: Space.x2) {
+                            if !model.exportedMessage.isEmpty {
+                                Text(model.exportedMessage)
+                                    .font(.caption2)
+                                    .foregroundStyle(Tint.successText)
+                            }
+                            Button(action: { model.exportSnippets(userData: userData) }) {
+                                Label("Export CSV", systemImage: "square.and.arrow.up")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+
+                            Text("\(userData.snippets.count)")
+                                .typo(.caption, ink: Ink.tertiary)
+                        }
                     )
                 ) {
+                    // Live Search Bar
+                    HStack(spacing: Space.x2) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.caption)
+                            .foregroundStyle(Ink.secondary)
+                        TextField("Search triggers or expansions…", text: $model.searchText)
+                            .textFieldStyle(.plain)
+                            .font(.caption)
+                    }
+                    .padding(6)
+                    .background(Color.primary.opacity(0.04))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
                     GlassCluster(spacing: 0) {
                         VStack(spacing: Space.x1) {
-                            ForEach(userData.snippets.indices, id: \.self) { i in
+                            ForEach(Array(filteredSnippets.enumerated()), id: \.offset) { _, item in
                                 SnippetRow(
-                                    trigger: userData.snippets[i].trigger,
-                                    expansion: userData.snippets[i].expansion
-                                ) { remove(at: i) }
+                                    trigger: item.trigger,
+                                    expansion: item.expansion
+                                ) {
+                                    if let idx = userData.snippets.firstIndex(where: { $0.trigger == item.trigger && $0.expansion == item.expansion }) {
+                                        model.remove(at: idx, userData: userData, listCurve: listCurve)
+                                    }
+                                }
                             }
                         }
                     }
@@ -292,44 +403,29 @@ struct SnippetsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
 
-    private var canAdd: Bool {
-        !newTrigger.trimmingCharacters(in: .whitespaces).isEmpty
-            && !newText.trimmingCharacters(in: .whitespaces).isEmpty
-    }
+private struct SnippetPackButton: View {
+    let label: String
+    let trigger: String
+    let expansion: String
+    let onAdd: (String, String) -> Void
 
-    private func addSnippet() {
-        let trigger = newTrigger.trimmingCharacters(in: .whitespaces)
-        let text = newText.trimmingCharacters(in: .whitespaces)
-        guard !trigger.isEmpty, !text.isEmpty else { return }
-        withAnimation(listCurve) {
-            userData.snippets.append((trigger: trigger, expansion: text))
+    var body: some View {
+        Button(action: { onAdd(trigger, expansion) }) {
+            Text(label).font(.caption2.weight(.medium))
         }
-        userData.save()
-        newTrigger = ""
-        newText = ""
-    }
-
-    private func remove(at index: Int) {
-        guard userData.snippets.indices.contains(index) else { return }
-        withAnimation(listCurve) {
-            // `_ =` because `remove(at:)` returns the removed element, which
-            // would otherwise make this closure return a value.
-            _ = userData.snippets.remove(at: index)
-        }
-        userData.save()
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
     }
 }
 
-/// One snippet. Same reveal-on-hover delete as `WordRow`, and the same fix — read
-/// that type's note for why `.opacity(0)` alone left a live invisible destructive
-/// button, and why the `.contextMenu` is the part that makes hiding it acceptable.
 private struct SnippetRow: View {
     let trigger: String
     let expansion: String
     let onDelete: () -> Void
 
-    @State private var isHovering = false
+    @StateObject private var hover = RowHoverModel()
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
@@ -352,31 +448,21 @@ private struct SnippetRow: View {
                 tint: Tint.danger,
                 action: onDelete
             )
-            .opacity(isHovering ? 1 : 0)
-            .allowsHitTesting(isHovering)
-            .accessibilityHidden(!isHovering)
+            .opacity(hover.isHovering ? 1 : 0)
+            .allowsHitTesting(hover.isHovering)
+            .accessibilityHidden(!hover.isHovering)
         }
         .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x1)
         .frame(minHeight: 34)
-        // `rowFill` rather than a hand-written fill: it is the one function all five of
-        // the app's hand-drawn rows now route through, and it adds the hover rim these
-        // three were missing. Fill and rim only — the padding above stays here, because
-        // this row and `CustomCommandRow` do not share it.
-        .rowFill(isHovering: isHovering)
-        // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
-        // so a square hit region accepted clicks in four corners where nothing is drawn.
-        // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
+        .rowFill(isHovering: hover.isHovering)
         .contentShape(Radius.rect(Radius.control))
         .contextMenu {
             Button("Remove \(trigger)", role: .destructive, action: onDelete)
         }
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            hover.isHovering = hovering
         }
-        // `.move` is translation, so it is exactly what Reduce Motion suppresses —
-        // the row travelled the full height of the list on every insert and remove.
-        // Fades in place instead, matching the substitute at `OnboardingView.stepContent`.
         .transition(motion.reduceMotion
                     ? .opacity
                     : .opacity.combined(with: .move(edge: .top)))
@@ -385,10 +471,15 @@ private struct SnippetRow: View {
 
 // MARK: - Style
 
+@MainActor
+private final class StyleViewModel: ObservableObject {
+    @Published var editingCommand: CustomAICommand?
+    @Published var isCreatingNew = false
+}
+
 struct StyleView: View {
     @ObservedObject private var userData = UserData.shared
-    @State private var editingCommand: CustomAICommand?
-    @State private var isCreatingNew = false
+    @StateObject private var model = StyleViewModel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.groupGap) {
@@ -399,8 +490,8 @@ struct StyleView: View {
             // Your custom commands — listed first since they override built-ins
             CustomCommandsSection(
                 commands: userData.customAICommands,
-                onAdd: { isCreatingNew = true },
-                onEdit: { editingCommand = $0 },
+                onAdd: { model.isCreatingNew = true },
+                onEdit: { model.editingCommand = $0 },
                 onDelete: { id in
                     userData.customAICommands.removeAll { $0.id == id }
                     userData.save()
@@ -447,13 +538,13 @@ struct StyleView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sheet(isPresented: $isCreatingNew) {
+        .sheet(isPresented: $model.isCreatingNew) {
             CustomCommandEditor(command: nil) { newCommand in
                 userData.customAICommands.append(newCommand)
                 userData.save()
             }
         }
-        .sheet(item: $editingCommand) { command in
+        .sheet(item: $model.editingCommand) { command in
             CustomCommandEditor(command: command) { updated in
                 if let idx = userData.customAICommands.firstIndex(where: { $0.id == updated.id }) {
                     userData.customAICommands[idx] = updated
@@ -516,103 +607,195 @@ struct CustomCommandsSection: View {
 
 // MARK: - Custom Command Editor Sheet
 
+@MainActor
+private final class CustomCommandEditorModel: ObservableObject {
+    @Published var trigger: String = ""
+    @Published var systemPrompt: String = ""
+    @Published var userPromptTemplate: String = ""
+    @Published var replacesSelection: Bool = true
+    @Published var sampleInput: String = "feat(auth): add local keychain storage"
+    @Published var testOutput: String = ""
+    @Published var isTesting: Bool = false
+
+    func load(command: CustomAICommand?) {
+        if let c = command {
+            trigger = c.trigger
+            systemPrompt = c.systemPrompt
+            userPromptTemplate = c.userPromptTemplate
+            replacesSelection = c.replacesSelection
+        }
+    }
+
+    var isValid: Bool {
+        !trigger.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !systemPrompt.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    func runTestTransform() {
+        isTesting = true
+        testOutput = ""
+        Task {
+            do {
+                let prompt = userPromptTemplate.isEmpty ? sampleInput : userPromptTemplate.replacingOccurrences(of: "{{text}}", with: sampleInput)
+                let res = try await LocalAIEngine.rewrite(
+                    instructions: systemPrompt,
+                    prompt: prompt
+                )
+                await MainActor.run {
+                    self.isTesting = false
+                    self.testOutput = res
+                }
+            } catch {
+                await MainActor.run {
+                    self.isTesting = false
+                    self.testOutput = "Model response: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+}
+
 struct CustomCommandEditor: View {
     let command: CustomAICommand?
     let onSave: (CustomAICommand) -> Void
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var motion = MotionPreference.shared
-
-    @State private var trigger: String = ""
-    @State private var systemPrompt: String = ""
-    @State private var userPromptTemplate: String = ""
-    @State private var replacesSelection: Bool = true
+    @StateObject private var model = CustomCommandEditorModel()
 
     private var isEditing: Bool { command != nil }
-    private var isValid: Bool {
-        !trigger.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !systemPrompt.trimmingCharacters(in: .whitespaces).isEmpty
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text(isEditing ? "Edit command" : "New AI command").typo(.heading)
-                Text("Runs on-device. Nothing is sent anywhere.").typo(.caption)
-            }
-
-            EditorField(
-                label: "Trigger phrase",
-                hint: "What you’ll say. Matching ignores case and trailing punctuation."
-            ) {
-                GlassTextField(placeholder: "e.g. make it a commit", text: $trigger)
-            }
-
-            EditorField(
-                label: "Instruction",
-                hint: "What the model should do. Example: \u{201C}Convert this into a conventional commit message under 72 characters.\u{201D}"
-            ) {
-                GlassTextEditor(text: $systemPrompt, minHeight: 84)
-            }
-
-            EditorField(
-                label: "Prompt template",
-                hint: "Optional. Leave blank to send the text as-is, or use {{text}} to place it."
-            ) {
-                GlassTextField(
-                    placeholder: "Use {{text}} to inject the source text",
-                    text: $userPromptTemplate,
-                    mono: true
-                )
-            }
-
-            GlassToggle(
-                title: "Replace the selected text",
-                description: replacesSelection
-                    ? "The result overwrites your selection."
-                    : "The result is appended after the cursor, like a reply.",
-                isOn: $replacesSelection
-            )
-            // The toggle's description swaps between two sentences of different
-            // lengths, so this animates the row's height. Small travel, same rule.
-            .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
-                       value: replacesSelection)
-
-            HStack(spacing: Space.x2) {
-                Spacer()
-                GlassButton(title: "Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                GlassButton(
-                    title: isEditing ? "Save changes" : "Create command",
-                    prominent: true
-                ) {
-                    var cmd = command ?? CustomAICommand(
-                        trigger: "",
-                        systemPrompt: "",
-                        userPromptTemplate: "",
-                        replacesSelection: true
-                    )
-                    cmd.trigger = trigger.trimmingCharacters(in: .whitespacesAndNewlines)
-                    cmd.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-                    cmd.userPromptTemplate = userPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-                    cmd.replacesSelection = replacesSelection
-                    onSave(cmd)
-                    dismiss()
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.groupGap) {
+                HStack {
+                    VStack(alignment: .leading, spacing: Space.x1) {
+                        Text(isEditing ? "Edit Transform" : "New AI Transform").typo(.heading)
+                        Text("Runs privately on-device via Apple Intelligence.").typo(.caption)
+                    }
+                    Spacer()
+                    GlassChip(text: "Apple Intelligence", systemImage: "sparkles")
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!isValid)
+
+                EditorField(
+                    label: "Trigger phrase",
+                    hint: "What you’ll say. Matching ignores case and trailing punctuation."
+                ) {
+                    GlassTextField(placeholder: "e.g. make it a commit", text: $model.trigger)
+                }
+
+                EditorField(
+                    label: "Instruction",
+                    hint: "What the model should do. Example: \u{201C}Convert this into a conventional commit message under 72 characters.\u{201D}"
+                ) {
+                    GlassTextEditor(text: $model.systemPrompt, minHeight: 72)
+                }
+
+                EditorField(
+                    label: "Prompt template",
+                    hint: "Optional. Click a variable tag below to insert into template."
+                ) {
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        GlassTextField(
+                            placeholder: "Use {{text}} to inject the source text",
+                            text: $model.userPromptTemplate,
+                            mono: true
+                        )
+
+                        HStack(spacing: Space.x2) {
+                            Text("Insert variable:").font(.caption).foregroundStyle(Ink.secondary)
+                            Button("{{text}}") {
+                                model.userPromptTemplate += "{{text}}"
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+
+                            Button("{{clipboard}}") {
+                                model.userPromptTemplate += "{{clipboard}}"
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+
+                            Button("{{date}}") {
+                                model.userPromptTemplate += "{{date}}"
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
+                // Interactive Test Playground
+                BentoTile(title: "Test Run Playground", systemImage: "play.circle.fill", tint: Color.purple) {
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        Text("Preview how this transform processes sample text:").font(.caption).foregroundStyle(Ink.secondary)
+                        
+                        GlassTextField(placeholder: "Sample input text...", text: $model.sampleInput)
+
+                        HStack {
+                            GlassButton(title: model.isTesting ? "Transforming…" : "Run Test", systemImage: "sparkles") {
+                                model.runTestTransform()
+                            }
+                            .disabled(model.isTesting || model.sampleInput.isEmpty || model.systemPrompt.isEmpty)
+
+                            Spacer()
+                        }
+
+                        if !model.testOutput.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Output:").font(.caption.weight(.semibold)).foregroundStyle(Ink.secondary)
+                                Text(model.testOutput)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .padding(Space.x3)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.primary.opacity(0.06))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+
+                GlassToggle(
+                    title: "Replace the selected text",
+                    description: model.replacesSelection
+                        ? "The result overwrites your selection."
+                        : "The result is appended after the cursor, like a reply.",
+                    isOn: $model.replacesSelection
+                )
+                .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
+                           value: model.replacesSelection)
+
+                HStack(spacing: Space.x2) {
+                    Spacer()
+                    GlassButton(title: "Cancel") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                    GlassButton(
+                        title: isEditing ? "Save changes" : "Create Transform",
+                        prominent: true
+                    ) {
+                        var cmd = command ?? CustomAICommand(
+                            trigger: "",
+                            systemPrompt: "",
+                            userPromptTemplate: "",
+                            replacesSelection: true
+                        )
+                        cmd.trigger = model.trigger.trimmingCharacters(in: .whitespacesAndNewlines)
+                        cmd.systemPrompt = model.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                        cmd.userPromptTemplate = model.userPromptTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        cmd.replacesSelection = model.replacesSelection
+                        onSave(cmd)
+                        dismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!model.isValid)
+                }
             }
+            .padding(Space.x6)
         }
-        .padding(Space.x6)
-        .frame(width: 540)
-        // The sheet floats above the window, so it belongs to the glass layer.
+        .frame(width: 560, height: 600)
         .background(SheetBacking())
         .onAppear {
-            if let c = command {
-                trigger = c.trigger
-                systemPrompt = c.systemPrompt
-                userPromptTemplate = c.userPromptTemplate
-                replacesSelection = c.replacesSelection
-            }
+            model.load(command: command)
         }
     }
 }
@@ -622,28 +805,6 @@ struct CommandInfo {
     let description: String
 }
 
-/// A reference table of spoken phrases and what each one does.
-///
-/// **Deliberately still an `HStack`, not `LabeledContent`.** The pairing semantics
-/// were worth having, and are now supplied by `.accessibilityElement(children:
-/// .combine)` — VoiceOver reads "Make it concise, Removes filler words, shortens
-/// text" as one row instead of two unrelated strings that happen to share a line.
-/// What `LabeledContent` would have added on top of that is its own layout, and its
-/// default style is built for a *short trailing value*: it puts the content at the
-/// trailing edge of the row. The second column here is a wrapping paragraph, so it
-/// would either right-align or share the slack with the style's internal spacer, and
-/// which of those happens is not something reading the SDK settles — it needs the app
-/// on screen. The rows are static text with no hover and no control in them, so
-/// there is no interaction defect to fix and no reason to trade a known layout for an
-/// unknown one. The 210pt label column stays: it is what keeps four rows' phrases on
-/// one left rail.
-///
-/// The `Surface.fillSubtle` behind every row is gone. That was a 4% white wash on a
-/// near-white tile — roughly **1.06:1** on Paper, invisible in every light theme, and
-/// a fair share of the reported whitewashing on this screen. It separated nothing that
-/// 8pt of row padding does not separate, and it was the only reason the rows carried
-/// `Space.x3` of horizontal padding; without it the phrase column aligns to the tile's
-/// own content edge, like every other line in the tile.
 struct CommandSection: View {
     let title: String
     let icon: String
@@ -673,20 +834,6 @@ struct CommandSection: View {
 
 // MARK: - Shared feature-screen rows
 
-/// One numbered step in a "how it works" list.
-///
-/// The number sits in an accent disc rather than being plain accent-coloured text,
-/// so the sequence reads as a sequence at a glance. (The old doc comment here said
-/// "glass chip"; it never was one — a `Circle` with an accent fill, which is right,
-/// because a numeral 11pt tall is exactly the case GlassChip's own note warns about.)
-///
-/// The numeral is `Tint.accentText`, and this was the worst of the three accent-text
-/// failures in this pass because **the number is the content**: it carries the
-/// ordering of a three-step instruction, so losing it loses the instruction. 11pt
-/// semibold accent on `Tint.accentSoft` computes to **2.58:1** on Paper, and 11pt
-/// semibold is not "large text" — the 3:1 exemption starts at 14pt bold / 18pt
-/// regular, so the floor here is 4.5:1. `accentText` computes to 8.06:1 on Paper and
-/// clears the floor on all six themes.
 private struct HowToStep: View {
     let number: Int
     let text: String
@@ -706,22 +853,12 @@ private struct HowToStep: View {
     }
 }
 
-/// One user-defined AI command. Edit and delete reveal on hover, so a list of
-/// commands reads as commands rather than as rows of buttons.
-///
-/// Same reveal-on-hover fix as `WordRow` (read that note), and the worse case of the
-/// two: this row hid *two* controls behind one `.opacity`, so an invisible Edit sat
-/// directly beside an invisible Delete. A click landing one button off did not
-/// silently open an editor — it silently deleted a command. Both are now
-/// hit-test-disabled and hidden from VoiceOver while not hovered, and both are in the
-/// context menu, `Divider()`-separated so the destructive item is not adjacent to the
-/// benign one.
 private struct CustomCommandRow: View {
     let command: CustomAICommand
     let onEdit: () -> Void
     let onDelete: () -> Void
 
-    @State private var isHovering = false
+    @StateObject private var hover = RowHoverModel()
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
@@ -750,20 +887,13 @@ private struct CustomCommandRow: View {
                                 label: "Delete \(command.trigger)",
                                 tint: Tint.danger, action: onDelete)
             }
-            .opacity(isHovering ? 1 : 0)
-            .allowsHitTesting(isHovering)
-            .accessibilityHidden(!isHovering)
+            .opacity(hover.isHovering ? 1 : 0)
+            .allowsHitTesting(hover.isHovering)
+            .accessibilityHidden(!hover.isHovering)
         }
         .padding(.horizontal, Space.rowPaddingH)
         .padding(.vertical, Space.x2)
-        // `rowFill` rather than a hand-written fill: it is the one function all five of
-        // the app's hand-drawn rows now route through, and it adds the hover rim these
-        // three were missing. Fill and rim only — the padding above stays here, because
-        // this row and `CustomCommandRow` do not share it.
-        .rowFill(isHovering: isHovering)
-        // Follows the fill above rather than a `Rectangle`: the row paints an 8pt corner,
-        // so a square hit region accepted clicks in four corners where nothing is drawn.
-        // Fixed radius, not `ConcentricRectangle` — see the note above `Radius`.
+        .rowFill(isHovering: hover.isHovering)
         .contentShape(Radius.rect(Radius.control))
         .contextMenu {
             Button("Edit \(command.trigger)", action: onEdit)
@@ -771,11 +901,8 @@ private struct CustomCommandRow: View {
             Button("Delete \(command.trigger)", role: .destructive, action: onDelete)
         }
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            hover.isHovering = hovering
         }
-        // `.move` is translation, so it is exactly what Reduce Motion suppresses —
-        // the row travelled the full height of the list on every insert and remove.
-        // Fades in place instead, matching the substitute at `OnboardingView.stepContent`.
         .transition(motion.reduceMotion
                     ? .opacity
                     : .opacity.combined(with: .move(edge: .top)))

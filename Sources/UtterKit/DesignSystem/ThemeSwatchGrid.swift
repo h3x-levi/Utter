@@ -43,12 +43,17 @@ struct ThemeSwatchGrid: View {
     }
 }
 
+@MainActor
+private final class SwatchHoverModel: ObservableObject {
+    @Published var isHovering = false
+}
+
 private struct ThemeSwatch: View {
     let theme: AppTheme
     let isSelected: Bool
     let action: () -> Void
 
-    @State private var isHovering = false
+    @StateObject private var model = SwatchHoverModel()
     @Environment(\.colorScheme) private var systemScheme
 
     var body: some View {
@@ -63,7 +68,7 @@ private struct ThemeSwatch: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { model.isHovering = hovering }
         }
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
         .accessibilityLabel("\(theme.name) theme")
@@ -93,7 +98,7 @@ private struct ThemeSwatch: View {
             // steps 1.32:1 in light, 1.55:1 in dark. No fill wash here on purpose: this tile
             // previews the theme's own canvas, so tinting it would misreport the choice.
             Radius.rect(Radius.control).strokeBorder(
-                isSelected ? Tint.accent : (isHovering ? Line.hairlineHover : Line.hairline),
+                isSelected ? Tint.accent : (model.isHovering ? Line.hairlineHover : Line.hairline),
                 lineWidth: isSelected ? 2 : Line.width
             )
         )
@@ -109,7 +114,7 @@ private struct ThemeSwatch: View {
         // against 0.97, and the label stepping from secondary to primary ink. A
         // drop shadow was the fourth signal for one state, and the price was every
         // swatch reading as a floating card in a flat window.
-        .scaleEffect(isSelected ? 1.0 : (isHovering ? 0.99 : 0.97))
+        .scaleEffect(isSelected ? 1.0 : (model.isHovering ? 0.99 : 0.97))
     }
 
     // A theme that defers to the system has `nil` surfaces, so the swatch has to

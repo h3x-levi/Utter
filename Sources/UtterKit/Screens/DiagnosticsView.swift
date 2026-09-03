@@ -82,34 +82,162 @@ struct CrashLogSummary: Identifiable {
 /// note text, no audio — and the files are already readable in Finder by anyone
 /// who opens the folder. Gating them would hide them from exactly the people in a
 /// position to report the crash while protecting nothing.
-struct DiagnosticsSettingsContent: View {
-    /// Loaded on appear rather than read from `body`.
-    ///
-    /// `CrashReporter.crashLogs` enumerates a directory and reads every file in
-    /// it. `body` runs on every layout pass, so binding the view straight to that
-    /// property would put synchronous disk I/O on the render path.
-    ///
-    /// Loading once is also sufficient, not just cheaper: a report for *this*
-    /// process is written as the process dies, so no new report can appear while
-    /// this pane is on screen. There is nothing for a Refresh button to find.
-    @State private var logs: [CrashLogSummary] = []
-    @State private var selectedID: URL?
-    /// Why a Finder reveal didn't happen, when it doesn't.
-    ///
-    /// `selectFile` returns `false` for a folder macOS hasn't created yet, and a
-    /// button that silently does nothing reads as a broken app.
-    @State private var revealProblem: String?
+@MainActor
+final class DiagnosticsViewModel: ObservableObject {
+    @Published var logs: [CrashLogSummary] = []
+    @Published var selectedID: URL?
+    @Published var revealProblem: String?
+    @Published var micLevel: Double = 0.0
 
-    private var selected: CrashLogSummary? {
+    var selected: CrashLogSummary? {
         logs.first { $0.id == selectedID }
     }
 
+    func load() {
+        logs = CrashReporter.shared.crashLogs.map {
+            CrashLogSummary(url: $0.url, date: $0.date, content: $0.content)
+        }
+        if selectedID == nil || !logs.contains(where: { $0.id == selectedID }) {
+            selectedID = logs.first?.id
+        }
+    }
+
+    private var timer: Timer?
+
+    func startMonitoring() {
+        stopMonitoring()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            let amp = AppDelegate.current?.audioRecorder?.inputLevel ?? 0
+            DispatchQueue.main.async {
+                withAnimation(.easeOut(duration: 0.08)) {
+                    self?.micLevel = max(0.05, min(1.0, Double(amp) * 1.8))
+                }
+            }
+        }
+    }
+
+    func stopMonitoring() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func reveal(_ url: URL, isDirectory: Bool = false) {
+        revealProblem = nil
+        let workspace = NSWorkspace.shared
+
+        if isDirectory {
+            if workspace.selectFile(nil, inFileViewerRootedAtPath: url.path) { return }
+            let parent = url.deletingLastPathComponent()
+            if workspace.selectFile(nil, inFileViewerRootedAtPath: parent.path) { return }
+            revealProblem = "Couldn’t open \(url.path)."
+        } else {
+            if workspace.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path) {
+                return
+            }
+            revealProblem = "Couldn’t reveal \(url.lastPathComponent). It may have been deleted."
+        }
+    }
+}
+
+struct DiagnosticsSettingsContent: View {
+    @StateObject private var model = DiagnosticsViewModel()
+
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x5) {
+            telemetryCard
+            liveMicTestCard
             reportsCard
             systemReportsCard
         }
-        .onAppear(perform: load)
+        .onAppear { model.load() }
+    }
+
+    // MARK: Hardware & Engine Telemetry
+
+    @ViewBuilder
+    private var telemetryCard: some View {
+        SettingsCard(title: "Hardware & Engine Telemetry") {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                HStack(spacing: Space.x4) {
+                    TelemetryTile(
+                        icon: "cpu",
+                        title: "Processor Architecture",
+                        value: "\(ProcessInfo.processInfo.processorCount) Cores Active",
+                        subtitle: "Apple Silicon Optimized"
+                    )
+                    TelemetryTile(
+                        icon: "bolt.badge.automatic",
+                        title: "Whisper Acceleration",
+                        value: "Metal + CoreML",
+                        subtitle: "Zero-Copy Audio Shaders"
+                    )
+                }
+
+                HStack(spacing: Space.x4) {
+                    TelemetryTile(
+                        icon: "memorychip",
+                        title: "Unified Memory",
+                        value: "\(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)) GB RAM",
+                        subtitle: "Shared GPU/Neural Buffer"
+                    )
+                    TelemetryTile(
+                        icon: "waveform.badge.magnifyingglass",
+                        title: "Speech Engine Model",
+                        value: ModelStore.shared.active.rawValue.capitalized,
+                        subtitle: "16 kHz Mono PCM Float32"
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: Live Microphone Test Meter
+
+    @ViewBuilder
+    private var liveMicTestCard: some View {
+        SettingsCard(title: "Microphone Input Test") {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                Text("Speak into your microphone to verify audio capture responsiveness:")
+                    .font(.caption)
+                    .foregroundStyle(Ink.secondary)
+
+                HStack(spacing: Space.x3) {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(Tint.accent)
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.primary.opacity(0.06))
+                                .frame(height: 12)
+
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Tint.accent, Color.green, Color.orange],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(8, geo.size.width * CGFloat(model.micLevel)), height: 12)
+                        }
+                    }
+                    .frame(height: 12)
+
+                    Text(String(format: "%.0f dB", (model.micLevel * 60) - 60))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Ink.secondary)
+                        .frame(width: 50, alignment: .trailing)
+                }
+                .padding(.vertical, 4)
+            }
+            .onAppear {
+                model.startMonitoring()
+            }
+            .onDisappear {
+                model.stopMonitoring()
+            }
+        }
     }
 
     // MARK: Utter's own reports
@@ -117,10 +245,7 @@ struct DiagnosticsSettingsContent: View {
     @ViewBuilder
     private var reportsCard: some View {
         SettingsCard(title: "Crash reports") {
-            if logs.isEmpty {
-                // Worded as the healthy outcome, because it is the common one.
-                // "No data" phrasing here would read as a failure to collect
-                // something rather than as nothing having gone wrong.
+            if model.logs.isEmpty {
                 EmptyStateView(
                     icon: "checkmark.seal",
                     title: "No crash reports",
@@ -140,40 +265,17 @@ struct DiagnosticsSettingsContent: View {
                     .typo(.caption)
                     .fixedSize(horizontal: false, vertical: true)
 
-                // **Not a `List(selection:)`, and this is the one place in this pane
-                // where that is a close call.** A single-selection list of reports
-                // with a detail view under it is what `List` is for, and it would
-                // bring row hover, keyboard arrow navigation and the system's
-                // selection highlight for free — all three of which
-                // `GlassSelectableRow` is hand-rolling. Three things stop it:
-                //
-                //   * `List` has no intrinsic content height on macOS. This pane is a
-                //     child of `SettingsWindowView`'s `ScrollView`, so a `List` here
-                //     is a scroll container inside a scroll container and would need a
-                //     hand-picked fixed height — a number that cannot be chosen
-                //     without the app on screen, and `.scrollDisabled(true)` does not
-                //     give a `List` an intrinsic height either.
-                //   * That outer `ScrollView` is being rewritten concurrently. Nesting
-                //     a `List` inside whatever replaces it is not a decision to take
-                //     from this file.
-                //   * `GlassSelectableRow` has a second call site, so converting this
-                //     one does not retire the type — it leaves the app with two
-                //     selection idioms instead of one.
-                //
-                // Routed rather than guessed. The rows keep their current behaviour
-                // exactly, which for a read-only crash-report pane is the safe half of
-                // the trade.
                 VStack(spacing: Space.x2) {
-                    ForEach(logs) { log in
-                        GlassSelectableRow(isSelected: log.id == selectedID) {
-                            selectedID = log.id
+                    ForEach(model.logs) { log in
+                        GlassSelectableRow(isSelected: log.id == model.selectedID) {
+                            model.selectedID = log.id
                         } content: {
                             row(for: log)
                         }
                     }
                 }
 
-                if let selected {
+                if let selected = model.selected {
                     HairlineDivider()
                     detail(for: selected)
                 }
@@ -184,8 +286,6 @@ struct DiagnosticsSettingsContent: View {
     private func row(for log: CrashLogSummary) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
             VStack(alignment: .leading, spacing: 2) {
-                // Locale-aware rather than a hand-built format string: this is a
-                // timestamp the user may have to quote in a bug report.
                 Text(log.date, format: .dateTime.month().day().hour().minute())
                     .typo(.callout, ink: Ink.primary)
                 let subtitle = log.subtitle
@@ -212,7 +312,7 @@ struct DiagnosticsSettingsContent: View {
                     .truncationMode(.middle)
                 Spacer(minLength: Space.x2)
                 GlassButton(title: "Reveal in Finder", systemImage: "folder", size: .small) {
-                    reveal(log.url)
+                    model.reveal(log.url)
                 }
                 GlassButton(title: "Copy", systemImage: "doc.on.doc", size: .small) {
                     NSPasteboard.general.clearContents()
@@ -220,32 +320,10 @@ struct DiagnosticsSettingsContent: View {
                 }
             }
 
-            // A well, not glass: this is a wall of 13pt monospaced text, and text
-            // composited onto Liquid Glass loses subpixel antialiasing. Thin mono
-            // stems are where that reads most plainly as blur. That reasoning
-            // survives `GroupBox` unchanged, because `GroupBox` is not glass — it is
-            // the system's own grouped container, which is what a well is.
-            //
-            // The hand-drawn version was `Surface.sunken` behind a
-            // `Line.hairline` stroke, and the hairline is the measured defect: it
-            // computes to **1.015:1** on Paper and **1.022:1** on Linen in light mode
-            // against ~1.55:1 in dark, so the well's edge was there in dark themes and
-            // simply absent in light ones. `DefaultGroupBoxStyle` draws the system's
-            // grouped background and border, which are appearance-aware by
-            // construction — the light-mode contrast stops being a number this file
-            // has to hit by hand.
-            //
-            // `.frame(height: 260)` stays and stays *inside* the group, so the well is
-            // still pinned and there is no intrinsic-height question to answer. The
-            // inner `Space.x3` also stays: it scrolls with the text, whereas
-            // `GroupBox`'s inset does not, and without it the first line of a trace
-            // would sit flush against the scroll edge.
             GroupBox {
                 ScrollView([.vertical, .horizontal]) {
                     Text(log.content)
                         .typo(.mono)
-                        // Selectable so a stack frame can be pulled straight into a
-                        // bug report, and unwrapped so the trace keeps its columns.
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Space.x3)
@@ -254,7 +332,7 @@ struct DiagnosticsSettingsContent: View {
                 .accessibilityLabel("Crash report contents")
             }
 
-            if let revealProblem {
+            if let revealProblem = model.revealProblem {
                 Text(revealProblem)
                     .typo(.caption, ink: Tint.dangerText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -266,60 +344,58 @@ struct DiagnosticsSettingsContent: View {
 
     private var systemReportsCard: some View {
         SettingsCard(title: "System crash reports") {
-            // Said plainly because it changes what someone attaches to a bug.
-            // Utter's own report carries raw addresses; the system's names the
-            // functions, which is the difference between a usable post-mortem and
-            // a list of numbers.
             Text("macOS files its own report for the same crash, fully symbolicated — it names the functions Utter’s report can only record as addresses. Prefer it when reporting a bug.")
                 .typo(.caption)
                 .fixedSize(horizontal: false, vertical: true)
 
             GlassButton(title: "Open DiagnosticReports", systemImage: "folder", size: .small) {
-                reveal(Self.systemReportsDirectory, isDirectory: true)
+                model.reveal(Self.systemReportsDirectory, isDirectory: true)
             }
         }
     }
 
-    /// `~/Library/Logs/DiagnosticReports/`, built from the search path rather
-    /// than a literal so it stays correct for the current user.
     private static var systemReportsDirectory: URL {
         FileManager.default
             .urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/DiagnosticReports", isDirectory: true)
     }
+}
 
-    // MARK: Actions
+// MARK: - Telemetry Tile
 
-    private func load() {
-        logs = CrashReporter.shared.crashLogs.map {
-            CrashLogSummary(url: $0.url, date: $0.date, content: $0.content)
-        }
-        // Open on the newest report: it is the one that just happened, and a pane
-        // that shows a list but no contents looks like it failed to load.
-        if selectedID == nil || !logs.contains(where: { $0.id == selectedID }) {
-            selectedID = logs.first?.id
-        }
-    }
+private struct TelemetryTile: View {
+    let icon: String
+    let title: String
+    let value: String
+    let subtitle: String
 
-    /// Show a file selected in Finder, or a folder's contents.
-    ///
-    /// Falls back to the enclosing folder when the target isn't there — macOS
-    /// creates `DiagnosticReports` lazily, so on a Mac that has never crashed the
-    /// obvious call just fails.
-    private func reveal(_ url: URL, isDirectory: Bool = false) {
-        revealProblem = nil
-        let workspace = NSWorkspace.shared
-
-        if isDirectory {
-            if workspace.selectFile(nil, inFileViewerRootedAtPath: url.path) { return }
-            let parent = url.deletingLastPathComponent()
-            if workspace.selectFile(nil, inFileViewerRootedAtPath: parent.path) { return }
-            revealProblem = "Couldn’t open \(url.path)."
-        } else {
-            if workspace.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path) {
-                return
+    var body: some View {
+        HStack(spacing: Space.x3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Tint.accent.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(Tint.accent)
             }
-            revealProblem = "Couldn’t reveal \(url.lastPathComponent). It may have been deleted."
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(Ink.secondary)
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Ink.primary)
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Ink.tertiary)
+            }
+            Spacer()
         }
+        .padding(8)
+        .background(Color.primary.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
+

@@ -21,6 +21,11 @@ import SwiftUI
 ///
 /// No word count, no progress bar, no ticker: the pill is a `.nonactivatingPanel` that
 /// cannot take key focus, so this is a display and not an editor.
+@MainActor
+private final class NoteCaptureBoxModel: ObservableObject {
+    @Published var entered = false
+}
+
 struct NoteCaptureBox: View {
     @ObservedObject var model: PillStateModel
     /// The live-indicator colour, passed in rather than picked here: `PillContent.dotTint`
@@ -36,20 +41,14 @@ struct NoteCaptureBox: View {
     @ObservedObject private var packStore = SpritePackStore.shared
     @ObservedObject private var motion = MotionPreference.shared
 
-    /// Whether the card's rows have arrived.
-    ///
-    /// The card is inserted with `.transition(.identity)` — nothing about it cross-fades, because a
-    /// fade against the outgoing state was one of the two ghosts. So the entrance is owned here
-    /// instead: each row fades and rises on its own delay (`Motion.cardRow`), which gives the card a
-    /// top-down arrival without ever drawing two states at once.
-    @State private var entered = false
+    @StateObject private var boxModel = NoteCaptureBoxModel()
 
     var body: some View {
         // 6 above, 10 below — the same 16pt total the two 8s spent, redistributed. Tightening the
         // header to its transcript says "this is the note, and here are the words"; loosening the
         // footer lets the live signals read as a status band rather than as another line of content.
         VStack(alignment: .leading, spacing: Space.x1 + 2) {
-            header.cardRow(0, entered: entered, reduceMotion: motion.reduceMotion)
+            header.cardRow(0, entered: boxModel.entered, reduceMotion: motion.reduceMotion)
             // With a companion to draw, the character takes a column of its own down the
             // left; with none, this is the card exactly as it was — one column, full-width
             // transcript, no gutter.
@@ -71,14 +70,14 @@ struct NoteCaptureBox: View {
         .frame(width: PillMetrics.noteContentWidth, alignment: .leading)
         .onAppear {
             guard !motion.reduceMotion else {
-                entered = true
+                boxModel.entered = true
                 return
             }
             // Deferred by a turn. Setting the flag and animating it in one synchronous pass is what
             // made the pill's settle inert: SwiftUI coalesces the writes and interpolates from the
             // committed value to itself. `onAppear` runs after a render, so this is belt-and-braces
             // rather than strictly required — and it costs one turn.
-            DispatchQueue.main.async { entered = true }
+            DispatchQueue.main.async { boxModel.entered = true }
         }
         // Horizontal padding comes from `PillContent`, which applies it to every state.
         .padding(.vertical, Space.x2 + 2)
@@ -105,8 +104,8 @@ struct NoteCaptureBox: View {
         VStack(alignment: .leading, spacing: Space.x2 + 2) {
             transcript
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .cardRow(1, entered: entered, reduceMotion: motion.reduceMotion)
-            footer.cardRow(2, entered: entered, reduceMotion: motion.reduceMotion)
+                .cardRow(1, entered: boxModel.entered, reduceMotion: motion.reduceMotion)
+            footer.cardRow(2, entered: boxModel.entered, reduceMotion: motion.reduceMotion)
         }
     }
 

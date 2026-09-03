@@ -247,12 +247,25 @@ final class NoteStore: ObservableObject {
                  notes: notes)
     }
 
+    private var cacheGeneration: Int = 0
+    private var cachedQuery: String?
+    private var cachedGroupGeneration: Int = -1
+    private var cachedGroups: [NoteGroup] = []
+
+    private func invalidateGroupCache() {
+        cacheGeneration &+= 1
+    }
+
     /// Newest first, grouped by modification date.
     ///
     /// Grouping and labelling deliberately match `TranscriptionHistory`
     /// (TODAY / YESTERDAY / weekday / full date) so the two screens agree.
     func grouped(matching search: String = "") -> [NoteGroup] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cachedGroupGeneration == cacheGeneration, cachedQuery == query {
+            return cachedGroups
+        }
+
         let filtered = query.isEmpty ? notes : notes.filter {
             $0.body.localizedCaseInsensitiveContains(query)
                 || $0.displayTitle.localizedCaseInsensitiveContains(query)
@@ -265,7 +278,7 @@ final class NoteStore: ObservableObject {
             return "\(c.year!)-\(c.month!)-\(c.day!)"
         }
 
-        return groups.map { key, notes in
+        let result = groups.map { key, notes in
             let sorted = notes.sorted { $0.modified > $1.modified }
             return NoteGroup(
                 id: key,
@@ -274,6 +287,11 @@ final class NoteStore: ObservableObject {
             )
         }
         .sorted { ($0.notes.first?.modified ?? .distantPast) > ($1.notes.first?.modified ?? .distantPast) }
+
+        cachedQuery = query
+        cachedGroupGeneration = cacheGeneration
+        cachedGroups = result
+        return result
     }
 
     static func dateLabel(for date: Date) -> String {
@@ -304,6 +322,7 @@ final class NoteStore: ObservableObject {
 
     private func insert(_ note: Note, select: Bool) {
         notes.insert(note, at: 0)
+        invalidateGroupCache()
         if select { selectedNoteID = note.id }
         scheduleSave()
     }
@@ -397,6 +416,7 @@ final class NoteStore: ObservableObject {
 
     func delete(id: UUID) {
         notes.removeAll { $0.id == id }
+        invalidateGroupCache()
         if selectedNoteID == id { selectedNoteID = notes.first?.id }
         scheduleSave()
     }
@@ -405,6 +425,7 @@ final class NoteStore: ObservableObject {
     /// nothing behind.
     func deleteAll() {
         notes.removeAll()
+        invalidateGroupCache()
         selectedNoteID = nil
         // Write through immediately rather than on the debounce: a user clearing
         // their data should not have it linger on disk for another second.
@@ -422,6 +443,7 @@ final class NoteStore: ObservableObject {
         guard change(&note) else { return }
         note.modified = Date()
         notes[index] = note
+        invalidateGroupCache()
         scheduleSave()
     }
 
@@ -528,6 +550,7 @@ final class NoteStore: ObservableObject {
             return
         }
         notes = decoded.sorted { $0.modified > $1.modified }
+        invalidateGroupCache()
         selectedNoteID = notes.first?.id
     }
 }

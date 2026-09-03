@@ -486,7 +486,7 @@ final class CompanionMemoryStore: ObservableObject {
 final class CompanionNotificationScheduler: ObservableObject {
     static let shared = CompanionNotificationScheduler()
 
-    enum State: Equatable {
+    enum AuthorizationState: Equatable {
         case unknown
         case authorized
         case denied
@@ -508,7 +508,7 @@ final class CompanionNotificationScheduler: ObservableObject {
     static let identifierPrefix = "utter.companion.memory."
     static let memoryIDKey = CompanionNotificationPayload.memoryIDKey
 
-    @Published private(set) var state: State = .unknown
+    @Published private(set) var state: AuthorizationState = .unknown
 
     private let center: UNUserNotificationCenter?
 

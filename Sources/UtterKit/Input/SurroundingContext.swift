@@ -79,18 +79,57 @@ enum SurroundingContext {
         }
     }
 
+    private static let cacheLock = NSLock()
+    private static var prewarmedSnapshot: Snapshot?
+    private static var prewarmedAt: Date?
+
+    /// Pre-warm surrounding context when recording starts.
+    /// Captures the insertion point state ahead of time so Whisper and SentencePolish
+    /// find a warm cache with zero main-thread AX delay when recording completes.
+    static func prewarm() {
+        guard UserData.shared.useSurroundingContext, AXIsProcessTrusted() else {
+            cacheLock.lock()
+            prewarmedSnapshot = nil
+            prewarmedAt = nil
+            cacheLock.unlock()
+            return
+        }
+        let captured = directCapture()
+        cacheLock.lock()
+        prewarmedSnapshot = captured
+        prewarmedAt = Date()
+        cacheLock.unlock()
+    }
+
+    /// Clear the cached prewarmed snapshot after a dictation turn finishes.
+    static func clearPrewarmed() {
+        cacheLock.lock()
+        prewarmedSnapshot = nil
+        prewarmedAt = nil
+        cacheLock.unlock()
+    }
+
     /// Read the context, or return an empty snapshot.
-    ///
-    /// Must be called from the main actor: the AX API is not thread-safe, and this
-    /// reads `UserData`.
-    @MainActor
+    /// Returns the prewarmed snapshot if still fresh (<= 45s), falling back to direct capture.
     static func capture() -> Snapshot {
         let empty = Snapshot(before: "")
         guard UserData.shared.useSurroundingContext else { return empty }
-        // Without this the AX calls below fail one by one; checking up front keeps
-        // the failure legible and avoids five pointless round trips.
         guard AXIsProcessTrusted() else { return empty }
 
+        cacheLock.lock()
+        let cached = prewarmedSnapshot
+        let at = prewarmedAt
+        cacheLock.unlock()
+
+        if let cached, let at, Date().timeIntervalSince(at) <= 45.0 {
+            return cached
+        }
+
+        return directCapture()
+    }
+
+    private static func directCapture() -> Snapshot {
+        let empty = Snapshot(before: "")
         guard let focused = focusedTextElement() else { return empty }
         guard !isSecure(focused) else { return empty }
 

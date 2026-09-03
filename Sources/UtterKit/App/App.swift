@@ -21,21 +21,20 @@ public struct UtterApp: App {
     public init() {}
 
     public var body: some Scene {
-        // An empty Settings scene.
-        //
-        // The app is a menu-bar app driven entirely by AppDelegate, but SwiftUI
-        // requires at least one Scene. This one exists only to satisfy that; the
-        // standard Settings command is replaced below so every route opens the real
-        // AppKit window rather than presenting this empty scene.
-        Settings { EmptyView() }
-            .commands {
-                CommandGroup(replacing: .appSettings) {
-                    Button("Settings\u{2026}") {
-                        appDelegate.showSettingsWindow()
-                    }
-                    .keyboardShortcut(",", modifiers: .command)
-                }
+        Settings {
+            HStack(spacing: 0) {
+                SettingsSidebar()
+                SettingsDetail()
             }
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings\u{2026}") {
+                    appDelegate.showSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 }
 
@@ -120,6 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         transcriptionService = TranscriptionService()
         audioRecorder = AudioRecorder()
+        SoundPlayer.preload()
 
         setupMenuBar()
 
@@ -194,8 +194,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // reachable from `open -a Utter --args --open-window`, which is the only
         // way to inspect the window when Accessibility is switched off (the
         // hotkey and the status-item menu both need it).
+        if CommandLine.arguments.contains("--render-snapshots") {
+            SnapshotRenderer.renderAll()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+
         if CommandLine.arguments.contains("--open-window") {
             showMainWindow()
+        }
+
+        // Suppress any spurious windows automatically opened by SwiftUI's default scene resolution
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            for window in NSApp.windows {
+                let isManaged = (window === self.onboardingWindow ||
+                                 window === self.mainWindow ||
+                                 window === self.settingsWindow ||
+                                 window === self.pillWindow ||
+                                 window === self.companionWindow ||
+                                 window is PillWindow ||
+                                 window is CompanionWindow)
+                if !isManaged && window.isVisible && window.title.contains("Settings") {
+                    window.orderOut(nil)
+                    window.close()
+                }
+            }
         }
     }
 
@@ -214,32 +240,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         // Onboarding gets the same translucent backing and theming as every other
-        // window. It used to be the one window without them, which would have
-        // made the app's very first screen the odd one out.
+        // window. It starts with Login if unauthenticated, then transitions to Onboarding.
         let hosting = NSHostingView(rootView: ThemedRoot {
-            OnboardingView(onFinish: { [weak self] skipped in
+            FirstRunFlowView(onFinish: { [weak self] skipped in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
-                // Hand the policy back to the preference — see the escalation at the
-                // end of this method. Ordered after the window is released so
-                // `isAnyWindowVisible` no longer sees it and the demotion is not
-                // deferred.
                 self?.applyDockVisibility()
-                // Fall through to the standard permission requests only when the user
-                // actually walked the steps.
-                //
-                // `requestMicrophonePermission` calls `AVCaptureDevice.requestAccess`
-                // on a `.notDetermined` status, which raises macOS's own cold
-                // "Utter would like to access the microphone" modal. Firing that
-                // immediately after Skip put up the exact dialog onboarding exists to
-                // replace, one frame after the user declined the explanation for it.
-                // (`requestAccessibilityPermission` was never the problem — its
-                // once-ever cap lives in `AccessibilityPermission.promptOnce`, and
-                // opening the pane already counts as having asked — but a Skip should
-                // not trigger a permission sweep at all, so both are gated.)
-                //
-                // Nothing is lost by not asking: Settings > General has a Grant button
-                // for both, and Home reports the status either way.
                 guard !skipped else { return }
                 self?.requestAccessibilityPermission()
                 self?.requestMicrophonePermission()
@@ -599,22 +605,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // collapse happens before this line runs, so it captured the *collapsed*
         // frame and every later correction faithfully restored 133x117. The size
         // the window is supposed to be is known independently, so use that.
-        // The ideal size from the design tokens — never read back from the window,
-        // which may already have collapsed by the time this line runs.
+        // Validate window dimensions on the next runloop turn.
         let intended = NSSize(width: Layout.windowIdealWidth,
                               height: Layout.windowIdealHeight)
-        for delay in [0.0, 0.05, 0.15, 0.3, 0.6, 1.0, 1.5, 2.5, 4.0] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak window] in
-                guard let window else { return }
-                guard window.frame.width < Layout.windowMinWidth
-                    || window.frame.height < Layout.windowMinHeight else { return }
-                window.setContentSize(intended)
-                // The collapse also drags the window off-screen, so re-centre
-                // whenever it is no longer visible on any display.
-                if let screen = window.screen ?? NSScreen.main,
-                   !screen.visibleFrame.intersects(window.frame) {
-                    window.center()
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak window] in
+            guard let window else { return }
+            guard window.frame.width < Layout.windowMinWidth
+                || window.frame.height < Layout.windowMinHeight else { return }
+            window.setContentSize(intended)
+            if let screen = window.screen ?? NSScreen.main,
+               !screen.visibleFrame.intersects(window.frame) {
+                window.center()
             }
         }
 
@@ -1258,10 +1259,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         isProcessing = false
         captureToNote = false
         captureToMemory = false
+        SurroundingContext.clearPrewarmed()
     }
 
     private func startRecording() {
         guard !isProcessing else { return }
+        // Prewarm surrounding text context right as recording begins
+        SurroundingContext.prewarm()
         // A meeting owns the microphone tap. Without this the dictation path would
         // call `startRecording` (a silent no-op while the tap is live) and then, on
         // release, `stopRecording` would hand back the ENTIRE meeting so far and
@@ -2351,3 +2355,28 @@ private extension NSToolbar.Identifier {
 private extension NSToolbarItem.Identifier {
     static let utterSettings = NSToolbarItem.Identifier("UtterSettings")
 }
+
+@MainActor
+private final class FirstRunFlowModel: ObservableObject {
+    @Published var showingLogin: Bool = !UserData.shared.isAuthenticated && !UserData.shared.isGuestMode
+}
+
+struct FirstRunFlowView: View {
+    var onFinish: (_ skipped: Bool) -> Void
+    @StateObject private var model = FirstRunFlowModel()
+
+    var body: some View {
+        Group {
+            if model.showingLogin {
+                LoginView { isGuest in
+                    withAnimation(Motion.layout) {
+                        model.showingLogin = false
+                    }
+                }
+            } else {
+                OnboardingView(onFinish: onFinish)
+            }
+        }
+    }
+}
+

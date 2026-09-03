@@ -3,31 +3,24 @@ import UniformTypeIdentifiers
 import AVFoundation
 import ApplicationServices
 
+@MainActor
+private final class HomeViewModel: ObservableObject {
+    @Published var searchText = ""
+}
+
 struct HomeView: View {
     @ObservedObject private var history = TranscriptionHistory.shared
     @ObservedObject private var userData = UserData.shared
-    @State private var searchText = ""
+    @StateObject private var model = HomeViewModel()
 
-    /// Width of the history search field.
-    ///
-    /// A `TextField` fills the width it is offered, and this one sits in a tile header
-    /// beside the export menu, so it needs a fixed one rather than a `Spacer` fight.
-    ///
-    /// 196 is kept as the slot width, but the arithmetic that used to justify it is
-    /// gone: it added up the hand-drawn well's own `Space.x3` insets (150 + 12 + 12 +
-    /// 12 + 8), and `GlassTextField` is now a `TextField` with
-    /// `.textFieldStyle(.roundedBorder)`, whose insets belong to the system bezel and
-    /// are not this file's to add up. What is left is a measured-by-eye slot: ~176pt
-    /// of field after the 12pt glyph and its `Space.x2` gap, which is a comfortable
-    /// search measure and leaves the header room for the export button.
     private static let searchWidth: CGFloat = 196
 
     private var filteredGroups: [HistoryGroup] {
         let groups = history.groupedByDate
-        if searchText.isEmpty { return groups }
+        if model.searchText.isEmpty { return groups }
         return groups.compactMap { group in
             let filtered = group.entries.filter {
-                $0.text.localizedCaseInsensitiveContains(searchText)
+                $0.text.localizedCaseInsensitiveContains(model.searchText)
             }
             return filtered.isEmpty ? nil : HistoryGroup(id: group.id, label: group.label, entries: filtered)
         }
@@ -35,20 +28,35 @@ struct HomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.groupGap) {
-            BentoTile(title: "Activity") {
-                VStack(alignment: .leading, spacing: 0) {
-                    activityRow("Words dictated", value: history.totalWords.formatted())
-                    Divider()
-                    activityRow("Dictations", value: history.entries.count.formatted())
-                    Divider()
-                    activityRow(
-                        "Day streak",
-                        value: history.streakDays > 0
-                            ? history.streakDays.formatted()
-                            : "\u{2014}"
-                    )
-                }
+            BentoRow(columns: 4) {
+                BentoStat(
+                    value: history.totalWords.formatted(),
+                    label: "Words Dictated",
+                    systemImage: "waveform.badge.mic",
+                    tint: Tint.accent
+                )
+                BentoStat(
+                    value: history.averageWPM,
+                    label: "Avg Speed",
+                    systemImage: "speedometer",
+                    tint: Color.cyan
+                )
+                BentoStat(
+                    value: history.entries.count.formatted(),
+                    label: "Dictations",
+                    systemImage: "sparkles",
+                    tint: Color.purple
+                )
+                BentoStat(
+                    value: history.streakDays > 0 ? "\(history.streakDays) Days" : "\u{2014}",
+                    label: "Day Streak",
+                    systemImage: "flame.fill",
+                    tint: Color.orange
+                )
             }
+
+            // 7-Day Dictation Activity Bar Chart
+            WeeklyActivityChart()
 
             // Readiness — a wide tile, since every row is live state.
             ReadyPanel(transcriptionCount: history.entries.count)
@@ -67,46 +75,20 @@ struct HomeView: View {
                         // app's landing screen got no indication that they had.
                         GlassTextField(
                             placeholder: "Search",
-                            text: $searchText,
+                            text: $model.searchText,
                             systemImage: "magnifyingglass"
                         )
                         .frame(width: Self.searchWidth)
 
-                        // Not `.searchable`, which is the obvious system answer and
-                        // does not apply: on macOS it places its field in the
-                        // surrounding `NavigationStack`/`NavigationSplitView`'s
-                        // toolbar, and this screen is inside neither — it is a tab
-                        // body in `FlowMainView`. With nowhere to put the field the
-                        // modifier renders nothing, so the search would disappear.
                         Menu {
                             Button("Markdown") { exportHistory(format: .markdown) }
                             Button("Comma-separated values") { exportHistory(format: .csv) }
                             Button("Plain text") { exportHistory(format: .text) }
                         } label: {
-                            // Explicit ink, not the ambient tint. Inheriting the
-                            // accent put this icon at **1.39:1** on the tile —
-                            // below the point where a shape reads as a control at
-                            // all, and this is a button, not decoration.
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Ink.secondary)
                         }
-                        // `.menuStyle(.button)` + `.buttonStyle(.bordered)`, which is
-                        // verbatim what the SDK's own deprecation on
-                        // `.menuStyle(.borderlessButton)` tells you to use ("Use
-                        // .menuStyle(.button) and .buttonStyle(.bordered)", macOS
-                        // 11.0 deprecated). Both macOS 13.0, under the 13.3 floor.
-                        //
-                        // It is also the fix for this button rather than only a
-                        // deprecation cleanup. `.borderlessButton` drew no bezel and
-                        // no hover, so the export affordance on the History tile was
-                        // a 12pt grey glyph floating in the header — indistinguishable
-                        // from decoration until clicked. `.bordered` gives it the
-                        // system's resting bezel and the system's hover, which is the
-                        // whole complaint about this app's light themes.
-                        //
-                        // `.frame(width: 24)` is gone with it: that width was sized to
-                        // a bare glyph and would clip a bezelled button's insets.
                         .menuStyle(.button)
                         .buttonStyle(.bordered)
                         .menuIndicator(.hidden)
@@ -126,10 +108,10 @@ struct HomeView: View {
                 } else if filteredGroups.isEmpty {
                     EmptyStateView(
                         icon: "magnifyingglass",
-                        title: "No matches for \u{201C}\(searchText)\u{201D}",
+                        title: "No matches for \u{201C}\(model.searchText)\u{201D}",
                         message: "Try a shorter phrase, or a single word.",
                         actionLabel: "Clear search",
-                        action: { searchText = "" }
+                        action: { model.searchText = "" }
                     )
                 } else {
                     // `LazyVStack`, not `VStack`: history is unbounded (300+ entries
@@ -263,24 +245,19 @@ struct HomeView: View {
 
 // MARK: - Ready panel
 
-/// Replaces the old decorative feature cards with live state. Every row here
-/// reflects something real, so it stays honest — and it answers the only
-/// question a new user actually has: "is this thing working?"
+@MainActor
+private final class ReadyPanelModel: ObservableObject {
+    @Published var expanded = true
+}
+
 struct ReadyPanel: View {
     let transcriptionCount: Int
 
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var readiness = ReadinessMonitor.shared
     @ObservedObject private var motion = MotionPreference.shared
-    @State private var expanded = true
+    @StateObject private var model = ReadyPanelModel()
 
-    /// The collapse/expand curve.
-    ///
-    /// This is the largest single piece of travel on the Home screen — the panel goes
-    /// from a 38pt bar to five status rows and a heading, roughly 200pt of height —
-    /// and it was the one place `Motion.layout` ran unbranched while eight smaller
-    /// movements in the same app were already checking. Reduce Motion cannot
-    /// meaningfully be honoured on a hover wash and ignored on this.
     private var collapseCurve: Animation {
         motion.reduceMotion ? Motion.reduced : Motion.layout
     }
@@ -294,8 +271,6 @@ struct ReadyPanel: View {
         micGranted && axGranted && modelPresent && readiness.modelLoad == .ready
     }
 
-    /// The model row states where the engine actually is — "bundled" alone was
-    /// misleading during the several seconds it takes to load 181 MB.
     private var modelValue: String {
         switch readiness.modelLoad {
         case .loading, .idle:
@@ -319,82 +294,38 @@ struct ReadyPanel: View {
         readiness.modelLoad == .loading || readiness.modelLoad == .idle
     }
 
-    /// Collapse once everything works and the user is past the first few
-    /// dictations, so it stops occupying prime space for regulars.
     private var shouldCollapse: Bool { allReady && transcriptionCount >= 5 }
 
-    /// Writes `expanded` inside `withAnimation(collapseCurve)`.
-    ///
-    /// `DisclosureGroup(isExpanded:)` sets the binding itself when its chevron is
-    /// clicked, and it animates that with SwiftUI's default curve. Routing the write
-    /// through here keeps `collapseCurve` — and therefore the Reduce Motion branch —
-    /// on the largest single piece of travel on the Home screen, which is the entire
-    /// reason `collapseCurve` exists. It is the same `withAnimation(collapseCurve)`
-    /// the hand-rolled expander did in its button actions, moved to where the system
-    /// control writes.
     private var disclosure: Binding<Bool> {
         Binding(
-            get: { expanded },
-            set: { open in withAnimation(collapseCurve) { expanded = open } }
+            get: { model.expanded },
+            set: { open in withAnimation(collapseCurve) { model.expanded = open } }
         )
     }
 
     var body: some View {
         BentoTile(title: nil) {
             if shouldCollapse {
-                // `DisclosureGroup` (macOS 11.0, under the 13.3 floor), not a
-                // hand-rolled expander.
-                //
-                // What this replaces is a whole second surface. The collapsed state
-                // was a `.buttonStyle(.plain)` `Button` wrapping a fixed 38pt row with
-                // its own `.card(radius: Radius.panel, padding: 0)` material, a
-                // hand-computed `.contentShape(Radius.rect(Radius.panel))` to stop the
-                // four unpainted corners of that card from eating clicks, and a
-                // hand-drawn `chevron.down` — while the expanded state carried a
-                // *second* hand-drawn `chevron.up` in an `IconButton` accessory. Two
-                // chevrons, two surfaces and a hit-region calculation, for one
-                // disclosure.
-                //
-                // The system supplies all of it: one chevron that knows which way it
-                // points, its own hit region, hover and pressed feedback, Space-bar
-                // activation, and the expanded/collapsed state VoiceOver announces —
-                // which the hand-rolled `Button` never did. It read as "Everything
-                // ready, Hold ⌥, to dictate, button", with nothing to say that
-                // activating it would reveal five rows.
                 DisclosureGroup(isExpanded: disclosure) {
                     panelContent
                 } label: {
-                    // A disclosure label is visible in both states, so it carries
-                    // whichever line the old two-branch layout showed: the heading
-                    // when open, the one-line summary when shut.
-                    if expanded { heading } else { summary }
+                    if model.expanded { heading } else { summary }
                 }
             } else {
-                // Not collapsible: something is still missing, or the user is inside
-                // their first five dictations. No disclosure affordance at all, which
-                // is what this branch did before — a `DisclosureGroup` here would
-                // offer to hide the readiness rows that are the only reason the panel
-                // is on screen.
                 VStack(alignment: .leading, spacing: Space.x3) {
                     heading
                     panelContent
                 }
             }
         }
-        // Full content width, like every other tile on the screen. A
-        // `readingWidth` cap here made this tile ~120pt narrower than the stat
-        // row above and the history tile below, so its right edge sat inside
-        // theirs — the one thing a bento layout cannot do. A reading-measure cap
-        // is right for prose; these are short label/value rows.
         .frame(maxWidth: .infinity)
         .onAppear {
             readiness.startPolling()
-            expanded = !shouldCollapse
+            model.expanded = !shouldCollapse
         }
         .onDisappear { readiness.stopPolling() }
     }
 
-    /// The open state's heading: what to press, or that the engine is still loading.
     @ViewBuilder
     private var heading: some View {
         HStack(spacing: Space.x2) {
@@ -412,13 +343,8 @@ struct ReadyPanel: View {
         }
     }
 
-    /// The shut state's one-liner: the five rows below, said in a sentence.
     private var summary: some View {
         HStack(spacing: Space.x2) {
-            // `checkmark.circle.fill`, the same glyph `StatusRow` draws for `.ok`, not
-            // a 7pt `Circle` filled green. The collapsed line now says what the five
-            // rows it stands in for say, in the same shape — and the meaning stops
-            // resting on hue alone, which a bare tinted dot cannot avoid.
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Tint.success)
@@ -430,8 +356,6 @@ struct ReadyPanel: View {
         }
     }
 
-    /// The divider and the five live rows — identical in both branches, which is why
-    /// they are one property rather than two copies that can drift apart.
     private var panelContent: some View {
         VStack(alignment: .leading, spacing: Space.x3) {
             HairlineDivider()
@@ -473,12 +397,6 @@ struct ReadyPanel: View {
 
 // MARK: - History row
 
-/// Applies text selection only when `active`, without changing the view's identity per frame.
-///
-/// `.textSelection(.enabled)` and `.disabled` are different types, so they cannot be chosen with a
-/// ternary; a `ViewModifier` erases the difference. Selection realises several AppKit-hosted views
-/// per row, so keeping it off until a pointer or keyboard is actually on the row is what takes that
-/// cost off the scroll path — see the call site in `HistoryRow`.
 private struct HoverTextSelection: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {
@@ -486,21 +404,34 @@ private struct HoverTextSelection: ViewModifier {
     }
 }
 
+@MainActor
+private final class HistoryRowModel: ObservableObject {
+    @Published var isHovering = false
+    @Published var copied = false
+    @Published var expanded = false
+
+    func copy(text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.copied = false
+        }
+    }
+}
+
 struct HistoryRow: View {
     let entry: TranscriptionEntry
     var onDelete: () -> Void = {}
 
-    @State private var isHovering = false
+    @StateObject private var model = HistoryRowModel()
     @FocusState private var isFocused: Bool
-    @State private var copied = false
-    @State private var expanded = false
     @ObservedObject private var motion = MotionPreference.shared
 
     private var isTruncatable: Bool { entry.text.count > 160 }
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.x3) {
-            // Locale-aware and tabular, so the column doesn't jitter.
             Text(entry.timestamp, format: .dateTime.hour().minute())
                 .typo(.timestamp)
                 .frame(width: 72, alignment: .trailing)
@@ -508,26 +439,15 @@ struct HistoryRow: View {
             VStack(alignment: .leading, spacing: Space.x1) {
                 Text(entry.text)
                     .typo(.transcript)
-                    .lineLimit(expanded ? nil : 3)
+                    .lineLimit(model.expanded ? nil : 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // Selectable only while the row is hovered or focused, not for every visible
-                    // row all the time. `.textSelection(.enabled)` realises ~4 AppKit-hosted views
-                    // per row, and doing that for every row as it enters the lazy viewport is a
-                    // large per-frame cost while scrolling the history — part of the "mouse wheel
-                    // lags" the user reported. Applied through a modifier because the enabled and
-                    // disabled selectability types are not the same type and cannot be ternaried;
-                    // the modifier erases that, and switches once per hover rather than per frame.
-                    .modifier(HoverTextSelection(active: isHovering || isFocused))
+                    .modifier(HoverTextSelection(active: model.isHovering || isFocused))
 
                 HStack(spacing: Space.x2) {
                     if isTruncatable {
-                        // Unbounded travel, not a fixed step: the row goes from a
-                        // 3-line clamp to however long the transcription is, which for
-                        // a dictated paragraph is the tallest thing on the screen. It
-                        // was the only expand in the app with no Reduce Motion branch.
-                        Button(expanded ? "Show less" : "Show more") {
+                        Button(model.expanded ? "Show less" : "Show more") {
                             withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
-                                expanded.toggle()
+                                model.expanded.toggle()
                             }
                         }
                         .buttonStyle(.plain)
@@ -539,38 +459,35 @@ struct HistoryRow: View {
                 }
             }
 
-            // Fixed width so the row doesn't reflow when actions appear.
             HStack(spacing: Space.x1) {
-                if isHovering || isFocused {
+                if model.isHovering || isFocused {
+                    IconButton(systemName: "square.and.pencil",
+                                label: "Create note from transcription") {
+                        NoteStore.shared.create(body: entry.text)
+                    }
                     IconButton(systemName: "arrow.uturn.left.square",
-                               label: "Paste into the previous app") {
+                                label: "Paste into the previous app") {
                         reinject(entry.text)
                     }
-                    IconButton(systemName: copied ? "checkmark" : "doc.on.doc",
-                               label: copied ? "Copied" : "Copy transcription",
-                               tint: copied ? Tint.success : nil) {
-                        copy()
+                    IconButton(systemName: model.copied ? "checkmark" : "doc.on.doc",
+                                label: model.copied ? "Copied" : "Copy transcription",
+                                tint: model.copied ? Tint.success : nil) {
+                        model.copy(text: entry.text)
                     }
                     IconButton(systemName: "trash", label: "Delete transcription") {
-                        // Not in the audit's list, but the same class: removing a row
-                        // slides every row below it up the list, which is travel.
                         withAnimation(motion.reduceMotion ? Motion.reduced : Motion.listChange) {
                             onDelete()
                         }
                     }
                 }
             }
-            .frame(width: 88, alignment: .trailing)
-            .accessibilityValue(copied ? "Copied" : "")
+            .frame(width: 116, alignment: .trailing)
+            .accessibilityValue(model.copied ? "Copied" : "")
         }
         .padding(.vertical, Space.rowPaddingV)
         .padding(.horizontal, Space.rowPaddingH)
         .frame(minHeight: Layout.rowMinHeight)
-        // Was `.rowFill()`, which reads no state — so this row, on the app's default
-        // screen, had a hover step of exactly 1.000:1 while its four siblings all moved
-        // their fill. The three action buttons still appeared, which is why it read as
-        // "controls materialise out of nowhere" rather than as nothing happening.
-        .rowFill(isHovering: isHovering)
+        .rowFill(isHovering: model.isHovering)
         .overlay(
             Radius.rect(Radius.control)
                 .strokeBorder(Line.focus, lineWidth: Line.focusWidth)
@@ -578,33 +495,109 @@ struct HistoryRow: View {
                 .padding(-1)
         )
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { model.isHovering = hovering }
         }
         .focusable()
         .focused($isFocused)
-        // Hover-only actions are unreachable by keyboard and invisible to
-        // VoiceOver, so mirror all three in a context menu.
         .contextMenu {
+            Button("Create Note from Transcription") { NoteStore.shared.create(body: entry.text) }
             Button("Paste into the previous app") { reinject(entry.text) }
-            Button("Copy transcription") { copy() }
+            Button("Copy transcription") { model.copy(text: entry.text) }
             Divider()
             Button("Delete transcription", role: .destructive) { onDelete() }
         }
     }
 
-    private func copy() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(entry.text, forType: .string)
-        copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-    }
-
-    /// Hide Utter so the previously-focused app regains focus, then paste there.
-    /// The short delay lets macOS finish the focus switch before we inject.
     private func reinject(_ text: String) {
         NSApp.hide(nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             TextInjector.typeText(text)
+        }
+    }
+}
+
+// MARK: - Weekly Activity Bar Chart
+
+struct WeeklyActivityChart: View {
+    @ObservedObject private var history = TranscriptionHistory.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    struct DayMetric: Identifiable {
+        let id = UUID()
+        let dayName: String
+        let date: Date
+        let count: Int
+        let isToday: Bool
+    }
+
+    private var last7Days: [DayMetric] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var days: [DayMetric] = []
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEE"
+
+        for offset in (0..<7).reversed() {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let nextDate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            let count = history.entries.filter { $0.timestamp >= date && $0.timestamp < nextDate }.reduce(0) { $0 + $1.wordCount }
+            let isToday = calendar.isDateInToday(date)
+            days.append(DayMetric(
+                dayName: isToday ? "Today" : dayFormatter.string(from: date),
+                date: date,
+                count: count,
+                isToday: isToday
+            ))
+        }
+        return days
+    }
+
+    private var maxCount: Int {
+        max(10, last7Days.map(\.count).max() ?? 10)
+    }
+
+    var body: some View {
+        BentoTile(
+            title: "7-Day Dictation Activity",
+            systemImage: "chart.bar.xaxis",
+            tint: Tint.accent
+        ) {
+            VStack(alignment: .leading, spacing: Space.x2) {
+                HStack(alignment: .bottom, spacing: Space.x3) {
+                    ForEach(last7Days) { metric in
+                        VStack(spacing: Space.x1) {
+                            Text(metric.count > 0 ? "\(metric.count)" : "0")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(metric.isToday ? Tint.accent : Ink.secondary)
+                                .monospacedDigit()
+
+                            GeometryReader { _ in
+                                let heightFraction = CGFloat(metric.count) / CGFloat(maxCount)
+                                let barHeight = max(6, heightFraction * 44)
+                                VStack {
+                                    Spacer(minLength: 0)
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(
+                                            metric.isToday
+                                                ? LinearGradient(colors: [Tint.accent, Tint.accent.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+                                                : LinearGradient(colors: [Color.primary.opacity(0.25), Color.primary.opacity(0.1)], startPoint: .top, endPoint: .bottom)
+                                        )
+                                        .frame(height: barHeight)
+                                }
+                            }
+                            .frame(height: 48)
+
+                            Text(metric.dayName)
+                                .font(.system(size: 11, weight: metric.isToday ? .bold : .regular))
+                                .foregroundStyle(metric.isToday ? Tint.accent : Ink.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.top, Space.x1)
+            }
         }
     }
 }

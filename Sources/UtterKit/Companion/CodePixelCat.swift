@@ -476,7 +476,7 @@ struct CodePixelCatView: View {
             elapsed: elapsed,
             reduceMotion: motion.reduceMotion
         )
-        Canvas(rendersAsynchronously: false) { context, canvasSize in
+        Canvas(rendersAsynchronously: true) { context, canvasSize in
             CodePixelCatRenderer.draw(
                 style: style,
                 mood: mood,
@@ -516,7 +516,6 @@ private enum CodePixelCatRenderer {
         canvasSize: CGSize,
         displayScale: CGFloat
     ) {
-        let palette = palette(for: style, heat: pose.heat)
         let articulation = CodeCompanionArticulation.resolve(
             mood: mood,
             gait: pose.gait,
@@ -524,95 +523,989 @@ private enum CodePixelCatRenderer {
             objectPlay: pose.objectPlay
         )
 
-        func fill(_ x: Int, _ y: Int, _ width: Int, _ height: Int, _ color: Color) {
-            guard width > 0, height > 0 else { return }
-            let pixel = min(canvasSize.width, canvasSize.height) / 32
-            let scale = max(1, displayScale)
-            let left = (CGFloat(x) * pixel * scale).rounded() / scale
-            let top = (CGFloat(y) * pixel * scale).rounded() / scale
-            let right = (CGFloat(x + width) * pixel * scale).rounded() / scale
-            let bottom = (CGFloat(y + height) * pixel * scale).rounded() / scale
-            let rect = CGRect(
-                x: left,
-                y: top,
-                width: max(1 / scale, right - left),
-                height: max(1 / scale, bottom - top)
-            )
-            context.fill(Path(rect), with: .color(color))
-        }
+        drawVectorCompanion(
+            style: style,
+            mood: mood,
+            pose: pose,
+            frame: frame,
+            articulation: articulation,
+            in: &context,
+            size: canvasSize
+        )
+    }
 
-        func fine(_ x: Int, _ y: Int, _ width: Int, _ height: Int, _ color: Color) {
-            guard width > 0, height > 0 else { return }
-            let pixel = min(canvasSize.width, canvasSize.height) / 64
-            let scale = max(1, displayScale)
-            let left = (CGFloat(x) * pixel * scale).rounded() / scale
-            let top = (CGFloat(y) * pixel * scale).rounded() / scale
-            let right = (CGFloat(x + width) * pixel * scale).rounded() / scale
-            let bottom = (CGFloat(y + height) * pixel * scale).rounded() / scale
-            let rect = CGRect(
-                x: left,
-                y: top,
-                width: max(1 / scale, right - left),
-                height: max(1 / scale, bottom - top)
-            )
-            context.fill(Path(rect), with: .color(color))
-        }
+    private static func drawVectorCompanion(
+        style: CodePixelCatStyle,
+        mood: CompanionMood,
+        pose: CompanionPose,
+        frame: CodePixelCatFrame,
+        articulation: CodeCompanionArticulation,
+        in context: inout GraphicsContext,
+        size: CGSize
+    ) {
+        let S = min(size.width, size.height)
+        guard S > 0 else { return }
 
-        var usesFineBase = false
-        switch articulation.form {
-        case .walking:
-            drawWalking(style: style, frame: frame, palette: palette, fill: fill)
-        case .held where style.species == .cat:
-            usesFineBase = true
-            drawArticulatedCatHeld(
-                style: style, articulation: articulation, pose: pose,
-                palette: palette, fine: fine
-            )
-        case .held:
-            drawHeld(style: style, frame: frame, pose: pose, palette: palette, fill: fill)
-        case .crouching where style.species == .cat:
-            usesFineBase = true
-            drawArticulatedCatCrouching(
-                style: style, articulation: articulation, pose: pose,
-                palette: palette, fine: fine
-            )
-        case .crouching:
-            drawHunting(style: style, frame: frame, pose: pose, palette: palette, fill: fill)
-        case .loaf where style.species == .cat:
-            usesFineBase = true
-            drawArticulatedCatLoaf(
-                style: style,
-                articulation: articulation,
-                pose: pose,
-                palette: palette,
-                fine: fine
-            )
-        case .rolling where style.species == .cat:
-            usesFineBase = true
-            drawArticulatedCatRolling(
-                style: style,
-                articulation: articulation,
-                pose: pose,
-                palette: palette,
-                fine: fine
-            )
-        case .loaf, .rolling:
-            drawSleeping(style: style, frame: frame, palette: palette, fill: fill)
-        case .seated:
-            usesFineBase = true
-            drawHighFidelitySeated(
-                style: style,
+        // Articulation offsets mapped to vector space
+        let hx = CGFloat(articulation.headX) * (S / 64)
+        let hy = CGFloat(articulation.headY) * (S / 64)
+        let by = CGFloat(articulation.bodyY + articulation.bodyCompression) * (S / 64)
+        let ley = CGFloat(articulation.leftEarY) * (S / 64)
+        let rey = CGFloat(articulation.rightEarY) * (S / 64)
+        let lpx = CGFloat(articulation.leftFrontPawX) * (S / 64)
+        let lpy = CGFloat(articulation.leftFrontPawY) * (S / 64)
+        let rpx = CGFloat(articulation.rightFrontPawX) * (S / 64)
+        let rpy = CGFloat(articulation.rightFrontPawY) * (S / 64)
+        let tailX = CGFloat(articulation.tailTipX) * (S / 64)
+        let tailY = CGFloat(articulation.tailTipY) * (S / 64)
+
+        // Real-time smooth cursor gaze vector
+        let gazeX = CGFloat(max(-1.0, min(1.0, pose.eyeAim.dx))) * (S * 0.024)
+        let gazeY = CGFloat(max(-1.0, min(1.0, -pose.eyeAim.dy))) * (S * 0.024)
+
+        // Soft ambient occlusion ground shadow
+        let shadowW = S * 0.70
+        let shadowH = S * 0.11
+        let shadowRect = CGRect(x: S * 0.5 - shadowW * 0.5, y: S * 0.86 + by, width: shadowW, height: shadowH)
+        context.fill(Path(ellipseIn: shadowRect), with: .color(Color.black.opacity(0.18)))
+
+        switch style.species {
+        case .cat:
+            let isGinger = (style == .orange)
+            drawVectorCat(
+                isGinger: isGinger,
                 mood: mood,
-                frame: frame,
-                articulation: articulation,
                 pose: pose,
-                palette: palette,
-                fine: fine
+                articulation: articulation,
+                frame: frame,
+                in: &context,
+                S: S,
+                hx: hx, hy: hy, by: by,
+                ley: ley, rey: rey,
+                lpx: lpx, lpy: lpy,
+                rpx: rpx, rpy: rpy,
+                tailX: tailX, tailY: tailY,
+                gazeX: gazeX, gazeY: gazeY
+            )
+        case .dog:
+            drawVectorDog(
+                mood: mood,
+                pose: pose,
+                articulation: articulation,
+                frame: frame,
+                in: &context,
+                S: S,
+                hx: hx, hy: hy, by: by,
+                ley: ley, rey: rey,
+                lpx: lpx, lpy: lpy,
+                rpx: rpx, rpy: rpy,
+                tailX: tailX, tailY: tailY,
+                gazeX: gazeX, gazeY: gazeY
+            )
+        case .panda:
+            drawVectorPanda(
+                mood: mood,
+                pose: pose,
+                articulation: articulation,
+                frame: frame,
+                in: &context,
+                S: S,
+                hx: hx, hy: hy, by: by,
+                ley: ley, rey: rey,
+                lpx: lpx, lpy: lpy,
+                rpx: rpx, rpy: rpy,
+                tailX: tailX, tailY: tailY,
+                gazeX: gazeX, gazeY: gazeY
             )
         }
-        if !usesFineBase {
-            drawTexture(style: style, mood: mood, frame: frame, pose: pose,
-                        palette: palette, fine: fine)
+
+        // Fluster / Heat reaction (soft blush & steam)
+        if pose.heat > 0 {
+            let blushAlpha = min(0.75, Double(pose.heat) * 0.8)
+            let blushW = S * 0.13
+            let blushH = S * 0.08
+            let blushL = CGRect(x: S * 0.22 + hx, y: S * 0.46 + hy, width: blushW, height: blushH)
+            let blushR = CGRect(x: S * 0.65 + hx, y: S * 0.46 + hy, width: blushW, height: blushH)
+            context.fill(Path(ellipseIn: blushL), with: .color(Color(red: 1.0, green: 0.28, blue: 0.42).opacity(blushAlpha)))
+            context.fill(Path(ellipseIn: blushR), with: .color(Color(red: 1.0, green: 0.28, blue: 0.42).opacity(blushAlpha)))
+
+            if frame.steam {
+                var steamPath = Path()
+                steamPath.move(to: CGPoint(x: S * 0.78 + hx, y: S * 0.18 + hy))
+                steamPath.addQuadCurve(to: CGPoint(x: S * 0.86 + hx, y: S * 0.08 + hy), control: CGPoint(x: S * 0.84 + hx, y: S * 0.14 + hy))
+                steamPath.addQuadCurve(to: CGPoint(x: S * 0.82 + hx, y: S * 0.02 + hy), control: CGPoint(x: S * 0.88 + hx, y: S * 0.05 + hy))
+                context.stroke(steamPath, with: .color(Color.white.opacity(0.8)), style: StrokeStyle(lineWidth: S * 0.022, lineCap: .round))
+            }
+        }
+    }
+
+    private static func drawVectorCat(
+        isGinger: Bool,
+        mood: CompanionMood,
+        pose: CompanionPose,
+        articulation: CodeCompanionArticulation,
+        frame: CodePixelCatFrame,
+        in context: inout GraphicsContext,
+        S: CGFloat,
+        hx: CGFloat, hy: CGFloat, by: CGFloat,
+        ley: CGFloat, rey: CGFloat,
+        lpx: CGFloat, lpy: CGFloat,
+        rpx: CGFloat, rpy: CGFloat,
+        tailX: CGFloat, tailY: CGFloat,
+        gazeX: CGFloat, gazeY: CGFloat
+    ) {
+        let isLoaf = articulation.form == .loaf || mood == .sleepy || mood == .loaf
+        let isWalking = articulation.form == .walking || pose.gait == .walking
+        let isHeld = articulation.form == .held || mood == .held
+        let isThinking = mood == .thinking
+        let isDelighted = mood == .delighted
+        let isKneading = mood == .kneading
+
+        let coatColor = isGinger ? Color(red: 0.96, green: 0.54, blue: 0.16) : Color(red: 0.22, green: 0.24, blue: 0.28)
+        let coatHighlight = isGinger ? Color(red: 1.0, green: 0.70, blue: 0.36) : Color(red: 0.36, green: 0.39, blue: 0.45)
+        let coatShadow = isGinger ? Color(red: 0.78, green: 0.34, blue: 0.08) : Color(red: 0.14, green: 0.15, blue: 0.18)
+        let creamColor = isGinger ? Color(red: 1.0, green: 0.94, blue: 0.82) : Color(red: 0.90, green: 0.91, blue: 0.94)
+        let stripeColor = isGinger ? Color(red: 0.55, green: 0.22, blue: 0.08) : Color(red: 0.10, green: 0.11, blue: 0.13)
+        let pinkColor = Color(red: 0.96, green: 0.56, blue: 0.62)
+        let outlineColor = isGinger ? Color(red: 0.32, green: 0.14, blue: 0.06) : Color(red: 0.08, green: 0.09, blue: 0.11)
+        let irisColor = isGinger ? Color(red: 0.42, green: 0.82, blue: 0.25) : Color(red: 0.22, green: 0.78, blue: 0.88)
+        let irisDark = isGinger ? Color(red: 0.18, green: 0.48, blue: 0.10) : Color(red: 0.08, green: 0.42, blue: 0.52)
+
+        // ── 1. Far Hind Leg (Back Left Leg) ──
+        if !isLoaf {
+            let backThighX = S * 0.18
+            let backThighY = S * 0.70 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[2]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[2]) * (S * 0.04)
+                let farPawRect = CGRect(x: backThighX + stride, y: S * 0.82 + by - lift, width: S * 0.14, height: S * 0.10)
+                context.fill(Path(roundedRect: farPawRect, cornerRadius: S * 0.05), with: .color(coatShadow))
+            } else if !isHeld {
+                let farHaunch = Path(ellipseIn: CGRect(x: backThighX, y: backThighY, width: S * 0.18, height: S * 0.16))
+                context.fill(farHaunch, with: .color(coatShadow))
+                let farPaw = Path(roundedRect: CGRect(x: S * 0.14, y: S * 0.81 + by, width: S * 0.13, height: S * 0.09), cornerRadius: S * 0.045)
+                context.fill(farPaw, with: .color(creamColor.opacity(0.85)))
+            }
+        }
+
+        // ── 2. Tail ──
+        var tailPath = Path()
+        if isLoaf {
+            let tailRoot = CGPoint(x: S * 0.68, y: S * 0.78 + by)
+            let tailTip = CGPoint(x: S * 0.28, y: S * 0.85 + by)
+            tailPath.move(to: tailRoot)
+            tailPath.addQuadCurve(to: tailTip, control: CGPoint(x: S * 0.86, y: S * 0.88 + by))
+            context.stroke(tailPath, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+        } else if isHeld {
+            let tailRoot = CGPoint(x: S * 0.50, y: S * 0.84 + by)
+            let tailTip = CGPoint(x: S * 0.54 + tailX * 0.5, y: S * 0.98 + by)
+            tailPath.move(to: tailRoot)
+            tailPath.addQuadCurve(to: tailTip, control: CGPoint(x: S * 0.52, y: S * 0.91 + by))
+            context.stroke(tailPath, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.09, lineCap: .round))
+        } else {
+            let tailRoot = CGPoint(x: S * 0.68, y: S * 0.74 + by)
+            let tailMid = CGPoint(x: S * 0.85 + tailX * 0.5, y: S * 0.58 + by + tailY * 0.5)
+            let tailTip = CGPoint(x: S * 0.90 + tailX, y: S * 0.38 + by + tailY)
+            tailPath.move(to: tailRoot)
+            tailPath.addQuadCurve(to: tailTip, control: tailMid)
+            context.stroke(tailPath, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round, lineJoin: .round))
+
+            var tipPath = Path()
+            tipPath.move(to: CGPoint(x: tailMid.x * 0.35 + tailTip.x * 0.65, y: tailMid.y * 0.35 + tailTip.y * 0.65))
+            tipPath.addLine(to: tailTip)
+            context.stroke(tipPath, with: .color(creamColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+        }
+
+        // ── 3. Torso Silhouette ──
+        var bodyPath = Path()
+        if isLoaf {
+            let loafRect = CGRect(x: S * 0.20, y: S * 0.56 + by, width: S * 0.60, height: S * 0.30)
+            bodyPath.addRoundedRect(in: loafRect, cornerSize: CGSize(width: S * 0.24, height: S * 0.15))
+        } else if isHeld {
+            let bTopL = CGPoint(x: S * 0.36, y: S * 0.46 + by)
+            let bTopR = CGPoint(x: S * 0.64, y: S * 0.46 + by)
+            let bBotR = CGPoint(x: S * 0.68, y: S * 0.90 + by)
+            let bBotL = CGPoint(x: S * 0.32, y: S * 0.90 + by)
+            bodyPath.move(to: bTopL)
+            bodyPath.addLine(to: bTopR)
+            bodyPath.addQuadCurve(to: bBotR, control: CGPoint(x: S * 0.70, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: bBotL, control: CGPoint(x: S * 0.50, y: S * 0.92 + by))
+            bodyPath.addQuadCurve(to: bTopL, control: CGPoint(x: S * 0.30, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        } else {
+            let bTopL = CGPoint(x: S * 0.34, y: S * 0.50 + by)
+            let bTopR = CGPoint(x: S * 0.66, y: S * 0.50 + by)
+            let bBotR = CGPoint(x: S * 0.74, y: S * 0.84 + by)
+            let bBotL = CGPoint(x: S * 0.26, y: S * 0.84 + by)
+            bodyPath.move(to: bTopL)
+            bodyPath.addLine(to: bTopR)
+            bodyPath.addQuadCurve(to: bBotR, control: CGPoint(x: S * 0.76, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: bBotL, control: CGPoint(x: S * 0.50, y: S * 0.88 + by))
+            bodyPath.addQuadCurve(to: bTopL, control: CGPoint(x: S * 0.24, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        }
+
+        context.fill(bodyPath, with: .linearGradient(
+            Gradient(colors: [coatHighlight, coatColor, coatShadow]),
+            startPoint: CGPoint(x: S * 0.5, y: S * 0.48 + by),
+            endPoint: CGPoint(x: S * 0.5, y: S * 0.88 + by)
+        ))
+
+        // Torso Flank Stripes
+        for side in [-1.0, 1.0] {
+            let cx = S * 0.5 + CGFloat(side) * S * 0.21
+            var s1 = Path()
+            s1.move(to: CGPoint(x: cx, y: S * 0.60 + by))
+            s1.addQuadCurve(to: CGPoint(x: cx - CGFloat(side) * S * 0.06, y: S * 0.63 + by), control: CGPoint(x: cx - CGFloat(side) * S * 0.03, y: S * 0.62 + by))
+            context.stroke(s1, with: .color(stripeColor), style: StrokeStyle(lineWidth: S * 0.026, lineCap: .round))
+
+            var s2 = Path()
+            s2.move(to: CGPoint(x: cx, y: S * 0.70 + by))
+            s2.addQuadCurve(to: CGPoint(x: cx - CGFloat(side) * S * 0.08, y: S * 0.73 + by), control: CGPoint(x: cx - CGFloat(side) * S * 0.04, y: S * 0.72 + by))
+            context.stroke(s2, with: .color(stripeColor), style: StrokeStyle(lineWidth: S * 0.026, lineCap: .round))
+        }
+
+        // Cream Belly Bib
+        var bibPath = Path()
+        bibPath.move(to: CGPoint(x: S * 0.38, y: S * 0.51 + by))
+        bibPath.addQuadCurve(to: CGPoint(x: S * 0.62, y: S * 0.51 + by), control: CGPoint(x: S * 0.50, y: S * 0.53 + by))
+        bibPath.addQuadCurve(to: CGPoint(x: S * 0.64, y: S * 0.81 + by), control: CGPoint(x: S * 0.65, y: S * 0.67 + by))
+        bibPath.addQuadCurve(to: CGPoint(x: S * 0.36, y: S * 0.81 + by), control: CGPoint(x: S * 0.50, y: S * 0.84 + by))
+        bibPath.addQuadCurve(to: CGPoint(x: S * 0.38, y: S * 0.51 + by), control: CGPoint(x: S * 0.35, y: S * 0.67 + by))
+        bibPath.closeSubpath()
+        context.fill(bibPath, with: .color(creamColor))
+
+        // ── 4. Near Hind Haunch (Right Rear / Fore Haunch) ──
+        if !isLoaf {
+            let nearThighX = S * 0.64
+            let nearThighY = S * 0.66 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[3]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[3]) * (S * 0.04)
+                let nearPawRect = CGRect(x: nearThighX + stride, y: S * 0.82 + by - lift, width: S * 0.15, height: S * 0.11)
+                context.fill(Path(roundedRect: nearPawRect, cornerRadius: S * 0.055), with: .color(creamColor))
+                context.stroke(Path(roundedRect: nearPawRect, cornerRadius: S * 0.055), with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+            } else if !isHeld {
+                // Muscular sitting haunch
+                let haunchPath = Path(ellipseIn: CGRect(x: nearThighX - S * 0.06, y: nearThighY, width: S * 0.22, height: S * 0.18))
+                context.fill(haunchPath, with: .linearGradient(
+                    Gradient(colors: [coatHighlight, coatColor]),
+                    startPoint: CGPoint(x: nearThighX, y: nearThighY),
+                    endPoint: CGPoint(x: nearThighX + S * 0.12, y: nearThighY + S * 0.18)
+                ))
+                let nearPaw = Path(roundedRect: CGRect(x: nearThighX + S * 0.02, y: S * 0.80 + by, width: S * 0.14, height: S * 0.10), cornerRadius: S * 0.05)
+                context.fill(nearPaw, with: .color(creamColor))
+                context.stroke(nearPaw, with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+            }
+        }
+
+        // ── 5. Forelimbs & Front Paws ──
+        let pawW = S * 0.15
+        let pawH = S * 0.12
+
+        if isLoaf {
+            // Tiny tucked toes peeking under chest
+            let nubL = CGRect(x: S * 0.36, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            let nubR = CGRect(x: S * 0.52, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            for rect in [nubL, nubR] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.3), with: .color(creamColor))
+            }
+        } else if isWalking && frame.legStrides.count >= 2 {
+            // Articulated 4-limb walk cycle: Forelegs
+            let leftWalkX = S * 0.32 + CGFloat(frame.legStrides[0]) * (S * 0.06)
+            let leftWalkY = S * 0.79 - CGFloat(frame.legLifts[0]) * (S * 0.04) + by
+            let rightWalkX = S * 0.52 + CGFloat(frame.legStrides[1]) * (S * 0.06)
+            let rightWalkY = S * 0.79 - CGFloat(frame.legLifts[1]) * (S * 0.04) + by
+
+            // Left forearm
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.58 + by))
+            leftArm.addLine(to: CGPoint(x: leftWalkX + pawW * 0.5, y: leftWalkY + pawH * 0.5))
+            context.stroke(leftArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+
+            // Right forearm
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.60, y: S * 0.58 + by))
+            rightArm.addLine(to: CGPoint(x: rightWalkX + pawW * 0.5, y: rightWalkY + pawH * 0.5))
+            context.stroke(rightArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+
+            // Paw pads
+            for rect in [CGRect(x: leftWalkX, y: leftWalkY, width: pawW, height: pawH),
+                         CGRect(x: rightWalkX, y: rightWalkY, width: pawW, height: pawH)] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+                context.stroke(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+            }
+        } else if isKneading {
+            // Alternating biscuit-making arms
+            let kneadCycle = sin(Double(frame.phase) * .pi * 0.5)
+            let leftKneadY = S * 0.78 + by + CGFloat(kneadCycle) * (S * 0.035)
+            let rightKneadY = S * 0.78 + by - CGFloat(kneadCycle) * (S * 0.035)
+
+            let leftPawRect = CGRect(x: S * 0.30 + lpx, y: leftKneadY, width: pawW * 1.05, height: pawH)
+            let rightPawRect = CGRect(x: S * 0.54 + rpx, y: rightKneadY, width: pawW * 1.05, height: pawH)
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+                context.stroke(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+                // Pink toe beans
+                let padRect = CGRect(x: rect.midX - pawW * 0.22, y: rect.midY - pawH * 0.2, width: pawW * 0.44, height: pawH * 0.4)
+                context.fill(Path(ellipseIn: padRect), with: .color(pinkColor.opacity(0.85)))
+            }
+        } else if isThinking {
+            // One arm raised to chin
+            let leftPawRect = CGRect(x: S * 0.32 + lpx, y: S * 0.79 + by, width: pawW, height: pawH)
+            let raisedPawRect = CGRect(x: S * 0.54 + hx, y: S * 0.48 + hy, width: pawW * 0.95, height: pawH * 0.95)
+
+            var arm = Path()
+            arm.move(to: CGPoint(x: S * 0.58, y: S * 0.62 + by))
+            arm.addLine(to: CGPoint(x: raisedPawRect.midX, y: raisedPawRect.midY))
+            context.stroke(arm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+
+            context.fill(Path(roundedRect: leftPawRect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+            context.fill(Path(roundedRect: raisedPawRect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+        } else if isDelighted {
+            // Both paws thrown in the air celebrating!
+            let leftPawRect = CGRect(x: S * 0.20 + hx, y: S * 0.34 + hy, width: pawW, height: pawH)
+            let rightPawRect = CGRect(x: S * 0.65 + hx, y: S * 0.34 + hy, width: pawW, height: pawH)
+
+            for (start, end) in [(CGPoint(x: S * 0.36, y: S * 0.54 + by), CGPoint(x: leftPawRect.midX, y: leftPawRect.midY)),
+                                 (CGPoint(x: S * 0.64, y: S * 0.54 + by), CGPoint(x: rightPawRect.midX, y: rightPawRect.midY))] {
+                var arm = Path()
+                arm.move(to: start)
+                arm.addLine(to: end)
+                context.stroke(arm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.10, lineCap: .round))
+            }
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+                let padRect = CGRect(x: rect.midX - pawW * 0.22, y: rect.midY - pawH * 0.2, width: pawW * 0.44, height: pawH * 0.4)
+                context.fill(Path(ellipseIn: padRect), with: .color(pinkColor.opacity(0.85)))
+            }
+        } else if isHeld {
+            // Dangling paws
+            let leftPawRect = CGRect(x: S * 0.32 + lpx, y: S * 0.85 + by, width: pawW * 0.9, height: pawH * 1.1)
+            let rightPawRect = CGRect(x: S * 0.54 + rpx, y: S * 0.85 + by, width: pawW * 0.9, height: pawH * 1.1)
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.45), with: .color(creamColor))
+                context.stroke(Path(roundedRect: rect, cornerRadius: pawH * 0.45), with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+            }
+        } else {
+            // Standard seated forelegs & paws
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.54 + by))
+            leftArm.addLine(to: CGPoint(x: S * 0.38 + lpx, y: S * 0.78 + by + lpy))
+            context.stroke(leftArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.62, y: S * 0.54 + by))
+            rightArm.addLine(to: CGPoint(x: S * 0.60 + rpx, y: S * 0.78 + by + rpy))
+            context.stroke(rightArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            let leftPawRect = CGRect(x: S * 0.31 + lpx, y: S * 0.79 + by + lpy, width: pawW, height: pawH)
+            let rightPawRect = CGRect(x: S * 0.53 + rpx, y: S * 0.79 + by + rpy, width: pawW, height: pawH)
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+                context.stroke(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(outlineColor.opacity(0.3)), lineWidth: S * 0.01)
+
+                var toe1 = Path()
+                toe1.move(to: CGPoint(x: rect.minX + pawW * 0.33, y: rect.maxY - pawH * 0.45))
+                toe1.addLine(to: CGPoint(x: rect.minX + pawW * 0.33, y: rect.maxY))
+                var toe2 = Path()
+                toe2.move(to: CGPoint(x: rect.minX + pawW * 0.66, y: rect.maxY - pawH * 0.45))
+                toe2.addLine(to: CGPoint(x: rect.minX + pawW * 0.66, y: rect.maxY))
+                context.stroke(toe1, with: .color(outlineColor.opacity(0.35)), style: StrokeStyle(lineWidth: S * 0.012, lineCap: .round))
+                context.stroke(toe2, with: .color(outlineColor.opacity(0.35)), style: StrokeStyle(lineWidth: S * 0.012, lineCap: .round))
+            }
+        }
+
+        // ── 6. Ears ──
+        var leftEar = Path()
+        leftEar.move(to: CGPoint(x: S * 0.20 + hx, y: S * 0.38 + hy + ley))
+        leftEar.addQuadCurve(to: CGPoint(x: S * 0.27 + hx, y: S * 0.10 + hy + ley), control: CGPoint(x: S * 0.18 + hx, y: S * 0.22 + hy + ley))
+        leftEar.addQuadCurve(to: CGPoint(x: S * 0.44 + hx, y: S * 0.24 + hy + ley), control: CGPoint(x: S * 0.37 + hx, y: S * 0.16 + hy + ley))
+        leftEar.closeSubpath()
+        context.fill(leftEar, with: .color(coatColor))
+
+        var innerLeft = Path()
+        innerLeft.move(to: CGPoint(x: S * 0.24 + hx, y: S * 0.34 + hy + ley))
+        innerLeft.addQuadCurve(to: CGPoint(x: S * 0.28 + hx, y: S * 0.16 + hy + ley), control: CGPoint(x: S * 0.23 + hx, y: S * 0.24 + hy + ley))
+        innerLeft.addQuadCurve(to: CGPoint(x: S * 0.40 + hx, y: S * 0.26 + hy + ley), control: CGPoint(x: S * 0.36 + hx, y: S * 0.20 + hy + ley))
+        innerLeft.closeSubpath()
+        context.fill(innerLeft, with: .color(pinkColor))
+
+        var rightEar = Path()
+        rightEar.move(to: CGPoint(x: S * 0.56 + hx, y: S * 0.24 + hy + rey))
+        rightEar.addQuadCurve(to: CGPoint(x: S * 0.73 + hx, y: S * 0.10 + hy + rey), control: CGPoint(x: S * 0.63 + hx, y: S * 0.16 + hy + rey))
+        rightEar.addQuadCurve(to: CGPoint(x: S * 0.80 + hx, y: S * 0.38 + hy + rey), control: CGPoint(x: S * 0.82 + hx, y: S * 0.22 + hy + rey))
+        rightEar.closeSubpath()
+        context.fill(rightEar, with: .color(coatColor))
+
+        var innerRight = Path()
+        innerRight.move(to: CGPoint(x: S * 0.60 + hx, y: S * 0.26 + hy + rey))
+        innerRight.addQuadCurve(to: CGPoint(x: S * 0.72 + hx, y: S * 0.16 + hy + rey), control: CGPoint(x: S * 0.64 + hx, y: S * 0.20 + hy + rey))
+        innerRight.addQuadCurve(to: CGPoint(x: S * 0.76 + hx, y: S * 0.34 + hy + rey), control: CGPoint(x: S * 0.77 + hx, y: S * 0.24 + hy + rey))
+        innerRight.closeSubpath()
+        context.fill(innerRight, with: .color(pinkColor))
+
+        // ── 7. Head ──
+        let headRect = CGRect(x: S * 0.18 + hx, y: S * 0.20 + hy, width: S * 0.64, height: S * 0.46)
+        let headPath = Path(roundedRect: headRect, cornerRadius: S * 0.22)
+        context.fill(headPath, with: .radialGradient(
+            Gradient(colors: [coatHighlight, coatColor, coatShadow]),
+            center: CGPoint(x: S * 0.46 + hx, y: S * 0.36 + hy),
+            startRadius: S * 0.04,
+            endRadius: S * 0.38
+        ))
+
+        // Tabby Forehead Markings (M crest)
+        var tabbyM = Path()
+        tabbyM.move(to: CGPoint(x: S * 0.40 + hx, y: S * 0.23 + hy))
+        tabbyM.addQuadCurve(to: CGPoint(x: S * 0.50 + hx, y: S * 0.32 + hy), control: CGPoint(x: S * 0.45 + hx, y: S * 0.25 + hy))
+        tabbyM.addQuadCurve(to: CGPoint(x: S * 0.60 + hx, y: S * 0.23 + hy), control: CGPoint(x: S * 0.55 + hx, y: S * 0.25 + hy))
+        context.stroke(tabbyM, with: .color(stripeColor), style: StrokeStyle(lineWidth: S * 0.032, lineCap: .round, lineJoin: .round))
+
+        var centerStripe = Path()
+        centerStripe.move(to: CGPoint(x: S * 0.50 + hx, y: S * 0.22 + hy))
+        centerStripe.addLine(to: CGPoint(x: S * 0.50 + hx, y: S * 0.30 + hy))
+        context.stroke(centerStripe, with: .color(stripeColor), style: StrokeStyle(lineWidth: S * 0.030, lineCap: .round))
+
+        // Snout & Cheeks
+        let snoutRect = CGRect(x: S * 0.35 + hx, y: S * 0.43 + hy, width: S * 0.30, height: S * 0.19)
+        context.fill(Path(roundedRect: snoutRect, cornerRadius: S * 0.095), with: .color(creamColor))
+
+        // Nose
+        var nosePath = Path()
+        let noseCenter = CGPoint(x: S * 0.50 + hx, y: S * 0.47 + hy)
+        nosePath.move(to: CGPoint(x: noseCenter.x - S * 0.03, y: noseCenter.y - S * 0.012))
+        nosePath.addLine(to: CGPoint(x: noseCenter.x + S * 0.03, y: noseCenter.y - S * 0.012))
+        nosePath.addLine(to: CGPoint(x: noseCenter.x, y: noseCenter.y + S * 0.022))
+        nosePath.closeSubpath()
+        context.fill(nosePath, with: .color(pinkColor))
+
+        // Smiling mouth (ω) or happy open mouth
+        if isDelighted || articulation.mouthOpen {
+            let openMouth = CGRect(x: S * 0.46 + hx, y: S * 0.50 + hy, width: S * 0.08, height: S * 0.07)
+            context.fill(Path(roundedRect: openMouth, cornerRadius: S * 0.035), with: .color(pinkColor))
+        }
+        var mouth = Path()
+        mouth.move(to: CGPoint(x: noseCenter.x - S * 0.055, y: noseCenter.y + S * 0.04))
+        mouth.addQuadCurve(to: CGPoint(x: noseCenter.x, y: noseCenter.y + S * 0.04), control: CGPoint(x: noseCenter.x - S * 0.028, y: noseCenter.y + S * 0.07))
+        mouth.addQuadCurve(to: CGPoint(x: noseCenter.x + S * 0.055, y: noseCenter.y + S * 0.04), control: CGPoint(x: noseCenter.x + S * 0.028, y: noseCenter.y + S * 0.07))
+        context.stroke(mouth, with: .color(outlineColor), style: StrokeStyle(lineWidth: S * 0.02, lineCap: .round))
+
+        // Whiskers
+        for side in [-1.0, 1.0] {
+            let wx = S * 0.50 + hx + CGFloat(side) * S * 0.13
+            let wy = S * 0.48 + hy
+            var w1 = Path()
+            w1.move(to: CGPoint(x: wx, y: wy))
+            w1.addLine(to: CGPoint(x: wx + CGFloat(side) * S * 0.15, y: wy - S * 0.025))
+            var w2 = Path()
+            w2.move(to: CGPoint(x: wx, y: wy + S * 0.02))
+            w2.addLine(to: CGPoint(x: wx + CGFloat(side) * S * 0.15, y: wy + S * 0.03))
+            context.stroke(w1, with: .color(stripeColor.opacity(0.55)), style: StrokeStyle(lineWidth: S * 0.012, lineCap: .round))
+            context.stroke(w2, with: .color(stripeColor.opacity(0.55)), style: StrokeStyle(lineWidth: S * 0.012, lineCap: .round))
+        }
+
+        // ── 8. Glossy Eyes ──
+        let eyeL = CGPoint(x: S * 0.33 + hx, y: S * 0.39 + hy)
+        let eyeR = CGPoint(x: S * 0.67 + hx, y: S * 0.39 + hy)
+        let eyeW = S * 0.15
+        let eyeH = S * 0.17
+
+        if articulation.eyesClosed || isLoaf {
+            for center in [eyeL, eyeR] {
+                var closedEye = Path()
+                closedEye.move(to: CGPoint(x: center.x - eyeW * 0.5, y: center.y + eyeH * 0.1))
+                closedEye.addQuadCurve(to: CGPoint(x: center.x + eyeW * 0.5, y: center.y + eyeH * 0.1), control: CGPoint(x: center.x, y: center.y - eyeH * 0.45))
+                context.stroke(closedEye, with: .color(outlineColor), style: StrokeStyle(lineWidth: S * 0.035, lineCap: .round))
+            }
+        } else {
+            for center in [eyeL, eyeR] {
+                let eyeRect = CGRect(x: center.x - eyeW * 0.5, y: center.y - eyeH * 0.5, width: eyeW, height: eyeH)
+                context.fill(Path(ellipseIn: eyeRect), with: .color(outlineColor))
+
+                let irisRect = CGRect(x: center.x - eyeW * 0.44 + gazeX, y: center.y - eyeH * 0.44 + gazeY, width: eyeW * 0.88, height: eyeH * 0.88)
+                context.fill(Path(ellipseIn: irisRect), with: .radialGradient(
+                    Gradient(colors: [irisColor, irisDark, Color.black]),
+                    center: CGPoint(x: irisRect.midX, y: irisRect.midY),
+                    startRadius: S * 0.01,
+                    endRadius: eyeW * 0.44
+                ))
+
+                let pupilW = (articulation.eyesWide || isHeld) ? eyeW * 0.52 : eyeW * 0.38
+                let pupilH = (articulation.eyesWide || isHeld) ? eyeH * 0.52 : eyeH * 0.60
+                let pupilRect = CGRect(x: irisRect.midX - pupilW * 0.5, y: irisRect.midY - pupilH * 0.5, width: pupilW, height: pupilH)
+                context.fill(Path(ellipseIn: pupilRect), with: .color(Color.black))
+
+                // Specular Catchlights
+                let glint1 = CGRect(x: irisRect.midX - eyeW * 0.28, y: irisRect.midY - eyeH * 0.32, width: eyeW * 0.36, height: eyeH * 0.36)
+                context.fill(Path(ellipseIn: glint1), with: .color(Color.white.opacity(0.95)))
+                let glint2 = CGRect(x: irisRect.midX + eyeW * 0.10, y: irisRect.midY + eyeH * 0.12, width: eyeW * 0.18, height: eyeH * 0.18)
+                context.fill(Path(ellipseIn: glint2), with: .color(Color.white.opacity(0.85)))
+            }
+        }
+    }
+
+    private static func drawVectorDog(
+        mood: CompanionMood,
+        pose: CompanionPose,
+        articulation: CodeCompanionArticulation,
+        frame: CodePixelCatFrame,
+        in context: inout GraphicsContext,
+        S: CGFloat,
+        hx: CGFloat, hy: CGFloat, by: CGFloat,
+        ley: CGFloat, rey: CGFloat,
+        lpx: CGFloat, lpy: CGFloat,
+        rpx: CGFloat, rpy: CGFloat,
+        tailX: CGFloat, tailY: CGFloat,
+        gazeX: CGFloat, gazeY: CGFloat
+    ) {
+        let isLoaf = articulation.form == .loaf || mood == .sleepy || mood == .loaf
+        let isWalking = articulation.form == .walking || pose.gait == .walking
+        let isHeld = articulation.form == .held || mood == .held
+        let isDelighted = mood == .delighted
+
+        let coatColor = Color(red: 0.94, green: 0.68, blue: 0.30)
+        let coatHighlight = Color(red: 1.0, green: 0.82, blue: 0.48)
+        let coatShadow = Color(red: 0.76, green: 0.48, blue: 0.16)
+        let earColor = Color(red: 0.72, green: 0.42, blue: 0.14)
+        let creamColor = Color(red: 1.0, green: 0.96, blue: 0.88)
+        let noseColor = Color(red: 0.14, green: 0.11, blue: 0.09)
+        let tongueColor = Color(red: 0.98, green: 0.45, blue: 0.52)
+        let outlineColor = Color(red: 0.28, green: 0.16, blue: 0.08)
+
+        // ── 1. Far Hind Leg ──
+        if !isLoaf {
+            let backThighX = S * 0.18
+            let backThighY = S * 0.70 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[2]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[2]) * (S * 0.04)
+                let farPawRect = CGRect(x: backThighX + stride, y: S * 0.82 + by - lift, width: S * 0.15, height: S * 0.11)
+                context.fill(Path(roundedRect: farPawRect, cornerRadius: S * 0.055), with: .color(coatShadow))
+            } else if !isHeld {
+                let farHaunch = Path(ellipseIn: CGRect(x: backThighX, y: backThighY, width: S * 0.20, height: S * 0.17))
+                context.fill(farHaunch, with: .color(coatShadow))
+                let farPaw = Path(roundedRect: CGRect(x: S * 0.14, y: S * 0.81 + by, width: S * 0.14, height: S * 0.10), cornerRadius: S * 0.05)
+                context.fill(farPaw, with: .color(creamColor.opacity(0.85)))
+            }
+        }
+
+        // ── 2. Wagging Tail ──
+        var tailPath = Path()
+        if isLoaf {
+            let tailRoot = CGPoint(x: S * 0.68, y: S * 0.78 + by)
+            tailPath.move(to: tailRoot)
+            tailPath.addQuadCurve(to: CGPoint(x: S * 0.32, y: S * 0.86 + by), control: CGPoint(x: S * 0.85, y: S * 0.88 + by))
+            context.stroke(tailPath, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+        } else {
+            let wagSway = isDelighted ? CGFloat(sin(Double(frame.phase) * .pi)) * (S * 0.12) : 0
+            let tailRoot = CGPoint(x: S * 0.68, y: S * 0.72 + by)
+            let tailTip = CGPoint(x: S * 0.88 + tailX + wagSway, y: S * 0.38 + by + tailY)
+            tailPath.move(to: tailRoot)
+            tailPath.addQuadCurve(to: tailTip, control: CGPoint(x: S * 0.85, y: S * 0.60 + by))
+            context.stroke(tailPath, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.12, lineCap: .round))
+        }
+
+        // ── 3. Torso ──
+        var bodyPath = Path()
+        if isLoaf {
+            bodyPath.addRoundedRect(in: CGRect(x: S * 0.20, y: S * 0.56 + by, width: S * 0.60, height: S * 0.30), cornerSize: CGSize(width: S * 0.24, height: S * 0.15))
+        } else if isHeld {
+            bodyPath.move(to: CGPoint(x: S * 0.36, y: S * 0.46 + by))
+            bodyPath.addLine(to: CGPoint(x: S * 0.64, y: S * 0.46 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.68, y: S * 0.90 + by), control: CGPoint(x: S * 0.70, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.32, y: S * 0.90 + by), control: CGPoint(x: S * 0.50, y: S * 0.92 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.36, y: S * 0.46 + by), control: CGPoint(x: S * 0.30, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        } else {
+            bodyPath.move(to: CGPoint(x: S * 0.34, y: S * 0.50 + by))
+            bodyPath.addLine(to: CGPoint(x: S * 0.66, y: S * 0.50 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.75, y: S * 0.84 + by), control: CGPoint(x: S * 0.77, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.25, y: S * 0.84 + by), control: CGPoint(x: S * 0.50, y: S * 0.88 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.34, y: S * 0.50 + by), control: CGPoint(x: S * 0.23, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        }
+
+        context.fill(bodyPath, with: .linearGradient(
+            Gradient(colors: [coatHighlight, coatColor, coatShadow]),
+            startPoint: CGPoint(x: S * 0.5, y: S * 0.48 + by),
+            endPoint: CGPoint(x: S * 0.5, y: S * 0.88 + by)
+        ))
+
+        // Cream Chest
+        var chestPath = Path()
+        chestPath.move(to: CGPoint(x: S * 0.38, y: S * 0.52 + by))
+        chestPath.addQuadCurve(to: CGPoint(x: S * 0.62, y: S * 0.52 + by), control: CGPoint(x: S * 0.50, y: S * 0.54 + by))
+        chestPath.addQuadCurve(to: CGPoint(x: S * 0.64, y: S * 0.80 + by), control: CGPoint(x: S * 0.65, y: S * 0.68 + by))
+        chestPath.addQuadCurve(to: CGPoint(x: S * 0.36, y: S * 0.80 + by), control: CGPoint(x: S * 0.50, y: S * 0.84 + by))
+        chestPath.closeSubpath()
+        context.fill(chestPath, with: .color(creamColor))
+
+        // ── 4. Near Hind Haunch ──
+        if !isLoaf {
+            let nearThighX = S * 0.64
+            let nearThighY = S * 0.66 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[3]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[3]) * (S * 0.04)
+                let nearPawRect = CGRect(x: nearThighX + stride, y: S * 0.82 + by - lift, width: S * 0.15, height: S * 0.11)
+                context.fill(Path(roundedRect: nearPawRect, cornerRadius: S * 0.055), with: .color(creamColor))
+            } else if !isHeld {
+                let haunchPath = Path(ellipseIn: CGRect(x: nearThighX - S * 0.06, y: nearThighY, width: S * 0.22, height: S * 0.18))
+                context.fill(haunchPath, with: .linearGradient(
+                    Gradient(colors: [coatHighlight, coatColor]),
+                    startPoint: CGPoint(x: nearThighX, y: nearThighY),
+                    endPoint: CGPoint(x: nearThighX + S * 0.12, y: nearThighY + S * 0.18)
+                ))
+                let nearPaw = Path(roundedRect: CGRect(x: nearThighX + S * 0.02, y: S * 0.80 + by, width: S * 0.14, height: S * 0.10), cornerRadius: S * 0.05)
+                context.fill(nearPaw, with: .color(creamColor))
+            }
+        }
+
+        // ── 5. Forelegs & Paws ──
+        let pawW = S * 0.16
+        let pawH = S * 0.13
+
+        if isLoaf {
+            let nubL = CGRect(x: S * 0.36, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            let nubR = CGRect(x: S * 0.52, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            for rect in [nubL, nubR] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.3), with: .color(creamColor))
+            }
+        } else if isWalking && frame.legStrides.count >= 2 {
+            let leftWalkX = S * 0.31 + CGFloat(frame.legStrides[0]) * (S * 0.06)
+            let leftWalkY = S * 0.79 - CGFloat(frame.legLifts[0]) * (S * 0.04) + by
+            let rightWalkX = S * 0.53 + CGFloat(frame.legStrides[1]) * (S * 0.06)
+            let rightWalkY = S * 0.79 - CGFloat(frame.legLifts[1]) * (S * 0.04) + by
+
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.58 + by))
+            leftArm.addLine(to: CGPoint(x: leftWalkX + pawW * 0.5, y: leftWalkY + pawH * 0.5))
+            context.stroke(leftArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.60, y: S * 0.58 + by))
+            rightArm.addLine(to: CGPoint(x: rightWalkX + pawW * 0.5, y: rightWalkY + pawH * 0.5))
+            context.stroke(rightArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            for rect in [CGRect(x: leftWalkX, y: leftWalkY, width: pawW, height: pawH),
+                         CGRect(x: rightWalkX, y: rightWalkY, width: pawW, height: pawH)] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+            }
+        } else {
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.54 + by))
+            leftArm.addLine(to: CGPoint(x: S * 0.38 + lpx, y: S * 0.78 + by + lpy))
+            context.stroke(leftArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.62, y: S * 0.54 + by))
+            rightArm.addLine(to: CGPoint(x: S * 0.60 + rpx, y: S * 0.78 + by + rpy))
+            context.stroke(rightArm, with: .color(coatColor), style: StrokeStyle(lineWidth: S * 0.11, lineCap: .round))
+
+            let leftPawRect = CGRect(x: S * 0.31 + lpx, y: S * 0.79 + by + lpy, width: pawW, height: pawH)
+            let rightPawRect = CGRect(x: S * 0.53 + rpx, y: S * 0.79 + by + rpy, width: pawW, height: pawH)
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(creamColor))
+            }
+        }
+
+        // ── 6. Floppy Puppy Ears ──
+        var leftEar = Path()
+        leftEar.move(to: CGPoint(x: S * 0.26 + hx, y: S * 0.24 + hy + ley))
+        leftEar.addQuadCurve(to: CGPoint(x: S * 0.12 + hx, y: S * 0.48 + hy + ley), control: CGPoint(x: S * 0.10 + hx, y: S * 0.30 + hy + ley))
+        leftEar.addQuadCurve(to: CGPoint(x: S * 0.24 + hx, y: S * 0.52 + hy + ley), control: CGPoint(x: S * 0.16 + hx, y: S * 0.56 + hy + ley))
+        leftEar.addQuadCurve(to: CGPoint(x: S * 0.28 + hx, y: S * 0.36 + hy + ley), control: CGPoint(x: S * 0.26 + hx, y: S * 0.44 + hy + ley))
+        leftEar.closeSubpath()
+        context.fill(leftEar, with: .color(earColor))
+
+        var rightEar = Path()
+        rightEar.move(to: CGPoint(x: S * 0.74 + hx, y: S * 0.24 + hy + rey))
+        rightEar.addQuadCurve(to: CGPoint(x: S * 0.88 + hx, y: S * 0.48 + hy + rey), control: CGPoint(x: S * 0.90 + hx, y: S * 0.30 + hy + rey))
+        rightEar.addQuadCurve(to: CGPoint(x: S * 0.76 + hx, y: S * 0.52 + hy + rey), control: CGPoint(x: S * 0.84 + hx, y: S * 0.56 + hy + rey))
+        rightEar.addQuadCurve(to: CGPoint(x: S * 0.72 + hx, y: S * 0.36 + hy + rey), control: CGPoint(x: S * 0.74 + hx, y: S * 0.44 + hy + rey))
+        rightEar.closeSubpath()
+        context.fill(rightEar, with: .color(earColor))
+
+        // ── 7. Head ──
+        let headRect = CGRect(x: S * 0.20 + hx, y: S * 0.19 + hy, width: S * 0.60, height: S * 0.46)
+        context.fill(Path(roundedRect: headRect, cornerRadius: S * 0.22), with: .radialGradient(
+            Gradient(colors: [coatHighlight, coatColor, coatShadow]),
+            center: CGPoint(x: S * 0.48 + hx, y: S * 0.35 + hy),
+            startRadius: S * 0.04,
+            endRadius: S * 0.36
+        ))
+
+        // Snout & Nose
+        let muzzleRect = CGRect(x: S * 0.34 + hx, y: S * 0.41 + hy, width: S * 0.32, height: S * 0.21)
+        context.fill(Path(roundedRect: muzzleRect, cornerRadius: S * 0.10), with: .color(creamColor))
+
+        let noseRect = CGRect(x: S * 0.45 + hx, y: S * 0.43 + hy, width: S * 0.10, height: S * 0.07)
+        context.fill(Path(roundedRect: noseRect, cornerRadius: S * 0.035), with: .color(noseColor))
+        let noseGlint = CGRect(x: S * 0.47 + hx, y: S * 0.44 + hy, width: S * 0.03, height: S * 0.02)
+        context.fill(Path(ellipseIn: noseGlint), with: .color(Color.white.opacity(0.8)))
+
+        // Tongue / Mouth
+        if isDelighted || articulation.mouthOpen {
+            let tongueRect = CGRect(x: S * 0.47 + hx, y: S * 0.53 + hy, width: S * 0.06, height: S * 0.07)
+            context.fill(Path(roundedRect: tongueRect, cornerRadius: S * 0.03), with: .color(tongueColor))
+        }
+
+        var mouth = Path()
+        mouth.move(to: CGPoint(x: S * 0.43 + hx, y: S * 0.51 + hy))
+        mouth.addQuadCurve(to: CGPoint(x: S * 0.50 + hx, y: S * 0.51 + hy), control: CGPoint(x: S * 0.465 + hx, y: S * 0.54 + hy))
+        mouth.addQuadCurve(to: CGPoint(x: S * 0.57 + hx, y: S * 0.51 + hy), control: CGPoint(x: S * 0.535 + hx, y: S * 0.54 + hy))
+        context.stroke(mouth, with: .color(outlineColor), style: StrokeStyle(lineWidth: S * 0.02, lineCap: .round))
+
+        // Warm Eyes
+        let eyeL = CGPoint(x: S * 0.34 + hx, y: S * 0.36 + hy)
+        let eyeR = CGPoint(x: S * 0.66 + hx, y: S * 0.36 + hy)
+        let eyeW = S * 0.15
+        let eyeH = S * 0.16
+
+        if articulation.eyesClosed || isLoaf {
+            for center in [eyeL, eyeR] {
+                var closedEye = Path()
+                closedEye.move(to: CGPoint(x: center.x - eyeW * 0.5, y: center.y + eyeH * 0.1))
+                closedEye.addQuadCurve(to: CGPoint(x: center.x + eyeW * 0.5, y: center.y + eyeH * 0.1), control: CGPoint(x: center.x, y: center.y - eyeH * 0.45))
+                context.stroke(closedEye, with: .color(outlineColor), style: StrokeStyle(lineWidth: S * 0.035, lineCap: .round))
+            }
+        } else {
+            for center in [eyeL, eyeR] {
+                let eyeRect = CGRect(x: center.x - eyeW * 0.5, y: center.y - eyeH * 0.5, width: eyeW, height: eyeH)
+                context.fill(Path(ellipseIn: eyeRect), with: .color(outlineColor))
+
+                let irisRect = CGRect(x: center.x - eyeW * 0.44 + gazeX, y: center.y - eyeH * 0.44 + gazeY, width: eyeW * 0.88, height: eyeH * 0.88)
+                context.fill(Path(ellipseIn: irisRect), with: .radialGradient(
+                    Gradient(colors: [Color(red: 0.64, green: 0.36, blue: 0.12), Color(red: 0.34, green: 0.16, blue: 0.06), Color.black]),
+                    center: CGPoint(x: irisRect.midX, y: irisRect.midY),
+                    startRadius: S * 0.01,
+                    endRadius: eyeW * 0.44
+                ))
+
+                let pupilRect = CGRect(x: irisRect.midX - eyeW * 0.22, y: irisRect.midY - eyeH * 0.26, width: eyeW * 0.44, height: eyeH * 0.52)
+                context.fill(Path(ellipseIn: pupilRect), with: .color(Color.black))
+
+                // Catchlights
+                let glint1 = CGRect(x: irisRect.midX - eyeW * 0.28, y: irisRect.midY - eyeH * 0.32, width: eyeW * 0.36, height: eyeH * 0.36)
+                context.fill(Path(ellipseIn: glint1), with: .color(Color.white.opacity(0.95)))
+                let glint2 = CGRect(x: irisRect.midX + eyeW * 0.10, y: irisRect.midY + eyeH * 0.12, width: eyeW * 0.18, height: eyeH * 0.18)
+                context.fill(Path(ellipseIn: glint2), with: .color(Color.white.opacity(0.85)))
+            }
+        }
+    }
+
+    private static func drawVectorPanda(
+        mood: CompanionMood,
+        pose: CompanionPose,
+        articulation: CodeCompanionArticulation,
+        frame: CodePixelCatFrame,
+        in context: inout GraphicsContext,
+        S: CGFloat,
+        hx: CGFloat, hy: CGFloat, by: CGFloat,
+        ley: CGFloat, rey: CGFloat,
+        lpx: CGFloat, lpy: CGFloat,
+        rpx: CGFloat, rpy: CGFloat,
+        tailX: CGFloat, tailY: CGFloat,
+        gazeX: CGFloat, gazeY: CGFloat
+    ) {
+        let isLoaf = articulation.form == .loaf || mood == .sleepy || mood == .loaf
+        let isWalking = articulation.form == .walking || pose.gait == .walking
+        let isHeld = articulation.form == .held || mood == .held
+
+        let whiteColor = Color(red: 0.98, green: 0.98, blue: 0.99)
+        let whiteShadow = Color(red: 0.86, green: 0.88, blue: 0.92)
+        let blackColor = Color(red: 0.14, green: 0.15, blue: 0.18)
+        let blackHighlight = Color(red: 0.28, green: 0.30, blue: 0.35)
+        let pinkColor = Color(red: 0.96, green: 0.56, blue: 0.62)
+        let outlineColor = Color(red: 0.08, green: 0.09, blue: 0.11)
+
+        // ── 1. Far Hind Leg ──
+        if !isLoaf {
+            let backThighX = S * 0.18
+            let backThighY = S * 0.70 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[2]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[2]) * (S * 0.04)
+                let farPawRect = CGRect(x: backThighX + stride, y: S * 0.82 + by - lift, width: S * 0.16, height: S * 0.12)
+                context.fill(Path(roundedRect: farPawRect, cornerRadius: S * 0.06), with: .color(blackColor))
+            } else if !isHeld {
+                let farHaunch = Path(ellipseIn: CGRect(x: backThighX, y: backThighY, width: S * 0.22, height: S * 0.18))
+                context.fill(farHaunch, with: .color(blackColor))
+            }
+        }
+
+        // ── 2. Tail ──
+        let tailNub = CGRect(x: S * 0.68, y: S * 0.74 + by, width: S * 0.11, height: S * 0.10)
+        context.fill(Path(ellipseIn: tailNub), with: .color(blackColor))
+
+        // ── 3. Torso (Black shoulder vest + white tummy) ──
+        var bodyPath = Path()
+        if isLoaf {
+            bodyPath.addRoundedRect(in: CGRect(x: S * 0.20, y: S * 0.56 + by, width: S * 0.60, height: S * 0.30), cornerSize: CGSize(width: S * 0.24, height: S * 0.15))
+        } else if isHeld {
+            bodyPath.move(to: CGPoint(x: S * 0.36, y: S * 0.46 + by))
+            bodyPath.addLine(to: CGPoint(x: S * 0.64, y: S * 0.46 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.68, y: S * 0.90 + by), control: CGPoint(x: S * 0.70, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.32, y: S * 0.90 + by), control: CGPoint(x: S * 0.50, y: S * 0.92 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.36, y: S * 0.46 + by), control: CGPoint(x: S * 0.30, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        } else {
+            bodyPath.move(to: CGPoint(x: S * 0.34, y: S * 0.50 + by))
+            bodyPath.addLine(to: CGPoint(x: S * 0.66, y: S * 0.50 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.75, y: S * 0.84 + by), control: CGPoint(x: S * 0.77, y: S * 0.68 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.25, y: S * 0.84 + by), control: CGPoint(x: S * 0.50, y: S * 0.88 + by))
+            bodyPath.addQuadCurve(to: CGPoint(x: S * 0.34, y: S * 0.50 + by), control: CGPoint(x: S * 0.23, y: S * 0.68 + by))
+            bodyPath.closeSubpath()
+        }
+
+        context.fill(bodyPath, with: .linearGradient(
+            Gradient(colors: [blackHighlight, blackColor]),
+            startPoint: CGPoint(x: S * 0.5, y: S * 0.48 + by),
+            endPoint: CGPoint(x: S * 0.5, y: S * 0.70 + by)
+        ))
+
+        // White belly
+        var bellyPath = Path()
+        bellyPath.move(to: CGPoint(x: S * 0.36, y: S * 0.60 + by))
+        bellyPath.addQuadCurve(to: CGPoint(x: S * 0.64, y: S * 0.60 + by), control: CGPoint(x: S * 0.50, y: S * 0.58 + by))
+        bellyPath.addQuadCurve(to: CGPoint(x: S * 0.68, y: S * 0.84 + by), control: CGPoint(x: S * 0.70, y: S * 0.74 + by))
+        bellyPath.addQuadCurve(to: CGPoint(x: S * 0.32, y: S * 0.84 + by), control: CGPoint(x: S * 0.50, y: S * 0.88 + by))
+        bellyPath.closeSubpath()
+        context.fill(bellyPath, with: .linearGradient(
+            Gradient(colors: [whiteColor, whiteShadow]),
+            startPoint: CGPoint(x: S * 0.5, y: S * 0.60 + by),
+            endPoint: CGPoint(x: S * 0.5, y: S * 0.86 + by)
+        ))
+
+        // ── 4. Near Hind Haunch ──
+        if !isLoaf {
+            let nearThighX = S * 0.64
+            let nearThighY = S * 0.66 + by
+            if isWalking && frame.legStrides.count >= 4 {
+                let stride = CGFloat(frame.legStrides[3]) * (S * 0.05)
+                let lift = CGFloat(frame.legLifts[3]) * (S * 0.04)
+                let nearPawRect = CGRect(x: nearThighX + stride, y: S * 0.82 + by - lift, width: S * 0.16, height: S * 0.12)
+                context.fill(Path(roundedRect: nearPawRect, cornerRadius: S * 0.06), with: .color(blackColor))
+            } else if !isHeld {
+                let haunchPath = Path(ellipseIn: CGRect(x: nearThighX - S * 0.06, y: nearThighY, width: S * 0.22, height: S * 0.18))
+                context.fill(haunchPath, with: .color(blackColor))
+                let padRect = CGRect(x: nearThighX + S * 0.03, y: S * 0.80 + by, width: S * 0.07, height: S * 0.06)
+                context.fill(Path(ellipseIn: padRect), with: .color(pinkColor.opacity(0.85)))
+            }
+        }
+
+        // ── 5. Forelegs & Paws ──
+        let pawW = S * 0.17
+        let pawH = S * 0.14
+
+        if isLoaf {
+            let nubL = CGRect(x: S * 0.36, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            let nubR = CGRect(x: S * 0.52, y: S * 0.81 + by, width: pawW * 0.75, height: pawH * 0.65)
+            for rect in [nubL, nubR] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.3), with: .color(blackColor))
+            }
+        } else if isWalking && frame.legStrides.count >= 2 {
+            let leftWalkX = S * 0.30 + CGFloat(frame.legStrides[0]) * (S * 0.06)
+            let leftWalkY = S * 0.79 - CGFloat(frame.legLifts[0]) * (S * 0.04) + by
+            let rightWalkX = S * 0.53 + CGFloat(frame.legStrides[1]) * (S * 0.06)
+            let rightWalkY = S * 0.79 - CGFloat(frame.legLifts[1]) * (S * 0.04) + by
+
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.56 + by))
+            leftArm.addLine(to: CGPoint(x: leftWalkX + pawW * 0.5, y: leftWalkY + pawH * 0.5))
+            context.stroke(leftArm, with: .color(blackColor), style: StrokeStyle(lineWidth: S * 0.12, lineCap: .round))
+
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.60, y: S * 0.56 + by))
+            rightArm.addLine(to: CGPoint(x: rightWalkX + pawW * 0.5, y: rightWalkY + pawH * 0.5))
+            context.stroke(rightArm, with: .color(blackColor), style: StrokeStyle(lineWidth: S * 0.12, lineCap: .round))
+
+            for rect in [CGRect(x: leftWalkX, y: leftWalkY, width: pawW, height: pawH),
+                         CGRect(x: rightWalkX, y: rightWalkY, width: pawW, height: pawH)] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(blackColor))
+                let padRect = CGRect(x: rect.midX - pawW * 0.25, y: rect.midY - pawH * 0.2, width: pawW * 0.5, height: pawH * 0.4)
+                context.fill(Path(ellipseIn: padRect), with: .color(pinkColor.opacity(0.85)))
+            }
+        } else {
+            var leftArm = Path()
+            leftArm.move(to: CGPoint(x: S * 0.38, y: S * 0.54 + by))
+            leftArm.addLine(to: CGPoint(x: S * 0.36 + lpx, y: S * 0.78 + by + lpy))
+            context.stroke(leftArm, with: .color(blackColor), style: StrokeStyle(lineWidth: S * 0.12, lineCap: .round))
+
+            var rightArm = Path()
+            rightArm.move(to: CGPoint(x: S * 0.62, y: S * 0.54 + by))
+            rightArm.addLine(to: CGPoint(x: S * 0.60 + rpx, y: S * 0.78 + by + rpy))
+            context.stroke(rightArm, with: .color(blackColor), style: StrokeStyle(lineWidth: S * 0.12, lineCap: .round))
+
+            let leftPawRect = CGRect(x: S * 0.30 + lpx, y: S * 0.79 + by + lpy, width: pawW, height: pawH)
+            let rightPawRect = CGRect(x: S * 0.53 + rpx, y: S * 0.79 + by + rpy, width: pawW, height: pawH)
+            for rect in [leftPawRect, rightPawRect] {
+                context.fill(Path(roundedRect: rect, cornerRadius: pawH * 0.5), with: .color(blackColor))
+                let padRect = CGRect(x: rect.midX - pawW * 0.25, y: rect.midY - pawH * 0.2, width: pawW * 0.5, height: pawH * 0.4)
+                context.fill(Path(ellipseIn: padRect), with: .color(pinkColor.opacity(0.85)))
+            }
+        }
+
+        // ── 6. Round Black Ears ──
+        let leftEarRect = CGRect(x: S * 0.18 + hx, y: S * 0.12 + hy + ley, width: S * 0.20, height: S * 0.20)
+        context.fill(Path(ellipseIn: leftEarRect), with: .color(blackColor))
+
+        let rightEarRect = CGRect(x: S * 0.62 + hx, y: S * 0.12 + hy + rey, width: S * 0.20, height: S * 0.20)
+        context.fill(Path(ellipseIn: rightEarRect), with: .color(blackColor))
+
+        // ── 7. Head ──
+        let headRect = CGRect(x: S * 0.18 + hx, y: S * 0.20 + hy, width: S * 0.64, height: S * 0.46)
+        context.fill(Path(roundedRect: headRect, cornerRadius: S * 0.23), with: .radialGradient(
+            Gradient(colors: [whiteColor, whiteShadow]),
+            center: CGPoint(x: S * 0.48 + hx, y: S * 0.36 + hy),
+            startRadius: S * 0.04,
+            endRadius: S * 0.36
+        ))
+
+        // ── 8. Classic Panda Eye Patches (Angled soft teardrops) ──
+        var leftPatch = Path()
+        leftPatch.addEllipse(in: CGRect(x: S * 0.26 + hx, y: S * 0.32 + hy, width: S * 0.18, height: S * 0.22))
+        context.fill(leftPatch, with: .color(blackColor))
+
+        var rightPatch = Path()
+        rightPatch.addEllipse(in: CGRect(x: S * 0.56 + hx, y: S * 0.32 + hy, width: S * 0.18, height: S * 0.22))
+        context.fill(rightPatch, with: .color(blackColor))
+
+        // Snout & Nose
+        let noseRect = CGRect(x: S * 0.45 + hx, y: S * 0.46 + hy, width: S * 0.10, height: S * 0.07)
+        context.fill(Path(roundedRect: noseRect, cornerRadius: S * 0.035), with: .color(blackColor))
+
+        var mouth = Path()
+        mouth.move(to: CGPoint(x: S * 0.44 + hx, y: S * 0.54 + hy))
+        mouth.addQuadCurve(to: CGPoint(x: S * 0.50 + hx, y: S * 0.54 + hy), control: CGPoint(x: S * 0.47 + hx, y: S * 0.57 + hy))
+        mouth.addQuadCurve(to: CGPoint(x: S * 0.56 + hx, y: S * 0.54 + hy), control: CGPoint(x: S * 0.53 + hx, y: S * 0.57 + hy))
+        context.stroke(mouth, with: .color(outlineColor), style: StrokeStyle(lineWidth: S * 0.02, lineCap: .round))
+
+        // Sparkling Eyes Inside Patches
+        let eyeL = CGPoint(x: S * 0.35 + hx, y: S * 0.42 + hy)
+        let eyeR = CGPoint(x: S * 0.65 + hx, y: S * 0.42 + hy)
+        let eyeW = S * 0.12
+        let eyeH = S * 0.13
+
+        if articulation.eyesClosed || isLoaf {
+            for center in [eyeL, eyeR] {
+                var closedEye = Path()
+                closedEye.move(to: CGPoint(x: center.x - eyeW * 0.5, y: center.y + eyeH * 0.1))
+                closedEye.addQuadCurve(to: CGPoint(x: center.x + eyeW * 0.5, y: center.y + eyeH * 0.1), control: CGPoint(x: center.x, y: center.y - eyeH * 0.45))
+                context.stroke(closedEye, with: .color(Color.white.opacity(0.9)), style: StrokeStyle(lineWidth: S * 0.028, lineCap: .round))
+            }
+        } else {
+            for center in [eyeL, eyeR] {
+                let irisRect = CGRect(x: center.x - eyeW * 0.5 + gazeX, y: center.y - eyeH * 0.5 + gazeY, width: eyeW, height: eyeH)
+                context.fill(Path(ellipseIn: irisRect), with: .color(Color(red: 0.10, green: 0.12, blue: 0.16)))
+
+                // Catchlights
+                let glint1 = CGRect(x: irisRect.midX - eyeW * 0.28, y: irisRect.midY - eyeH * 0.32, width: eyeW * 0.38, height: eyeH * 0.38)
+                context.fill(Path(ellipseIn: glint1), with: .color(Color.white))
+                let glint2 = CGRect(x: irisRect.midX + eyeW * 0.10, y: irisRect.midY + eyeH * 0.12, width: eyeW * 0.20, height: eyeH * 0.20)
+                context.fill(Path(ellipseIn: glint2), with: .color(Color.white.opacity(0.85)))
+            }
         }
     }
 

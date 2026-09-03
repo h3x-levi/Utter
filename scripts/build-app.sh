@@ -22,6 +22,10 @@
 #
 set -e
 
+if [ -z "$SDKROOT" ] && [ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk" ]; then
+    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk"
+fi
+
 cd "$(dirname "$0")/.."
 PROJECT_ROOT="$(pwd)"
 
@@ -334,7 +338,7 @@ if [ -z "$CONFIG_MANAGER" ]; then
 fi
 sed -i '' "s/var appVersion: String = \".*\"/var appVersion: String = \"$VERSION\"/" "$CONFIG_MANAGER"
 
-swift build -c release 2>&1 | grep -E "(Build complete|error:)" || true
+swift build -c release
 if [ ! -f ".build/release/$EXEC_NAME" ]; then
     echo "❌ Build failed"
     exit 1
@@ -356,19 +360,6 @@ echo "   ✓ Binary copied"
 # dies at launch with "Library not loaded: @rpath/whisper.framework".
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS/$EXEC_NAME" 2>/dev/null || true
 echo "   ✓ Framework search path added"
-
-# Code sign with the resolved identity (see SIGN_ID above).
-#
-# Errors are shown and fatal. This used to be `2>/dev/null || true` followed by an
-# unconditional "✓ Binary signed", so a failed signing produced a build that claimed
-# to be signed and was not — and an unsigned app has no stable designated requirement,
-# which is precisely the permissions-break this signing exists to prevent. Silence
-# about that is worse than a failed build.
-if ! codesign --force --deep --sign "$SIGN_ID" "$MACOS/$EXEC_NAME"; then
-    echo "   ❌ Signing the binary failed with identity: $SIGN_ID"
-    exit 1
-fi
-echo "   ✓ Binary signed"
 
 # Icon
 cp AppIcon.icns "$RESOURCES/AppIcon.icns"
@@ -515,16 +506,38 @@ cat > "$CONTENTS/Info.plist" << EOF
 EOF
 echo "   ✓ Info.plist created"
 
-# Code sign the entire bundle. Fatal on failure, and verified — see the binary
-# signing above for why a quiet failure here is the expensive one.
-if ! codesign --force --deep --sign "$SIGN_ID" "$APP_DIR"; then
+# Ensure write permissions and clean any extended attributes or AppleDouble files before bundle signing
+chmod -R u+w "$APP_DIR" 2>/dev/null || true
+xattr -cr "$APP_DIR" 2>/dev/null || true
+find build -name "._*" -delete 2>/dev/null || true
+
+# If on a non-APFS volume (such as an external drive where macOS creates ._* files),
+# stage in /tmp (APFS) for clean codesigning.
+STAGING_DIR="/tmp/Utter-staging-$$"
+mkdir -p "$STAGING_DIR"
+cp -R "$APP_DIR" "$STAGING_DIR/"
+find "$STAGING_DIR" -name "._*" -delete 2>/dev/null || true
+
+# Sign embedded frameworks first if present
+if [ -d "$STAGING_DIR/$APP_NAME.app/Contents/Frameworks/whisper.framework" ]; then
+    codesign --force --sign "$SIGN_ID" "$STAGING_DIR/$APP_NAME.app/Contents/Frameworks/whisper.framework" 2>/dev/null || true
+fi
+
+# Code sign the entire bundle. Fatal on failure, and verified.
+if ! codesign --force --deep --sign "$SIGN_ID" "$STAGING_DIR/$APP_NAME.app"; then
     echo "   ❌ Signing the app bundle failed with identity: $SIGN_ID"
+    rm -rf "$STAGING_DIR"
     exit 1
 fi
-if ! codesign --verify --deep --strict "$APP_DIR" 2>/dev/null; then
+if ! codesign --verify --deep --strict "$STAGING_DIR/$APP_NAME.app" 2>/dev/null; then
     echo "   ❌ The signed bundle does not verify — permissions would not persist."
+    rm -rf "$STAGING_DIR"
     exit 1
 fi
+
+rm -rf "$APP_DIR"
+cp -R "$STAGING_DIR/$APP_NAME.app" "$APP_DIR"
+rm -rf "$STAGING_DIR"
 echo "   ✓ App bundle signed and verified"
 
 # ─── Step 6: Create DMG ───
@@ -596,25 +609,86 @@ done
 rm -f "build/$DMG_NAME"
 DMG_IS_PLAIN=0
 
-create-dmg \
-    --volname "$APP_NAME" \
-    --volicon "AppIcon.icns" \
-    --window-pos 200 140 \
-    --window-size 720 480 \
-    --background "$BG_2X" \
-    --icon-size 128 \
-    --text-size 16 \
-    --icon "${APP_NAME}.app" 188 250 \
-    --app-drop-link 532 250 \
-    --hide-extension "${APP_NAME}.app" \
-    --no-internet-enable \
-    --hdiutil-quiet \
-    "build/$DMG_NAME" \
-    "$APP_DIR" \
-    2>&1 | grep -v "^$" || true
+if command -v create-dmg >/dev/null 2>&1; then
+    create-dmg \
+        --volname "$APP_NAME" \
+        --volicon "AppIcon.icns" \
+        --window-pos 200 140 \
+        --window-size 720 480 \
+        --background "$BG_2X" \
+        --icon-size 128 \
+        --text-size 16 \
+        --icon "${APP_NAME}.app" 188 250 \
+        --app-drop-link 532 250 \
+        --hide-extension "${APP_NAME}.app" \
+        --no-internet-enable \
+        --hdiutil-quiet \
+        "build/$DMG_NAME" \
+        "$APP_DIR" \
+        2>&1 | grep -v "^$" || true
+fi
 
 if [ ! -f "build/$DMG_NAME" ]; then
-    echo "   ⚠️  Finder could not lay out the branded DMG; creating a plain installer instead"
+    echo "   🎨 Building branded DMG via native macOS Finder layout..."
+    APP_SIZE_MB=$(du -sm "$APP_DIR" | cut -f1)
+    DMG_SIZE_MB=$(( APP_SIZE_MB + 150 ))
+    rm -f "build/Utter-rw.dmg"
+    hdiutil create -size "${DMG_SIZE_MB}m" -fs HFS+ -volname "$APP_NAME" -ov "build/Utter-rw.dmg" -quiet
+
+    MOUNT_OUTPUT=$(hdiutil attach "build/Utter-rw.dmg" -readwrite -noverify -noautoopen)
+    DEV_NAME=$(echo "$MOUNT_OUTPUT" | egrep '^/dev/' | head -n1 | awk '{print $1}')
+    MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/.*' | head -n1)
+
+    if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
+        ditto "$APP_DIR" "$MOUNT_POINT/${APP_NAME}.app"
+        ln -s /Applications "$MOUNT_POINT/Applications"
+        mkdir -p "$MOUNT_POINT/.background"
+        cp "$BG_1X" "$MOUNT_POINT/.background/dmg-background.png" 2>/dev/null || true
+        cp "$BG_2X" "$MOUNT_POINT/.background/dmg-background@2x.png" 2>/dev/null || true
+
+        if [ -f "AppIcon.icns" ]; then
+            cp "AppIcon.icns" "$MOUNT_POINT/.VolumeIcon.icns" 2>/dev/null || true
+            SetFile -a C "$MOUNT_POINT" 2>/dev/null || true
+        fi
+        SetFile -a V "$MOUNT_POINT/.background" 2>/dev/null || true
+
+        osascript -e "
+            tell application \"Finder\"
+                tell disk \"$APP_NAME\"
+                    open
+                    set current view of container window to icon view
+                    set toolbar visible of container window to false
+                    set statusbar visible of container window to false
+                    set the bounds of container window to {200, 140, 920, 620}
+                    set theViewOptions to the icon view options of container window
+                    set arrangement of theViewOptions to not arranged
+                    set icon size of theViewOptions to 128
+                    set text size of theViewOptions to 16
+                    try
+                        set background picture of theViewOptions to file \".background:dmg-background.png\"
+                    end try
+                    set position of item \"${APP_NAME}.app\" of container window to {188, 250}
+                    set position of item \"Applications\" of container window to {532, 250}
+                    close
+                    open
+                    update without registering applications
+                    delay 1
+                end tell
+            end tell
+        " 2>/dev/null || true
+
+        sync
+        hdiutil detach "$DEV_NAME" -force -quiet 2>/dev/null || true
+        sleep 1
+
+        hdiutil convert "build/Utter-rw.dmg" -format UDZO -imagekey zlib-level=9 -o "build/$DMG_NAME" -ov -quiet
+        rm -f "build/Utter-rw.dmg"
+        echo "   ✓ Branded DMG created with custom background and layout"
+    fi
+fi
+
+if [ ! -f "build/$DMG_NAME" ]; then
+    echo "   ⚠️  Fallback to basic DMG layout"
     DMG_IS_PLAIN=1
     DMG_STAGING_DIR=$(mktemp -d)
     trap 'rm -rf "$DMG_STAGING_DIR"' EXIT

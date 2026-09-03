@@ -18,23 +18,15 @@ import SwiftUI
 /// no microphone input during onboarding, and the timer is animating a *scripted
 /// demonstration*, not misrepresenting live data. The label above always names the
 /// state being shown, so nothing is implied that isn't happening.
-struct PillDemoView: View {
-    /// Seconds each beat of the demo holds.
+@MainActor
+final class PillDemoPlayer: ObservableObject {
     private let beat: TimeInterval = 2.2
+    let model = PillStateModel()
+    @Published var beatIndex = 0
+    private var timer: Timer?
+    private var started = false
 
-    @StateObject private var model = PillStateModel()
-    @ObservedObject private var motion = MotionPreference.shared
-    @State private var beatIndex = 0
-    @State private var timer: Timer?
-    /// Whether `start()` has already run for this appearance.
-    ///
-    /// A `timer == nil` check would not do: under Reduce Motion no timer is ever
-    /// created, so that test can never become false and every `onAppear` would
-    /// re-run setup.
-    @State private var started = false
-
-    /// One beat of the demonstration: a pill state plus what to call it.
-    private struct Beat {
+    struct Beat {
         let state: PillState
         let caption: String
         let level: Float
@@ -42,7 +34,7 @@ struct PillDemoView: View {
         let preview: String
     }
 
-    private var beats: [Beat] {
+    var beats: [Beat] {
         [
             Beat(state: .idle,
                  caption: "Resting. It stays out of the way.",
@@ -62,80 +54,31 @@ struct PillDemoView: View {
         ]
     }
 
-    var body: some View {
-        VStack(spacing: Space.x4) {
-            // A fixed-height stage so the surrounding layout doesn't shift as the
-            // pill grows and shrinks between states.
-            ZStack {
-                // No hover control in the demo: it is a scripted playback, not a live pill.
-                PillContent(model: model)
-            }
-            .frame(height: PillMetrics.windowHeight)
-
-            Text(beats[beatIndex].caption)
-                .typo(.callout)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(height: 34, alignment: .top)
-                // Keyed to the index so SwiftUI crossfades between captions
-                // instead of blurring one string into the next.
-                .id(beatIndex)
-                .transition(.opacity)
-
-            beatIndicator
-        }
-        .onAppear { start() }
-        .onDisappear { stop() }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("A demonstration of the dictation pill")
-        .accessibilityValue(beats[beatIndex].caption)
-    }
-
-    /// Which beat is showing. Dots rather than a progress bar: this loops, so a
-    /// bar would imply an end that never comes.
-    private var beatIndicator: some View {
-        HStack(spacing: Space.x1) {
-            ForEach(beats.indices, id: \.self) { index in
-                Circle()
-                    .fill(index == beatIndex ? Tint.accent : Ink.tertiary.opacity(0.3))
-                    .frame(width: 5, height: 5)
-            }
-        }
-        .animation(Motion.layout, value: beatIndex)
-    }
-
-    // MARK: - Playback
-
-    private func start() {
-        // Idempotent: SwiftUI may call `onAppear` more than once for the same view
-        // (re-parenting, a step transition that reuses the identity), and a second
-        // `scheduledTimer` would orphan the first — leaving a timer that wakes the
-        // main thread every couple of seconds for the rest of the process's life.
+    func start() {
         guard !started else { return }
         started = true
-
         apply(beats[0])
 
-        // Reduce Motion: show the resting pill and the first caption, and stop.
-        // Someone who has asked the system to stop moving things has not asked for
-        // a five-beat animation, and the pill is still shown — which was the point.
-        guard !motion.reduceMotion else { return }
+        guard !MotionPreference.shared.reduceMotion else { return }
 
-        timer = Timer.scheduledTimer(withTimeInterval: beat, repeats: true) { _ in
-            Task { @MainActor in advance() }
+        timer = Timer.scheduledTimer(withTimeInterval: beat, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.advance()
+            }
         }
     }
 
-    private func stop() {
+    func stop() {
         timer?.invalidate()
         timer = nil
         started = false
     }
 
-    @MainActor
     private func advance() {
         beatIndex = (beatIndex + 1) % beats.count
-        withAnimation(Motion.layout) { apply(beats[beatIndex]) }
+        withAnimation(Motion.layout) {
+            apply(beats[beatIndex])
+        }
     }
 
     private func apply(_ beat: Beat) {
@@ -143,5 +86,44 @@ struct PillDemoView: View {
         model.level = beat.level
         model.elapsed = beat.elapsed
         model.previewText = beat.preview
+    }
+}
+
+struct PillDemoView: View {
+    @StateObject private var player = PillDemoPlayer()
+
+    var body: some View {
+        VStack(spacing: Space.x4) {
+            ZStack {
+                PillContent(model: player.model)
+            }
+            .frame(height: PillMetrics.windowHeight)
+
+            Text(player.beats[player.beatIndex].caption)
+                .typo(.callout)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(height: 34, alignment: .top)
+                .id(player.beatIndex)
+                .transition(.opacity)
+
+            beatIndicator
+        }
+        .onAppear { player.start() }
+        .onDisappear { player.stop() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("A demonstration of the dictation pill")
+        .accessibilityValue(player.beats[player.beatIndex].caption)
+    }
+
+    private var beatIndicator: some View {
+        HStack(spacing: Space.x1) {
+            ForEach(player.beats.indices, id: \.self) { index in
+                Circle()
+                    .fill(index == player.beatIndex ? Tint.accent : Ink.tertiary.opacity(0.3))
+                    .frame(width: 5, height: 5)
+            }
+        }
+        .animation(Motion.layout, value: player.beatIndex)
     }
 }

@@ -1173,7 +1173,13 @@ final class CompanionWindow: NSPanel {
 /// non-interactive, which matters: the panel is 2.1x the character's size so it has
 /// room to roam, and every point of that square that isn't the character must pass
 /// clicks through to the desktop.
-private struct CompanionContainerView: View {
+@MainActor
+private final class CompanionRootViewModel: ObservableObject {
+    @Published var isDragging = false
+    @Published var isHovering = false
+}
+
+struct CompanionContainerView: View {
     @ObservedObject var behaviour: CompanionBehaviour
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -1191,8 +1197,7 @@ private struct CompanionContainerView: View {
     /// The *panel* is resized separately, by the window that owns it.
     private var characterSize: CGFloat { userData.companionSize.points }
 
-    @State private var isDragging = false
-    @State private var isHovering = false
+    @StateObject private var model = CompanionRootViewModel()
 
     var body: some View {
         let selectedObject = userData.companionObjectUnlocked(userData.companionObject)
@@ -1225,11 +1230,11 @@ private struct CompanionContainerView: View {
                 )
                 // A hover lift, so the character acknowledges the pointer before
                 // it is even clicked.
-                .scaleEffect(isHovering ? CompanionGeometry.hoverScale : 1)
+                .scaleEffect(model.isHovering ? CompanionGeometry.hoverScale : 1)
                 .animation(MotionPreference.shared.reduceMotion ? Motion.reduced : Motion.morph,
-                           value: isHovering)
+                           value: model.isHovering)
                 .contentShape(Circle())
-                .onHover { hovering in isHovering = hovering }
+                .onHover { hovering in model.isHovering = hovering }
                 .gesture(
                     TapGesture(count: 2)
                         .exclusively(before: TapGesture(count: 1))
@@ -1243,11 +1248,11 @@ private struct CompanionContainerView: View {
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 1)
                         .onChanged { _ in
-                            isDragging = true
+                            model.isDragging = true
                             onDragTo(NSEvent.mouseLocation)
                         }
                         .onEnded { value in
-                            isDragging = false
+                            model.isDragging = false
                             let predicted = value.predictedEndTranslation
                             let actual = value.translation
                             onDragEnded(CGVector(

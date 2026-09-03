@@ -21,7 +21,6 @@ extension Notification.Name {
 // MARK: - General Settings
 
 struct GeneralSettingsContent: View {
-    @State private var launchAtLogin = false
     @ObservedObject private var readiness = ReadinessMonitor.shared
 
     private var micGranted: Bool { readiness.micGranted }
@@ -30,15 +29,23 @@ struct GeneralSettingsContent: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var themeManager = ThemeManager.shared
     @ObservedObject private var motion = MotionPreference.shared
-
-    /// Read only to decide whether Screen Recording is needed *now* — see
-    /// `PermissionNeed.screenRecording`.
-    ///
-    /// `@ObservedObject` and not a computed lookup, for the same reason `NotesView`
-    /// spells it this way: `state` is `@Published`, and reading it through a plain
-    /// `AppDelegate.current?.meetingSession` would not subscribe, so a capture failing
-    /// while this pane is open would leave the row still saying "optional".
     @ObservedObject private var meeting = AppDelegate.current?.meetingSession ?? MeetingSession()
+
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if #available(macOS 13.0, *) {
+                    return SMAppService.mainApp.status == .enabled
+                }
+                return false
+            },
+            set: { val in
+                if #available(macOS 13.0, *) {
+                    try? val ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                }
+            }
+        )
+    }
 
     var body: some View {
         // `Form` + `Section`, not a `VStack` of `SettingsCard`s.
@@ -53,260 +60,222 @@ struct GeneralSettingsContent: View {
         //
         // Section titles are the plain `Section("…")` string, so they are real headers to
         // VoiceOver rather than a `Text` that happens to sit above the rows.
-        Form {
-            // App settings — grouped the way the user expects to find them:
-            // what the app does at the OS level, then sound, then per-screen
-            // behaviour. Speech settings moved to their own pane.
-            Section("App") {
-                SettingsToggle(
-                    title: "Launch at login",
-                    description: "Start Utter automatically when you log in.",
-                    isOn: $launchAtLogin
-                )
-                .onChange(of: launchAtLogin) { val in
-                    if #available(macOS 13.0, *) {
-                        try? val ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.groupGap) {
+                SettingsCard(title: "Account") {
+                    HStack(spacing: Space.x4) {
+                        ZStack {
+                            Circle()
+                                .fill(userData.isAuthenticated ? Tint.accent.opacity(0.15) : Color.primary.opacity(0.08))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: userData.isAuthenticated ? "person.crop.circle.fill" : "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 22))
+                                .foregroundStyle(userData.isAuthenticated ? Tint.accent : Ink.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(userData.isAuthenticated ? (userData.userDisplayName.isEmpty ? "Connected User" : userData.userDisplayName) : "Guest Mode (Offline)")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(userData.isAuthenticated ? "\(userData.userEmail) · \(userData.authProvider)" : "Preferences and transcripts are stored locally.")
+                                .font(.caption)
+                                .foregroundStyle(Ink.secondary)
+                        }
+
+                        Spacer()
+
+                        if userData.isAuthenticated {
+                            Button("Sign Out") {
+                                userData.signOut()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        } else {
+                            Button {
+                                userData.signInWithGoogle()
+                            } label: {
+                                HStack(spacing: Space.x2) {
+                                    GoogleVectorLogo(size: 13)
+                                    Text("Sign in with Google")
+                                        .font(.caption.weight(.medium))
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .onAppear {
-                    if #available(macOS 13.0, *) {
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
+
+                SettingsCard(title: "App") {
+                    SettingsToggle(
+                        title: "Launch at login",
+                        description: "Start Utter automatically when you log in.",
+                        isOn: launchAtLoginBinding
+                    )
+
+                    HairlineDivider()
+
+                    SettingsToggle(
+                        title: "Always show the pill",
+                        description: "Keep it on screen. When off, it appears only while dictating.",
+                        isOn: $userData.alwaysShowPill
+                    )
+                    .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
+
+                    HairlineDivider()
+
+                    SettingsToggle(
+                        title: "Show in Dock",
+                        description: "Utter lives in the menu bar. Turn this on to add a Dock icon too.",
+                        isOn: $userData.showInDock
+                    )
+                    .onChange(of: userData.showInDock) { _ in userData.save() }
+
+                    HairlineDivider()
+
+                    SettingsToggle(
+                        title: "Offer to transcribe calls",
+                        description: "Offers when a supported calling app is actively using your microphone and speakers. Includes Zoom, Teams, FaceTime, Webex, Slack, Discord, WhatsApp, Signal, and more. Start browser meetings manually from Notes. Nothing is recorded unless you accept. Needs Screen Recording, below, to capture the other people and not just you.",
+                        isOn: $userData.offerToTranscribeCalls
+                    )
+                    .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
+                }
+
+                SettingsCard(title: "Sound") {
+                    SettingsToggle(
+                        title: "Dictation sounds",
+                        description: "Soft cues when recording starts, stops, and finishes.",
+                        isOn: $userData.soundsEnabled
+                    )
+                    .onChange(of: userData.soundsEnabled) { _ in
+                        userData.save()
+                        if userData.soundsEnabled { SoundPlayer.playDone() }
                     }
+
+                    HairlineDivider()
+
+                    SettingsToggle(
+                        title: "Pause other audio while dictating",
+                        description: "Sends the play/pause key so music doesn\u{2019}t bleed into the microphone.",
+                        isOn: $userData.muteMusicWhileDictating
+                    )
+                    .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
                 }
 
-                SettingsToggle(
-                    title: "Always show the pill",
-                    description: "Keep it on screen. When off, it appears only while dictating.",
-                    isOn: $userData.alwaysShowPill
-                )
-                .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
-
-                SettingsToggle(
-                    title: "Show in Dock",
-                    description: "Utter lives in the menu bar. Turn this on to add a Dock icon too.",
-                    isOn: $userData.showInDock
-                )
-                .onChange(of: userData.showInDock) { _ in userData.save() }
-
-                // Here rather than under Speech or Notes: what it switches on is the app
-                // watching the audio devices and putting a panel on screen by itself, which
-                // is OS-level behaviour, and the permission it needs is in this same pane.
-                SettingsToggle(
-                    title: "Offer to transcribe calls",
-                    description: "Offers when a supported calling app is actively using your "
-                        + "microphone and speakers. Includes Zoom, Teams, FaceTime, Webex, Slack, "
-                        + "Discord, WhatsApp, Signal, and more. Start browser meetings manually "
-                        + "from Notes. "
-                        + "Nothing is recorded unless you accept. "
-                        + "Needs Screen Recording, below, to capture the other people and "
-                        + "not just you.",
-                    isOn: $userData.offerToTranscribeCalls
-                )
-                .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
-            }
-
-            Section("Sound") {
-                SettingsToggle(
-                    title: "Dictation sounds",
-                    description: "Soft cues when recording starts, stops, and finishes.",
-                    isOn: $userData.soundsEnabled
-                )
-                .onChange(of: userData.soundsEnabled) { _ in
-                    userData.save()
-                    // Play one so the choice is audible immediately.
-                    if userData.soundsEnabled { SoundPlayer.playDone() }
-                }
-
-                SettingsToggle(
-                    title: "Pause other audio while dictating",
-                    description: "Sends the play/pause key so music doesn\u{2019}t bleed into the microphone.",
-                    isOn: $userData.muteMusicWhileDictating
-                )
-                .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
-            }
-
-            Section("Notes") {
-                // Native AppKit radio buttons, not `GlassSegmentedControl`.
-                //
-                // Two mutually exclusive options, one of them six words long: that is what a
-                // radio group is for, and a segmented control with "Always start a new note" in
-                // one segment either truncates or forces the two segments to unequal widths.
-                // Each option is its own row so macOS cannot reflow the pair horizontally.
-                //
-                // Replaces the old "when you open the Scratchpad" choice, which stopped
-                // meaning anything once notes became a list: every note persists and you pick
-                // the one you want. The real question now is where dictated text lands.
-                Text("When you dictate into Utter").typo(.body)
-                SettingsRadioButton(
-                    title: "Add to the open note",
-                    value: true,
-                    selection: $userData.captureAppendsToOpenNote
-                )
-                SettingsRadioButton(
-                    title: "Always start a new note",
-                    value: false,
-                    selection: $userData.captureAppendsToOpenNote
-                )
-                .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
-            }
-
-            // Hotkey — a radio group, not a segmented control and not a pop-up menu.
-            //
-            // The pop-up went first, and for the reason that still holds: it hid every
-            // alternative behind a click for no space saving, and the description below
-            // updates with the selection, which is the real reason to show the choices — each
-            // key has a different trade-off. The segmented control that replaced it goes now
-            // because the four labels are not equal-weight ("Fn" against "Right ⌘ Command"),
-            // and because a radio group is what macOS uses for a keyed choice with an
-            // explanation attached to it.
-            Section("Hotkey") {
-                Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
-
-                // Explicit rows preserve both the native radio appearance and predictable
-                // vertical rhythm for labels of very different lengths.
-                VStack(alignment: .leading, spacing: Space.x2) {
-                    ForEach(HotkeyOption.options) { option in
+                SettingsCard(title: "Notes") {
+                    Text("When you dictate into Utter").typo(.body)
+                    VStack(alignment: .leading, spacing: Space.x2) {
                         SettingsRadioButton(
-                            title: option.name,
-                            value: option.name,
-                            selection: $userData.hotkeyName
+                            title: "Add to the open note",
+                            value: true,
+                            selection: $userData.captureAppendsToOpenNote
+                        )
+                        SettingsRadioButton(
+                            title: "Always start a new note",
+                            value: false,
+                            selection: $userData.captureAppendsToOpenNote
                         )
                     }
-                }
-                .onChange(of: userData.hotkeyName) { _ in
-                    userData.save()
-                    NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
+                    .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
                 }
 
-                let opt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
-                VStack(alignment: .leading, spacing: Space.x1) {
-                    Text(opt.description)
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(opt.impact)
-                        .typo(.caption, ink: opt.impact.hasPrefix("Use with caution")
-                              ? Tint.warningText : Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                // The description block below changes height as the selection
-                // moves between hotkeys, so this is layout travel, not a fade.
-                .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
-                           value: userData.hotkeyName)
+                SettingsCard(title: "Hotkey") {
+                    Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
 
-            }
-
-            // The other two ways into dictation, named here rather than only
-            // in the status-item menu. Nothing on screen reveals them — the pill
-            // shows the hold hotkey and that is all. Every shortcut comes from
-            // `KeyChord` or `HoldTap`, the same values `KeyMonitor` matches on,
-            // so this section cannot advertise a gesture that no longer fires.
-            //
-            // Its own `Section` rather than the tail of "Hotkey" behind a
-            // `HairlineDivider()`: the divider was standing in for a group boundary, and
-            // a group boundary is what a `Section` is. The heading is the only new string
-            // in this pass — the divider it replaces said the same thing wordlessly, and
-            // a header is what VoiceOver's rotor can jump to.
-            Section("Other shortcuts") {
-                // Hold-then-tap needs an event tap to swallow the tapped key, so it
-                // is shown only when there is one. `axGranted` is both a precondition
-                // for that tap and what makes this view re-render when it appears —
-                // `HoldTap.isAvailable` alone would go stale on screen.
-                let handsFreeHoldTap = (axGranted && HoldTap.isAvailable)
-                    ? HoldTap.binding(for: .handsFree) : nil
-
-                VStack(alignment: .leading, spacing: Space.x2) {
-                    ShortcutHint(keys: KeyChord.handsFree.keycaps,
-                                 caption: ShortcutAction.handsFree.label,
-                                 spokenKeys: KeyChord.handsFree.spelled)
-                    if let handsFreeHoldTap {
-                        ShortcutHint(keys: handsFreeHoldTap.keycaps(holdKey: userData.hotkeyName),
-                                     caption: "while dictating",
-                                     spokenKeys: handsFreeHoldTap.spelled(holdKey: userData.hotkeyName))
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        ForEach(HotkeyOption.options) { option in
+                            SettingsRadioButton(
+                                title: option.name,
+                                value: option.name,
+                                selection: $userData.hotkeyName
+                            )
+                        }
                     }
-                    Text("Starts recording without holding anything, and keeps "
-                         + "going until you press it again or stop speaking for "
-                         + "three seconds.")
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let handsFreeHoldTap {
-                        Text("Already dictating? Keep \(userData.hotkeyName) down and "
-                             + "tap \(handsFreeHoldTap.keyLabel) — that recording keeps "
-                             + "going after you let go. Tap it again to finish, or just "
-                             + "stop talking.")
+                    .onChange(of: userData.hotkeyName) { _ in
+                        userData.save()
+                        NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
+                    }
+
+                    let opt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
+                    VStack(alignment: .leading, spacing: Space.x1) {
+                        Text(opt.description)
                             .typo(.caption)
                             .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: Space.x2) {
-                    ShortcutHint(keys: KeyChord.noteCapture.keycaps,
-                                 caption: ShortcutAction.noteCapture.label,
-                                 spokenKeys: KeyChord.noteCapture.spelled)
-                    Text("Press it, say what you want to keep, then press it again "
-                         + "\u{2014} or simply stop talking, as with hands-free. The "
-                         + "text goes to your notes instead of the app in front: "
-                         + "into the note that is open, or a new one, following the "
-                         + "Notes setting above. Pressing it while already dictating "
-                         + "redirects that recording into a note.")
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Or say \u{201C}start a new note\u{201D} or \u{201C}continue "
-                         + "the note\u{201D} while dictating: the phrase is the "
-                         + "command, and whatever you say next is filed there. "
-                         + "Needs Voice commands, under Speech.")
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // Answers the obvious question the row above raises. Only worth
-                    // saying once hold-and-tap has been introduced, hence the same
-                    // condition.
-                    if handsFreeHoldTap != nil {
-                        Text("This one has no hold-and-tap spelling: macOS keeps "
-                             + "Fn and N for Notification Center.")
-                            .typo(.caption)
+                        Text(opt.impact)
+                            .typo(.caption, ink: opt.impact.hasPrefix("Use with caution")
+                                  ? Tint.warningText : Ink.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
+                               value: userData.hotkeyName)
+                }
+
+                SettingsCard(title: "Other shortcuts") {
+                    let handsFreeHoldTap = (axGranted && HoldTap.isAvailable)
+                        ? HoldTap.binding(for: .handsFree) : nil
+
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        ShortcutHint(keys: KeyChord.handsFree.keycaps,
+                                     caption: ShortcutAction.handsFree.label,
+                                     spokenKeys: KeyChord.handsFree.spelled)
+                        if let handsFreeHoldTap {
+                            ShortcutHint(keys: handsFreeHoldTap.keycaps(holdKey: userData.hotkeyName),
+                                         caption: "while dictating",
+                                         spokenKeys: handsFreeHoldTap.spelled(holdKey: userData.hotkeyName))
+                        }
+                        Text("Starts recording without holding anything, and keeps going until you press it again or stop speaking for three seconds.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let handsFreeHoldTap {
+                            Text("Already dictating? Keep \(userData.hotkeyName) down and tap \(handsFreeHoldTap.keyLabel) — that recording keeps going after you let go. Tap it again to finish, or just stop talking.")
+                                .typo(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    HairlineDivider()
+
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        ShortcutHint(keys: KeyChord.noteCapture.keycaps,
+                                     caption: ShortcutAction.noteCapture.label,
+                                     spokenKeys: KeyChord.noteCapture.spelled)
+                        Text("Press it, say what you want to keep, then press it again \u{2014} or simply stop talking, as with hands-free. The text goes to your notes instead of the app in front: into the note that is open, or a new one, following the Notes setting above. Pressing it while already dictating redirects that recording into a note.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Or say \u{201C}start a new note\u{201D} or \u{201C}continue the note\u{201D} while dictating: the phrase is the command, and whatever you say next is filed there. Needs Voice commands, under Speech.")
+                            .typo(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if handsFreeHoldTap != nil {
+                            Text("This one has no hold-and-tap spelling: macOS keeps Fn and N for Notification Center.")
+                                .typo(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                SettingsCard(title: "Permissions") {
+                    PermRow(need: .core(granted: axGranted), label: "Accessibility",
+                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                    HairlineDivider()
+                    PermRow(need: .core(granted: micGranted), label: "Microphone",
+                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+                    HairlineDivider()
+                    PermRow(need: .screenRecording(granted: screenGranted,
+                                                   offersToTranscribeCalls: userData.offerToTranscribeCalls,
+                                                   meetingCaptureUnderway: meeting.state != .idle),
+                            label: "Screen Recording",
+                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+                }
+
+                SettingsCard(title: "The pill") {
+                    Text("Long-press the pill for two seconds to open the Utter window.")
+                        .typo(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            Section("Permissions") {
-                PermRow(need: .core(granted: axGranted), label: "Accessibility",
-                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-                PermRow(need: .core(granted: micGranted), label: "Microphone",
-                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-                // Only meeting capture needs this, so it is listed last and it is
-                // optional until meeting capture is in play — see `PermissionNeed`
-                // for which signals count as "in play" and why.
-                //
-                // The label lost its "(meetings)" parenthetical: it named the
-                // feature but never said the permission was optional, which was the
-                // whole of the problem, and in the optional state it would now say
-                // "meetings" twice over the reason line beneath. In the required
-                // state the "Offer to transcribe calls" switch above already says
-                // "Needs Screen Recording, below", so nothing is lost there either.
-                PermRow(need: .screenRecording(granted: screenGranted,
-                                               offersToTranscribeCalls: userData.offerToTranscribeCalls,
-                                               meetingCaptureUnderway: meeting.state != .idle),
-                        label: "Screen Recording",
-                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-            }
-
-            // What was a "How to use" card restating all three shortcuts now that
-            // the Hotkey section above carries them properly. This line was the only
-            // thing unique to it — and it said "this window", which stopped being
-            // true when Settings moved out of the main window: a long press opens
-            // Utter, not Settings.
-            //
-            // A titled `Section` with one prose row, not a `footer:` on the section above.
-            // A footer would have read better as a standing note, but "The pill" is a
-            // heading the user can see today and this is a presentation pass — dropping a
-            // visible string is a content change, and not one to make on the way past.
-            Section("The pill") {
-                Text("Long-press the pill for two seconds to open the Utter window.")
-                    .typo(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            .padding(.horizontal, Space.pageInset)
+            .padding(.bottom, Space.pageInset)
         }
-        .settingsForm()
         .onAppear { readiness.startPolling() }
         .onDisappear { readiness.stopPolling() }
     }
@@ -352,11 +321,11 @@ extension View {
     }
 }
 
-/// A native form toggle with a two-line label.
+/// An anti-collision settings toggle row with native macOS ergonomics.
 ///
-/// `Form` owns the label/control alignment, row hit target, focus ring, keyboard
-/// behavior, and switch placement. Keep `GlassToggle` for card-based layouts
-/// outside a form, where macOS otherwise places the switch before its label.
+/// Decouples the multi-line text container from the native switch control, ensuring
+/// that SwiftUI's Form layout engine calculates the true height of multi-line descriptions
+/// without overlapping adjacent rows.
 struct SettingsToggle: View {
     let title: String
     let description: String
@@ -365,13 +334,16 @@ struct SettingsToggle: View {
     var body: some View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).typo(.body)
+                Text(title)
+                    .typo(.body, ink: Ink.primary)
                 Text(description)
-                    .typo(.caption)
+                    .typo(.caption, ink: Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .toggleStyle(.switch)
+        .padding(.vertical, 2)
+        .accessibilityLabel("\(title), \(description)")
     }
 }
 

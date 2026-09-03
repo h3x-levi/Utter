@@ -11,3 +11,7 @@ __pycache__/
 .venv/
 env/
 venv/
+.build/
+.buildid
+Utter.xcodeproj/
+*.dmg

@@ -36,12 +36,12 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
     /// stroke weight — filled symbols read heavier and more consumer.
     var icon: String {
         switch self {
-        case .dictation: return "mic"
+        case .dictation: return "waveform"
         case .dictionary: return "character.book.closed"
-        case .snippets: return "scissors"
-        case .commands: return "wand.and.rays"
-        case .notes: return "note.text"
-        case .companion: return "figure.wave"
+        case .snippets: return "text.badge.plus"
+        case .commands: return "sparkles"
+        case .notes: return "square.and.pencil"
+        case .companion: return "pawprint.fill"
         }
     }
     @MainActor
@@ -427,12 +427,44 @@ struct FlowContent: View {
     /// branches above so the two containers cannot drift apart.
     private var column: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text(selected.rawValue)
-                    .font(.title2.weight(.semibold))
-                Text(selected.subtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text(selected.rawValue)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(Ink.primary)
+                    Text(selected.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(Ink.secondary)
+                }
+                Spacer()
+                HStack(spacing: Space.x2) {
+                    // Live Local Status Badge
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Tint.success)
+                            .frame(width: 7, height: 7)
+                        Text("Whisper Local Engine")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Ink.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Surface.fillSubtle, in: Capsule())
+
+                    // Quick Hotkey Helper
+                    HStack(spacing: 4) {
+                        Text("Hold")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Ink.tertiary)
+                        Keycap(key: userData.hotkeyName)
+                        Text("to dictate")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Ink.tertiary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Surface.fillSubtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
             }
             .padding(.bottom, Space.groupGap)
 
@@ -441,49 +473,16 @@ struct FlowContent: View {
                 .id(selected)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Equal padding on all four sides. The bottom edge previously had
-        // none, so the last tile ran off the bottom of the viewport and was
-        // clipped by it. This is also the only thing holding text off the window's
-        // right and bottom edges, and — via the leading safe-area inset it now sits
-        // inside — off the sidebar's glass.
-        //
-        // `Space.pageInset` rather than a literal because this is one of only two page columns
-        // in the app, and both must use the same rail. Nothing inside this column may add a
-        // second horizontal inset — see the token's own note.
         .padding(Space.pageInset)
     }
 
     // MARK: Window surface
 
-    /// The window's one continuous surface — the surface every screen's text sits directly on.
-    ///
-    /// This is the *content* layer in the HIG's sense: "use standard materials for
-    /// elements in the content layer, such as app backgrounds." So it is a
-    /// `NSVisualEffectView` plus a themed veil, never `glassEffect`. The glass in
-    /// this window is the sidebar's, and it is AppKit's, floating above this.
-    ///
-    /// The material and the veil are the ones the content *card* used — `.contentBackground`
-    /// and `Veil.contentSurface` — kept unchanged when the card was deleted, because carrying text
-    /// is this surface's job. Note that this inverts what those two token names imply: with the card
-    /// gone the window shell *is* the content surface, and `Veil.windowShell` now describes only the
-    /// sidebar's pre-macOS-26 strip. All three of the ramp's veils therefore still have exactly one
-    /// user each, and the ramp the tests pin still holds where it is about nesting: plane 0.72 under
-    /// tiles at 0.86 (`Veil.nestedSurface`, via `BentoTile`). The sidebar strip's 0.42 is not part of
-    /// that ordering and must not be read as breaking it: it is chrome sitting *above* the plane, and
-    /// being thinner than what it covers is its job. On macOS 26 it is not a veil at all — it is the
-    /// system's glass.
-    ///
-    /// Working the arithmetic on the tokens: `Ink.secondary` lands at ~5.8:1 on the
-    /// card's mix (raised at 0.72 over a light material), ~5.3:1 on the old window
-    /// mix (canvas at 0.42), and ~4.1:1 on that same mix if the material tracks a
-    /// black wallpaper — under the 4.5:1 floor for body text. The veil opacities
-    /// are exact; the material's own luminance is assumed (0.93 light / 0.75 behind
-    /// black), so treat the two lower figures as an estimate of a real hazard
-    /// rather than a screenshot measurement. Either way the content region's tone
-    /// is byte-for-byte what it was before the split-view change: the same material and the same
-    /// veil, over a larger frame.
     private var windowSurface: some View {
-        Color(nsColor: .windowBackgroundColor)
+        ZStack {
+            WindowBacking(material: .contentBackground)
+            Surface.canvas.opacity(Veil.contentSurface(isDark: isDark))
+        }
     }
 
     @ViewBuilder

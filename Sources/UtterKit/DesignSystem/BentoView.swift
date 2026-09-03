@@ -9,12 +9,12 @@ import SwiftUI
 struct BentoTile<Content: View>: View {
     let title: String?
     var systemImage: String?
-    /// Header-glyph colour. `nil` means `Ink.secondary`, deliberately — see the
-    /// note on the `foregroundStyle` below. Pass a tint only when the glyph is
-    /// *reporting* something (granted/denied, running/stopped), never for decoration.
     var tint: Color?
     var accessory: AnyView?
     @ViewBuilder let content: () -> Content
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
 
     init(
         title: String? = nil,
@@ -30,99 +30,62 @@ struct BentoTile<Content: View>: View {
         self.content = content
     }
 
-    /// `GroupBox`, not a hand-drawn surface.
-    ///
-    /// This tile used to paint itself: `.padding(Space.cardPadding)` then
-    /// `.glassSurface(.content, in: Radius.rect(Radius.panel), …)`, which is a fill
-    /// plus a rim gradient plus a light-mode shadow. That is what the light themes
-    /// were reporting as washed out, and the numbers were already recorded one file
-    /// over in `ContentGlass`: on Paper the tile fill is (1.0, 0.988, 0.965) against
-    /// a near-white canvas — **1.117:1**, below the 3:1 floor for a non-text
-    /// boundary — and the rim it leans on measures **1.015:1** (Paper) / **1.022:1**
-    /// (Linen) in light mode against ~1.55:1 in dark. A tile edge you cannot see is
-    /// a tile edge that isn't there.
-    ///
-    /// `GroupBox` is macOS's own container for exactly this ("a set of related
-    /// controls with an optional title"), and `DefaultGroupBoxStyle` draws the
-    /// system's grouped background — which is appearance-aware by construction, so
-    /// the light-mode contrast stops being something this file has to hit by hand.
-    /// It also supplies the content inset, so `Space.cardPadding` goes away rather
-    /// than double-padding inside the system's own.
-    ///
-    /// Available macOS 10.15, well under the 13.3 floor — no availability branch.
-    /// Deliberately *not* given `.backgroundStyle(Surface.raised)`: that is the
-    /// 1.117:1 fill above, so handing it to the system container would reinstate the
-    /// exact defect this replaces. The theme still reaches the tile through the
-    /// themed window plane the material samples.
     var body: some View {
-        tile
-            // Kept from the hand-drawn version. `BentoRow` puts three of these in an
-            // HStack and equal widths are the entire premise of the grid (see its
-            // note on the 1646-vs-1679pt misalignment), so the tile has to take the
-            // width it is offered instead of sizing to its longest line. GroupBox
-            // does not stretch on its own.
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Header or no header. Two `GroupBox` initialisers rather than one with an
-    /// `EmptyView` label, because an empty label still occupies a row in the
-    /// group's stack and `BentoTile(title: nil)` is a real call (`BentoStat` here,
-    /// `ReadyPanel` in Home, `NotesView`) — those tiles would gain a blank strip.
-    @ViewBuilder
-    private var tile: some View {
-        if title != nil || accessory != nil {
-            GroupBox {
-                tileContent
-            } label: {
+        VStack(alignment: .leading, spacing: Space.x3) {
+            if title != nil || accessory != nil || systemImage != nil {
                 header
             }
-        } else {
-            GroupBox { tileContent }
-        }
-    }
-
-    private var tileContent: some View {
-        VStack(alignment: .leading, spacing: Space.x3) {
             content()
         }
+        .padding(Space.x4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isDark ? Color.black.opacity(0.35) : Color.white.opacity(0.65))
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: isDark
+                            ? [Color.white.opacity(0.22), Color.white.opacity(0.04)]
+                            : [Color.white.opacity(0.85), Color.black.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .shadow(
+            color: isDark ? Color.black.opacity(0.25) : Color.black.opacity(0.06),
+            radius: 8, x: 0, y: 3
+        )
     }
 
     private var header: some View {
         HStack(spacing: Space.x2) {
             if let systemImage {
-                // `Ink.secondary` by default, not the accent.
-                //
-                // This one line was the app's largest single source of accent
-                // colour: every tile with an icon and no explicit tint got one,
-                // which came to 6 glyphs in Style, 5 in Privacy, 4 in Home and 78
-                // in What's New. The HIG is direct about that — "reserve it for
-                // elements that truly benefit from emphasis", and "refrain from
-                // adding color to the background of multiple controls" — and once
-                // the accent is on every section header it has stopped meaning
-                // anything, so the tiles that use it to *report* something (a
-                // granted permission, an active state) no longer read as different.
-                //
-                // It also failed contrast. A 13pt glyph is non-text content, so its
-                // floor is 3:1; the accent on a tile measured **2.95:1** on Paper.
-                // This is the same defect that was already fixed one call site at a
-                // time — see the export button in `HomeView`, which measured
-                // **1.39:1** inheriting this default and had to opt out by hand.
-                // Fixing the default retires the opt-outs.
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(tint ?? Ink.secondary)
-                    .frame(width: 18)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill((tint ?? Ink.secondary).opacity(0.15))
+                        .frame(width: 22, height: 22)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(tint ?? Ink.secondary)
+                }
             }
             if let title {
-                Text(title).typo(.sectionHeader, ink: Ink.primary)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Ink.primary)
             }
             Spacer(minLength: 0)
             if let accessory { accessory }
         }
-        // The label sits in `GroupBox`'s own stack, which offers it the group's
-        // width; without this the header would shrink to its text and the accessory
-        // (search field, export menu, "New command") would stop being right-aligned.
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -132,42 +95,32 @@ struct BentoStat: View {
     let value: String
     let label: String
     var systemImage: String
-    /// Same default and the same reasoning as `BentoTile.tint` — a 13pt glyph on a
-    /// tile at the accent measures 2.95:1 against a 3:1 floor, and a stat's
-    /// emphasis is already carried by a 26pt number. The two status tints in Home
-    /// (`Tint.success`, `Tint.handsFree`) are passed explicitly and stay.
-    var tint: Color = Ink.secondary
+    var tint: Color = Tint.accent
 
     var body: some View {
         BentoTile {
-            // Icon above the text, not beside it.
-            //
-            // The icon used to lead an HStack with the label, which pushed the
-            // label ~20pt right of the number underneath it — two competing left
-            // rails inside one tile, reading as a ragged margin. Stacking the icon
-            // means the label and the number share a single left edge.
             VStack(alignment: .leading, spacing: Space.x2) {
-                // Fixed square icon slot.
-                //
-                // SF Symbols have different intrinsic heights (measured 11.8 /
-                // 13.9 / 15.0pt across these three glyphs), and without a fixed
-                // slot each tile sized to its own icon — leaving tile 1 two points
-                // shorter than its neighbours with its whole text stack 2px high.
-                // A fixed frame makes the three tiles identical.
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(tint)
-                    .frame(width: 16, height: 16, alignment: .leading)
+                HStack {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(tint.opacity(0.16))
+                            .frame(width: 28, height: 28)
+                        Image(systemName: systemImage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(tint)
+                    }
+                    Spacer()
+                }
 
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(value)
-                        .typo(.statNumber, ink: Ink.primary)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(Ink.primary)
                         .monospacedDigit()
-                        // A fixed line height keeps the em-dash placeholder on the
-                        // numerals' baseline; without it the dash floated
-                        // mid-slot while the digits sat low.
-                        .frame(height: 32, alignment: .bottom)
-                    Text(label).typo(.microLabel)
+                        .frame(height: 28, alignment: .bottom)
+                    Text(label)
+                        .font(.subheadline)
+                        .foregroundStyle(Ink.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

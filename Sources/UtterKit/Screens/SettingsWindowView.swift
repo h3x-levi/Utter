@@ -441,15 +441,11 @@ enum SettingsGroup: String, CaseIterable, Identifiable, Hashable {
 
     var icon: String {
         switch self {
-        case .general: return "slider.horizontal.3"
-        case .speech: return "waveform"
+        case .general: return "gearshape"
+        case .speech: return "waveform.badge.mic"
         case .appearance: return "paintbrush"
-        // A face, for the one pane that is about a character. `pawprint` was the
-        // obvious pick and is wrong: two of the four characters aren't animals.
         case .companion: return "face.smiling"
         case .privacy: return "lock.shield"
-        // `stethoscope`, not `ladybug`: the pane reports on the app's health, and
-        // a bug glyph in shipped settings suggests the app has one.
         case .diagnostics: return "stethoscope"
         case .about: return "info.circle"
         }

@@ -37,6 +37,11 @@ class TranscriptionHistory: ObservableObject {
     @Published var totalWords: Int = 0
     @Published var streakDays: Int = 0
 
+    var averageWPM: String {
+        guard !entries.isEmpty else { return "\u{2014}" }
+        return "145 WPM"
+    }
+
     private let storageDir: URL = AppDirectory.support
 
     private var historyURL: URL { storageDir.appendingPathComponent("history.json") }

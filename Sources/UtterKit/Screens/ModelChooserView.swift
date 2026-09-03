@@ -34,33 +34,11 @@ import SwiftUI
 /// No glass here. This is content inside `SettingsCard`/the onboarding step, and the
 /// radio group's own control layer is the system's to draw.
 struct ModelChooserView: View {
-    /// Compact form omits the explanatory header (used inside Settings).
     var compact: Bool = false
 
     @ObservedObject private var store = ModelStore.shared
     private let device = Device.current()
 
-    /// The radio's selection is `store.active` — the model that actually transcribes.
-    ///
-    /// Deliberately **not** `pendingSelection ?? active`. Picking a model that is not on
-    /// disk starts its download and only activates it when the bytes land
-    /// (`ModelStore.select` → `download` → `select`), so binding to the pending value
-    /// would move the dot to a model that is not in use. The radio tells the truth about
-    /// which model is running; the option's own status line explains that a download is
-    /// in flight and that it will switch when it finishes.
-    private var selection: Binding<SpeechModel.Tier> {
-        Binding(
-            get: { store.active },
-            set: { store.select($0) }
-        )
-    }
-
-    /// Downloads in flight, in catalogue order.
-    ///
-    /// A transfer is not a choice, so it does not belong inside the radio group: a radio
-    /// label cannot host a working `Button`, and the progress of a download is a
-    /// different fact from which model is selected. These are rows of their own,
-    /// present only while something is downloading — the Safari-downloads arrangement.
     private var downloads: [(model: SpeechModel, progress: Double)] {
         SpeechModel.all.compactMap { model in
             guard case .downloading(let progress) = store.state(for: model.tier) else { return nil }
@@ -68,7 +46,6 @@ struct ModelChooserView: View {
         }
     }
 
-    /// Models that can be deleted — `ModelStore.canRemove` requires one to remain.
     private var removable: [SpeechModel] {
         SpeechModel.all.filter { store.canRemove($0.tier) }
     }
@@ -77,188 +54,195 @@ struct ModelChooserView: View {
         VStack(alignment: .leading, spacing: Space.stackGap) {
             if !compact {
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    Text("Choose a speech model").typo(.heading)
+                    HStack {
+                        Text("Speech Models").typo(.heading)
+                        Spacer()
+                        GlassChip(text: "\(device.ramGB)GB Unified Memory", systemImage: "memorychip")
+                    }
                     Text(device.recommendationReason)
                         .typo(.lede)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.bottom, Space.x2)
+                .padding(.bottom, Space.x1)
             }
 
-            // `.labelsHidden()` suppresses the *visual* label only, so the group keeps its
-            // accessible name. Both call sites already title this list — the header above
-            // in the full form, `SettingsCard(title: "Model")` in the compact one — and a
-            // third "Speech model" heading between them would be the same word twice.
-            //
-            // `.tint` is the whole theming bridge: it colours the selected radio's fill,
-            // which is the one place the seven themes need to reach a system control here.
-            // Nothing is drawn behind the group; the themed window shows through it.
-            Picker(selection: selection) {
+            // Bento Model Cards
+            VStack(spacing: Space.x3) {
                 ForEach(SpeechModel.all) { model in
-                    ModelOption(
+                    BentoModelCard(
                         model: model,
                         device: device,
+                        isActive: store.active == model.tier,
                         isRecommended: model.tier == device.recommended.tier,
-                        state: store.state(for: model.tier)
-                    )
-                    .tag(model.tier)
-                }
-            } label: {
-                Text("Speech model")
-            }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-
-            ForEach(downloads, id: \.model.tier) { download in
-                LabeledContent("Downloading \(download.model.displayName)") {
-                    HStack(spacing: Space.x2) {
-                        ProgressView(value: download.progress)
-                            .progressViewStyle(.linear)
-                            .frame(width: 90)
-                        Text("\(Int(download.progress * 100))%")
-                            .typo(.caption)
-                            .monospacedDigit()
-                        GlassButton(title: "Cancel", size: .small) {
-                            store.cancelDownload(download.model.tier)
-                        }
-                    }
-                }
-                .typo(.caption)
-            }
-
-            // Removal is disk management, not model choice, and it is the one action here
-            // that cannot be undone — so it is a `Menu` (a real macOS pop-up button, with
-            // the system's own hover and pressed states) rather than a trash glyph on every
-            // row. Two clicks for a destructive, occasional action is the right trade, and
-            // it keeps the radio labels free of controls a radio label cannot host.
-            //
-            // Absent entirely when nothing is removable, which is the state of a fresh
-            // install: only `small` ships in the bundle, so there is nothing to reclaim
-            // until the user has downloaded a second model.
-            if !removable.isEmpty {
-                Menu {
-                    ForEach(removable) { model in
-                        Button("\(model.displayName) \u{2014} frees \(model.sizeMB) MB") {
+                        state: store.state(for: model.tier),
+                        onSelect: {
+                            store.select(model.tier)
+                        },
+                        onDelete: store.canRemove(model.tier) ? {
                             store.remove(model.tier)
-                        }
-                    }
-                } label: {
-                    Label("Remove a model", systemImage: "trash")
+                        } : nil
+                    )
                 }
-                .menuStyle(.button)
-                .fixedSize()
             }
 
-            Text("Small is included and works offline right away. Downloading a larger model is the only "
-                 + "time Utter uses the network, and it only happens when you ask. You can remove any "
-                 + "model you\u{2019}re not using \u{2014} including the included one \u{2014} as long as one remains.")
-                .typo(.caption)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, Space.x1)
+            // In-Flight Downloads Bar
+            ForEach(downloads, id: \.model.tier) { download in
+                BentoTile(title: "Downloading \(download.model.displayName)", systemImage: "arrow.down.circle.fill", tint: Tint.accent) {
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        HStack {
+                            ProgressView(value: download.progress)
+                                .progressViewStyle(.linear)
+                            Text("\(Int(download.progress * 100))%")
+                                .typo(.caption)
+                                .monospacedDigit()
+                            GlassButton(title: "Cancel", size: .small) {
+                                store.cancelDownload(download.model.tier)
+                            }
+                        }
+                        Text("Transcribing will automatically switch to \(download.model.displayName) once finished.")
+                            .font(.caption2)
+                            .foregroundStyle(Ink.secondary)
+                    }
+                }
+            }
+
+            // Storage Management Note
+            HStack(spacing: Space.x2) {
+                Image(systemName: "internaldrive")
+                    .foregroundStyle(Tint.accent)
+                Text("All speech recognition runs 100% on-device. Downloading models is the only time Utter uses the network.")
+                    .typo(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, Space.x1)
         }
     }
 }
 
-/// One radio option: the model, its cost on this Mac, and what picking it will do.
-///
-/// Contains no controls. A `.radioGroup` option's label is the radio's own hit area, so
-/// anything tappable inside it would be competing with the radio for the same click —
-/// and it does not need to compete, because every button this row used to carry was a
-/// different spelling of "pick this model":
-///
-///   * **Use** (installed, not active) → select it.
-///   * **Download** / **Restore** (not on disk) → `ModelStore.select` downloads it and
-///     activates it when the bytes land, so picking it *is* the download.
-///   * **Retry** (failed) → the same call again, which is exactly what re-picking does.
-///
-/// Cancel and Remove are the two that genuinely are not "pick this model", and they live
-/// outside the group in `ModelChooserView`.
-private struct ModelOption: View {
+// MARK: - Bento Model Card
+
+private struct BentoModelCard: View {
     let model: SpeechModel
     let device: Device
+    let isActive: Bool
     let isRecommended: Bool
     let state: ModelStore.State
+    let onSelect: () -> Void
+    let onDelete: (() -> Void)?
 
     private var isAvailable: Bool {
         state == .bundled || state == .installed
     }
 
-    /// Estimated wall-clock to transcribe a minute of speech on this Mac.
-    private var speedText: String {
+    private var speedBadgeText: String {
         let seconds = model.secondsPerMinuteOfSpeech(scale: device.speedScale)
-        if seconds < 1 { return "under a second per minute of speech" }
-        if seconds < 60 { return String(format: "about %.0fs per minute of speech", seconds) }
-        return String(format: "about %.1f× slower than real time", seconds / 60)
-    }
-
-    /// Where the model is, and what picking it will do.
-    ///
-    /// This line carries what the row's four buttons used to say, and it has to: with the
-    /// buttons gone, "Download" is no longer visible as a word anywhere, so the option
-    /// must state that picking it starts a download. `Tint.dangerText`/`Ink.secondary`
-    /// rather than `Tint.danger`/`Ink.tertiary` — this is text the user must read.
-    private var status: (text: String, ink: Color) {
-        switch state {
-        case .bundled:
-            return ("Included with Utter \u{2014} ready now", Ink.secondary)
-        case .installed:
-            return ("Downloaded \u{2014} ready now", Ink.secondary)
-        case .downloading:
-            return ("Downloading \u{2014} switches over when it finishes", Ink.secondary)
-        case .notDownloaded:
-            let verb = SpeechModel.isBundled(model.tier) ? "downloads it again" : "downloads"
-            return ("Not on this Mac \u{2014} picking it \(verb) (\(model.sizeMB) MB)", Ink.secondary)
-        case .failed(let reason):
-            return ("Download failed: \(reason). Pick it again to retry.", Tint.dangerText)
-        }
+        if seconds < 1 { return "<1s per min (Ultra Fast)" }
+        if seconds < 60 { return String(format: "%.0fs per min", seconds) }
+        return String(format: "%.1f× real-time", seconds / 60)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x1) {
-            HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
-                Text(model.displayName).typo(.subheading)
-                if isRecommended {
-                    // `GlassChip`, not a hand-rolled `Text` on `Tint.accentSoft`. That
-                    // badge was 12pt `Tint.accentText` over the accent at 12% — a measured
-                    // fix for a 2.58:1 failure on Paper, whose theme accent is an amber
-                    // tuned to read as a fill. `GlassChip` already resolves that case the
-                    // same way for every chip in the app: `Ink.primary` for the label, the
-                    // tint on the rim and glyph only. One fewer place to re-measure.
-                    GlassChip(text: "Recommended", tint: Tint.accent)
+        VStack(alignment: .leading, spacing: Space.x2) {
+            HStack(alignment: .center) {
+                // Radio / Active Indicator
+                Button(action: onSelect) {
+                    HStack(spacing: Space.x3) {
+                        Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(isActive ? Tint.accent : Ink.secondary.opacity(0.6))
+
+                        HStack(spacing: Space.x2) {
+                            Text(model.displayName)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Ink.primary)
+
+                            if isActive {
+                                GlassChip(text: "Active & Ready", tint: Tint.accent)
+                            }
+
+                            if isRecommended {
+                                GlassChip(text: "Recommended", tint: Color.purple)
+                            }
+
+                            if model.isMultilingual {
+                                Text("90+ languages")
+                                    .font(.caption2)
+                                    .foregroundStyle(Ink.secondary)
+                            }
+                        }
+                    }
                 }
-                if model.isMultilingual {
-                    Text("90+ languages").typo(.caption)
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Actions (Delete if downloaded & not active)
+                if let deleteAction = onDelete, isAvailable && !isActive {
+                    Button(action: deleteAction) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Ink.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete to free \(model.sizeMB) MB")
                 }
             }
 
             Text(model.summary)
-                .typo(.callout)
+                .font(.caption)
+                .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 28)
 
+            // Metric Badges Row
             HStack(spacing: Space.x3) {
-                Label("\(model.sizeMB) MB", systemImage: "internaldrive")
-                Label(speedText, systemImage: "speedometer")
-                Label("\(model.peakRAMMB) MB RAM", systemImage: "memorychip")
-            }
-            .typo(.caption)
-            .labelStyle(.titleAndIcon)
+                MetricChip(icon: "internaldrive", text: "\(model.sizeMB) MB")
+                MetricChip(icon: "speedometer", text: speedBadgeText)
+                MetricChip(icon: "memorychip", text: "\(model.peakRAMMB) MB RAM")
 
-            Text(status.text)
-                .typo(.caption, ink: status.ink)
-                .fixedSize(horizontal: false, vertical: true)
+                Spacer()
 
-            if !model.fitsComfortably(in: device) && !isAvailable {
-                Label(
-                    "Uses a large share of \(device.ramGB) GB \u{2014} may slow other apps",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .typo(.caption, ink: Tint.warningText)
+                if !isAvailable && !isActive {
+                    Button(action: onSelect) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle")
+                            Text("Download")
+                        }
+                        .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
-        // The radio group supplies the indent, the row's hit area and the gap between
-        // options; the former `Space.x3` padding, `Radius.card` fill, hairline rim and
-        // `.contentShape` are all gone with it. This is the only geometry left, and it is
-        // just breathing room between one multi-line option and the next.
-        .padding(.vertical, Space.x1)
+        .padding(Space.x3)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isActive ? Tint.accent.opacity(0.08) : Color.primary.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isActive ? Tint.accent.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+private struct MetricChip: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundStyle(Tint.accent)
+            Text(text)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(Ink.primary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }

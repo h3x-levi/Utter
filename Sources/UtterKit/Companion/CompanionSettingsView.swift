@@ -626,21 +626,21 @@ private struct CompanionCharacterGrid: View {
                             style: style,
                             mood: .resting,
                             pose: .neutral,
-                            size: 32,
+                            size: 46,
                             elapsed: 1
                         )
-                        .frame(width: 34, height: 34)
+                        .frame(width: 48, height: 48)
                     } else if let frame = pack.frames(for: .resting).first {
                         Image(nsImage: frame)
                             .resizable()
                             .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 34, height: 34)
+                            .frame(width: 48, height: 48)
                     } else {
                         Image(systemName: "questionmark.square.dashed")
-                            .font(.system(size: 20))
+                            .font(.system(size: 24))
                             .foregroundStyle(Ink.secondary)
-                            .frame(width: 34, height: 34)
+                            .frame(width: 48, height: 48)
                     }
                 }
             }
@@ -655,39 +655,32 @@ private struct CompanionCharacterGrid: View {
     }
 }
 
-private struct CharacterTile<Preview: View>: View {
+@MainActor
+private final class PackTileModel: ObservableObject {
+    @Published var isHovering = false
+}
+
+struct CharacterTile<Preview: View>: View {
     let name: String
     let blurb: String
     let isSelected: Bool
     let action: () -> Void
     @ViewBuilder let preview: () -> Preview
 
-    @State private var isHovering = false
+    @StateObject private var model = PackTileModel()
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: Space.x2) {
                 ZStack {
-                    // Hover moves the FILL, not the stroke.
-                    //
-                    // It used to move only the stroke, hairline -> strong. Measured on this
-                    // app's light canvases that is a 1.070:1 change on a 1pt border: hairline
-                    // is `hairlineInk` at 13% (a dark brown) and strong is `Color.primary` at
-                    // 14% (black), so the hover signal was a 0.01 alpha difference on one pixel
-                    // of edge. Imperceptible, and in both appearances — the tile simply did not
-                    // respond to the pointer.
-                    //
-                    // fillSubtle -> fillHover measures 1.147:1 and covers the whole 52pt well,
-                    // so the signal is large-area rather than hairline-thin. The stroke still
-                    // firms up as a second, quieter cue.
                     Radius.rect(Radius.control)
-                        .fill(isHovering ? Surface.fillHover : Surface.fillSubtle)
+                        .fill(model.isHovering ? Surface.fillHover : Surface.fillSubtle)
                     preview()
                 }
-                .frame(height: 52)
+                .frame(height: 68)
                 .overlay(
                     Radius.rect(Radius.control).strokeBorder(
-                        isSelected ? Tint.accent : (isHovering ? Line.hairlineHover : Line.hairline),
+                        isSelected ? Tint.accent : (model.isHovering ? Line.hairlineHover : Line.hairline),
                         lineWidth: isSelected ? 2 : Line.width
                     )
                 )
@@ -700,7 +693,7 @@ private struct CharacterTile<Preview: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { model.isHovering = hovering }
         }
         .help(blurb)
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)

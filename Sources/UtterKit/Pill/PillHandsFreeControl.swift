@@ -120,85 +120,42 @@ enum PillHoverControl {
 ///
 /// No text, by request. Nothing would fit anyway: a 28pt capsule holding a word plus a glyph
 /// is the keycap chip the resting pill was deliberately stripped back from.
+@MainActor
+private final class HandsFreeHoverModel: ObservableObject {
+    @Published var isHovering = false
+}
+
 struct HandsFreeRevealButton: View {
     /// Whether this press ends a latched session rather than starting one.
     let stops: Bool
     /// How far out of the pill the bead has travelled, 0 (inscribed in the capsule's end) to
-    /// 1 (at rest beside it).
-    ///
-    /// Drives the glyph, which is now the only thing this view draws. The bead's *body* belongs
-    /// to `PillShellShape` — it is a lobe of the pill's own silhouette, so at 0 it is inscribed in
-    /// the capsule's rounded end and contributes nothing, and on the way out the shell's single
-    /// outline necks and stretches. This view never fades a glass body in, because there is no
-    /// second glass body to fade: that was what read as a bead materialising beside the pill.
-    ///
-    /// The glyph still has to be hidden while the lobe is inside the capsule, or a record ring
-    /// would sit on the capsule's face at rest.
     let emergence: Double
     let action: () -> Void
-    /// Reported upward so `PillContainerView` can hand the press to this control rather than to
-    /// the long press it sits inside. See `PillHoverControl.longPressOpensUtter`.
     let onHoverChanged: (Bool) -> Void
 
     @ObservedObject private var motion = MotionPreference.shared
-    @State private var isHovering = false
+    @StateObject private var model = HandsFreeHoverModel()
 
-    /// The full button, matching `PillMetrics.handsFreeButtonSide`.
-    ///
-    /// It was 20pt when it sat *inside* the capsule and had to leave the shell room. It is
-    /// now a bead of the pill's own body, so it is sized as one — and 26 against the capsule's
-    /// 28 is what lets it sit exactly inscribed in the rounded end when tucked.
     private static let side: CGFloat = PillMetrics.handsFreeButtonSide
 
     var body: some View {
         Button(action: action) {
-            // 13pt against the 11 the lock used. `record.circle`'s meaning is carried by the
-            // gap between its ring and its dot, and at 11pt that gap is under a point — it
-            // closes up into a blob that could be any filled circle.
-            //
-            // A bare glyph, and that is the whole of it now.
-            //
-            // This view used to carry its own `glassSurface(in: Circle())` and its own
-            // `Circle().strokeBorder`, and both are deleted rather than suppressed. Two glass
-            // bodies cannot be stroked as one object: during the merge the viewer saw two fully
-            // outlined objects overlapping — the fields blending underneath while two hard rings
-            // slid through each other, which reads as two stickers, not one liquid. And the
-            // fallbacks were worse, not better: with no `GlassEffectContainer` before macOS 26 or
-            // under Reduce Transparency the ring came *back*, so the three configurations with no
-            // merge to hide it got the rejected "a button travels out of the pill" read
-            // permanently.
-            //
-            // `PillShellShape` draws the bead as a lobe of the pill's own silhouette instead, so
-            // there is one glass body and one outline on every configuration, and this is a glyph
-            // riding on a bead the shell has already drawn. Hover no longer tints a surface of its
-            // own — it brightens the glyph, which is the only thing here to brighten.
             Image(systemName: stops ? "stop.circle" : "record.circle")
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Tint.handsFree.opacity(isHovering ? 1 : 0.82))
-                // Only the glyph fades. See `emergence`.
+                .foregroundStyle(Tint.handsFree.opacity(model.isHovering ? 1 : 0.82))
                 .opacity(emergence)
                 .frame(width: Self.side, height: Self.side)
-                // Exactly the artwork, and no more.
-                //
-                // `GlassIconButton` extends its hit region to the HIG's 44pt; that would be
-                // wrong here. The bead sits `handsFreeButtonGap` from a capsule that is itself
-                // long-pressable, so a hit region larger than the artwork would reach back over
-                // the pill and start eating presses meant for it.
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            isHovering = hovering
+            model.isHovering = hovering
             onHoverChanged(hovering)
         }
         .help(stops ? "Stop hands-free dictation" : "Start hands-free dictation")
-        // The pill as a whole is one accessibility element (`children: .ignore`), so this
-        // label is not what VoiceOver reads — `PillContent` exposes the same action on the
-        // element itself, which is also the only way a hover-revealed control can be
-        // reached without a pointer.
         .accessibilityHidden(true)
-        .animation(motion.reduceMotion ? nil : (isHovering ? Motion.hoverIn : Motion.hoverOut),
-                   value: isHovering)
+        .animation(motion.reduceMotion ? nil : (model.isHovering ? Motion.hoverIn : Motion.hoverOut),
+                   value: model.isHovering)
     }
 }
 

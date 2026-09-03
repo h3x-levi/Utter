@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import ApplicationServices
+import Combine
 
 /// First-run onboarding: a short guided flow that walks the user through the two
 /// permissions Utter needs (Microphone + Accessibility) and confirms the on-device
@@ -11,70 +12,103 @@ import ApplicationServices
 ///
 /// An unfinished run is resumable: the current step is written to UserDefaults on
 /// every move, so quitting part-way — which the Screen Recording step obliges the
-/// user to do — reopens where they were rather than at the welcome screen.
+@MainActor
+final class OnboardingViewModel: ObservableObject {
+    static let totalSteps = 7
+
+    @Published var step = OnboardingState.resumeStep(stepCount: OnboardingViewModel.totalSteps)
+    @Published var micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    @Published var axGranted = AXIsProcessTrusted()
+    @Published var modelReady = LocalWhisperProvider.modelURL() != nil
+    @Published var screenGranted = SystemAudioCapture.permissionState() == .granted
+    @Published var wantsCompanion = UserData.shared.companionEnabled
+    @Published var sampleTestText: String = ""
+
+    func refresh() {
+        micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        axGranted = AXIsProcessTrusted()
+        modelReady = LocalWhisperProvider.modelURL() != nil
+        screenGranted = SystemAudioCapture.permissionState() == .granted
+    }
+
+    func requestMic() {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.micGranted = granted
+                }
+            }
+        case .denied, .restricted:
+            openSettings("Privacy_Microphone")
+        default:
+            micGranted = true
+        }
+    }
+
+    func requestScreenRecording() {
+        _ = SystemAudioCapture.requestPermission()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func requestAccessibility() {
+        AccessibilityPermission.openSettingsPane()
+    }
+
+    private func openSettings(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+/// The first-launch walkthrough: permissions, model verification, and key assignment.
 struct OnboardingView: View {
-    /// Called when the user finishes or skips onboarding, with `true` when they
-    /// skipped. See `finish(skipped:)` for why the caller has to be able to tell.
     var onFinish: (_ skipped: Bool) -> Void
 
-    /// Where the flow opens, restored from the last unfinished run.
-    ///
-    /// Granting Screen Recording *requires* macOS to relaunch the app, so an
-    /// interrupted first run is the main path here, not an edge case: this used to be
-    /// a plain `0`, and the relaunch after the meetings step sent the user back to
-    /// the welcome screen to redo microphone, accessibility and the model choice.
-    /// `OnboardingState` owns the clamping — see `resumeStep`.
-    @State private var step = OnboardingState.resumeStep(stepCount: OnboardingView.totalSteps)
-    @State private var micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-    @State private var axGranted = AXIsProcessTrusted()
-    @State private var modelReady = LocalWhisperProvider.modelURL() != nil
-    @State private var screenGranted = SystemAudioCapture.permissionState() == .granted
-    /// Companion opt-in, asked once here rather than left to be discovered.
-    @State private var wantsCompanion = UserData.shared.companionEnabled
-
-    // Re-checks permission state on a timer while the window is open, so the UI
-    // updates as soon as the user grants access in System Settings.
-    private let poll = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    @StateObject private var model = OnboardingViewModel()
+    @ObservedObject private var userData = UserData.shared
     @ObservedObject private var motion = MotionPreference.shared
 
-    /// `static` so the initial value of `step` can be resolved against it — a stored
-    /// property's default expression cannot reach an instance member.
-    private static let totalSteps = 7
+    private let poll = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
-            // Progress dots
-            //
-            // These were the inconsistency inside this one file: `stepContent` below
-            // already branches its transition on `motion.reduceMotion` (:145-152), and
-            // the dots — which grow from 7pt to 20pt as the selection moves — did not.
-            // So with Reduce Motion on, the content correctly crossfaded while the
-            // indicator above it kept animating its width.
-            HStack(spacing: 6) {
-                ForEach(0..<Self.totalSteps, id: \.self) { i in
-                    Capsule()
-                        .fill(i == step ? Tint.accent : Color.primary.opacity(0.15))
-                        .frame(width: i == step ? 20 : 7, height: 7)
-                        .animation(motion.reduceMotion ? Motion.reduced : Motion.layout,
-                                   value: step)
+            // Progress dots & Account State Chip
+            HStack {
+                HStack(spacing: 6) {
+                    ForEach(0..<OnboardingViewModel.totalSteps, id: \.self) { i in
+                        Capsule()
+                            .fill(i == model.step ? Tint.accent : Color.primary.opacity(0.15))
+                            .frame(width: i == model.step ? 20 : 7, height: 7)
+                            .animation(motion.reduceMotion ? Motion.reduced : Motion.layout,
+                                       value: model.step)
+                    }
                 }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Step \(step + 1) of \(Self.totalSteps)")
-            .padding(.top, 22)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Step \(model.step + 1) of \(OnboardingViewModel.totalSteps)")
 
-            // Centred when the step fits, scrollable when it doesn't.
-            //
-            // The window opens at 620×600, where the tallest step (welcome, with the
-            // live pill demo) comes to roughly 491pt of the ~501pt available. That
-            // fits at the default text size and not much above it: previously the
-            // step content simply overflowed, pushing the nav row below the window
-            // edge, so at a larger system text size "Continue" was reachable only
-            // through its keyboard shortcut. The spacers live *inside* the scroll
-            // content, and `minHeight` matches the space available, so the layout is
-            // pixel-identical while it fits and starts scrolling exactly when it
-            // stops fitting — at whatever size the window currently is, since the
-            // proxy measures the space actually given rather than a fixed 600.
+                Spacer()
+
+                // Account status chip
+                HStack(spacing: 4) {
+                    Image(systemName: userData.isAuthenticated ? "person.crop.circle.fill" : "person.crop.circle.badge.checkmark")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Tint.accent)
+                    Text(userData.isAuthenticated ? (userData.userDisplayName.isEmpty ? userData.userEmail : userData.userDisplayName) : "Guest (Offline)")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(Ink.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.04))
+                .clipShape(Capsule())
+            }
+            .padding(.horizontal, Space.x5)
+            .padding(.top, 18)
+
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 0) {
@@ -87,69 +121,27 @@ struct OnboardingView: View {
             }
 
             // Nav buttons
-            //
-            // This row is the closest thing this window has to a chrome layer: it
-            // persists across all seven steps while everything above it changes, it
-            // carries the flow's primary control, and it sits flush to the window's
-            // bottom edge. It was the obvious candidate for a Liquid Glass bar when the
-            // Settings column got one. It does not get one, for a reason that is a fact
-            // about this code rather than a taste call:
-            //
-            // **The glass here is already the buttons.** `GlassButtonLook` resolves
-            // `GlassButton` to `.buttonStyle(.glassProminent)` on macOS 26 (and to
-            // `.glass` for the permission buttons on every step above), so "Continue"
-            // is a real Liquid Glass control today. A glass band behind it would stack
-            // a second glass layer under a glass button — the glass-on-glass the HIG
-            // rules out, and the same trap `FlowSidebar.navRows` avoids by keeping its
-            // sidebar rows on flat fills. Given a choice between glass on a *standard*
-            // component, whose accessibility adaptation Apple actually promises, and
-            // glass on a custom band, the standard component wins.
-            //
-            // The full Apple pattern for a bottom bar over scrolling content is
-            // `safeAreaBar(edge: .bottom)` — it exists at macOS 26.0, and unlike
-            // `safeAreaInset` it insets the safe area so the bar gets scroll-edge
-            // treatment and content passes under it — with the buttons regrouped in a
-            // `GlassEffectContainer` so they merge *into* the bar instead of sitting on
-            // it. That is a real upgrade and it is deliberately not taken here: this row
-            // is a sibling in the `VStack`, and the `GeometryReader` above hands the
-            // `ScrollView` exactly the height between the dots and this row
-            // (`minHeight: proxy.size.height`). Insetting the safe area would leave that
-            // measurement too tall by the bar's height, so the content would always
-            // overflow by that much and never centre — reopening the scar recorded above
-            // it, where "Continue" was reachable only by keyboard shortcut. Take it when
-            // the arithmetic is reworked to subtract the inset, not before.
-            // "Skip" was `.buttonStyle(.plain)` with a hand-set `Ink.secondary`, which is
-            // the app's own complaint in miniature: `.plain` draws no background, so it
-            // has no hover state, no pressed state and no focus ring. In a light theme
-            // the only feedback on mouse-over was none at all. It is now the same
-            // `GlassButton` the permission steps use, so the system draws all three.
-            //
-            // Non-prominent, deliberately: "Continue" is the one prominent control here,
-            // and a secondary action that looks as loud as the primary one is not a
-            // secondary action. `.bordered` beside `.borderedProminent` (pre-26) and
-            // `.glass` beside `.glassProminent` (26+) is the standard pairing —
-            // `GlassButtonLook` picks whichever the OS has.
             HStack {
-                if step > 0 {
+                if model.step > 0 {
                     GlassButton(title: "Back") {
                         withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
-                            step -= 1
+                            model.step -= 1
                         }
                     }
                 }
 
-                if step < Self.totalSteps - 1 {
+                if model.step < OnboardingViewModel.totalSteps - 1 {
                     GlassButton(title: "Skip") { finish(skipped: true) }
                 }
 
                 Spacer()
                 GlassButton(
-                    title: step == Self.totalSteps - 1 ? "Get started" : "Continue",
+                    title: model.step == OnboardingViewModel.totalSteps - 1 ? "Get started" : "Continue",
                     prominent: true
                 ) {
-                    if step < Self.totalSteps - 1 {
+                    if model.step < OnboardingViewModel.totalSteps - 1 {
                         withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
-                            step += 1
+                            model.step += 1
                         }
                     } else {
                         finish(skipped: false)
@@ -160,46 +152,33 @@ struct OnboardingView: View {
             }
             .padding(Space.x5)
         }
-        // A minimum and an ideal, not a fixed size. This was `.frame(width: 620,
-        // height: 600)`: with the window now `.resizable`, a fixed frame would have
-        // ignored every size it was given and left a resizable window whose content
-        // never moved. The minimum matches the window's `contentMinSize`, so the view
-        // is never asked to lay out smaller than it can.
         .frame(minWidth: Layout.onboardingMinWidth,
                idealWidth: Layout.onboardingIdealWidth,
                maxWidth: .infinity,
                minHeight: Layout.onboardingMinHeight,
                idealHeight: Layout.onboardingIdealHeight,
                maxHeight: .infinity)
-        // Same shell as the main window: translucent material plus a warm veil,
-        // so the first screen a user sees is the same material as the rest.
         .background(OnboardingBacking())
         .onReceive(poll) { _ in
-            micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-            axGranted = AXIsProcessTrusted()
-            modelReady = LocalWhisperProvider.modelURL() != nil
-            screenGranted = SystemAudioCapture.permissionState() == .granted
+            model.refresh()
         }
-        // Drop an anchor on every move, forwards or back, so a relaunch reopens the
-        // step the user was actually looking at.
-        .onChange(of: step) { value in OnboardingState.recordStep(value) }
+        .onChange(of: model.step) { value in OnboardingState.recordStep(value) }
     }
 
     private var canAdvance: Bool {
         OnboardingState.canAdvance(
-            step: step,
-            microphoneGranted: micGranted,
-            accessibilityGranted: axGranted,
-            modelReady: modelReady
+            step: model.step,
+            microphoneGranted: model.micGranted,
+            accessibilityGranted: model.axGranted,
+            modelReady: model.modelReady
         )
     }
 
     // MARK: - Steps
 
-    /// The current step, with the shared padding and transition.
     private var stepContent: some View {
         Group {
-            switch step {
+            switch model.step {
             case 0: welcomeStep
             case 1: micStep
             case 2: axStep
@@ -211,9 +190,6 @@ struct OnboardingView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Space.x10)
-        // Steps slide sideways as you advance, and fade under Reduce Motion.
-        // Previously only the progress dots moved, so the content itself
-        // changed as a hard cut.
         .transition(
             motion.reduceMotion
                 ? .opacity
@@ -222,7 +198,7 @@ struct OnboardingView: View {
                     removal: .move(edge: .leading).combined(with: .opacity)
                   )
         )
-        .id(step)
+        .id(model.step)
     }
 
     private var welcomeStep: some View {
@@ -232,13 +208,6 @@ struct OnboardingView: View {
                 Text("Welcome to Utter").typo(.title)
             }
 
-            // Show the pill rather than describing it.
-            //
-            // This tile used to be prose — "hold your hotkey anywhere and your words
-            // are typed into whatever app you're using" — sitting beside a real pill
-            // that was already on screen, unexplained. `PillDemoView` renders the
-            // actual pill view through its real states, so the first thing a new
-            // user sees is the thing itself doing the thing.
             BentoTile(title: "How it works", systemImage: "mic") {
                 PillDemoView()
                     .frame(maxWidth: .infinity)
@@ -263,10 +232,10 @@ struct OnboardingView: View {
             iconColor: Tint.recording,
             title: "Microphone access",
             message: "Utter records your voice only while you hold the hotkey, and transcribes it on this Mac. Your audio never leaves the device, and nothing is recorded otherwise.",
-            granted: micGranted,
+            granted: model.micGranted,
             grantedLabel: "Microphone access granted",
             actionLabel: "Grant Microphone Access",
-            action: requestMic
+            action: { model.requestMic() }
         )
     }
 
@@ -276,45 +245,32 @@ struct OnboardingView: View {
             iconColor: Tint.accent,
             title: "Accessibility access",
             message: "Utter needs Accessibility access to type the transcribed text into whatever app you’re using, and to detect your hotkey. Toggle Utter on in the window that opens.",
-            granted: axGranted,
+            granted: model.axGranted,
             grantedLabel: "Accessibility access granted",
             actionLabel: "Open Accessibility Settings",
-            action: requestAccessibility
+            action: { model.requestAccessibility() }
         )
     }
 
-    /// No `ScrollView` of its own: the step container is now scrollable, and nesting
-    /// a second scroll view inside it gives two competing scrollers over the same
-    /// gesture — the inner one swallows the wheel and the outer never moves.
     private var modelStep: some View {
         ModelChooserView()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, Space.x2)
     }
 
-    /// Screen Recording, framed as optional because it is.
-    ///
-    /// Asked here rather than on first use so the user meets it in context, with an
-    /// explanation, instead of a bare system prompt appearing the moment they try to
-    /// record a meeting. Skipping costs them nothing but that one feature.
     private var meetingsStep: some View {
         PermissionStep(
             icon: "person.wave.2.fill",
             iconColor: Tint.accent,
             title: "Meetings — optional",
             message: "To transcribe a meeting Utter needs Screen Recording, which is how macOS lets an app hear other participants. It captures audio only, never the screen, and only while you are recording a meeting. Skip this and everything else still works.",
-            granted: screenGranted,
+            granted: model.screenGranted,
             grantedLabel: "Screen Recording granted",
             actionLabel: "Open Screen Recording Settings",
-            action: requestScreenRecording
+            action: { model.requestScreenRecording() }
         )
     }
 
-    /// The companion opt-in.
-    ///
-    /// Asked once, here, because a character that appears on the desktop unannounced
-    /// is a surprise rather than a feature — and one buried in Settings would never
-    /// be found. Off by default; this is the moment it gets offered.
     private var companionStep: some View {
         VStack(spacing: Space.groupGap) {
             VStack(spacing: Space.x2) {
@@ -326,18 +282,38 @@ struct OnboardingView: View {
 
             BentoTile(title: "Companion", systemImage: "sparkles") {
                 VStack(alignment: .leading, spacing: Space.x3) {
-                    Text("A small animated character can sit beside the pill and react "
-                         + "as you dictate. Purely for company — it changes nothing "
-                         + "about how Utter works.")
-                        .typo(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Space.x4) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(LinearGradient(colors: [Tint.accent.opacity(0.2), Color.purple.opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 56, height: 56)
+
+                            Image(systemName: model.wantsCompanion ? "cat.fill" : "moon.zzz.fill")
+                                .font(.system(size: 28))
+                                .foregroundStyle(Tint.accent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.wantsCompanion ? "Pixel Pet: Active" : "Pixel Pet: Resting")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Ink.primary)
+                            Text("Watches cursor, kneads paws during typing, and cheers your dictations.")
+                                .font(.caption2)
+                                .foregroundStyle(Ink.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(Color.primary.opacity(0.03))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     GlassToggle(
                         title: "Show a companion",
-                        description: "You can change this any time, and pick a character.",
-                        isOn: $wantsCompanion
+                        description: "You can change this any time, and pick from multiple characters.",
+                        isOn: $model.wantsCompanion
                     )
-                    .onChange(of: wantsCompanion) { value in
+                    .onChange(of: model.wantsCompanion) { value in
                         UserData.shared.companionEnabled = value
                         UserData.shared.save()
                     }
@@ -349,29 +325,46 @@ struct OnboardingView: View {
     private var readyStep: some View {
         VStack(spacing: Space.groupGap) {
             VStack(spacing: Space.x2) {
-                Image(systemName: modelReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: model.modelReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 40))
-                    // Text variants — see the note in `AIStatusRow`. 40pt is large, but amber
-                    // measured 1.48:1 on cream, which no point size rescues.
-                    .foregroundStyle(modelReady ? Tint.successText : Tint.warningText)
-                Text(modelReady ? "You\u{2019}re all set" : "Speech model missing")
+                    .foregroundStyle(model.modelReady ? Tint.successText : Tint.warningText)
+                Text(model.modelReady ? "You\u{2019}re all set" : "Speech model missing")
                     .typo(.title)
             }
 
             BentoTile(title: "Ready to use", systemImage: "checklist") {
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    ReadinessRow(label: "Microphone", ok: micGranted)
-                    ReadinessRow(label: "Accessibility", ok: axGranted)
-                    ReadinessRow(label: "Speech model", ok: modelReady)
-                    // Optional, so its absence is not a failure — the status says so
-                    // rather than showing an alarm for a feature the user may never use.
+                    ReadinessRow(label: "Microphone", ok: model.micGranted)
+                    ReadinessRow(label: "Accessibility", ok: model.axGranted)
+                    ReadinessRow(label: "Speech model", ok: model.modelReady)
                     ReadinessRow(label: "Screen Recording",
-                                 ok: screenGranted,
+                                 ok: model.screenGranted,
                                  pendingText: "Optional \u{2014} for meetings")
                 }
             }
 
-            Text(modelReady
+            // Live Dictation Test Bar Playground
+            BentoTile(title: "Test Dictation", systemImage: "waveform", tint: Color.purple) {
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    Text("Try holding \(UserData.shared.hotkeyName) and speaking now:")
+                        .font(.caption)
+                        .foregroundStyle(Ink.secondary)
+
+                    HStack(spacing: Space.x2) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Tint.accent)
+                        TextField("Transcribed text appears here as you speak…", text: $model.sampleTestText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13))
+                    }
+                    .padding(Space.x3)
+                    .background(Color.primary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+
+            Text(model.modelReady
                  ? "Hold \(UserData.shared.hotkeyName) anywhere and start dictating."
                  : "The bundled speech model couldn\u{2019}t be found. Reinstalling Utter should restore it.")
                 .typo(.callout)
@@ -382,60 +375,6 @@ struct OnboardingView: View {
 
     // MARK: - Actions
 
-    private func requestMic() {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                DispatchQueue.main.async { micGranted = granted }
-            }
-        case .denied, .restricted:
-            // Already decided — send the user to System Settings to change it.
-            openSettings("Privacy_Microphone")
-        default:
-            micGranted = true
-        }
-    }
-
-    /// Trigger the system prompt, then send the user to the pane.
-    ///
-    /// `CGRequestScreenCaptureAccess` shows the prompt only once per app signature;
-    /// after a denial macOS never asks again, so the Settings deep link is the only
-    /// way back and is opened regardless.
-    private func requestScreenRecording() {
-        _ = SystemAudioCapture.requestPermission()
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func requestAccessibility() {
-        // Open the pane, and deliberately do NOT raise the system's own dialog.
-        //
-        // This used to do both. `AXIsProcessTrustedWithOptions([prompt: true])` puts up macOS's
-        // "Utter would like to control this computer … Grant access in Privacy & Security
-        // settings" modal — advice that is already obsolete by the time it appears, because the
-        // next line opens exactly that pane. The modal then sits in front of the pane and covers
-        // the switch the user came to flip. One ask, and it is this screen's.
-        AccessibilityPermission.openSettingsPane()
-    }
-
-    private func openSettings(_ pane: String) {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    /// Close the flow.
-    ///
-    /// `skipped` distinguishes "I walked the steps" from "I pressed Skip", and the
-    /// caller needs it: the app's post-onboarding fallback asks for the microphone,
-    /// and `AVCaptureDevice.requestAccess` on a `.notDetermined` status raises the
-    /// system's cold permission dialog. Pressing Skip on step one therefore produced
-    /// the exact modal this whole screen exists to replace, one frame after the user
-    /// said they did not want to be walked through it.
-    ///
-    /// Both paths still `markCompleted()`. Skip is a decision, not an interruption —
-    /// it must not reopen on next launch.
     private func finish(skipped: Bool) {
         OnboardingState.markCompleted()
         onFinish(skipped)
@@ -462,15 +401,19 @@ private struct PermissionStep: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if granted {
-                    Label(grantedLabel, systemImage: "checkmark.circle.fill")
-                        .typo(.caption, ink: Tint.successText)
+                    HStack(spacing: Space.x2) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Tint.success)
+                            .scaleEffect(1.05)
+                        Text(grantedLabel)
+                            .typo(.caption, ink: Tint.successText)
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 10)
+                    .background(Tint.success.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
-                    // `GlassButton`. This one call site is the primary action of four
-                    // of the seven onboarding steps — microphone, accessibility,
-                    // meetings — and it was a bare system `Button` sitting two views
-                    // away from a `.glassProminent` "Continue" and a `.plain` "Skip".
-                    // Three button styles on the first screen a user ever sees.
-                    //
                     GlassButton(title: actionLabel, prominent: true, action: action)
                 }
             }
@@ -595,7 +538,7 @@ private struct ReadinessRow: View {
 /// Matches `FlowContent.windowSurface` rather than inventing its own — this
 /// is the very first screen, and having it read as a different app's window was
 /// the most visible inconsistency in the app.
-private struct OnboardingBacking: View {
+struct OnboardingBacking: View {
     @ObservedObject private var motion = MotionPreference.shared
     /// Observed although the body never names it: `Surface.canvas` resolves
     /// `ThemeManager.shared.current`, and without a dependency on the manager this

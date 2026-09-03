@@ -18,6 +18,13 @@ class UserData: ObservableObject {
     /// the detail view) doesn't silently discard the user's notes.
     @Published var scratchpad: String = ""
 
+    // MARK: - Authentication & Account State
+    @Published var isAuthenticated: Bool = false
+    @Published var isGuestMode: Bool = false
+    @Published var userEmail: String = ""
+    @Published var userDisplayName: String = ""
+    @Published var authProvider: String = "" // "Google", "Apple", or "Guest"
+
     // MARK: - App settings
 
     /// Show the floating pill at all times, or only while dictating.
@@ -303,11 +310,45 @@ class UserData: ObservableObject {
         return nil
     }
 
+    // MARK: - Authentication Actions
+
+    func signInWithGoogle(name: String = "Alex Rivers", email: String = "alex.rivers@gmail.com") {
+        isAuthenticated = true
+        isGuestMode = false
+        userDisplayName = name
+        userEmail = email
+        authProvider = "Google"
+        save()
+    }
+
+    func signInAsGuest() {
+        isAuthenticated = false
+        isGuestMode = true
+        userDisplayName = "Guest"
+        userEmail = ""
+        authProvider = "Guest"
+        save()
+    }
+
+    func signOut() {
+        isAuthenticated = false
+        isGuestMode = false
+        userDisplayName = ""
+        userEmail = ""
+        authProvider = ""
+        save()
+    }
+
     func save() {
         let snipData = snippets.map { ["trigger": $0.trigger, "expansion": $0.expansion] }
         let customCmdData = (try? JSONEncoder().encode(customAICommands))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
         let data: [String: Any] = [
+            "isAuthenticated": isAuthenticated,
+            "isGuestMode": isGuestMode,
+            "userEmail": userEmail,
+            "userDisplayName": userDisplayName,
+            "authProvider": authProvider,
             "words": dictionaryWords,
             "snippets": snipData,
             "language": selectedLanguage,
@@ -375,6 +416,12 @@ class UserData: ObservableObject {
             }
             return
         }
+
+        if let v = json["isAuthenticated"] as? Bool { isAuthenticated = v }
+        if let v = json["isGuestMode"] as? Bool { isGuestMode = v }
+        if let v = json["userEmail"] as? String { userEmail = v }
+        if let v = json["userDisplayName"] as? String { userDisplayName = v }
+        if let v = json["authProvider"] as? String { authProvider = v }
 
         if let words = json["words"] as? [String] { dictionaryWords = words }
         if let snips = json["snippets"] as? [[String: String]] {

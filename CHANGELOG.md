@@ -4,6 +4,182 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [1.1.47] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.46] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.45] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.44] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.43] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.42] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.41] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.40] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.39] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.38] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.37] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.36] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.35] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.34] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.33] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.32] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.31] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.30] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.29] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.28] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.27] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.26] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.25] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.24] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.23] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.22] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.21] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.20] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.19] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.18] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.17] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.16] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.15] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.14] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.13] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.12] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.11] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.10] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.9] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.8] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.7] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.6] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.5] — September 2026
+
+- Internal build — packaging and tooling updates
+
+## [1.1.4] — September 2026
+
+- Internal build — packaging and tooling updates
+
 ## [3.0.50] — August 2026
 
 - Internal build — packaging and tooling updates

@@ -64,6 +64,138 @@ struct VersionEntry: Identifiable {
 /// `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "1.1.47", version: "1.1.47", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.46", version: "1.1.46", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.45", version: "1.1.45", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.44", version: "1.1.44", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.43", version: "1.1.43", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.42", version: "1.1.42", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.41", version: "1.1.41", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.40", version: "1.1.40", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.39", version: "1.1.39", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.38", version: "1.1.38", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.37", version: "1.1.37", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.36", version: "1.1.36", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.35", version: "1.1.35", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.34", version: "1.1.34", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.33", version: "1.1.33", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.32", version: "1.1.32", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.31", version: "1.1.31", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.30", version: "1.1.30", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.29", version: "1.1.29", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.28", version: "1.1.28", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.27", version: "1.1.27", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.26", version: "1.1.26", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.25", version: "1.1.25", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.24", version: "1.1.24", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.23", version: "1.1.23", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.22", version: "1.1.22", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.21", version: "1.1.21", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.20", version: "1.1.20", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.19", version: "1.1.19", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.18", version: "1.1.18", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.17", version: "1.1.17", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.16", version: "1.1.16", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.15", version: "1.1.15", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.14", version: "1.1.14", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.13", version: "1.1.13", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.12", version: "1.1.12", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.11", version: "1.1.11", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.10", version: "1.1.10", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.9", version: "1.1.9", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.8", version: "1.1.8", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.7", version: "1.1.7", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.6", version: "1.1.6", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.5", version: "1.1.5", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
+        VersionEntry(id: "1.1.4", version: "1.1.4", date: "September 2026", highlights: [
+            "Internal build — packaging and tooling updates",
+        ]),
         VersionEntry(id: "3.0.50", version: "3.0.50", date: "August 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),

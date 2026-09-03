@@ -83,10 +83,10 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			iomImc6sH8EkLVq23uLr5AnwIsk=
+			SLhNqrGHb19XD24eEWIc6Jqul6M=
 			</data>
 			<key>requirement</key>
-			<string>identifier "org.ggml.whisper" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: akshamondevops@gmail.com (HGJ2F46L52)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+			<string>cdhash H"48b84daab1876f5f570f6e1e11621ce89aae97a3" or cdhash H"8d8776a74b33e1b6b4ffae76ea29aec688ae0c5c"</string>
 		</dict>
 		<key>Resources/AppIcon.icns</key>
 		<dict>

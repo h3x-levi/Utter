@@ -130,6 +130,24 @@ struct SoundPlayer {
         }
     }
 
+    /// Pre-warms the core audio cues into memory asynchronously to eliminate disk I/O latency
+    /// on the first dictation attempt.
+    static func preload() {
+        queue.async {
+            for name in ["start", "stop", "done", "error"] {
+                guard cache[name] == nil else { continue }
+                for root in searchRoots {
+                    let url = root.appendingPathComponent("\(name).wav")
+                    if let sound = NSSound(contentsOf: url, byReference: true) {
+                        sound.volume = Self.volume
+                        cache[name] = sound
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     static func playStart() { play("start") }
     static func playStop() { play("stop") }
     static func playDone() { play("done") }

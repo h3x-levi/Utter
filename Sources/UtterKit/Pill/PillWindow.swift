@@ -507,11 +507,17 @@ class PillWindow: NSPanel {
         // path — not another SwiftUI transaction.
         stateModel.state = target
 
-        // Set outright, not staged. `noteCardSettled` gates the card's companion column, and it was
-        // briefly delayed so that an expensive first APNG decode could not land inside the morph's
-        // opening frames. With no morph there is nothing to protect: a delay here would simply leave
-        // the card visibly empty for the length of it.
-        stateModel.noteCardSettled = PillMetrics.isExpanded(target)
+        // Staged by one runloop turn during expansion: allows the shell frame to render
+        // its first frame smoothly before the heavy companion APNG decoder and 30Hz ticker
+        // are mounted inside NoteCaptureBox.
+        if PillMetrics.isExpanded(target) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, PillMetrics.isExpanded(self.stateModel.state) else { return }
+                self.stateModel.noteCardSettled = true
+            }
+        } else {
+            stateModel.noteCardSettled = false
+        }
     }
 
     /// The state the pill is going to be in — the newest request, applied or not.
@@ -623,62 +629,55 @@ class PillWindow: NSPanel {
 
 // MARK: - Container
 
+@MainActor
+final class PillContainerViewModel: ObservableObject {
+    @Published var pointerOnControl = false
+    @Published var pointerInsidePill = false
+    @Published var revealed = false
+    var revealLatch = HoverRevealLatch()
+    var hideWork: DispatchWorkItem?
+    @Published var settle: CGFloat = 1
+    @Published var colorState: PillState = .idle
+
+    func restartSettle(state: PillState, capsuleWidth: CGFloat, reduceMotion: Bool) {
+        guard !reduceMotion else {
+            settle = 1
+            colorState = state
+            return
+        }
+        settle = Motion.settleScale(
+            width: PillMetrics.shellWidth(for: state, measured: capsuleWidth),
+            height: PillMetrics.shellHeight(for: state)
+        )
+        withAnimation(Motion.tintCross) { colorState = state }
+        DispatchQueue.main.async { [weak self] in
+            withAnimation(Motion.settle) { self?.settle = 1 }
+        }
+    }
+
+    func refreshReveal() {
+        let present = pointerInsidePill || pointerOnControl
+        hideWork?.cancel()
+        hideWork = nil
+        revealed = revealLatch.update(present: present, at: ProcessInfo.processInfo.systemUptime)
+        guard !present, revealed else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.revealed = self.revealLatch.update(present: false,
+                                                   at: ProcessInfo.processInfo.systemUptime)
+        }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverRevealLatch.grace, execute: work)
+    }
+}
+
 struct PillContainerView: View {
     @ObservedObject var stateModel: PillStateModel
     @ObservedObject private var themeManager = ThemeManager.shared
     @ObservedObject private var motion = MotionPreference.shared
+    @StateObject private var containerModel = PillContainerViewModel()
     var onLongPress: () -> Void = {}
 
-    /// Whether the pointer is on the hands-free control. Lives here because the long press
-    /// does; `PillContent` reports into it.
-    @State private var pointerOnControl = false
-    /// Whether the pointer is anywhere over the pill or its bead. Lives here because the
-    /// bead is a sibling of the capsule, so the tracked region has to span both.
-    @State private var pointerInsidePill = false
-
-    /// The reveal, latched through `HoverRevealLatch` so it survives the pointer crossing the
-    /// gap between the pill and the bead. Everything that shows the bead — `extrusion`, the
-    /// button's `shown`, the window hit-region publish — reads this, not the raw flags, so the
-    /// bead cannot retract mid-transit. See `HoverRevealLatch` for why.
-    @State private var revealed = false
-    @State private var revealLatch = HoverRevealLatch()
-    /// The pending "hide after grace" flip. Cancelled the moment the pointer returns.
-    @State private var hideWork: DispatchWorkItem?
-
-    /// The settle: how far the shell is scaled while it springs into a new state.
-    ///
-    /// **Owned here, not in `PillContent`, and that placement is a fix rather than a preference.**
-    /// It lived one level down and scaled only the capsule — but the hands-free bead's *glyph* is a
-    /// sibling in this `ZStack`, so the pill's lobe scaled while the ring drawn on it did not. At the
-    /// `.handsFree` capsule width the lobe's centre sits ~74pt from the anchor, so a 0.90 settle put
-    /// the ring **7.4pt** off its own bead — 28% of the bead's diameter — for the length of the
-    /// spring. Scaling this container transforms the capsule and the bead as the single object they
-    /// are meant to read as.
-    @State private var settle: CGFloat = 1
-
-    /// The state the shell's **colours** are drawn from — assigned inside a transaction so the tint
-    /// and border cross-fade, while geometry keeps reading `stateModel.state` and changes instantly.
-    ///
-    /// This is the transition the pill was most obviously missing. The tint and the outer ring were a
-    /// hard cut: `idle -> recording` went from untinted glass with a neutral 0.18-0.22 border to red
-    /// glass at 0.50 with a red border at 0.75, in a single frame. Unlike the note card, that fires on
-    /// **every** dictation and on all nine states, so it is the snap the user actually meets — and
-    /// colour is the one property here that is both freely animatable and provably unable to
-    /// re-anchor the glass body, because it changes no bounds.
-    ///
-    /// Seeded on appear rather than initialised, since the real state is only known then.
-    @State private var colorState: PillState = .idle
-
-    /// Identifies the state's *case*, ignoring anything that rides inside it.
-    ///
-    /// The settle fires on a state change and **must not** fire on a width change: `.recording`
-    /// republishes `capsuleWidth` on every word of the live transcript, so keying this on the drawn
-    /// size would pulse the pill continuously while someone was talking.
-    ///
-    /// An `Int`, not a `String`. This is read on every `body` run, and `body` runs at 30Hz while
-    /// recording (the microphone level publishes at that rate) — so a `String` here was an allocation
-    /// and a comparison thirty times a second to answer a question that changes a handful of times
-    /// per dictation.
     private var stateCase: Int {
         switch stateModel.state {
         case .preparing: return 0
@@ -693,262 +692,70 @@ struct PillContainerView: View {
         }
     }
 
-    /// Restart the settle.
-    ///
-    /// **The deferred hop is what makes this animate at all.** Setting the start value and calling
-    /// `withAnimation` in the same synchronous call does nothing: SwiftUI coalesces `@State` writes
-    /// and evaluates the graph once, at the end of the turn, so the animation is built from the last
-    /// *committed* presentation value (1) to the new value (1) — a delta of zero, and 0.90 is never
-    /// displayed. It failed silently and safely, which is why the pill still looked right and still
-    /// snapped. Committing the start values in one turn and animating home in the next gives the
-    /// interpolation two different endpoints to work with.
-    ///
-    /// Only these two values are ever animated. An ambient transaction around the state change
-    /// itself would also animate `ShellSize`, which resizes the glass body — the one thing that
-    /// ghosts.
-    private func restartSettle() {
-        guard !motion.reduceMotion else {
-            settle = 1
-            colorState = stateModel.state
-            return
-        }
-        // Scaled for constant edge travel, so the card does not lurch four times as far as the
-        // capsule — see `Motion.settleEdgeTravel`.
-        settle = Motion.settleScale(
-            width: PillMetrics.shellWidth(for: stateModel.state, measured: stateModel.capsuleWidth),
-            height: PillMetrics.shellHeight(for: stateModel.state)
-        )
-        // The colour crosses immediately — it has no start value to commit, it interpolates from
-        // whatever hue is currently on screen to the new one.
-        withAnimation(Motion.tintCross) { colorState = stateModel.state }
-        DispatchQueue.main.async {
-            withAnimation(Motion.settle) { settle = 1 }
-        }
-    }
-
     var onStartHandsFree: (() -> Void)? = nil
 
-    /// How far the pill's body has extended into the hands-free bead: 0 reabsorbed, 1 at rest.
-    ///
-    /// One scalar, read by both the shell's shape and the glyph's offset, so the outline and the
-    /// ring inside it are the same event rather than two animations of it. Asks
-    /// `PillHoverControl.isRevealed` — the same question `PillWindow.drawnShellRect` asks — so
-    /// what is drawn and what can be clicked cannot disagree. Two answers is what made the stop
-    /// button visible and inert; see `drawnShellRect`.
     private var extrusion: CGFloat {
         guard onStartHandsFree != nil,
               PillHoverControl.isRevealed(in: stateModel.state,
-                                          pointerInsidePill: revealed)
+                                          pointerInsidePill: containerModel.revealed)
         else { return 0 }
         return 1
     }
 
-    /// The capsule's drawn width — the same value `PillContent` hands to `ShellSize`.
-    ///
-    /// The bead's glyph has to be placed on the lobe the shell has drawn, and the shell is
-    /// drawn at this width, so it must be asked for by the same expression rather than read off
-    /// `capsuleWidth` directly. That distinction is not theoretical: `capsuleWidth` is now the
-    /// content's *ideal* width, which lands a layout pass before the box that is forced from it.
-    /// Reading it raw would put the glyph a frame ahead of its own bead every time a word
-    /// arrived in the `.handsFree` live transcript — the same disagreement, in the opposite
-    /// direction, that the shell's `GeometryReader` exists to avoid.
     private var drawnCapsuleWidth: CGFloat {
         PillMetrics.shellWidth(for: stateModel.state, measured: stateModel.capsuleWidth)
     }
 
-    /// Recompute the reveal from the raw pointer flags, with grace on the way out.
-    ///
-    /// Called from both hover callbacks. On entry it reveals immediately and cancels any pending
-    /// hide; on exit it does not hide now — it schedules one flip `HoverRevealLatch.grace` later,
-    /// which a returning pointer cancels. That single deferred call is what actually lowers the
-    /// bead, since no hover event fires while the pointer simply sits outside.
-    private func refreshReveal() {
-        let present = pointerInsidePill || pointerOnControl
-        hideWork?.cancel()
-        hideWork = nil
-        revealed = revealLatch.update(present: present, at: ProcessInfo.processInfo.systemUptime)
-        guard !present, revealed else { return }
-        let work = DispatchWorkItem {
-            revealed = revealLatch.update(present: false,
-                                          at: ProcessInfo.processInfo.systemUptime)
-        }
-        hideWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + HoverRevealLatch.grace, execute: work)
-    }
-
     var body: some View {
-        // Anchored to the *bottom* of the window, not centred in it.
-        //
-        // The panel is a fixed `PillMetrics.windowHeight` — tall enough for the note card at
-        // all times — so all but the last 28pt of it is empty in every resting state. The
-        // shell has to be pinned to the edge the pill is positioned against. Centred, the
-        // capsule would float 48pt above where `positionAtBottomCenter` put it, and the note
-        // card would grow downward into the Dock the pill is parked above.
-        //
-        // `verticalInset` reproduces the previous centred position exactly: a 28pt
-        // capsule centred in a 60pt window sat 16pt off the bottom.
-        //
-        // No `GlassEffectContainer` here any more. The bead is not a sibling glass body being
-        // proximity-blended with the capsule; it is a *lobe of the capsule's own shape*, drawn by
-        // `PillShellShape` inside `PillContent`. See that shape's doc for why — in one line, the
-        // container's merged silhouette has no `Path`, so nothing could stroke it, and the pill's
-        // outer contrast ring is not decoration.
-        //
-        // So what is left out here is the *glyph*, riding on top of a lobe the shell has already
-        // drawn.
         ZStack(alignment: .bottom) {
             Color.clear
-            // `onStartHandsFree` is forwarded because `PillContent` carries the
-            // VoiceOver action for it: the bead is revealed by hovering, which VoiceOver
-            // has no way to do, so the action on the pill's accessibility element is the
-            // only route to hands-free without a pointer.
             PillContent(model: stateModel,
                         onStartHandsFree: onStartHandsFree,
                         onHoverChanged: { inside in
-                            pointerInsidePill = inside
-                            // Leaving the capsule clears the bead's flag too. The pointer
-                            // can exit across the bead without SwiftUI delivering the
-                            // inner `onHover(false)`, and a stale `true` is what
-                            // `longPressOpensUtter` guards against.
-                            if !inside { pointerOnControl = false }
-                            refreshReveal()
+                            containerModel.pointerInsidePill = inside
+                            if !inside { containerModel.pointerOnControl = false }
+                            containerModel.refreshReveal()
                         },
-                        colorState: colorState,
+                        colorState: containerModel.colorState,
                         extrusion: extrusion)
-                // No longer what resolves the pill's width — `ShellSize` inside `PillContent`
-                // fixes both axes outright, so this proposes nothing to a view that would
-                // ignore the proposal anyway. Kept because it still states the intent (the
-                // pill sizes itself; the `ZStack` filling the 320x156 panel must not stretch
-                // it), and because `PillDemoView` hosts `PillContent` without it, which is
-                // the proof that the pill's size no longer depends on who is asking.
                 .fixedSize()
-                // The press sits out here, on the same rect as before the hands-free
-                // control existed, and deliberately not on the shell inside `PillContent`:
-                // a gesture there consumed the mouse-down the window needed, and the pill
-                // stopped responding. It still yields to the bead — `pointerOnControl` is
-                // reported up from `HandsFreeRevealButton` for exactly that.
                 .onLongPressGesture(minimumDuration: 2.0) {
                     if PillHoverControl.longPressOpensUtter(in: stateModel.state,
-                                                            pointerOnControl: pointerOnControl) {
+                                                            pointerOnControl: containerModel.pointerOnControl) {
                         onLongPress()
                     }
                 }
                 .padding(.bottom, PillMetrics.verticalInset)
 
-            // The glyph on the bead — and only the glyph.
-            //
-            // It used to carry the bead's glass and its own two `Circle().strokeBorder`s, and
-            // travel from a tucked offset to a resting one. All three are gone: the shell's shape
-            // draws the bead now, so there is exactly one glass body and exactly one outline on
-            // screen, and there is nothing here to keep in step with a merge it cannot see.
-            //
-            // Its offset reads `PillMetrics.lobeCentreOffset` — the *same* function the shape uses
-            // to place the lobe — so the ring cannot sit a point off its own bead. Both are driven
-            // by the same `extrusion` scalar in the same transaction.
-            //
-            // Kept always-present with `allowsHitTesting(shown)` rather than made conditional. An
-            // invisible SwiftUI `Button` still takes clicks and still fires `onHover`, so the
-            // tucked copy would capture presses meant for the pill and set `pointerOnControl`,
-            // silently killing the 2s long press that opens Utter — and this is the form of that
-            // guard `PillHoverControlTests` pins. Presence keyed on `shown` would swap one hazard
-            // for another: SwiftUI is not obliged to deliver `onHover(false)` to a view it has just
-            // removed, which is the stale-flag case `longPressOpensUtter` exists for.
-            // Present whenever a handler exists — **not** gated on `isOffered`.
-            //
-            // The comment above spends six lines explaining why this must not be conditional, and
-            // then the condition reintroduced exactly the hazard it describes. Stopping hands-free
-            // moves the pill to `.processing`, which does not offer the control, so SwiftUI *removed*
-            // this `Button` while the pointer was still on it — and delivered no `onHover(false)` for
-            // a view it had just removed. `pointerOnControl` is only cleared inside the *capsule's*
-            // `onHover(false)`, which cannot fire because the pointer was never on the capsule. So
-            // the flag stuck true, and with it: the bead sat revealed on the resting pill with no
-            // pointer near it, `longPressOpensUtter` returned false forever so the 2-second press
-            // that opens Utter was dead, and `drawnShellRect` stayed extended over a 33pt strip that
-            // ate desktop clicks. Recovering needed the pointer to enter *and* leave the capsule.
-            //
-            // Dropping the term costs nothing visually: `isRevealed` already requires `isOffered`, so
-            // in every non-offering state `shown` is false, which means `extrusion` is 0 (tucked
-            // inside the capsule's end arc, contributing nothing to the silhouette), the glyph's
-            // opacity is 0, and it takes no clicks.
             if let onStartHandsFree {
                 let shown = PillHoverControl.isRevealed(
                     in: stateModel.state,
-                    pointerInsidePill: revealed
+                    pointerInsidePill: containerModel.revealed
                 )
                 HandsFreeRevealButton(stops: PillHoverControl.stops(in: stateModel.state),
                                       emergence: shown ? 1 : 0,
                                       action: onStartHandsFree,
-                                      onHoverChanged: { pointerOnControl = $0; refreshReveal() })
-                    // Measured from the panel's centre, which is where the capsule's centre is:
-                    // the lobe offset is measured from the capsule's trailing edge, so half the
-                    // capsule's width bridges the two frames.
+                                      onHoverChanged: {
+                                          containerModel.pointerOnControl = $0
+                                          containerModel.refreshReveal()
+                                      })
                     .offset(x: drawnCapsuleWidth / 2
                                + PillMetrics.lobeCentreOffset(extrusion: extrusion,
                                                              capsuleWidth: drawnCapsuleWidth))
                     .allowsHitTesting(shown)
-                    // Centred on the capsule's own centre line, so the neck runs straight
-                    // and the two read as one horizontal body.
                     .padding(.bottom, PillMetrics.verticalInset
                                       + (PillMetrics.capsuleHeight - PillMetrics.handsFreeButtonSide) / 2)
-                    // No animation of its own. The container's single `.animation(value: revealed)`
-                    // drives the glyph and the lobe it sits on together — a second transaction here
-                    // is what put the ring on a different clock from its own bead.
             }
         }
-        // **The settle** — the capsule and its bead scaled as one object.
-        //
-        // A transform, not a resize, and that is the whole reason it is allowed to animate:
-        // `scaleEffect` transforms a layer that has already been composited, so the glass body is
-        // neither re-anchored nor re-created and there is nothing for the system to cross-fade. An
-        // animated *size* is the ghost, and nine attempts have died on it.
-        //
-        // The anchor is the shell's bottom edge, not the panel's — see
-        // `PillMetrics.shellBottomAnchorY`. `Motion.settle` overshoots by 0.0006 on a 0.10 change, so
-        // the drawn pill is never more than 0.18pt larger than `PillWindow.drawnShellRect` claims,
-        // which keeps the clickable region a superset of the drawing at every frame.
-        .scaleEffect(settle, anchor: UnitPoint(x: 0.5, y: PillMetrics.shellBottomAnchorY))
-        // One settle per state change; never on a width change — see `stateCase`.
-        .onChange(of: stateCase) { _ in restartSettle() }
-        // Seeded, not initialised: `@State` cannot see the model at construction, and starting the
-        // colours on `.idle` would cross-fade once on first appearance for no reason.
-        .onAppear { colorState = stateModel.state }
-        // Hover is tracked on the container, not the capsule.
-        //
-        // The button lives outside the pill now, so moving the pointer onto it *leaves* the
-        // capsule — and a reveal driven by the capsule's own hover would hide the button the
-        // instant you reached for it. `pointerOnControl` keeps it alive while the pointer is
-        // on the bead.
-        //
-        // Deliberately NOT an `.onHover` out here. This view is a `ZStack` holding a
-        // `Color.clear`, so it fills the entire 320x156 panel — and since the panel is now
-        // permanently note-tall, an `.onHover` here fired with the pointer up to 96pt *above*
-        // the capsule and 130pt either side of it. The bead appeared long before the pointer
-        // reached the pill. `PillContent` reports its own hover against `PillShape()`
-        // (`.contentShape(PillShape())`), which is the actual drawn capsule.
-        // **One curve for the whole reveal**, and this is what makes the hands-free transition read
-        // as smooth rather than as two things happening.
-        //
-        // It used to be `Motion.hoverIn` — `easeOut(0.11)` — while the bead's *glyph* carried its own
-        // `.animation(Motion.morph, value: extrusion)`, a `snappy(0.32)` spring with 0.19 bounce. So
-        // one event was drawn on two clocks: the pill's outline grew its lobe and settled in 110ms
-        // while the ring inside it was still springing, and overshooting, for another 210ms. The
-        // outline and the thing it is supposed to contain visibly disagreed.
-        //
-        // Now the container owns the transaction and the glyph has no animation of its own, so the
-        // lobe, the neck, the outline and the ring are one interpolation. `Motion.morph` is the
-        // spring, because a bead emerging from a liquid pill should have a little life in it — and
-        // it is safe to animate, unlike the note-card resize: `PillMetrics.shellWidthWithBead` does
-        // not depend on `extrusion`, so the glass body's frame is **constant** across the whole
-        // reveal and only the path inside it changes. That is why this animation has never ghosted.
-        // Emerge and retract differ — see `Motion.beadEmerge`. One transaction still drives the
-        // lobe, the neck, the outline and the glyph together, which is the part that must not split.
+        .scaleEffect(containerModel.settle, anchor: UnitPoint(x: 0.5, y: PillMetrics.shellBottomAnchorY))
+        .onChange(of: stateCase) { _ in
+            containerModel.restartSettle(state: stateModel.state, capsuleWidth: stateModel.capsuleWidth, reduceMotion: motion.reduceMotion)
+        }
+        .onAppear { containerModel.colorState = stateModel.state }
         .animation(motion.reduceMotion ? nil
-                                       : (revealed ? Motion.beadEmerge : Motion.beadRetract),
-                   value: revealed)
-        // Publish the raw pointer, not a decision about it. `PillWindow.drawnShellRect` and
-        // this view both put it through `PillHoverControl.isRevealed`, so the drawn button and
-        // the region that can be clicked cannot disagree.
-        .onChange(of: revealed) { inside in
+                                       : (containerModel.revealed ? Motion.beadEmerge : Motion.beadRetract),
+                   value: containerModel.revealed)
+        .onChange(of: containerModel.revealed) { inside in
             stateModel.pointerInsidePill = inside
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1223,14 +1030,13 @@ struct PillContent: View {
         return Color.clear
             .frame(width: PillMetrics.shellWidthWithBead(capsuleWidth: capsuleWidth),
                    height: height)
+            // Foundation contrast layer so white glyphs and waveform bars never wash out over bright wallpapers
+            .background(shape.fill(Color.black.opacity(isDark ? 0.35 : 0.42)))
             // The pill is the purest case for real Liquid Glass: a small floating control layer with
             // nothing but desktop behind it. State colour rides *on* the glass as a tint rather than
             // replacing it, so the material still refracts the wallpaper while reading as
             // recording/error/etc.
             .glassSurface(
-                // Untinted glass at rest, tinted glass otherwise — asked of `stateGlassTint`, which
-                // is the value passed as `tint:` on the next line. It used to ask a second table
-                // (`stateTint == .clear`) that agreed only by coincidence.
                 stateGlassTint == nil ? .chrome : .accentControl,
                 in: shape,
                 reduceTransparency: motion.reduceTransparency,
@@ -1297,7 +1103,9 @@ struct PillContent: View {
     /// other, one of them dissolving. Applied here it covers insertion and removal of every branch,
     /// so no two states are ever on screen together.
     private var content: some View {
-        stateContent.transition(.identity)
+        stateContent
+            .animation(Motion.morph, value: model.state)
+            .transition(.opacity.combined(with: .scale(scale: 0.94)))
     }
 
     @ViewBuilder
@@ -1305,96 +1113,47 @@ struct PillContent: View {
         switch model.state {
         case .preparing:
             BreathingDot(reduceMotion: motion.reduceMotion)
-            Text("Getting ready").typo(.caption)
 
         case .idle:
-            // Just the microphone. The hotkey name used to sit beside it in a
-            // keycap chip, which is what forced the pill wide — and it was
-            // telling the user something they only need once. The hint lives in
-            // the menu-bar item, Settings, and onboarding; the resting pill's
-            // whole job is to say "ready" and otherwise stay out of the way.
-            AdaptivePillGlyph(systemName: "mic", size: 13)
+            // Just the centered, high-contrast microphone glyph. No text clutter.
+            AdaptivePillGlyph(systemName: "mic.fill", size: 13)
+
         case .capturingNote:
-            // The one state that is not a row of glyphs in a capsule. The shell above — glass,
-            // border, frame — is the same view either way; only what sits inside is swapped.
-            //
-            // No `.transition` here. It carried `.identity` for exactly the right reason and it was
-            // not enough: a transition on one branch says nothing about the branch being *removed*,
-            // which kept its default `.opacity` and faded out over the top of this card. The
-            // `.identity` now sits on the switch itself (see `content`), which covers both.
             NoteCaptureBox(model: model, liveTint: dotTint)
 
-        case .recording, .handsFree, .capturingMemory:
-            // Static dot: the meter beside it already says "live". A pulsing
-            // ring plus animating bars is two things saying the same thing.
-            Circle()
-                .fill(dotTint)
-                .frame(width: 8, height: 8)
+        case .recording:
+            // Microphone morphs smoothly into active live sound waveform bars dancing with speech
             LevelMeter(signal: model.levels)
-            if model.previewText.isEmpty {
-                Text(model.elapsedText).typo(.timestamp)
-            } else {
-                // The live transcript replaces the timer rather than joining it.
-                // Both are secondary to the level meter, and a pill carrying dot +
-                // meter + timer + text + lock is a status bar, not a pill.
-                //
-                // Truncated from the *head*: the interesting end of a growing
-                // transcript is the most recent words, so the tail must stay
-                // visible as it grows.
-                // Pre-trimmed, like the card's copy. This was handed the whole unbounded
-                // `previewText` and left to `truncationMode(.head)`, so SwiftUI laid out an
-                // ever-growing string just to find the cut, and the cut landed mid-word with no
-                // ellipsis — where `LiveTranscript.tail` cuts on a word boundary and says it did.
-                // 40 characters against the ~33 that fit at this width, so the truncator still has
-                // something to trim.
-                Text(LiveTranscript.tail(of: model.previewText, maxCharacters: 40))
-                    .typo(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .foregroundStyle(Ink.secondary)
-                    .frame(maxWidth: 190, alignment: .trailing)
-            }
-            if model.state == .handsFree {
+
+        case .handsFree:
+            HStack(spacing: 4) {
+                LevelMeter(signal: model.levels)
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Tint.handsFree)
-            } else if model.state == .capturingMemory {
-                AdaptivePillGlyph(systemName: "brain.head.profile", size: 11)
+            }
+
+        case .capturingMemory:
+            HStack(spacing: 4) {
+                LevelMeter(signal: model.levels)
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Tint.accent)
             }
 
         case .processing:
-            // Pen only, no phase name. `PillState`'s doc argues that naming the phase is "real
-            // feedback" and it was briefly drawn on that basis — but it was asked for by a comment,
-            // not by anyone using the app, and on screen it turned a small round pill into a wide
-            // label three times per dictation. The phase still reaches VoiceOver, where a name is
-            // the only thing available.
+            // Waveform morphs into the writing pen, indicating active typing into the active application
             WritingPen(reduceMotion: motion.reduceMotion)
 
-        case .notice(let message):
-            // 13pt regular, matching the error glyph below and the idle microphone. These two
-            // siblings disagreed — 11pt semibold against 13pt regular — so the same row of the same
-            // pill changed weight depending on whether the news was good.
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 13))
+        case .notice:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Tint.accent)
-            Text(message).typo(.caption, ink: Ink.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: PillMetrics.messageWidth, alignment: .leading)
 
-        case .error(let reason):
-            Image(systemName: "exclamationmark.circle")
-                .font(.system(size: 13))
+        case .error:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Tint.danger)
-            // Primary ink: an error the user has to act on should not be drawn in the same grey as a
-            // footnote. And a width, because these messages come from arbitrary failures — without
-            // one, a long reason drew the shell wider than the 320pt panel, which clipped its rounded
-            // ends. `PillMetrics.shellWidth(for:measured:)` also caps it now; this is the half that
-            // keeps the *text* readable rather than merely the shell intact.
-            Text(reason).typo(.caption, ink: Ink.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: PillMetrics.messageWidth, alignment: .leading)
         }
     }
 
@@ -1568,30 +1327,17 @@ struct PillContent: View {
     }
 }
 
-/// A symbol that remains legible over either extreme of an arbitrary desktop.
-///
-/// The pill floats over wallpaper and other apps, so the app's light/dark
-/// appearance cannot tell us whether the pixels behind a glyph are light or
-/// dark. A white outer symbol and smaller black inner symbol provide both
-/// contrast edges at once: the black core carries it on light content and the
-/// white rim carries it on dark content.
+/// A symbol that remains crisp and high-contrast over any wallpaper.
 struct AdaptivePillGlyph: View {
-    static let outerInk = Color.white
-    static let innerInk = Color.black
-
     let systemName: String
     let size: CGFloat
 
     var body: some View {
-        ZStack {
-            Image(systemName: systemName)
-                .font(.system(size: size + 2, weight: .semibold))
-                .foregroundStyle(Self.outerInk)
-            Image(systemName: systemName)
-                .font(.system(size: size, weight: .medium))
-                .foregroundStyle(Self.innerInk)
-        }
-        .accessibilityHidden(true)
+        Image(systemName: systemName)
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.40), radius: 1, x: 0, y: 0.5)
+            .accessibilityHidden(true)
     }
 }
 
@@ -1630,58 +1376,45 @@ struct ShellSize: ViewModifier, Animatable {
 
 // MARK: - Level meter
 
+@MainActor
+final class LevelMeterModel: ObservableObject {
+    @Published var history: [Float] = Array(repeating: 0, count: LevelMeter.barCount)
+    @Published var publishes = 0
+
+    func process(newValue: Float, publishesPerShift: Int) {
+        publishes += 1
+        if publishes % publishesPerShift == 0 {
+            history.removeFirst()
+            history.append(newValue)
+        } else if !history.isEmpty {
+            history[history.count - 1] = newValue
+        }
+    }
+}
+
 /// Seven bars fed by a ring buffer of real levels, so the shape scrolls right-to-left like a
 /// hardware meter. No `repeatForever`, no staggered delays.
-///
-/// **The history window was the defect, not the bar count.** Five bars shifted at the recorder's
-/// 30Hz publish rate hold 5/30 s = 167ms of history, which is below the eye's integration time for a
-/// scrolling display — so it read as five bars flickering rather than as a meter scrolling, which is
-/// the opposite of what this comment used to claim. Seven bars shifted every *other* publish gives
-/// 7/15 s = 467ms: a legible half-second of speech, for 11pt more width.
-///
-/// The newest bar is still fed at the full 30Hz, so the leading edge is exactly as responsive as it
-/// was; only the *history* is sampled at a rate that can be seen. Every bar remains a real RMS
-/// measurement — this decimates when the buffer shifts, it never invents a value.
 struct LevelMeter: View {
-    /// The level, observed directly rather than passed down as a `Float`.
-    ///
-    /// **This is what confines the 30 Hz redraw to the seven bars.** Taking a `Float` meant the
-    /// level had to be *read* by whoever built the meter — `PillContent` and `NoteCaptureBox` —
-    /// so both of them, and everything above them, were subscribers to a signal only this view
-    /// draws. Observing it here makes this the only view a mic publish invalidates; see
-    /// `PillLevelSignal` for the before/after counts.
     @ObservedObject var signal: PillLevelSignal
 
-    /// How many publishes to collect before shifting the buffer. The recorder publishes at 30Hz, so
-    /// 2 gives a 15Hz scroll.
     private static let publishesPerShift = 2
     static let barCount = 7
 
-    @State private var history: [Float] = Array(repeating: 0, count: LevelMeter.barCount)
-    @State private var publishes = 0
+    @StateObject private var model = LevelMeterModel()
 
     var body: some View {
         HStack(spacing: 2.5) {
-            ForEach(history.indices, id: \.self) { index in
+            ForEach(model.history.indices, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Ink.secondary.opacity(0.55 + 0.45 * Double(history[index])))
-                    .frame(width: 3, height: 3 + 17 * CGFloat(history[index]))
+                    .fill(Color.white.opacity(0.65 + 0.35 * Double(model.history[index])))
+                    .frame(width: 3, height: max(3, 3 + 17 * CGFloat(model.history[index])))
+                    .shadow(color: .black.opacity(0.35), radius: 1, x: 0, y: 0.5)
             }
         }
         .frame(height: 20)
-        // Bar heights come straight from the already-smoothed signal; animating
-        // again would double-filter and add lag.
         .animation(nil, value: signal.value)
         .onChange(of: signal.value) { newValue in
-            publishes += 1
-            if publishes % Self.publishesPerShift == 0 {
-                history.removeFirst()
-                history.append(newValue)
-            } else if !history.isEmpty {
-                // Between shifts the leading bar keeps tracking, so the meter's response to a
-                // sudden sound is unchanged at 30Hz.
-                history[history.count - 1] = newValue
-            }
+            model.process(newValue: newValue, publishesPerShift: Self.publishesPerShift)
         }
         .accessibilityHidden(true)
     }
@@ -1689,27 +1422,27 @@ struct LevelMeter: View {
 
 // MARK: - Breathing dot
 
+@MainActor
+final class BreathingDotModel: ObservableObject {
+    @Published var big = false
+}
+
 /// A slow pulse for the preparing state. One element, one animation — enough to
 /// say "working" without the busy-spinner look.
 struct BreathingDot: View {
     let reduceMotion: Bool
-    @State private var big = false
+    @StateObject private var model = BreathingDotModel()
 
     var body: some View {
         Circle()
             .fill(Tint.accent)
             .frame(width: 8, height: 8)
-            // 0.82, not 0.6. An 8pt dot scaling to 4.8pt while *also* dropping to 0.45 opacity is
-            // two channels doing the same job, both of them deep — it read as a blink rather than a
-            // breath. And 0.85s autoreversing is a 1.7s cycle: 35 a minute, which is panting.
-            // 1.1s gives a 2.2s cycle, close to a resting breath, with the depth carried mostly by
-            // opacity where it is least distracting on a 8pt dot.
-            .scaleEffect(reduceMotion ? 1 : (big ? 1.0 : 0.82))
-            .opacity(reduceMotion ? 0.8 : (big ? 1.0 : 0.60))
+            .scaleEffect(reduceMotion ? 1 : (model.big ? 1.0 : 0.82))
+            .opacity(reduceMotion ? 0.8 : (model.big ? 1.0 : 0.60))
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                    big = true
+                    model.big = true
                 }
             }
             .accessibilityHidden(true)
@@ -1748,15 +1481,11 @@ struct WritingPen: View {
                     context.stroke(
                         path,
                         with: .color(.white),
-                        style: StrokeStyle(lineWidth: 2.7, lineCap: .round, lineJoin: .round)
-                    )
-                    context.stroke(
-                        path,
-                        with: .color(.black),
-                        style: StrokeStyle(lineWidth: 1.1, lineCap: .round, lineJoin: .round)
+                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
                     )
                 }
-                AdaptivePillGlyph(systemName: "pencil.tip", size: 8)
+                .shadow(color: .black.opacity(0.35), radius: 1, x: 0, y: 0.5)
+                AdaptivePillGlyph(systemName: "pencil.tip", size: 9)
                     .rotationEffect(.degrees(-26))
                     .position(point)
             }

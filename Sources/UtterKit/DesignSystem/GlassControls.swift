@@ -397,12 +397,17 @@ struct GlassTextEditor: View {
 /// The hover wash is at least now *visible*: `Surface.fillHover` moved 0.06 → 0.10
 /// after 6% measured **1.142:1** on a light theme's card, which is the report this
 /// refactor came from. 10% measures 1.253:1, roughly AppKit's own list-row step.
+@MainActor
+private final class GlassRowHoverModel: ObservableObject {
+    @Published var isHovering = false
+}
+
 struct GlassSelectableRow<Content: View>: View {
     let isSelected: Bool
     let action: () -> Void
     @ViewBuilder let content: () -> Content
 
-    @State private var isHovering = false
+    @StateObject private var model = GlassRowHoverModel()
     @Environment(\.colorScheme) private var colorScheme
 
     private var isDark: Bool { colorScheme == .dark }
@@ -417,7 +422,7 @@ struct GlassSelectableRow<Content: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { isHovering = hovering }
+            withAnimation(hovering ? Motion.hoverIn : Motion.hoverOut) { model.isHovering = hovering }
         }
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
@@ -428,7 +433,7 @@ struct GlassSelectableRow<Content: View>: View {
         shape
             .fill(isSelected
                   ? Tint.accent.opacity(isDark ? 0.22 : 0.13)
-                  : (isHovering ? Surface.fillHover : Surface.fillSubtle))
+                  : (model.isHovering ? Surface.fillHover : Surface.fillSubtle))
             .overlay(shape.strokeBorder(
                 isSelected ? Tint.accent.opacity(0.45) : Line.hairline,
                 lineWidth: Line.width

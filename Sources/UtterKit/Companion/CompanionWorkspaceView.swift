@@ -83,12 +83,30 @@ private struct CompanionTodayView: View {
                 alignment: .leading,
                 spacing: Space.groupGap
             ) {
+                // Interactive Pet Stage & Mood
+                CompanionStageCard()
+
                 SettingsCard(title: "Your companion") {
                     HStack(spacing: Space.x4) {
-                        Image(systemName: userData.companionEnabled
-                              ? "figure.wave.circle.fill" : "moon.zzz")
-                            .font(.system(size: 38))
-                            .foregroundStyle(userData.companionEnabled ? Tint.accent : Ink.secondary)
+                        if let style = CodePixelCatStyle(rawValue: userData.companionCharacter) {
+                            CodePixelCatView(
+                                style: style,
+                                mood: userData.companionEnabled ? .resting : .loaf,
+                                pose: .neutral,
+                                size: 44,
+                                elapsed: 1.0
+                            )
+                            .frame(width: 44, height: 44)
+                        } else {
+                            CodePixelCatView(
+                                style: .orange,
+                                mood: userData.companionEnabled ? .resting : .loaf,
+                                pose: .neutral,
+                                size: 44,
+                                elapsed: 1.0
+                            )
+                            .frame(width: 44, height: 44)
+                        }
                         VStack(alignment: .leading, spacing: Space.x1) {
                             Text(userData.companionEnabled ? "Ready on your desktop" : "Taking a break")
                                 .typo(.body)
@@ -171,15 +189,53 @@ private struct CompanionTodayView: View {
     }
 }
 
-private struct CompanionRememberView: View {
+@MainActor
+final class CompanionRememberViewModel: ObservableObject {
+    @Published var input = ""
+    @Published var proposal: CompanionMemoryProposal? = nil
+    @Published var hasReminder = false
+    @Published var isParsing = false
+    @Published var errorMessage: String? = nil
+    @Published var confirmDeleteAll = false
+
+    func review() {
+        errorMessage = nil
+        isParsing = true
+        Task {
+            do {
+                let parsed = try await CompanionMemoryParser.parse(input)
+                await MainActor.run {
+                    self.proposal = parsed
+                    self.hasReminder = parsed.remindAt != nil
+                    self.isParsing = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.isParsing = false
+                }
+            }
+        }
+    }
+
+    func save(store: CompanionMemoryStore) {
+        guard let proposal else { return }
+        do {
+            _ = try store.add(proposal: proposal, source: .typed)
+            input = ""
+            self.proposal = nil
+            hasReminder = false
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct CompanionRememberView: View {
     @ObservedObject private var store = CompanionMemoryStore.shared
     @ObservedObject private var notifications = CompanionNotificationScheduler.shared
-    @State private var input = ""
-    @State private var proposal: CompanionMemoryProposal?
-    @State private var hasReminder = false
-    @State private var isParsing = false
-    @State private var errorMessage: String?
-    @State private var confirmDeleteAll = false
+    @StateObject private var model = CompanionRememberViewModel()
 
     var body: some View {
         ScrollView {
@@ -196,7 +252,7 @@ private struct CompanionRememberView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, Space.pageInset)
         }
-        .alert("Delete all memories?", isPresented: $confirmDeleteAll) {
+        .alert("Delete all memories?", isPresented: $model.confirmDeleteAll) {
             Button("Cancel", role: .cancel) {}
             Button("Delete All", role: .destructive) { store.deleteAll() }
         } message: {
@@ -210,7 +266,7 @@ private struct CompanionRememberView: View {
                 .typo(.caption)
                 .fixedSize(horizontal: false, vertical: true)
 
-            GlassTextEditor(text: $input, minHeight: 110)
+            GlassTextEditor(text: $model.input, minHeight: 110)
                 .accessibilityLabel("What should Utter remember?")
 
             HStack {
@@ -223,45 +279,45 @@ private struct CompanionRememberView: View {
 
                 Spacer()
 
-                Button("Review") { review() }
+                Button("Review") { model.review() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isParsing || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(model.isParsing || model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if isParsing {
+            if model.isParsing {
                 ProgressView("Understanding…")
                     .controlSize(.small)
             }
 
-            if let proposal {
+            if let proposal = model.proposal {
                 Divider()
                 Text("Review before saving").typo(.body)
                 TextField(
                     "Memory",
                     text: Binding(
                         get: { proposal.text },
-                        set: { self.proposal?.text = $0 }
+                        set: { model.proposal?.text = $0 }
                     )
                 )
                 .textFieldStyle(.roundedBorder)
 
-                Toggle("Remind me", isOn: $hasReminder)
-                    .onChange(of: hasReminder) { enabled in
-                        if enabled, self.proposal?.remindAt == nil {
-                            self.proposal?.remindAt = Calendar.current.date(
+                Toggle("Remind me", isOn: $model.hasReminder)
+                    .onChange(of: model.hasReminder) { enabled in
+                        if enabled, model.proposal?.remindAt == nil {
+                            model.proposal?.remindAt = Calendar.current.date(
                                 byAdding: .hour, value: 1, to: Date()
                             )
                         } else if !enabled {
-                            self.proposal?.remindAt = nil
+                            model.proposal?.remindAt = nil
                         }
                     }
 
-                if hasReminder {
+                if model.hasReminder {
                     DatePicker(
                         "When",
                         selection: Binding(
-                            get: { self.proposal?.remindAt ?? Date().addingTimeInterval(3_600) },
-                            set: { self.proposal?.remindAt = $0 }
+                            get: { model.proposal?.remindAt ?? Date().addingTimeInterval(3_600) },
+                            set: { model.proposal?.remindAt = $0 }
                         ),
                         in: Date().addingTimeInterval(60)...,
                         displayedComponents: [.date, .hourAndMinute]
@@ -270,17 +326,17 @@ private struct CompanionRememberView: View {
 
                 HStack {
                     Button("Cancel") {
-                        self.proposal = nil
-                        hasReminder = false
+                        model.proposal = nil
+                        model.hasReminder = false
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("Save memory") { save() }
+                    Button("Save memory") { model.save(store: store) }
                         .buttonStyle(.borderedProminent)
                 }
             }
 
-            if let visibleError = errorMessage ?? store.lastError {
+            if let visibleError = model.errorMessage ?? store.lastError {
                 Label(visibleError, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Tint.danger)
                     .typo(.caption)
@@ -295,7 +351,7 @@ private struct CompanionRememberView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if !store.memories.isEmpty {
                 Button("Delete all memories", role: .destructive) {
-                    confirmDeleteAll = true
+                    model.confirmDeleteAll = true
                 }
                 .buttonStyle(.borderless)
             }
@@ -344,39 +400,6 @@ private struct CompanionRememberView: View {
         case .unknown: return "bell"
         }
     }
-
-    private func review() {
-        errorMessage = nil
-        isParsing = true
-        Task {
-            do {
-                let parsed = try await CompanionMemoryParser.parse(input)
-                await MainActor.run {
-                    proposal = parsed
-                    hasReminder = parsed.remindAt != nil
-                    isParsing = false
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isParsing = false
-                }
-            }
-        }
-    }
-
-    private func save() {
-        guard let proposal else { return }
-        do {
-            _ = try store.add(proposal: proposal, source: .typed)
-            input = ""
-            self.proposal = nil
-            hasReminder = false
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
 }
 
 private struct CompanionRewardsView: View {
@@ -421,34 +444,60 @@ private struct CompanionRewardsView: View {
     }
 }
 
-private struct MemoryRow: View {
+@MainActor
+final class MemoryRowModel: ObservableObject {
+    @Published var isEditing = false
+    @Published var draft = ""
+    @Published var hasReminder = false
+    @Published var reminder = Date().addingTimeInterval(3_600)
+    @Published var errorMessage: String? = nil
+
+    func beginEdit(memory: CompanionMemory) {
+        draft = memory.text
+        hasReminder = memory.remindAt != nil
+        reminder = memory.remindAt ?? Date().addingTimeInterval(3_600)
+        errorMessage = nil
+        isEditing = true
+    }
+
+    func saveEdit(memory: CompanionMemory, store: CompanionMemoryStore) {
+        var updated = memory
+        updated.text = draft
+        updated.remindAt = hasReminder ? reminder : nil
+        do {
+            try store.update(updated)
+            errorMessage = nil
+            isEditing = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct MemoryRow: View {
     let memory: CompanionMemory
     @ObservedObject private var store = CompanionMemoryStore.shared
-    @State private var isEditing = false
-    @State private var draft = ""
-    @State private var hasReminder = false
-    @State private var reminder = Date().addingTimeInterval(3_600)
-    @State private var errorMessage: String?
+    @StateObject private var model = MemoryRowModel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x2) {
-            if isEditing {
-                TextField("Memory", text: $draft)
+            if model.isEditing {
+                TextField("Memory", text: $model.draft)
                     .textFieldStyle(.roundedBorder)
-                Toggle("Remind me", isOn: $hasReminder)
-                if hasReminder {
+                Toggle("Remind me", isOn: $model.hasReminder)
+                if model.hasReminder {
                     DatePicker(
                         "When",
-                        selection: $reminder,
+                        selection: $model.reminder,
                         in: Date().addingTimeInterval(60)...,
                         displayedComponents: [.date, .hourAndMinute]
                     )
                 }
                 HStack {
-                    Button("Cancel") { isEditing = false }
+                    Button("Cancel") { model.isEditing = false }
                         .buttonStyle(.bordered)
                     Spacer()
-                    Button("Save") { saveEdit() }
+                    Button("Save") { model.saveEdit(memory: memory, store: store) }
                         .buttonStyle(.borderedProminent)
                 }
             } else {
@@ -470,7 +519,7 @@ private struct MemoryRow: View {
                     }
                     Spacer()
                     Menu {
-                        Button("Edit") { beginEdit() }
+                        Button("Edit") { model.beginEdit(memory: memory) }
                         Button("Done") { store.complete(id: memory.id) }
                         if memory.remindAt != nil {
                             Button("Snooze 10 minutes") { store.snooze(id: memory.id) }
@@ -487,32 +536,11 @@ private struct MemoryRow: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }
-            if let errorMessage {
+            if let errorMessage = model.errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Tint.danger)
                     .typo(.caption)
             }
-        }
-    }
-
-    private func beginEdit() {
-        draft = memory.text
-        hasReminder = memory.remindAt != nil
-        reminder = memory.remindAt ?? Date().addingTimeInterval(3_600)
-        errorMessage = nil
-        isEditing = true
-    }
-
-    private func saveEdit() {
-        var updated = memory
-        updated.text = draft
-        updated.remindAt = hasReminder ? reminder : nil
-        do {
-            try store.update(updated)
-            errorMessage = nil
-            isEditing = false
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }
@@ -629,5 +657,130 @@ private struct CompanionEmptyState: View {
         }
         .frame(maxWidth: .infinity, minHeight: 120)
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Interactive Companion Stage & Mood Card
+
+@MainActor
+private final class CompanionStageCardModel: ObservableObject {
+    @Published var activeToyAction: String?
+    @Published var petMood: String = "Delighted 🐾"
+
+    func triggerToy(_ actionText: String, sound: Bool, userData: UserData) {
+        withAnimation {
+            activeToyAction = actionText
+            petMood = "Playful & Happy ✨"
+        }
+        if sound && userData.companionSounds {
+            SoundPlayer.playDone()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            withAnimation {
+                self?.activeToyAction = nil
+                self?.petMood = "Delighted 🐾"
+            }
+        }
+    }
+}
+
+private struct CompanionStageCard: View {
+    @ObservedObject private var userData = UserData.shared
+    @StateObject private var model = CompanionStageCardModel()
+
+    var body: some View {
+        SettingsCard(title: "Interactive Stage & Mood") {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                HStack(spacing: Space.x4) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(LinearGradient(colors: [Tint.accent.opacity(0.2), Color.purple.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 64, height: 64)
+                        
+                        if let style = CodePixelCatStyle(rawValue: userData.companionCharacter) {
+                            CodePixelCatView(
+                                style: style,
+                                mood: .delighted,
+                                pose: .neutral,
+                                size: 52,
+                                elapsed: 1.0
+                            )
+                        } else {
+                            CodePixelCatView(
+                                style: .orange,
+                                mood: .delighted,
+                                pose: .neutral,
+                                size: 52,
+                                elapsed: 1.0
+                            )
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text("Current Mood:")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Ink.secondary)
+                            Text(model.petMood)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Tint.accent)
+                        }
+
+                        HStack {
+                            Text("Friendship:")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Ink.secondary)
+                            Text("Level \(max(1, min(5, userData.companionProgress.lifetimeWords / 500 + 1))) · Close Friend")
+                                .font(.caption)
+                                .foregroundStyle(Ink.primary)
+                        }
+
+                        ProgressView(value: Double(userData.companionProgress.lifetimeWords % 500), total: 500)
+                            .controlSize(.small)
+                    }
+                    Spacer()
+                }
+
+                // Interactive Toy Box
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    Text("Interactive Toy Box")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Ink.secondary)
+
+                    HStack(spacing: Space.x2) {
+                        Button("🧶 Yarn") {
+                            model.triggerToy("Playing with yarn! 🧶", sound: true, userData: userData)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("🐟 Snack") {
+                            model.triggerToy("Eating fish snack! 🐟", sound: true, userData: userData)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("🔴 Laser") {
+                            model.triggerToy("Chasing laser dot! 🔴", sound: false, userData: userData)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button("🔔 Nap") {
+                            model.triggerToy("Taking a cozy catnap! 😴", sound: false, userData: userData)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    if let action = model.activeToyAction {
+                        Text(action)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Tint.accent)
+                            .transition(.opacity)
+                    }
+                }
+            }
+        }
     }
 }
