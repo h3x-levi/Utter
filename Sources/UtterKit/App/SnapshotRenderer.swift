@@ -56,7 +56,7 @@ public struct SnapshotRenderer {
                 windowWidth: 920,
                 windowHeight: 640,
                 showPill: true,
-                pillState: .capturingNote,
+                pillState: .recording,
                 companionStyle: .orange,
                 companionMood: .alert,
                 companionPose: CompanionPose(gait: .idle)
@@ -73,7 +73,7 @@ public struct SnapshotRenderer {
                 windowWidth: 860,
                 windowHeight: 640,
                 showPill: true,
-                pillState: .processing(.rewriting),
+                pillState: .processing(.transcribing),
                 companionStyle: .panda,
                 companionMood: .thinking,
                 companionPose: CompanionPose(gait: .idle)
@@ -230,8 +230,6 @@ struct MacScreenContainer<Content: View>: View {
     let windowHeight: CGFloat
     var showPill: Bool = true
     var pillState: PillState = .idle
-    var pillLevel: Float = 0.6
-    var pillElapsed: Int = 3
     var companionStyle: CodePixelCatStyle? = .gray
     var companionMood: CompanionMood = .alert
     var companionPose: CompanionPose = CompanionPose(gait: .walking, travelSpeed: 1.0)
@@ -292,10 +290,10 @@ struct MacScreenContainer<Content: View>: View {
 
                 Spacer()
 
-                // Bottom Floating Pill and Companion
+                // Bottom Floating Pill and Companion (100% Real Pill, NO text)
                 if showPill {
                     HStack(alignment: .bottom, spacing: 14) {
-                        RealPillSnapshotView(state: pillState, level: pillLevel, elapsed: pillElapsed)
+                        RealPillSnapshotView(state: pillState)
 
                         if let style = companionStyle {
                             CodePixelCatView(
@@ -438,31 +436,31 @@ struct MacPillShowcaseDesktopView: View {
                 }
                 .padding(24)
 
-                // 4 Real Pill States Showcase floating directly in the workspace
+                // 4 Real Pill States Showcase floating directly in the workspace (NO TEXT in pills)
                 VStack(spacing: 24) {
                     Text("Utter Liquid Glass Pill Lineup")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.white)
 
-                    HStack(spacing: 20) {
-                        // 1. Idle / Resting
-                        PillCardWrapper(title: "Idle (Resting)") {
-                            RealPillSnapshotView(state: .idle, level: 0, elapsed: 0)
+                    HStack(spacing: 28) {
+                        // 1. Idle / Resting (Pure mic glyph)
+                        PillCardWrapper(title: "Resting") {
+                            RealPillSnapshotView(state: .idle)
                         }
 
-                        // 2. Recording (Held Hotkey)
-                        PillCardWrapper(title: "Recording (Hold Fn)") {
-                            RealPillSnapshotView(state: .recording, level: 0.72, elapsed: 4)
+                        // 2. Recording (Pure live waveform bars)
+                        PillCardWrapper(title: "Recording") {
+                            RealPillSnapshotView(state: .recording)
                         }
 
-                        // 3. Hands-Free Latched
-                        PillCardWrapper(title: "Hands-Free (⌃⌥Space)") {
-                            RealPillSnapshotView(state: .handsFree, level: 0.55, elapsed: 14)
+                        // 3. Hands-Free Latched (Waveform + Lock)
+                        PillCardWrapper(title: "Hands-Free") {
+                            RealPillSnapshotView(state: .handsFree)
                         }
 
-                        // 4. Processing
-                        PillCardWrapper(title: "Processing Phase") {
-                            RealPillSnapshotView(state: .processing(.transcribing), level: 0, elapsed: 0)
+                        // 4. Processing Phase (Writing pen)
+                        PillCardWrapper(title: "Typing") {
+                            RealPillSnapshotView(state: .processing(.typing))
                         }
                     }
 
@@ -510,13 +508,13 @@ private struct PillCardWrapper<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             content()
             Text(title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.65))
         }
-        .padding(14)
+        .padding(16)
         .background(Color.white.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -642,113 +640,90 @@ private struct CompanionShowcaseTile<Content: View>: View {
     }
 }
 
-// MARK: - Real Pill Snapshot Component
+// MARK: - Real Pill Snapshot Component (100% Genuine, Pure Glyphs & Waveform, NO TEXT)
 
 struct RealPillSnapshotView: View {
     let state: PillState
-    let level: Float
-    let elapsed: Int
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             switch state {
             case .idle:
-                // Real Resting Pill: Keycap + Prompt
-                KeycapChip(text: UserData.shared.hotkeyName)
-                Text("Hold to talk")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.85))
+                // Real Resting Pill: Centered microphone glyph
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
 
             case .recording:
-                // Real Recording Pill: Red Dot + Timer + Live RMS Meter
-                Circle()
-                    .fill(Color(red: 1.0, green: 0.28, blue: 0.25))
-                    .frame(width: 8, height: 8)
-                Text(timeString(elapsed))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                realAudioMeter(level: level)
+                // Real Recording Pill: 7 audio waveform bars dancing
+                realWaveformBars(color: .white)
 
             case .handsFree:
-                // Real Hands Free Pill: Lock + Timer + Stop Control
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Tint.handsFree)
-                Text(timeString(elapsed))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                realAudioMeter(level: level)
+                // Real Hands-Free Pill: Waveform bars + green lock icon
+                HStack(spacing: 5) {
+                    realWaveformBars(color: .white)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Tint.handsFree)
+                }
 
-            case .capturingNote:
-                // Real Note Capture Pill: Note glyph + Destination
-                Image(systemName: "note.text")
-                    .font(.system(size: 11, weight: .semibold))
+            case .processing:
+                // Real Processing / Typing Pill: Writing pen glyph
+                Image(systemName: "pencil.and.scribble")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Tint.accent)
-                Text("Dictating into Note")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
-                realAudioMeter(level: level)
 
-            case .processing(let phase):
-                // Real Processing Pill
-                ProgressView()
-                    .controlSize(.mini)
-                Text(phase.rawValue)
-                    .font(.system(size: 12, weight: .medium))
+            case .notice:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Tint.accent)
+
+            case .error:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Tint.danger)
 
             default:
-                KeycapChip(text: "Fn")
-                Text("Utter")
-                    .font(.system(size: 12, weight: .medium))
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
             }
         }
-        .padding(.horizontal, 16)
-        .frame(height: 32)
+        .padding(.horizontal, state == .idle ? 18 : 14)
+        .frame(height: 28)
         .background(
-            Color(red: 0.12, green: 0.13, blue: 0.17).opacity(0.85)
+            ZStack {
+                Capsule()
+                    .fill(Color.black.opacity(0.38))
+                Capsule()
+                    .fill(state == .handsFree ? Tint.handsFree.opacity(0.2) : Color.white.opacity(0.12))
+            }
         )
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.65), .white.opacity(0.15)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.8
+                )
         )
-        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 4)
     }
 
-    private func timeString(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
-    }
-
-    private func realAudioMeter(level: Float) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0..<5, id: \.self) { i in
-                let factor = Float(i + 1) / 5.0
-                let height: CGFloat = level >= factor ? CGFloat(8 + i * 3) : 3
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(state == .handsFree ? Tint.handsFree : Color(red: 1.0, green: 0.28, blue: 0.25))
-                    .frame(width: 2, height: height)
+    private func realWaveformBars(color: Color) -> some View {
+        let barHeights: [CGFloat] = [5, 11, 16, 13, 18, 9, 6]
+        return HStack(spacing: 2.5) {
+            ForEach(0..<barHeights.count, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(color.opacity(0.85))
+                    .frame(width: 3, height: barHeights[i])
+                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 0.5)
             }
         }
-    }
-}
-
-private struct KeycapChip: View {
-    let text: String
-    var body: some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(Color.white.opacity(0.9))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.white.opacity(0.15))
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-            )
+        .frame(height: 20)
     }
 }
