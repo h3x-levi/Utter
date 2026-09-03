@@ -144,12 +144,31 @@ struct DiagnosticsSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x5) {
+            helpAndFeedbackCard
             telemetryCard
             liveMicTestCard
             reportsCard
             systemReportsCard
         }
         .onAppear { model.load() }
+    }
+
+    @ViewBuilder
+    private var helpAndFeedbackCard: some View {
+        SettingsCard(title: "Help & Issue Reporting") {
+            HStack(alignment: .center, spacing: Space.x4) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Report Bug, Audio Issue or Lag")
+                        .typo(.body, ink: Ink.primary)
+                    Text("Utter is a bi-ported app. If you experience crashes, audio drops, or UI lag, report it with 1-click GitHub pre-fill.")
+                        .typo(.caption, ink: Ink.secondary)
+                }
+                Spacer()
+                GlassButton(title: "Report Issue", systemImage: "exclamationmark.bubble.fill", size: .regular) {
+                    AppDelegate.current?.openReportIssue()
+                }
+            }
+        }
     }
 
     // MARK: Hardware & Engine Telemetry
@@ -311,6 +330,9 @@ struct DiagnosticsSettingsContent: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: Space.x2)
+                GlassButton(title: "Report Crash", systemImage: "ladybug", size: .small) {
+                    AppDelegate.current?.openReportIssue(crashLog: log.content, category: .bug)
+                }
                 GlassButton(title: "Reveal in Finder", systemImage: "folder", size: .small) {
                     model.reveal(log.url)
                 }

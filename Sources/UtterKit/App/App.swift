@@ -400,6 +400,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // this was the one that was not.
         menu.addItem(NSMenuItem(title: "Setup\u{2026}", action: #selector(showSetup), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "What\u{2019}s New in Utter", action: #selector(showWhatsNew), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Report an Issue / Feedback\u{2026}", action: #selector(showReportIssue), keyEquivalent: "i"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit Utter", action: #selector(quit), keyEquivalent: "q"))
 
@@ -680,7 +681,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// is how closing either one could leave the app `.regular` with the preference
     /// off — nothing reasserted it afterwards.
     private var isAnyWindowVisible: Bool {
-        [mainWindow, onboardingWindow, settingsWindow, whatsNewWindow]
+        [mainWindow, onboardingWindow, settingsWindow, whatsNewWindow, reportIssueWindow]
             .contains { $0?.isVisible == true }
     }
 
@@ -1108,6 +1109,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private var whatsNewWindow: NSWindow?
+    private var reportIssueWindow: NSWindow?
+
+    @objc public func showReportIssue() {
+        openReportIssue()
+    }
+
+    public func openReportIssue(crashLog: String? = nil, category: IssueCategory = .bug) {
+        presentAuxWindow(
+            &reportIssueWindow,
+            title: "Report an Issue / Send Feedback",
+            size: NSSize(width: 660, height: 620),
+            content: AnyView(
+                ThemedRoot {
+                    ReportIssueSheet(initialCrashLog: crashLog, initialCategory: category)
+                }
+            )
+        )
+    }
 
     /// The hint line names the user's configured hotkey, so it must be rebuilt
     /// when that changes rather than hardcoding "Fn".

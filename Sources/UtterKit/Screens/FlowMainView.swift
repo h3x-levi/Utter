@@ -339,10 +339,31 @@ struct FlowSidebar: View {
     /// is worse than one that already works on both. It is `navRows`' greed that pins this to the
     /// base now, not a `Spacer` — see `column`.
     private var bottomBlock: some View {
-        UsageCard()
-            .padding(.horizontal, Space.x2)
-            .padding(.bottom, Space.x1)
-        // Was the `Spacer`'s `minLength` — see `column` for why it moved here.
+        VStack(spacing: Space.x2) {
+            UsageCard()
+            Button(action: {
+                AppDelegate.current?.openReportIssue()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.bubble")
+                        .font(.system(size: 11))
+                    Text("Report Issue / Feedback")
+                        .font(.system(size: 11, weight: .medium))
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9))
+                }
+                .foregroundStyle(Ink.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Report an Issue or Send Feedback")
+        }
+        .padding(.horizontal, Space.x2)
+        .padding(.bottom, Space.x1)
         .padding(.top, Space.x4)
         .padding(.bottom, Space.x3)
     }
