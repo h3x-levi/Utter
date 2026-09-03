@@ -18,13 +18,13 @@ export default function StageCompanionSandbox() {
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
       <div className="text-center mb-8">
-        <span className="font-mono-sm text-xs font-semibold px-3 py-1 rounded-full bg-black/5 text-black/60 border border-black/10">
+        <span className="font-mono-sm text-xs font-semibold px-3 py-1 rounded-full bg-white/5 text-zinc-400 border border-white/10">
           Articulated Sprite Engine · Sensory Companion
         </span>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mt-3 text-[#0d0d0d]">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mt-3 text-white">
           A desktop companion that reacts to your voice.
         </h2>
-        <p className="text-black/60 text-base sm:text-lg max-w-2xl mx-auto mt-2">
+        <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto mt-2">
           Retro pixel pets that sit on your window edge, track your cursor with their gaze, level up friendship, and celebrate your coding velocity.
         </p>
       </div>
@@ -54,7 +54,7 @@ export default function StageCompanionSandbox() {
               initial={{ opacity: 0, y: 10, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="mb-4 px-4 py-2 rounded-2xl bg-white text-[#0d0d0d] font-medium text-xs sm:text-sm shadow-xl relative"
+              className="mb-4 px-4 py-2 rounded-2xl bg-white text-white font-medium text-xs sm:text-sm shadow-xl relative"
             >
               {speechBubble}
               {/* Bubble Tail */}

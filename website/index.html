@@ -2,16 +2,66 @@
 <html lang="en" class="scroll-smooth dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/assets/app-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Utter — Zero-Latency On-Device Voice Dictation for macOS</title>
+    
+    <!-- Primary Meta Tags -->
+    <title>Utter — Native On-Device Voice Dictation for macOS</title>
+    <meta name="title" content="Utter — Native On-Device Voice Dictation for macOS" />
     <meta name="description" content="Hold a key, speak naturally, let go — your words appear anywhere on macOS with 100% privacy, sub-200ms latency, and zero cloud telemetry." />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Utter" />
+    <link rel="canonical" href="https://utter.run/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://utter.run/" />
+    <meta property="og:title" content="Utter — Native On-Device Voice Dictation for macOS" />
+    <meta property="og:description" content="Hold a key, speak naturally, let go — your words appear anywhere on macOS with 100% privacy, sub-200ms latency, and zero cloud telemetry." />
+    <meta property="og:image" content="https://utter.run/assets/app-icon.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://utter.run/" />
+    <meta property="twitter:title" content="Utter — Native On-Device Voice Dictation for macOS" />
+    <meta property="twitter:description" content="Hold a key, speak naturally, let go — your words appear anywhere on macOS with 100% privacy, sub-200ms latency, and zero cloud telemetry." />
+    <meta property="twitter:image" content="https://utter.run/assets/app-icon.png" />
+
+    <!-- Favicons & App Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Utter",
+      "operatingSystem": "macOS 14.0 or later",
+      "applicationCategory": "UtilitiesApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "Utter",
+        "url": "https://utter.run"
+      },
+      "description": "Hold a key, speak naturally, let go — your words appear anywhere on macOS with 100% privacy, sub-200ms latency, and zero cloud telemetry."
+    }
+    </script>
+    
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#0b0d13] text-slate-100 antialiased selection:bg-orange-500 selection:text-white overflow-x-hidden">
+  <body class="bg-[#09090b] text-[#f4f4f5] antialiased selection:bg-indigo-600 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

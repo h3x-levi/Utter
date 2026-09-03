@@ -1,0 +1,9 @@
+/* TEAM */
+Product: Utter for macOS
+Site: https://utter.run
+Open Source: https://github.com/h3x-levi/Utter
+
+/* TECH */
+Architecture: 100% On-Device whisper.cpp + Metal GPU + Apple Foundation
+Web Stack: React 18, Vite, Three.js WebGL, Framer Motion, Tailwind CSS
+Standards: HTML5, CSS3, ES2024, Schema.org

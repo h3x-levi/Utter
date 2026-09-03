@@ -1,92 +1,73 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Download, Github } from 'lucide-react';
+import { Download, Github, Shield, Sparkles, Cpu } from 'lucide-react';
 
-const DownloadSection = () => {
+export default function DownloadSection() {
   return (
-    <section className="px-4 mt-8">
-      <div className="bg-[#0a0a0a] text-white rounded-[40px] md:rounded-[60px] py-28 md:py-36 px-6 relative overflow-hidden">
-        {/* Subtle radial glow */}
+    <section className="py-28 px-4 relative z-20 border-t border-white/10 bg-[#09090b]">
+      <div className="max-w-5xl mx-auto text-center relative">
+        {/* Subtle Ambient Radial Glow */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-30"
+          className="absolute inset-0 pointer-events-none opacity-20"
           style={{
-            background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(95, 97, 237, 0.15), transparent)',
+            background: 'radial-gradient(ellipse 60% 50% at 50% 35%, rgba(95, 97, 237, 0.4), transparent 70%)',
           }}
         />
 
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="mb-8"
-          >
+        <div className="relative z-10 glass-panel p-10 sm:p-16 rounded-[36px] shadow-2xl border border-white/10">
+          {/* App Icon */}
+          <div className="mb-8 flex justify-center">
             <img
               src="/assets/app-icon.png"
-              alt="Utter"
-              className="w-16 h-16 rounded-2xl mx-auto shadow-2xl border border-white/10"
+              alt="Utter Icon"
+              className="w-20 h-20 rounded-2xl shadow-2xl border border-white/15"
             />
-          </motion.div>
+          </div>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tight mb-6 leading-[1.06]"
-          >
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6">
             Ready to speak at the speed of thought?
-          </motion.h2>
+          </h2>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="text-lg text-white/50 max-w-xl mx-auto mb-12"
-          >
-            Download Utter for macOS today. 100% free, fully open source, and completely private.
-          </motion.p>
+          <p className="text-lg text-zinc-400 max-w-xl mx-auto mb-10 leading-relaxed">
+            Download Utter for macOS today. 100% on-device, fully open source, and completely air-gapped.
+          </p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14"
-          >
+          <div className="flex flex-wrap items-center justify-center gap-4 mb-10">
             <a
               href="https://github.com/h3x-levi/Utter/releases/latest"
-              className="flex items-center justify-center gap-2.5 bg-white text-black px-10 py-4.5 rounded-full font-bold text-[15px] hover:bg-gray-200 transition-all active:scale-[0.97] w-full sm:w-auto shadow-lg"
+              className="flex items-center gap-2.5 bg-white text-black px-9 py-4 rounded-full font-bold text-base hover:bg-zinc-200 transition-all shadow-xl active:scale-95"
             >
-              <Download size={20} />
+              <Download size={19} />
               Download for Mac
+              <span className="text-xs font-mono opacity-60 ml-1">v1.1.56</span>
             </a>
+
             <a
               href="https://github.com/h3x-levi/Utter"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2.5 border-2 border-white/15 text-white px-10 py-4.5 rounded-full font-bold text-[15px] hover:bg-white/10 transition-all active:scale-[0.97] w-full sm:w-auto"
+              className="flex items-center gap-2.5 border border-white/15 bg-white/5 text-white px-8 py-4 rounded-full font-semibold text-base hover:bg-white/10 transition-all active:scale-95 shadow-sm"
             >
-              <Github size={20} />
-              View on GitHub
+              <Github size={19} />
+              View Source on GitHub
             </a>
-          </motion.div>
+          </div>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="font-mono-sm text-xs text-white/30"
-          >
-            MIT License · macOS 13+ · Apple Silicon & Intel · v1.1.56
-          </motion.p>
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-zinc-500 font-mono">
+            <span className="flex items-center gap-1.5">
+              <Shield size={13} className="text-emerald-400" /> Zero Telemetry
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1.5">
+              <Cpu size={13} className="text-indigo-400" /> Apple Silicon & Intel
+            </span>
+            <span>•</span>
+            <span>macOS 14+ Sonoma & Sequoia</span>
+            <span>•</span>
+            <span>MIT License</span>
+          </div>
         </div>
       </div>
     </section>
   );
-};
-
-export default DownloadSection;
+}
