@@ -87,19 +87,25 @@ const FeatureShowcase = () => {
 
               {/* Screenshot in glass frame */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                initial={{ opacity: 0, scale: 0.85, y: 60 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                viewport={{ once: true, margin: '-120px' }}
+                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                 className="flex-[1.3] w-full"
               >
-                <div className="glass-panel p-2">
-                  <img
+                <motion.div 
+                  whileHover={{ scale: 1.03 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="glass-panel p-2 overflow-hidden cursor-pointer shadow-[0_20px_50px_rgba(0,0,0,0.1)]"
+                >
+                  <motion.img
+                    whileHover={{ scale: 1.08 }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
                     src={feature.image}
                     alt={feature.heading}
-                    className="w-full h-auto rounded-[22px] shadow-lg"
+                    className="w-full h-auto rounded-[22px]"
                   />
-                </div>
+                </motion.div>
               </motion.div>
             </div>
           );

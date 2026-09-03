@@ -5,6 +5,13 @@ import { Download, Github } from 'lucide-react';
 const Hero = () => {
   return (
     <section className="relative pt-40 pb-20 px-4 overflow-visible">
+      {/* Animated radial spotlight */}
+      <motion.div
+        animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.1, 1] }}
+        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full pointer-events-none z-0"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, transparent 60%)' }}
+      />
       {/* Atmospheric top vignette — fades hero into canvas */}
       <div
         className="absolute inset-x-0 top-0 h-[200px] pointer-events-none z-0"
@@ -51,22 +58,26 @@ const Hero = () => {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="flex flex-col sm:flex-row items-center gap-4 mb-6"
         >
-          <a
+          <motion.a
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="flex items-center gap-2.5 bg-[#0d0d0d] text-white px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/80 transition-all active:scale-[0.97] shadow-lg"
+            className="flex items-center gap-2.5 bg-[#0d0d0d] text-white px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/80 transition-colors shadow-lg"
           >
             <Download size={18} />
             Download for Mac
-          </a>
-          <a
+          </motion.a>
+          <motion.a
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             href="https://github.com/h3x-levi/Utter"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2.5 border-2 border-black/10 text-[#0d0d0d] px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/5 transition-all active:scale-[0.97]"
+            className="flex items-center gap-2.5 border-2 border-black/10 text-[#0d0d0d] px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/5 transition-colors"
           >
             <Github size={18} />
             View on GitHub
-          </a>
+          </motion.a>
         </motion.div>
 
         {/* Integration micro-chips */}
@@ -85,12 +96,17 @@ const Hero = () => {
         {/* 3D GLASS DISPLAY FRAME */}
         {/* ===================== */}
         <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, scale: 0.8, y: 100 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 1.4, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full max-w-[948px] mx-auto z-10"
         >
-          <div className="glass-panel p-2 md:p-3 relative group" style={{ aspectRatio: '16 / 9' }}>
+          <motion.div 
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="glass-panel p-2 md:p-3 relative group overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.15)]" 
+            style={{ aspectRatio: '16 / 9' }}
+          >
             {/* macOS Menu Bar */}
             <div className="absolute top-4 left-0 right-0 px-5 md:px-6 flex items-center justify-between z-20 text-[11px] font-medium text-black/50">
               <div className="flex items-center gap-2">
@@ -102,12 +118,41 @@ const Hero = () => {
             </div>
 
             {/* Screenshot */}
-            <img
+            <motion.img
+              initial={{ scale: 1.1 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 2, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ scale: 1.04 }}
               src="/assets/screenshots/hero-main.png"
               alt="Utter — macOS Voice Dictation App"
               className="rounded-[22px] w-full h-full object-cover relative z-10"
             />
-          </div>
+
+            {/* Obsidian Glass Dock Capsule */}
+            <motion.div
+              initial={{ opacity: 0, y: 30, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, x: '-50%' }}
+              transition={{ duration: 1, delay: 1, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute bottom-6 md:bottom-8 left-1/2 z-30 flex items-center gap-3 p-3 rounded-[30px] obsidian-glass shadow-2xl origin-bottom border border-white/10"
+            >
+              {[
+                { icon: '🎙️', label: 'Dictate' },
+                { icon: '✨', label: 'Magic' },
+                { icon: '⌘', label: 'Macros' },
+                { icon: '⚙️', label: 'Settings' }
+              ].map((widget, i) => (
+                <motion.div
+                  key={i}
+                  whileHover={{ scale: 1.15, y: -8 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className="w-[70px] h-[70px] md:w-[80px] md:h-[80px] rounded-[20px] bg-white/10 border border-white/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-white/20 shadow-inner"
+                >
+                  <div className="text-2xl drop-shadow-md">{widget.icon}</div>
+                  <span className="text-[10px] font-medium text-white/90">{widget.label}</span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </motion.div>
 
           {/* Left floating 3D side card */}
           <motion.div
@@ -116,9 +161,12 @@ const Hero = () => {
             className="absolute -left-16 top-1/4 w-[220px] hidden lg:block z-20"
             style={{ transform: 'rotateY(12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
           >
-            <div className="glass-panel-sm p-1.5 shadow-2xl">
+            <motion.div 
+              whileHover={{ scale: 1.05, y: -5 }}
+              className="glass-panel-sm p-1.5 shadow-2xl cursor-pointer"
+            >
               <img src="/assets/screenshots/06_model_chooser.png" alt="Model Chooser" className="rounded-[14px] w-full" />
-            </div>
+            </motion.div>
           </motion.div>
 
           {/* Right floating 3D side card */}
@@ -128,9 +176,12 @@ const Hero = () => {
             className="absolute -right-16 bottom-1/4 w-[220px] hidden lg:block z-20"
             style={{ transform: 'rotateY(-12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
           >
-            <div className="glass-panel-sm p-1.5 shadow-2xl">
+            <motion.div 
+              whileHover={{ scale: 1.05, y: -5 }}
+              className="glass-panel-sm p-1.5 shadow-2xl cursor-pointer"
+            >
               <img src="/assets/screenshots/04_notes_studio.png" alt="Notes Studio" className="rounded-[14px] w-full" />
-            </div>
+            </motion.div>
           </motion.div>
         </motion.div>
 
