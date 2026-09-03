@@ -1,55 +1,24 @@
 import React from 'react';
-import ScrollProgress from './components/ScrollProgress';
-import NavbarPill from './components/NavbarPill';
-import MacDisplayHero from './components/MacDisplayHero';
-import AssetTransitionShowcase from './components/AssetTransitionShowcase';
-import InteractiveWidgetsGrid from './components/InteractiveWidgetsGrid';
-import WorkflowSteps from './components/WorkflowSteps';
-import PillStateShowcase from './components/PillStateShowcase';
-import MeetingStudio from './components/MeetingStudio';
-import AITransformsPlayground from './components/AITransformsPlayground';
-import CompanionPlayground from './components/CompanionPlayground';
-import SpeechModelMatrix from './components/SpeechModelMatrix';
-import KeyboardStudio from './components/KeyboardStudio';
-import BenchmarkLatency from './components/BenchmarkLatency';
-import ComparisonMatrix from './components/ComparisonMatrix';
-import PrivacyArchitecture from './components/PrivacyArchitecture';
-import TerminalInstall from './components/TerminalInstall';
-import CommunityQuotes from './components/CommunityQuotes';
-import FAQ from './components/FAQ';
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import FeatureShowcase from './components/FeatureShowcase';
+import PrivacySection from './components/PrivacySection';
+import DownloadSection from './components/DownloadSection';
 import Footer from './components/Footer';
 
-export default function App() {
+function App() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 relative selection:bg-white selection:text-black">
-      {/* Top Scroll Indicator */}
-      <ScrollProgress />
-
-      {/* Floating Centered Pill Navbar (Inspired by dock.cool) */}
-      <NavbarPill />
-
-      {/* Main Content */}
-      <main className="relative z-10">
-        <MacDisplayHero />
-        <AssetTransitionShowcase />
-        <InteractiveWidgetsGrid />
-        <WorkflowSteps />
-        <PillStateShowcase />
-        <MeetingStudio />
-        <AITransformsPlayground />
-        <CompanionPlayground />
-        <SpeechModelMatrix />
-        <KeyboardStudio />
-        <BenchmarkLatency />
-        <ComparisonMatrix />
-        <PrivacyArchitecture />
-        <TerminalInstall />
-        <CommunityQuotes />
-        <FAQ />
+    <div className="min-h-screen bg-[#edeceb] text-[#0d0d0d] font-sans selection:bg-[#5f61ed] selection:text-white overflow-x-hidden">
+      <Navbar />
+      <main>
+        <Hero />
+        <FeatureShowcase />
+        <PrivacySection />
       </main>
-
-      {/* Clean Apple Footer */}
+      <DownloadSection />
       <Footer />
     </div>
   );
 }
+
+export default App;

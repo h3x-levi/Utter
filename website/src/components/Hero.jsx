@@ -1,243 +1,147 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Download, Mic, Terminal, Play } from 'lucide-react';
-import { animate as animeAnimate, stagger } from 'animejs';
-import ThreeHeroScene from './ThreeHeroScene';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Download, Github } from 'lucide-react';
 
-export default function Hero() {
-  const [isRecording, setIsRecording] = useState(false);
-  const [typedText, setTypedText] = useState('');
-  const [activePreset, setActivePreset] = useState(0);
-  const titleRef = useRef(null);
-  const typingTimerRef = useRef(null);
-
-  const presets = [
-    {
-      label: 'Swift Metal Audio Stream',
-      text: 'func processAudioStream(sampleBuffer: CMSampleBuffer) async throws -> SpeechTurn {\n    let pcm16 = try audioConverter.convert(sampleBuffer)\n    return try await whisperEngine.transcribe(pcm16, language: .en)\n}',
-      stats: '188 WPM • 0.16s latency • Metal GPU',
-    },
-    {
-      label: 'Meeting Action Items',
-      text: '- Levi to review Metal compute shader pipeline before release.\n- Air-gapped zero telemetry architecture verified with lsof.\n- DMG installer packaged with Small.en model bundled.',
-      stats: '194 WPM • 0.18s latency • Notes Studio',
-    },
-    {
-      label: 'Local Foundation Summary',
-      text: 'Summary: Utter processes audio streams directly in unified Apple Silicon memory without temporary disk files, eliminating cloud network latency.',
-      stats: 'Apple Intelligence • On-Device',
-    },
-  ];
-
-  // Anime.js Headline Entrance Animation
-  useEffect(() => {
-    if (titleRef.current) {
-      const chars = titleRef.current.querySelectorAll('.char-span');
-      if (chars.length > 0) {
-        animeAnimate(chars, {
-          translateY: [20, 0],
-          opacity: [0, 1],
-          delay: stagger(15, { start: 100 }),
-          duration: 600,
-        });
-      }
-    }
-  }, []);
-
-  const startDictation = (textIndex = 0) => {
-    if (isRecording) return;
-    setIsRecording(true);
-    setTypedText('');
-    clearInterval(typingTimerRef.current);
-
-    animeAnimate('.pill-indicator', {
-      scale: [1, 1.05, 1],
-      duration: 350,
-    });
-
-    const targetText = presets[textIndex].text;
-
-    setTimeout(() => {
-      let idx = 0;
-      typingTimerRef.current = setInterval(() => {
-        if (idx < targetText.length) {
-          setTypedText(targetText.substring(0, idx + 1));
-          idx++;
-        } else {
-          clearInterval(typingTimerRef.current);
-          setIsRecording(false);
-        }
-      }, 14);
-    }, 500);
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.code === 'Space' && !isRecording && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        startDictation(activePreset);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isRecording, activePreset]);
-
-  // Split headline for Anime.js staggered reveal
-  const headlineWords = "Zero-latency voice dictation engineered for macOS.".split(" ");
-
+const Hero = () => {
   return (
-    <section className="relative z-10 pt-32 pb-24 px-6 overflow-hidden">
-      <div className="max-w-6xl mx-auto text-center">
+    <section className="relative pt-40 pb-20 px-4 overflow-visible">
+      {/* Atmospheric top vignette — fades hero into canvas */}
+      <div
+        className="absolute inset-x-0 top-0 h-[200px] pointer-events-none z-0"
+        style={{ background: 'linear-gradient(#edeceb 0%, transparent 100%)' }}
+      />
 
-        {/* Apple Sub-Header Badge */}
-        <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono font-medium text-zinc-300 mb-8 backdrop-blur-xl">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          100% On-Device Whisper.cpp on Apple Silicon Metal GPU
-        </div>
-
-        {/* Editorial Headline */}
-        <h1
-          ref={titleRef}
-          className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-white leading-[1.05] mb-8 max-w-5xl mx-auto"
+      <div className="max-w-5xl mx-auto text-center flex flex-col items-center relative z-10">
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="font-mono-sm text-xs font-medium px-4 py-1.5 rounded-full border border-black/10 bg-white/40 backdrop-blur-sm mb-8 text-black/50 inline-flex items-center gap-2"
         >
-          {headlineWords.map((word, wIdx) => (
-            <span key={wIdx} className="inline-block mr-3 sm:mr-4 whitespace-nowrap">
-              {word.split("").map((char, cIdx) => (
-                <span key={cIdx} className="char-span inline-block opacity-0">
-                  {char}
-                </span>
-              ))}
-            </span>
-          ))}
-        </h1>
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+          100% On-Device · Zero Telemetry · MIT License
+        </motion.div>
+
+        {/* Headline */}
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="text-5xl sm:text-6xl md:text-[76px] font-black leading-[1.06] tracking-tight mb-6 max-w-4xl"
+        >
+          Voice dictation that stays on your Mac.
+        </motion.h1>
 
         {/* Subtitle */}
-        <p className="text-lg sm:text-2xl text-zinc-400 max-w-3xl mx-auto leading-relaxed mb-12 font-normal">
-          Hold a key, speak naturally, release to type anywhere on your Mac. Sub-200ms local inference with zero cloud telemetry.
-        </p>
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="text-lg md:text-xl text-[#0d0d0d]/60 max-w-2xl mb-10 leading-relaxed"
+        >
+          Hold a key, speak, let go. Utter transcribes at 180 WPM using local Whisper models
+          on Apple Silicon — no cloud, no subscription, no data leaves your device.
+        </motion.p>
 
-        {/* Apple Action CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+        {/* Buttons */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex flex-col sm:flex-row items-center gap-4 mb-6"
+        >
           <a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-3.5 rounded-xl text-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-200 transition-all hover:scale-102 active:scale-98 shadow-xl"
+            className="flex items-center gap-2.5 bg-[#0d0d0d] text-white px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/80 transition-all active:scale-[0.97] shadow-lg"
           >
-            <Download className="w-4 h-4" />
-            Download for macOS
+            <Download size={18} />
+            Download for Mac
           </a>
-          <button
-            onClick={() => startDictation(activePreset)}
-            className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl text-sm font-semibold bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 transition-all hover:scale-102 active:scale-98"
+          <a
+            href="https://github.com/h3x-levi/Utter"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 border-2 border-black/10 text-[#0d0d0d] px-8 py-4 rounded-full font-semibold text-[15px] hover:bg-black/5 transition-all active:scale-[0.97]"
           >
-            <Play className="w-4 h-4 text-zinc-400" />
-            Test Live Simulation
-          </button>
-        </div>
+            <Github size={18} />
+            View on GitHub
+          </a>
+        </motion.div>
 
-        {/* 3D Three.js Interactive Sculpture */}
-        <div className="max-w-4xl mx-auto -my-6">
-          <ThreeHeroScene isRecording={isRecording} />
-        </div>
-
-        {/* 3D Interactive macOS Window Frame */}
-        <div
-          id="demo"
-          className="relative max-w-5xl mx-auto rounded-2xl bg-[#121215] border border-zinc-800 shadow-2xl overflow-hidden text-left mt-8"
+        {/* Integration micro-chips */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+          className="flex flex-wrap justify-center gap-4 text-[13px] text-black/40 font-medium mb-16"
         >
-          {/* macOS Titlebar */}
-          <div className="h-10 bg-[#18181b] px-4 flex items-center justify-between border-b border-zinc-800">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#ff5f56]"></span>
-              <span className="w-3 h-3 rounded-full bg-[#ffbd2e]"></span>
-              <span className="w-3 h-3 rounded-full bg-[#27c93f]"></span>
+          {['Xcode', 'Cursor', 'VS Code', 'Slack', 'Obsidian', 'Notion', 'Terminal', 'Pages'].map((app) => (
+            <span key={app}>{app}</span>
+          ))}
+        </motion.div>
+
+        {/* ===================== */}
+        {/* 3D GLASS DISPLAY FRAME */}
+        {/* ===================== */}
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-[948px] mx-auto z-10"
+        >
+          <div className="glass-panel p-2 md:p-3 relative group" style={{ aspectRatio: '16 / 9' }}>
+            {/* macOS Menu Bar */}
+            <div className="absolute top-4 left-0 right-0 px-5 md:px-6 flex items-center justify-between z-20 text-[11px] font-medium text-black/50">
+              <div className="flex items-center gap-2">
+                <div className="w-[10px] h-[10px] rounded-full bg-[#ff5f56]" />
+                <div className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]" />
+                <div className="w-[10px] h-[10px] rounded-full bg-[#27c93f]" />
+              </div>
+              <span className="font-mono-sm text-[10px] text-black/30">Utter v1.1.56</span>
             </div>
-            <span className="text-xs font-mono text-zinc-400">
-              Live macOS HUD Simulator — Press Spacebar or Click Mic
-            </span>
-            <div className="w-12"></div>
+
+            {/* Screenshot */}
+            <img
+              src="/assets/screenshots/hero-main.png"
+              alt="Utter — macOS Voice Dictation App"
+              className="rounded-[22px] w-full h-full object-cover relative z-10"
+            />
           </div>
 
-          {/* Body Canvas */}
-          <div className="p-6 sm:p-10 bg-[#0e0e11] flex flex-col items-center justify-between min-h-[460px] gap-6">
-
-            {/* Floating Liquid Glass Pill */}
-            <div
-              onClick={() => startDictation(activePreset)}
-              className={`pill-indicator cursor-pointer select-none rounded-full px-6 py-3 flex items-center gap-4 border transition-all duration-300 ${
-                isRecording
-                  ? 'bg-zinc-800 border-white text-white shadow-2xl'
-                  : 'bg-zinc-900/90 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-              }`}
-            >
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
-                isRecording ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-300'
-              }`}>
-                <Mic className="w-3.5 h-3.5" />
-              </div>
-
-              {/* 7-Bar Acoustic Waveform */}
-              <div className="flex items-center gap-1 h-5">
-                {[8, 14, 20, 24, 20, 14, 8].map((h, i) => (
-                  <div
-                    key={i}
-                    className={`w-1 rounded-full transition-all duration-150 ${
-                      isRecording ? 'bg-white animate-wave-bar' : 'bg-zinc-600'
-                    }`}
-                    style={{
-                      height: isRecording ? `${h}px` : '4px',
-                      animationDelay: `${i * 0.1}s`,
-                    }}
-                  />
-                ))}
-              </div>
-
-              <span className="text-xs font-mono font-medium">
-                {isRecording ? 'Listening (Metal GPU)...' : 'Hold Space to Dictate'}
-              </span>
+          {/* Left floating 3D side card */}
+          <motion.div
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute -left-16 top-1/4 w-[220px] hidden lg:block z-20"
+            style={{ transform: 'rotateY(12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
+          >
+            <div className="glass-panel-sm p-1.5 shadow-2xl">
+              <img src="/assets/screenshots/06_model_chooser.png" alt="Model Chooser" className="rounded-[14px] w-full" />
             </div>
+          </motion.div>
 
-            {/* Target Code Editor Box */}
-            <div className="w-full max-w-2xl rounded-xl bg-[#16161a] border border-zinc-800 p-6 shadow-xl">
-              <div className="flex items-center justify-between text-xs font-mono text-zinc-400 border-b border-zinc-800 pb-2 mb-3">
-                <span className="flex items-center gap-2">
-                  <Terminal className="w-3.5 h-3.5 text-zinc-400" />
-                  Target: <strong className="text-zinc-200">Xcode / Cursor (main.swift)</strong>
-                </span>
-                <span className="text-zinc-300 font-semibold">{presets[activePreset].stats}</span>
-              </div>
-              <pre className="font-mono text-xs sm:text-sm text-zinc-200 min-h-[85px] whitespace-pre-wrap leading-relaxed">
-                {typedText || (
-                  <span className="text-zinc-500">
-                    // Hold Spacebar or click the pill above to test on-device transcription...
-                  </span>
-                )}
-                {isRecording && <span className="inline-block w-1.5 h-4 bg-white ml-1 animate-pulse" />}
-              </pre>
+          {/* Right floating 3D side card */}
+          <motion.div
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+            className="absolute -right-16 bottom-1/4 w-[220px] hidden lg:block z-20"
+            style={{ transform: 'rotateY(-12deg) rotateX(3deg)', transformStyle: 'preserve-3d' }}
+          >
+            <div className="glass-panel-sm p-1.5 shadow-2xl">
+              <img src="/assets/screenshots/04_notes_studio.png" alt="Notes Studio" className="rounded-[14px] w-full" />
             </div>
+          </motion.div>
+        </motion.div>
 
-            {/* Presets Switcher */}
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {presets.map((preset, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setActivePreset(idx);
-                    startDictation(idx);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all border ${
-                    activePreset === idx
-                      ? 'bg-zinc-800 text-white border-zinc-600'
-                      : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-          </div>
-        </div>
-
+        {/* Bottom atmospheric vignette */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-[250px] pointer-events-none z-0"
+          style={{ background: 'linear-gradient(transparent 0%, #edeceb 100%)' }}
+        />
       </div>
     </section>
   );
-}
+};
+
+export default Hero;
