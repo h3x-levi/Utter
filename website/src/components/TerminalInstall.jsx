@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Terminal, Copy, Check, Download, ShieldCheck, Sparkles } from 'lucide-react';
+import { Terminal, Copy, Check } from 'lucide-react';
 
 export default function TerminalInstall() {
   const [activeTab, setActiveTab] = useState(0);
@@ -39,18 +39,18 @@ export default function TerminalInstall() {
   };
 
   return (
-    <section id="install" className="py-28 px-6 relative z-10 bg-[#0b0d13]">
+    <section id="install" className="py-28 px-6 relative z-10 bg-[#09090b]">
       <div className="max-w-4xl mx-auto">
 
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-xs uppercase font-mono tracking-widest text-emerald-400 font-bold">
+          <span className="text-xs uppercase font-mono tracking-widest text-zinc-400 font-semibold">
             Developer Quickstart
           </span>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mt-3 mb-4 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-bold text-white mt-3 mb-4 tracking-tight">
             Install Utter in 10 seconds.
           </h2>
-          <p className="text-slate-400 text-base sm:text-lg">
+          <p className="text-zinc-400 text-base sm:text-lg">
             No accounts, no subscriptions, no credit cards required.
           </p>
         </div>
@@ -61,10 +61,10 @@ export default function TerminalInstall() {
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold transition-all border ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-medium transition-all border ${
                 activeTab === t.id
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-lg shadow-emerald-500/10'
-                  : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-slate-200'
+                  ? 'bg-zinc-800 text-white border-zinc-500 shadow-sm'
+                  : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:text-zinc-200'
               }`}
             >
               {t.name}
@@ -73,35 +73,35 @@ export default function TerminalInstall() {
         </div>
 
         {/* Terminal Window Box */}
-        <div className="glass-panel rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-          <div className="h-10 bg-[#121624] px-4 flex items-center justify-between border-b border-white/5">
+        <div className="apple-panel rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl">
+          <div className="h-9 bg-[#161619] px-4 flex items-center justify-between border-b border-zinc-800 text-xs font-mono text-zinc-400">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[#ff5f56]"></span>
               <span className="w-3 h-3 rounded-full bg-[#ffbd2e]"></span>
               <span className="w-3 h-3 rounded-full bg-[#27c93f]"></span>
             </div>
-            <span className="text-xs font-mono text-slate-400 flex items-center gap-1.5">
-              <Terminal className="w-3.5 h-3.5 text-emerald-400" /> zsh — macOS Terminal
+            <span className="flex items-center gap-1.5">
+              <Terminal className="w-3.5 h-3.5 text-zinc-400" /> zsh — macOS Terminal
             </span>
             <div className="w-12"></div>
           </div>
 
-          <div className="p-8 bg-[#090c14] flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="font-mono text-xs sm:text-sm text-slate-100 flex items-center gap-3 overflow-x-auto w-full">
-              <span className="text-emerald-400 font-bold select-none">$</span>
-              <span className="text-orange-300 select-all">{tabs[activeTab].command}</span>
+          <div className="p-6 sm:p-8 bg-[#0c0c0e] flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="font-mono text-xs sm:text-sm text-zinc-200 flex items-center gap-3 overflow-x-auto w-full">
+              <span className="text-zinc-500 font-bold select-none">$</span>
+              <span className="text-zinc-100 select-all">{tabs[activeTab].command}</span>
             </div>
 
             <button
               onClick={handleCopy}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-mono font-bold bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-all shrink-0 hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-medium bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 transition-all shrink-0 active:scale-95"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copied' : 'Copy Command'}
+              {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
 
-          <div className="p-4 bg-[#0d101a] border-t border-white/5 text-xs text-slate-400 text-center font-mono">
+          <div className="p-3.5 bg-[#121215] border-t border-zinc-800 text-xs text-zinc-400 text-center font-mono">
             {tabs[activeTab].desc}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Minus, ShieldCheck, Zap, Sparkles } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 export default function ComparisonMatrix() {
   const rows = [
@@ -20,63 +20,61 @@ export default function ComparisonMatrix() {
   const renderVal = (val) => {
     if (val === true) {
       return (
-        <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold font-mono text-xs">
-          <Check className="w-4 h-4" /> Yes
+        <span className="inline-flex items-center gap-1.5 text-zinc-200 font-medium font-mono text-xs">
+          <Check className="w-3.5 h-3.5 text-white" /> Yes
         </span>
       );
     }
     if (val === false) {
       return (
-        <span className="inline-flex items-center gap-1.5 text-rose-500 font-mono text-xs">
-          <X className="w-4 h-4" /> No
+        <span className="inline-flex items-center gap-1.5 text-zinc-600 font-mono text-xs">
+          <X className="w-3.5 h-3.5" /> No
         </span>
       );
     }
-    return <span className="font-mono text-xs text-slate-300">{val}</span>;
+    return <span className="font-mono text-xs text-zinc-400">{val}</span>;
   };
 
   return (
-    <section id="comparison" className="py-28 px-6 relative z-10 border-t border-white/5 bg-[#080a10]">
+    <section id="comparison" className="py-28 px-6 relative z-10 border-t border-zinc-800/80 bg-[#09090b]">
       <div className="max-w-6xl mx-auto">
 
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-20">
-          <span className="text-xs uppercase font-mono tracking-widest text-orange-400 font-bold">
+          <span className="text-xs uppercase font-mono tracking-widest text-zinc-400 font-semibold">
             Feature Breakdown
           </span>
-          <h2 className="text-4xl sm:text-6xl font-extrabold text-white mt-3 mb-6 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-bold text-white mt-3 mb-4 tracking-tight">
             How Utter compares.
           </h2>
-          <p className="text-slate-400 text-base sm:text-xl">
+          <p className="text-zinc-400 text-base sm:text-lg">
             Why privacy-first developers, writers, and power users choose on-device Metal compute.
           </p>
         </div>
 
         {/* Comparison Table */}
-        <div className="glass-panel rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
+        <div className="apple-panel rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 bg-[#121624]">
-                  <th className="p-6 text-sm font-bold text-white">Feature / Capability</th>
-                  <th className="p-6 text-sm font-bold text-orange-400 bg-orange-500/10 border-x border-orange-500/20">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-orange-400" /> Utter (On-Device)
-                    </span>
+                <tr className="border-b border-zinc-800 bg-[#141418]">
+                  <th className="p-5 text-xs font-bold text-zinc-300 uppercase font-mono">Feature / Capability</th>
+                  <th className="p-5 text-xs font-bold text-white bg-zinc-800/80 border-x border-zinc-700 uppercase font-mono">
+                    Utter (On-Device)
                   </th>
-                  <th className="p-6 text-sm font-bold text-slate-400">Cloud AI Voice Wrappers</th>
-                  <th className="p-6 text-sm font-bold text-slate-400">Default macOS Dictation</th>
+                  <th className="p-5 text-xs font-bold text-zinc-400 uppercase font-mono">Cloud Voice Apps</th>
+                  <th className="p-5 text-xs font-bold text-zinc-400 uppercase font-mono">macOS Dictation</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-zinc-800/60">
                 {rows.map((r, idx) => (
-                  <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="p-5 text-sm font-medium text-slate-200">{r.feature}</td>
-                    <td className="p-5 bg-orange-500/[0.04] border-x border-orange-500/20">
+                  <tr key={idx} className="hover:bg-white/[0.01] transition-colors">
+                    <td className="p-4 text-xs sm:text-sm font-medium text-zinc-300">{r.feature}</td>
+                    <td className="p-4 bg-zinc-900/50 border-x border-zinc-800 text-white font-medium">
                       {renderVal(r.utter)}
                     </td>
-                    <td className="p-5 text-slate-400">{renderVal(r.cloud)}</td>
-                    <td className="p-5 text-slate-400">{renderVal(r.apple)}</td>
+                    <td className="p-4 text-zinc-400">{renderVal(r.cloud)}</td>
+                    <td className="p-4 text-zinc-400">{renderVal(r.apple)}</td>
                   </tr>
                 ))}
               </tbody>

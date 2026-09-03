@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, MessageSquareQuote, Shield, Cpu, Terminal } from 'lucide-react';
+import { Star } from 'lucide-react';
 
 export default function CommunityQuotes() {
   const reviews = [
@@ -22,20 +22,20 @@ export default function CommunityQuotes() {
       role: 'Senior Backend Architect',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       text: 'Having the pixel cat companion sit next to my terminal while dictating pull request summaries is the most joyful detail I didn’t know I needed. High-craft macOS software.',
-      tag: 'Rust & Distributed Systems',
+      tag: 'Rust & Systems',
     },
   ];
 
   return (
-    <section id="community" className="py-28 px-6 relative z-10 border-t border-white/5 bg-[#080a10]">
+    <section id="community" className="py-28 px-6 relative z-10 border-t border-zinc-800/80 bg-[#0c0c0e]">
       <div className="max-w-7xl mx-auto">
 
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-20">
-          <span className="text-xs uppercase font-mono tracking-widest text-amber-400 font-bold">
+          <span className="text-xs uppercase font-mono tracking-widest text-zinc-400 font-semibold">
             Built for Developers & Writers
           </span>
-          <h2 className="text-4xl sm:text-6xl font-extrabold text-white mt-3 mb-6 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-bold text-white mt-3 mb-4 tracking-tight">
             Loved by engineers who value privacy and speed.
           </h2>
         </div>
@@ -45,28 +45,28 @@ export default function CommunityQuotes() {
           {reviews.map((r, idx) => (
             <div
               key={idx}
-              className="glass-panel rounded-3xl p-8 border border-white/10 flex flex-col justify-between tilt-card"
+              className="apple-panel rounded-2xl p-8 border border-zinc-800 flex flex-col justify-between"
             >
               <div>
-                <div className="flex items-center gap-1 text-amber-400 mb-6">
+                <div className="flex items-center gap-1 text-zinc-400 mb-6">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400" />
+                    <Star key={i} className="w-3.5 h-3.5 fill-zinc-300 text-zinc-300" />
                   ))}
                 </div>
-                <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8">
+                <p className="text-zinc-300 text-sm sm:text-base leading-relaxed mb-8">
                   "{r.text}"
                 </p>
               </div>
 
-              <div className="flex items-center justify-between pt-6 border-t border-white/10">
+              <div className="flex items-center justify-between pt-6 border-t border-zinc-800">
                 <div className="flex items-center gap-3">
-                  <img src={r.avatar} alt={r.name} className="w-10 h-10 rounded-full object-cover border border-white/15" />
+                  <img src={r.avatar} alt={r.name} className="w-9 h-9 rounded-full object-cover border border-zinc-700" />
                   <div>
-                    <h5 className="text-sm font-bold text-white">{r.name}</h5>
-                    <p className="text-xs text-slate-400">{r.role}</p>
+                    <h5 className="text-xs font-semibold text-white">{r.name}</h5>
+                    <p className="text-[11px] text-zinc-500">{r.role}</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
+                <span className="text-[10px] font-mono text-zinc-300 bg-zinc-800 px-2.5 py-1 rounded-md border border-zinc-700">
                   {r.tag}
                 </span>
               </div>

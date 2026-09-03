@@ -1,6 +1,5 @@
 import React from 'react';
 import ScrollProgress from './components/ScrollProgress';
-import ThreeAudioSphere from './components/ThreeAudioSphere';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import WorkflowSteps from './components/WorkflowSteps';
@@ -21,12 +20,9 @@ import Footer from './components/Footer';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#0b0d13] text-slate-100 relative selection:bg-orange-500 selection:text-white">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 relative selection:bg-white selection:text-black">
       {/* Top Scroll Indicator */}
       <ScrollProgress />
-
-      {/* 3D WebGL Background Audio Particle Sphere */}
-      <ThreeAudioSphere />
 
       {/* Sticky Glass Navbar */}
       <Navbar />

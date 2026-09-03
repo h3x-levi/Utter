@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PhoneCall, Mic, Volume2, Sparkles, FileText, Download, Users, Copy, Check } from 'lucide-react';
+import { Mic, Volume2, Users, Copy, Check } from 'lucide-react';
 
 export default function MeetingStudio() {
   const [copied, setCopied] = useState(false);
@@ -19,123 +19,122 @@ export default function MeetingStudio() {
   };
 
   return (
-    <section id="meetings" className="py-28 px-6 relative z-10 border-t border-white/5 bg-[#080a10]">
+    <section id="meetings" className="py-28 px-6 relative z-10 border-t border-zinc-800/80 bg-[#09090b]">
       <div className="max-w-7xl mx-auto">
 
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-20">
-          <span className="text-xs uppercase font-mono tracking-widest text-indigo-400 font-bold">
+          <span className="text-xs uppercase font-mono tracking-widest text-zinc-400 font-semibold">
             Two-Way Audio Capture
           </span>
-          <h2 className="text-4xl sm:text-6xl font-extrabold text-white mt-3 mb-6 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-bold text-white mt-3 mb-4 tracking-tight">
             Transcribe calls in Zoom, Meet, Teams & FaceTime.
           </h2>
-          <p className="text-slate-400 text-base sm:text-xl">
+          <p className="text-zinc-400 text-base sm:text-lg">
             Dual-stream audio capture taps both your microphone and incoming speaker audio without external virtual audio drivers.
           </p>
         </div>
 
         {/* Studio Demo Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
 
-          {/* Left Column: Audio Stream Indicators */}
-          <div className="glass-panel rounded-3xl p-8 border border-white/10 flex flex-col justify-between">
+          {/* Left Column */}
+          <div className="apple-panel rounded-2xl p-8 border border-zinc-800 flex flex-col justify-between">
             <div>
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-mono font-bold mb-6 border border-indigo-500/20 w-max">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-zinc-800 text-zinc-300 text-xs font-mono font-medium mb-6 border border-zinc-700 w-max">
                 <Users className="w-3.5 h-3.5" /> Call Presence Detected
               </div>
 
-              <h4 className="text-2xl font-bold text-white mb-3">
+              <h4 className="text-xl font-bold text-white mb-2">
                 Automatic Call Diarization
               </h4>
 
-              <p className="text-slate-400 text-sm leading-relaxed mb-8">
+              <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed mb-8">
                 When you join a meeting, Utter automatically displays an offer panel to record and transcribe the session in real time.
               </p>
 
-              {/* Live Audio Meter 1: Your Mic */}
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 mb-4">
-                <div className="flex items-center justify-between text-xs font-mono text-slate-300 mb-2">
+              {/* Audio Meter 1 */}
+              <div className="p-4 rounded-xl bg-[#141418] border border-zinc-800 mb-3">
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-300 mb-2">
                   <span className="flex items-center gap-2">
-                    <Mic className="w-3.5 h-3.5 text-orange-400" />
+                    <Mic className="w-3.5 h-3.5 text-white" />
                     Channel 1: Your Microphone
                   </span>
-                  <span className="text-emerald-400 font-bold">Active (48kHz)</span>
+                  <span className="text-zinc-400">Active (48kHz)</span>
                 </div>
-                <div className="flex items-center gap-1 h-4">
+                <div className="flex items-center gap-1 h-3.5">
                   {[40, 70, 90, 60, 80, 45, 65, 30].map((v, i) => (
-                    <div key={i} className="flex-1 bg-orange-400/80 rounded-sm" style={{ height: `${v}%` }} />
+                    <div key={i} className="flex-1 bg-zinc-400 rounded-sm" style={{ height: `${v}%` }} />
                   ))}
                 </div>
               </div>
 
-              {/* Live Audio Meter 2: System Audio Output */}
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-                <div className="flex items-center justify-between text-xs font-mono text-slate-300 mb-2">
+              {/* Audio Meter 2 */}
+              <div className="p-4 rounded-xl bg-[#141418] border border-zinc-800">
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-300 mb-2">
                   <span className="flex items-center gap-2">
-                    <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <Volume2 className="w-3.5 h-3.5 text-zinc-400" />
                     Channel 2: Remote Attendees
                   </span>
-                  <span className="text-indigo-400 font-bold">Tapped (CoreAudio)</span>
+                  <span className="text-zinc-400">CoreAudio Tap</span>
                 </div>
-                <div className="flex items-center gap-1 h-4">
+                <div className="flex items-center gap-1 h-3.5">
                   {[60, 85, 40, 95, 75, 50, 90, 70].map((v, i) => (
-                    <div key={i} className="flex-1 bg-indigo-400/80 rounded-sm" style={{ height: `${v}%` }} />
+                    <div key={i} className="flex-1 bg-zinc-600 rounded-sm" style={{ height: `${v}%` }} />
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-xs font-mono text-slate-400">
+            <div className="mt-8 pt-4 border-t border-zinc-800 flex items-center justify-between text-xs font-mono text-zinc-500">
               <span>ScreenCaptureKit / CoreAudio Tap</span>
-              <span className="text-emerald-400">Zero Cloud Storage</span>
+              <span className="text-zinc-400">Zero Cloud Storage</span>
             </div>
           </div>
 
-          {/* Right 2 Columns: Live Transcript Player */}
-          <div className="glass-panel rounded-3xl p-8 border border-white/10 lg:col-span-2 flex flex-col justify-between">
+          {/* Right Columns */}
+          <div className="apple-panel rounded-2xl p-8 border border-zinc-800 lg:col-span-2 flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-6">
                 <div>
-                  <h4 className="text-lg font-bold text-white">Live Meeting Session: Sprint Planning</h4>
-                  <span className="text-xs font-mono text-slate-400">Duration: 24m 12s • 4 Speakers</span>
+                  <h4 className="text-base font-bold text-white">Live Meeting Session: Sprint Planning</h4>
+                  <span className="text-xs font-mono text-zinc-500">Duration: 24m 12s • 4 Speakers</span>
                 </div>
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-mono font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/15 transition-all"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition-all"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? 'Copied Markdown' : 'Copy Transcript'}
+                  {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Copied' : 'Copy Transcript'}
                 </button>
               </div>
 
-              {/* Transcript Scroll Area */}
-              <div className="space-y-4 font-mono text-xs sm:text-sm">
+              {/* Transcript Area */}
+              <div className="space-y-3 font-mono text-xs">
                 {mockTranscript.map((t, idx) => (
-                  <div key={idx} className="p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-1">
+                  <div key={idx} className="p-3.5 rounded-lg bg-[#141418] border border-zinc-800/60 flex flex-col gap-1">
                     <div className="flex items-center justify-between">
-                      <span className={`font-bold ${t.speaker === 'You' ? 'text-orange-400' : 'text-indigo-400'}`}>
+                      <span className={`font-semibold ${t.speaker === 'You' ? 'text-white' : 'text-zinc-400'}`}>
                         {t.speaker}
                       </span>
-                      <span className="text-[11px] text-slate-500">{t.time}</span>
+                      <span className="text-[10px] text-zinc-500">{t.time}</span>
                     </div>
-                    <p className="text-slate-200 leading-relaxed">{t.text}</p>
+                    <p className="text-zinc-300 leading-relaxed">{t.text}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Quick AI Action Pills */}
-            <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-mono text-slate-400">Apply Instant Local AI Action:</span>
-              <button className="px-3 py-1 rounded-lg text-xs font-mono bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30">
-                ✨ Generate Executive Summary
+            <div className="mt-6 pt-4 border-t border-zinc-800 flex flex-wrap items-center gap-2 text-xs font-mono">
+              <span className="text-zinc-500">Local Actions:</span>
+              <button className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700">
+                Summary (.md)
               </button>
-              <button className="px-3 py-1 rounded-lg text-xs font-mono bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30">
-                ⚡ Extract Action Items
+              <button className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700">
+                Action Items
               </button>
-              <button className="px-3 py-1 rounded-lg text-xs font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30">
-                📥 Export to Obsidian (.md)
+              <button className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700">
+                Export to Obsidian
               </button>
             </div>
 

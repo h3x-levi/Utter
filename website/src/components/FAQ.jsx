@@ -28,34 +28,34 @@ export default function FAQ() {
   ];
 
   return (
-    <section id="faq" className="py-28 px-6 relative z-10 border-t border-white/5 bg-[#080a10]">
+    <section id="faq" className="py-28 px-6 relative z-10 border-t border-zinc-800/80 bg-[#09090b]">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-16">
-          <span className="text-xs uppercase font-mono tracking-widest text-orange-400 font-bold">
+          <span className="text-xs uppercase font-mono tracking-widest text-zinc-400 font-semibold">
             Frequently Asked Questions
           </span>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mt-3 tracking-tight">
+          <h2 className="text-4xl sm:text-5xl font-bold text-white mt-3 tracking-tight">
             Everything you need to know.
           </h2>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {faqs.map((faq, idx) => (
             <div
               key={idx}
               onClick={() => setOpenIdx(openIdx === idx ? -1 : idx)}
-              className="glass-panel rounded-2xl p-6 border border-white/10 cursor-pointer transition-colors hover:border-white/20"
+              className="apple-panel rounded-xl p-5 border border-zinc-800 cursor-pointer transition-colors hover:border-zinc-700"
             >
-              <div className="font-bold text-white flex items-center justify-between text-base sm:text-lg">
+              <div className="font-semibold text-white flex items-center justify-between text-sm sm:text-base">
                 <span>{faq.q}</span>
                 <ChevronDown
-                  className={`w-5 h-5 text-orange-400 transition-transform duration-200 ${
+                  className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
                     openIdx === idx ? 'rotate-180' : ''
                   }`}
                 />
               </div>
               {openIdx === idx && (
-                <p className="text-slate-400 text-sm sm:text-base mt-4 leading-relaxed border-t border-white/5 pt-4">
+                <p className="text-zinc-400 text-xs sm:text-sm mt-3 leading-relaxed border-t border-zinc-800 pt-3">
                   {faq.a}
                 </p>
               )}
