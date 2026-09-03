@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Github, Sparkles, Shield, Cpu, HelpCircle, Menu, X } from 'lucide-react';
+import { Download, Github, Menu, X, Sparkles } from 'lucide-react';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -15,7 +15,7 @@ export default function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-[#0c0e14]/80 backdrop-blur-xl border-b border-white/10 py-3.5 shadow-2xl shadow-black/50'
+          ? 'bg-[#0c0e14]/85 backdrop-blur-2xl border-b border-white/10 py-3.5 shadow-2xl shadow-black/60'
           : 'bg-transparent py-5'
       }`}
     >
@@ -39,22 +39,27 @@ export default function Navbar() {
         </a>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+        <nav className="hidden xl:flex items-center gap-6 text-xs font-semibold text-slate-300">
           <a href="#features" className="hover:text-orange-400 transition-colors">Features</a>
-          <a href="#demo" className="hover:text-orange-400 transition-colors">Live Demo</a>
-          <a href="#benchmarks" className="hover:text-orange-400 transition-colors">Benchmarks</a>
+          <a href="#workflow" className="hover:text-orange-400 transition-colors">Pipeline</a>
+          <a href="#pill-states" className="hover:text-orange-400 transition-colors">Pill HUD</a>
+          <a href="#meetings" className="hover:text-orange-400 transition-colors">Meetings</a>
+          <a href="#transforms" className="hover:text-orange-400 transition-colors">AI Transforms</a>
           <a href="#companions" className="hover:text-orange-400 transition-colors">Pixel Pets</a>
-          <a href="#privacy" className="hover:text-orange-400 transition-colors">Zero-Telemetry</a>
+          <a href="#models" className="hover:text-orange-400 transition-colors">Speech Models</a>
+          <a href="#hotkeys" className="hover:text-orange-400 transition-colors">Hotkeys</a>
+          <a href="#benchmarks" className="hover:text-orange-400 transition-colors">Benchmarks</a>
+          <a href="#comparison" className="hover:text-orange-400 transition-colors">Comparison</a>
           <a href="#faq" className="hover:text-orange-400 transition-colors">FAQ</a>
         </nav>
 
-        {/* CTA Buttons */}
+        {/* Action Buttons */}
         <div className="hidden sm:flex items-center gap-3">
           <a
             href="https://github.com/h3x-levi/Utter"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all hover:scale-102 active:scale-98"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all hover:scale-102"
           >
             <Github className="w-4 h-4" />
             GitHub
@@ -71,7 +76,7 @@ export default function Navbar() {
         {/* Mobile Hamburger */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden text-slate-300 hover:text-white p-2"
+          className="xl:hidden text-slate-300 hover:text-white p-2"
         >
           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -79,17 +84,23 @@ export default function Navbar() {
 
       {/* Mobile Drawer */}
       {mobileOpen && (
-        <div className="md:hidden bg-[#0e111a] border-b border-white/10 px-6 py-6 space-y-4">
-          <a href="#features" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">Features</a>
-          <a href="#demo" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">Live Demo</a>
-          <a href="#benchmarks" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">Benchmarks</a>
-          <a href="#companions" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">Pixel Pets</a>
-          <a href="#privacy" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">Zero-Telemetry</a>
-          <a href="#faq" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400 text-base font-medium">FAQ</a>
-          <div className="pt-4 flex flex-col gap-3">
+        <div className="xl:hidden bg-[#0e111a] border-b border-white/10 px-6 py-6 space-y-3.5 max-h-[80vh] overflow-y-auto font-mono text-sm">
+          <a href="#features" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Features</a>
+          <a href="#workflow" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Pipeline (How it works)</a>
+          <a href="#pill-states" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Liquid Glass Pill HUD</a>
+          <a href="#meetings" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Meeting Studio</a>
+          <a href="#transforms" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Local AI Transforms</a>
+          <a href="#companions" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Pixel Pet Companions</a>
+          <a href="#models" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Speech Models Matrix</a>
+          <a href="#hotkeys" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Hotkey Configuration</a>
+          <a href="#benchmarks" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Hardware Benchmarks</a>
+          <a href="#comparison" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Feature Matrix</a>
+          <a href="#install" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">Terminal Install</a>
+          <a href="#faq" onClick={() => setMobileOpen(false)} className="block text-slate-300 hover:text-orange-400">FAQ</a>
+          <div className="pt-4">
             <a
               href="https://github.com/h3x-levi/Utter/releases/latest"
-              className="w-full text-center py-3 rounded-xl text-sm font-bold bg-orange-500 text-white"
+              className="w-full text-center py-3 rounded-xl text-sm font-bold bg-orange-500 text-white block"
             >
               Download Free DMG
             </a>
