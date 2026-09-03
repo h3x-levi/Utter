@@ -4,6 +4,10 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [1.1.48] — September 2026
+
+- Internal build — packaging and tooling updates
+
 ## [1.1.47] — September 2026
 
 - Internal build — packaging and tooling updates

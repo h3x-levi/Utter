@@ -196,10 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // hotkey and the status-item menu both need it).
         if CommandLine.arguments.contains("--render-snapshots") {
             SnapshotRenderer.renderAll()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                NSApp.terminate(nil)
-            }
-            return
+            exit(0)
         }
 
         if CommandLine.arguments.contains("--open-window") {
