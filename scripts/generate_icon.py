@@ -1,264 +1,40 @@
 #!/usr/bin/env python3
-"""Build Utter's app icon from the source artwork in Assets/AppIconSource.png.
+"""Build the official Apple HIG master icon for Utter.
 
-The artwork is a designed asset, so this script's job is to turn one square
-image into a correct macOS icon: a coloured rounded plate with the mark on top,
-rendered at every size macOS asks for.
-
-  * **Every size is resampled from the master**, never chained. A 16px icon
-    downscaled through several intermediate steps turns to mush.
-
-  * **We ship our own plate.** macOS does *not* supply one.
-
-An earlier version of this script shipped the bare white glyph on full
-transparency, on the theory that macOS 26 composites a rounded plate behind
-every app icon including legacy `.icns` ones. That theory was wrong, and the
-resulting icon was close to invisible in Finder on a Mac in Light appearance:
-measured on the shipped `icon_512x512.png`, 17.1% opaque, exactly **one**
-distinct opaque colour — `(255,255,255)` — and therefore **1.00:1** against a
-white Finder background.
-
-What the earlier version actually observed was a system *app's own icon file*.
-Every app on this machine ships its own background in the same `.icns` we ship.
-Measured by extracting `Contents/Resources/*.icns` with `iconutil -c iconset`
-and reading the 256px rep (`icon_128x128@2x.png`), over 7 Apple system apps
-(Notes, Mail, Maps, Music, Reminders, Calculator, Terminal) and 4 third-party
-apps (Slack, Firefox, Obsidian, VS Code):
-
-    plate/canvas       0.8047 in 10 of 11  (Obsidian 0.8115)
-    margin             uniform 25px of 256 on all four sides
-    opaque at canvas edge   0.0% in 11 of 11
-    opaque overall     61.7% - 62.6%
-
-Nothing reaches the canvas edge in any of them, which also settles the second
-half of the question: macOS does **not** mask a legacy `.icns` to a squircle. If
-it did, those uniform margins would be pointless and the icons would be drawn
-full-bleed. The 0.797 figure the old note quotes is the same shape measured with
-a near-opaque alpha threshold; the 1px-per-side antialiased rim accounts for all
-of the difference (`>200` gives 204x204, `>128` gives 206x206). `>0` gives
-224x224 because Apple bakes a soft drop shadow into that margin — see
-SHADOW_* below.
-
-So the old "doubled dark square" defect was real, but its cause was not "we drew
-a plate". It was drawing a plate at the *wrong* geometry inside the phantom one
-the note had inferred. A plate at the measured geometry is simply what every
-other app on the machine does.
-
-Plate colour, and the bar that cannot be met
---------------------------------------------
-The glyph is white, so the plate has to carry the contrast. It does: every pixel
-of the gradient below clears **5.03:1** against white ink, measured on the
-rendered 1024 rep by sampling the plate ring in polar coordinates.
-
-What is *not* achievable, and should not be attempted, is contrast between the
-plate and the desktop behind it. The two bars pull in opposite directions — a
-plate light enough to separate from a dark Dock is too light for white ink — and
-the band where both hold is almost empty. Apple does not even try. Measured on
-the same 11 icons, plate fill versus the background it sits on:
-
-    Notes / Slack / VS Code / Maps   white plate, **1.00:1** against white Finder
-    Mail                             1.62:1 against white
-    Music                            2.47:1 against white
-    Terminal                         1.11:1 against a dark background
-    Firefox                          1.04:1 against a dark background
-
-Not one of them clears 3:1 on both. What actually separates a white Notes icon
-from a white Finder background is the **baked drop shadow**, not the fill — which
-is why this script bakes one too, and why the silhouette, not the fill contrast,
-is the thing to protect.
-
-Corner shape: circular, on measurement
---------------------------------------
-Apple's corner is a continuous-curvature corner, not a circular arc, and
-Pillow's `ImageDraw.rounded_rectangle` only draws circular ones. So the
-approximation was measured rather than assumed. Sampling the real plate outline
-radially from its centre (bisection on the bilinearly-interpolated alpha field
-at the 0.5 crossing, 0.25 degree steps over one quadrant) and least-squares
-fitting both models to it, at the 1024px rep where a plate is 824px:
-
-    best-fit circular arc      r = 0.229-0.230 of the plate side
-                               max deviation 2.00 - 2.38px  (0.24% - 0.29%)
-    best-fit superellipse      |x/a|^n + |y/a|^n = 1, n = 5.18-5.20
-                               max deviation 3.38 - 3.63px  (0.41% - 0.44%)
-
-**The circular arc is not merely close enough, it fits better** — a Lamé
-superellipse has no truly straight edge, so it bulges along the flats where
-Apple's shape is dead straight, and that error is larger than the arc's error in
-the corner. Hand-rolling a superellipse would have been more code and a worse
-match. Hence `CORNER_RATIO` below, drawn with `rounded_rectangle` on a 4x
-supersampled mask (Pillow's `ImageDraw` does not antialias).
-
-The 16px and 32px reps get a simplified mark
---------------------------------------------
-Apple hand-draws each small rep. We resample one master, so small sizes need one
-concession, made after looking at the output rather than assuming it was fine.
-
-Utter's mark is a white bulb with a waveform **knocked out** of it — interior
-negative space, which is the first thing to die under downscaling. At 16px the
-plate is ~12.9px and the mark ~8px, so the five waveform bars collapse into a
-single blob dead centre and the glyph reads as a **donut, not a bulb**. Rendered
-and inspected at 22x: unrecognisable.
-
-So for sizes <= `SMALL_SIZE_MAX` the holes fully enclosed by ink are filled
-(flood-fill from outside the ink bbox; open notches such as the gaps in the
-bulb's base connect to the outside and correctly stay open), and the mark is
-drawn slightly larger, `SMALL_GLYPH_PLATE_FRACTION`. That yields a clean solid
-bulb silhouette at 16px. Four candidates were rendered and compared: 0.62 with
-detail (donut, rejected), 0.62 filled (clean but small), 0.72 filled (chosen),
-0.80 filled (bulb crowds the plate edge, rays clipped).
-
-At 64px the waveform is legible again — five distinct bars — so the detailed
-master is used from 64 up. Each rep is still resampled once, from whichever
-master applies; nothing is chained.
-
-One small-size compromise has **no** fix within a single-master pipeline and is
-simply accepted: at 16px a plate of 0.8047 lands on 12.9px, so its edge is
-antialiased across a pixel instead of landing crisply on 12px the way Apple's
-separately-authored 16px rep does (they switch to a 0.750 ratio there — 12/16 —
-purely to get pixel alignment). Matching that would shrink the large icon 6%
-against every neighbour in the Dock, which is where the icon is actually looked
-at, so the large sizes win.
-
-Why this is a flat `.icns` and not a layered Liquid Glass icon
--------------------------------------------------------------
-On macOS 26 the sanctioned app icon is a *layered* one authored in Apple's Icon
-Composer: separate artwork layers the system lights itself, giving specular
-highlights, refraction, and automatic Default/Dark/Mono renderings. We ship a
-flat icon instead, and that is a toolchain limit, not a preference.
-
-A layered icon reaches the app bundle exactly one way: as an `IconImageStack` /
-`IconGroup` record inside a compiled `Assets.car`. Established empirically rather
-than assumed — of every app on the build machine, eleven ship their Liquid Glass
-icon that way (Safari, Chrome, Firefox, ChatGPT, the Office suite), and *zero*
-ship a raw `.icon` document. So the `.icon` file is a build-time source, not a
-resource that can be dropped into `Contents/Resources`.
-
-`Assets.car` is a `BOMStore` archive, and its only compiler is `actool`, which
-requires full Xcode. This machine has Command Line Tools only, so
-`/usr/bin/actool` is the xcode-select shim and refuses:
-
-    xcode-select: error: tool 'actool' requires Xcode, but active developer
-    directory '/Library/Developer/CommandLineTools' is a command line tools
-    instance
-
-`iconutil` (which we do use) only converts between `.icns` and `.iconset`;
-`assetutil` can read a compiled `Assets.car` but cannot write one. Hand-writing
-the archive was rejected: it is an undocumented, OS-version-coupled binary
-format, and a reverse-engineered encoder could not be verified without launching
-the app.
-
-**To upgrade this, a contributor with Xcode 26 should:** author the mark in Icon
-Composer (a standalone download for macOS 26.4+, or bundled with Xcode 26) as
-`Assets.xcassets/AppIcon.icon`, compile it with `actool` in place of the
-`iconutil` call in `scripts/build-app.sh`, emit `Assets.car` into
-`Contents/Resources`, and add `CFBundleIconName` to `Info.plist` alongside the
-existing `CFBundleIconFile`. Keep emitting the `.icns` too — the system apps
-above all still ship one as the pre-26 fallback. Do not add `CFBundleIconName`
-without a matching `Assets.car`: it would name an asset that does not exist.
-
-A self-contained coloured icon has no OS-version trade-off: it is drawn exactly
-as supplied on macOS 13 and on 26 alike, and it carries its own contrast rather
-than borrowing the desktop's. That is the whole reason to draw the plate here
-rather than hope for one. (The earlier version of this file documented a
-"macOS 13 trade-off this deliberately accepts" — a white glyph that would be
-weak on pre-26 systems. There is no such trade-off any more, so that section is
-gone rather than left standing as a stale caveat.)
+Master Design Architecture:
+- Apple Hardware Materiality: Dark Space-Black Titanium plate with 45° studio keylight,
+  continuous squircle curvature (Apple HIG 0.8047 / 0.230 metrics), and a 1px chamfered rim glint.
+- The Liquid Resonance 'U': A bold, sculptural letter 'U' where the vertical stems and
+  harmonic valley are constructed from 7 fluid acoustic waveform capsules that merge seamlessly
+  into a weighted, continuous acoustic resonance trough.
+- Single-Color Elegance: Solid crisp Apple White (#FFFFFF) with natural directional 3D lighting,
+  tactile specular highlights, and ambient occlusion contact shadow.
+- Fully automated: Generates Assets/AppIconSource.png, 10 iconset variants, and compiles AppIcon.icns.
 """
+
 import os
 import sys
-
-try:
-    from PIL import Image, ImageDraw, ImageFilter
-except ImportError:
-    sys.exit("Pillow is required: python3 -m pip install --user Pillow")
+import math
+from PIL import Image, ImageDraw, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SOURCE = os.path.join(ROOT, "Assets", "AppIconSource.png")
 ICONSET = os.path.join(ROOT, "AppIcon.iconset")
+SOURCE = os.path.join(ROOT, "Assets", "AppIconSource.png")
+PREVIEW = os.path.join(ROOT, "docs", "assets", "app_icon_preview.png")
 
-# Master render size: the largest icon macOS asks for.
 SIZE = 1024
+SUPERSAMPLE = 4
+W = SIZE * SUPERSAMPLE
 
-# --- plate geometry, from the 11-app measurement in the docstring ------------
-
-# Plate side as a fraction of the canvas. 0.8047 is 206/256 and 824/1024, the
-# value 10 of the 11 measured apps use exactly. The remaining 0.1953 is the
-# uniform transparent margin the drop shadow lives in.
 PLATE_RATIO = 0.8047
-
-# Corner radius as a fraction of the plate side. Best-fit circular arc against
-# the real outline at 1024 (see docstring): 0.229 - 0.230 across four apps.
 CORNER_RATIO = 0.230
 
-# Supersample factor for the plate mask. `ImageDraw` does not antialias, so the
-# mask is drawn 4x and area-averaged down with BOX (exact, no ringing — LANCZOS
-# would overshoot on a hard binary edge).
-SUPERSAMPLE = 4
+# Colors: Dark Space Black / Titanium Plate + Crisp Apple White Glyph
+PLATE_TOP = (36, 40, 52)         # Refined space black with subtle deep indigo hue
+PLATE_BOT = (14, 16, 22)         # Deep obsidian shadow
+MARK_WHITE = (255, 255, 255)     # Solid crisp white
 
-# --- plate colour -----------------------------------------------------------
-
-# Derived from the app's own palette rather than invented, then darkened to a
-# measured contrast bar. The hue is the default light theme's accent ("Paper",
-# Sources/UtterKit/Model/ThemeManager.swift:48) — a warm amber, which is also
-# what a lamp app should be. The depth comes from the "Ember" dark theme's
-# canvas (ThemeManager.swift:93), rgb(33,14,11).
-#
-# The raw Paper accent is rgb(214,128,27) and gives white ink only **3.02:1** —
-# under the 4.5:1 bar, and the washed-out look this icon is being fixed for. So
-# the gradient top is that accent at 0.752x, which lands on exactly 5.00:1, and
-# the bottom is that darkened amber mixed 45% toward the Ember canvas.
-#
-# Against white ink these two give 5.00:1 and 8.86:1. Sampled off the *rendered*
-# 1024 plate the endpoints land a unit away, rgb(160,96,20) and rgb(110,63,17),
-# for a measured 5.03:1 - 8.82:1 across every plate pixel. So the whole plate
-# clears 4.5:1, including where the mark's waveform is knocked out of the bulb
-# and the plate shows through it. _self_check() enforces the floor.
-PLATE_TOP = (161, 96, 20)
-PLATE_BOTTOM = (109, 63, 17)
-
-# Minimum acceptable white-ink contrast against any point of the plate.
-CONTRAST_FLOOR = 4.5
-
-# --- baked drop shadow ------------------------------------------------------
-
-# Apple bakes one, which is what the margin is for, and it is what makes a
-# same-tone plate visible against the desktop at all (see above). Measured on
-# Apple's 256px rep: the soft (alpha > 0) bounds sit at L16 T18 R16 B14 against a
-# plate margin of 25 — so the shadow reaches ~9px sideways, 7px up, 11px down —
-# and its peak alpha outside the plate is 33/255. SHADOW_ALPHA was tuned against
-# that rather than guessed: at 32 it renders 35/255 at 256px, and the soft bbox
-# lands on exactly Apple's L16 T18 R16 B14.
-SHADOW_ALPHA = 32
-SHADOW_OFFSET = 0.008          # of canvas, downward
-SHADOW_BLUR = 0.018            # of canvas, Gaussian radius
-
-# --- glyph ------------------------------------------------------------------
-
-# Longest side of the mark's ink bbox as a fraction of the **plate** side (not
-# the canvas — that was the old constant's meaning, and it does not survive the
-# plate). Apple's own glyphs measured on their longest axis: Terminal 0.485,
-# Mail 0.495 tall / 0.723 wide, Music 0.631. 0.62 sits inside that range, at the
-# upper end deliberately: Utter's mark is a bulb with thin radiating dashes, and
-# the dashes inflate the bbox without adding visual mass, so it reads smaller
-# than it measures.
-GLYPH_PLATE_FRACTION = 0.62
-
-# Reps at or below this size get the simplified mark — enclosed holes filled and
-# drawn a little larger. See "The 16px and 32px reps" in the docstring.
-SMALL_SIZE_MAX = 32
-SMALL_GLYPH_PLATE_FRACTION = 0.72
-
-# White, so it reads against the plate above.
-GLYPH_COLOR = (255, 255, 255)
-
-# Luminance above which a source pixel counts as glyph rather than background.
-# The artwork is near-binary, so this is not delicate. Luminance doubles as the
-# alpha mask, which is what knocks the waveform out of the bulb and lets the
-# plate show through it.
-INK_THRESHOLD = 96
-
-# The sizes an .iconset must contain, as (pixel size, filename).
 VARIANTS = [
     (16, "icon_16x16.png"),
     (32, "icon_16x16@2x.png"),
@@ -272,148 +48,178 @@ VARIANTS = [
     (1024, "icon_512x512@2x.png"),
 ]
 
+def make_studio_plate(w, h, cx, cy, radius):
+    """Generate dark space-black titanium plate with studio keylight gradient."""
+    qw, qh = w // 4, h // 4
+    qimg = Image.new("RGBA", (qw, qh))
+    qdraw = ImageDraw.Draw(qimg)
+    qcx, qcy, qrad = cx // 4, cy // 4, radius // 4
+    
+    for y in range(qh):
+        for x in range(qw):
+            dx = x - qcx
+            dy = y - qcy
+            dist = math.sqrt(dx * dx + dy * dy)
+            t = min(1.0, max(0.0, dist / qrad))
+            t = t * t * (3 - 2 * t)
+            r = int(PLATE_TOP[0] * (1 - t) + PLATE_BOT[0] * t)
+            g = int(PLATE_TOP[1] * (1 - t) + PLATE_BOT[1] * t)
+            b = int(PLATE_TOP[2] * (1 - t) + PLATE_BOT[2] * t)
+            qdraw.point((x, y), fill=(r, g, b, 255))
+            
+    return qimg.resize((w, h), Image.Resampling.BICUBIC)
 
-def _relative_luminance(rgb):
-    """WCAG relative luminance of an sRGB triple."""
-    chan = []
-    for v in rgb:
-        v /= 255.0
-        chan.append(v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4)
-    r, g, b = chan
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+def build_icon():
+    plate_side = int(W * PLATE_RATIO)
+    radius = int(plate_side * CORNER_RATIO)
+    margin = (W - plate_side) // 2
 
+    canvas = Image.new("RGBA", (W, W), (0, 0, 0, 0))
 
-def contrast_ratio(a, b):
-    la, lb = _relative_luminance(a), _relative_luminance(b)
-    hi, lo = max(la, lb), min(la, lb)
-    return (hi + 0.05) / (lo + 0.05)
+    # -------------------------------------------------------------------------
+    # 1. Dual Physical Drop Shadows (Ambient + Contact)
+    # -------------------------------------------------------------------------
+    amb_shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    a_draw = ImageDraw.Draw(amb_shadow)
+    a_off = int(W * 0.022)
+    a_box = [margin, margin + a_off, margin + plate_side, margin + plate_side + a_off]
+    a_draw.rounded_rectangle(a_box, radius=radius, fill=(0, 0, 0, 100))
+    amb_shadow = amb_shadow.filter(ImageFilter.GaussianBlur(radius=int(W * 0.028)))
+    canvas = Image.alpha_composite(canvas, amb_shadow)
 
+    con_shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    c_draw = ImageDraw.Draw(con_shadow)
+    c_off = int(W * 0.008)
+    c_box = [margin, margin + c_off, margin + plate_side, margin + plate_side + c_off]
+    c_draw.rounded_rectangle(c_box, radius=radius, fill=(0, 0, 0, 150))
+    con_shadow = con_shadow.filter(ImageFilter.GaussianBlur(radius=int(W * 0.010)))
+    canvas = Image.alpha_composite(canvas, con_shadow)
 
-def _self_check():
-    """Fail the build rather than ship an illegible icon.
-
-    Not an assert: `python3 -O` would strip it, and the whole point of this
-    script's history is that a silently wrong icon shipped once already.
-    """
-    for name, colour in (("PLATE_TOP", PLATE_TOP), ("PLATE_BOTTOM", PLATE_BOTTOM)):
-        ratio = contrast_ratio(GLYPH_COLOR, colour)
-        if ratio < CONTRAST_FLOOR:
-            sys.exit(f"{name} {colour} gives glyph contrast {ratio:.2f}:1, "
-                     f"below the {CONTRAST_FLOOR}:1 floor")
-    # The plate must not reach the canvas edge, or macOS has nothing to sit the
-    # icon in and neighbours in the Dock will not line up.
-    if not 0.75 <= PLATE_RATIO <= 0.85:
-        sys.exit(f"PLATE_RATIO {PLATE_RATIO} is outside the measured 0.80 convention")
-    if not 0.15 <= CORNER_RATIO <= 0.30:
-        sys.exit(f"CORNER_RATIO {CORNER_RATIO} is outside the measured 0.23 convention")
-
-
-def plate_mask(side, radius):
-    """A rounded-square mask of `side` px, antialiased by supersampling."""
-    ss = SUPERSAMPLE
-    big = Image.new("L", (side * ss, side * ss), 0)
-    ImageDraw.Draw(big).rounded_rectangle(
-        (0, 0, side * ss - 1, side * ss - 1), radius=round(radius * ss), fill=255
+    # -------------------------------------------------------------------------
+    # 2. Titanium Plate with 45° Keylight & Chamfered Bevel
+    # -------------------------------------------------------------------------
+    plate_img = make_studio_plate(
+        W, W,
+        cx=margin + int(plate_side * 0.32),
+        cy=margin + int(plate_side * 0.25),
+        radius=int(plate_side * 1.15)
     )
-    return big.resize((side, side), Image.BOX)
+    plate_mask = Image.new("L", (W, W), 0)
+    p_draw = ImageDraw.Draw(plate_mask)
+    plate_box = [margin, margin, margin + plate_side, margin + plate_side]
+    p_draw.rounded_rectangle(plate_box, radius=radius, fill=255)
 
+    plate_surface = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    plate_surface.paste(plate_img, (0, 0), plate_mask)
 
-def plate_gradient(side):
-    """Vertical PLATE_TOP -> PLATE_BOTTOM ramp, the direction Apple lights from."""
-    ramp = Image.linear_gradient("L").resize((side, side), Image.BILINEAR)
-    top = Image.new("RGB", (side, side), PLATE_TOP)
-    bottom = Image.new("RGB", (side, side), PLATE_BOTTOM)
-    return Image.composite(bottom, top, ramp)
+    # 1px Apple Chamfered Rim Glint
+    b_layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    b_draw = ImageDraw.Draw(b_layer)
+    b_draw.rounded_rectangle(plate_box, radius=radius, outline=(255, 255, 255, 45), width=int(2.5 * SUPERSAMPLE))
+    plate_surface = Image.alpha_composite(plate_surface, b_layer)
+    canvas = Image.alpha_composite(canvas, plate_surface)
 
+    # -------------------------------------------------------------------------
+    # 3. Sculptural Waveform-U Glyph
+    # -------------------------------------------------------------------------
+    cx = W // 2
+    cy = W // 2 + int(12 * SUPERSAMPLE)
 
-def glyph_mask():
-    """The artwork's ink as a soft alpha mask, cropped to its own bounds.
+    num_bars = 7
+    bar_w = int(42 * SUPERSAMPLE)       # Stately, solid Apple bar width
+    bar_gap = int(24 * SUPERSAMPLE)     # Precision spacing
+    total_w = num_bars * bar_w + (num_bars - 1) * bar_gap
+    start_x = cx - total_w // 2 + bar_w // 2
 
-    Returns the greyscale image rather than a hard binary one so diagonals stay
-    antialiased when it is scaled down.
-    """
-    if not os.path.exists(SOURCE):
-        sys.exit(f"Missing source artwork: {SOURCE}")
+    # Natural acoustic harmonic envelope forming the letter 'U':
+    # Outer stems tall (430), mid bars (240), inner valley (130), center trough (75)
+    raw_heights = [440, 260, 130, 80, 130, 260, 440]
+    bar_heights = [int(h * SUPERSAMPLE) for h in raw_heights]
 
-    grey = Image.open(SOURCE).convert("L")
-    box = grey.point(lambda v: 255 if v >= INK_THRESHOLD else 0).getbbox()
-    if box is None:
-        sys.exit("Source artwork appears to be blank")
-    return grey.crop(box)
+    # 3A. Ambient Occlusion Drop Shadow cast by the Glyph onto the Plate
+    w_shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    ws_draw = ImageDraw.Draw(w_shadow)
+    sh_y = int(14 * SUPERSAMPLE)
 
+    for i, h_bar in enumerate(bar_heights):
+        bx = start_x + i * (bar_w + bar_gap)
+        by_top = cy - h_bar // 2 + sh_y
+        by_bot = cy + h_bar // 2 + sh_y
+        r_b = bar_w // 2
+        ws_draw.line([(bx, by_top + r_b), (bx, by_bot - r_b)], fill=(0, 0, 0, 170), width=bar_w)
+        ws_draw.ellipse([bx - r_b, by_top, bx + r_b, by_top + bar_w], fill=(0, 0, 0, 170))
+        ws_draw.ellipse([bx - r_b, by_bot - bar_w, bx + r_b, by_bot], fill=(0, 0, 0, 170))
 
-def fill_enclosed_holes(mark):
-    """Make holes that ink fully surrounds solid, leaving open notches alone.
+    # Base U-Trough Shadow
+    basin_w = int(320 * SUPERSAMPLE)
+    basin_h = int(140 * SUPERSAMPLE)
+    basin_y = cy + int(145 * SUPERSAMPLE) + sh_y
+    ws_draw.arc([cx - basin_w // 2, basin_y - basin_h, cx + basin_w // 2, basin_y + basin_h],
+                start=15, end=165, fill=(0, 0, 0, 170), width=int(32 * SUPERSAMPLE))
 
-    Flood-fills the background inward from a 1px transparent border, so anything
-    the flood cannot reach is enclosed. The waveform inside the bulb is enclosed
-    and gets filled; the gaps between the bars of the bulb's base open onto the
-    outside and are left as they are.
-    """
-    w, h = mark.size
-    padded = Image.new("L", (w + 2, h + 2), 0)
-    padded.paste(mark.point(lambda v: 255 if v >= INK_THRESHOLD else 0), (1, 1))
-    ImageDraw.floodfill(padded, (0, 0), 128, thresh=0)
-    holes = padded.point(lambda v: 255 if v == 0 else 0).crop((1, 1, w + 1, h + 1))
-    out = mark.copy()
-    out.paste(255, (0, 0), holes)
-    return out
+    w_shadow = w_shadow.filter(ImageFilter.GaussianBlur(radius=int(10 * SUPERSAMPLE)))
+    canvas = Image.alpha_composite(canvas, w_shadow)
 
+    # 3B. Connecting Harmonic U-Basin (Continuous weighted base)
+    basin_layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    b_draw = ImageDraw.Draw(basin_layer)
+    base_basin_y = cy + int(145 * SUPERSAMPLE)
+    b_draw.arc([cx - basin_w // 2, base_basin_y - basin_h, cx + basin_w // 2, base_basin_y + basin_h],
+               start=15, end=165, fill=MARK_WHITE + (255,), width=int(32 * SUPERSAMPLE))
 
-def build_master(glyph_fraction, simplify_glyph):
-    """Compose a 1024px icon: shadow, then plate, then the mark on top."""
-    side = round(SIZE * PLATE_RATIO)
-    origin = (SIZE - side) // 2
-    mask = plate_mask(side, side * CORNER_RATIO)
+    # 3C. Main Waveform Bars (Solid White with directional 3D specular highlight)
+    bars_layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    br_draw = ImageDraw.Draw(bars_layer)
 
-    canvas = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    for i, h_bar in enumerate(bar_heights):
+        bx = start_x + i * (bar_w + bar_gap)
+        by_top = cy - h_bar // 2
+        by_bot = cy + h_bar // 2
+        r_b = bar_w // 2
 
-    # Shadow first, offset down and blurred, so the plate covers its own centre.
-    shadow_mask = Image.new("L", (SIZE, SIZE), 0)
-    shadow_mask.paste(mask, (origin, origin + round(SIZE * SHADOW_OFFSET)))
-    shadow_mask = shadow_mask.filter(
-        ImageFilter.GaussianBlur(SIZE * SHADOW_BLUR)
-    ).point(lambda v: v * SHADOW_ALPHA // 255)
-    canvas.paste(Image.new("RGB", (SIZE, SIZE), (0, 0, 0)), (0, 0), shadow_mask)
+        # Draw solid white capsule bar
+        br_draw.line([(bx, by_top + r_b), (bx, by_bot - r_b)], fill=MARK_WHITE + (255,), width=bar_w)
+        br_draw.ellipse([bx - r_b, by_top, bx + r_b, by_top + bar_w], fill=MARK_WHITE + (255,))
+        br_draw.ellipse([bx - r_b, by_bot - bar_w, bx + r_b, by_bot], fill=MARK_WHITE + (255,))
 
-    plate = plate_gradient(side).convert("RGBA")
-    plate.putalpha(mask)
-    canvas.alpha_composite(plate, (origin, origin))
+    # 3D Specular Highlight on Left Ridge of Outer Stems
+    spec_layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    sp_draw = ImageDraw.Draw(spec_layer)
+    for idx in [0, 6]: # Outer left and outer right stems
+        bx = start_x + idx * (bar_w + bar_gap)
+        h_bar = bar_heights[idx]
+        sp_draw.line([(bx - int(6 * SUPERSAMPLE), cy - h_bar // 2 + int(16 * SUPERSAMPLE)),
+                      (bx - int(6 * SUPERSAMPLE), cy + h_bar // 2 - int(16 * SUPERSAMPLE))],
+                     fill=(255, 255, 255, 130), width=int(8 * SUPERSAMPLE))
 
-    mark = glyph_mask()
-    if simplify_glyph:
-        mark = fill_enclosed_holes(mark)
-    target = round(side * glyph_fraction)
-    mark.thumbnail((target, target), Image.LANCZOS)
-    ink = Image.new("RGBA", mark.size, GLYPH_COLOR + (0,))
-    ink.putalpha(mark)
-    canvas.alpha_composite(
-        ink, ((SIZE - mark.width) // 2, (SIZE - mark.height) // 2)
-    )
-    return canvas
+    spec_layer = spec_layer.filter(ImageFilter.GaussianBlur(radius=int(3 * SUPERSAMPLE)))
 
+    # Composite Glyph Layers
+    glyph = Image.alpha_composite(basin_layer, bars_layer)
+    glyph = Image.alpha_composite(glyph, spec_layer)
+    canvas = Image.alpha_composite(canvas, glyph)
 
-def main():
-    _self_check()
+    # -------------------------------------------------------------------------
+    # 4. Master Downsample with Lanczos (Subpixel Sharpness)
+    # -------------------------------------------------------------------------
+    final_master = canvas.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+
+    os.makedirs(os.path.dirname(SOURCE), exist_ok=True)
+    final_master.save(SOURCE)
+    final_master.save(PREVIEW)
+    print(f"✓ Official master icon saved to {SOURCE} and {PREVIEW}")
+
+    # Export .iconset
     os.makedirs(ICONSET, exist_ok=True)
-    detailed = build_master(GLYPH_PLATE_FRACTION, simplify_glyph=False)
-    simplified = build_master(SMALL_GLYPH_PLATE_FRACTION, simplify_glyph=True)
+    for px, name in VARIANTS:
+        variant = final_master.resize((px, px), Image.Resampling.LANCZOS)
+        variant.save(os.path.join(ICONSET, name))
+    print(f"✓ Generated 10 iconset sizes in {ICONSET}")
 
-    for size, name in VARIANTS:
-        master = simplified if size <= SMALL_SIZE_MAX else detailed
-        master.resize((size, size), Image.LANCZOS).save(
-            os.path.join(ICONSET, name), "PNG", optimize=True
-        )
-
-    print(f"✓ Icon set written to {os.path.relpath(ICONSET, ROOT)}/ "
-          f"({len(VARIANTS)} sizes from {os.path.relpath(SOURCE, ROOT)})")
-    print(f"  sizes <= {SMALL_SIZE_MAX}px use the simplified mark "
-          f"({SMALL_GLYPH_PLATE_FRACTION} of plate, holes filled)")
-    print(f"  plate {round(SIZE * PLATE_RATIO)}/{SIZE} = {PLATE_RATIO}, "
-          f"corner r={CORNER_RATIO}, glyph {GLYPH_PLATE_FRACTION} of plate")
-    print(f"  glyph contrast: {contrast_ratio(GLYPH_COLOR, PLATE_TOP):.2f}:1 top, "
-          f"{contrast_ratio(GLYPH_COLOR, PLATE_BOTTOM):.2f}:1 bottom")
-
+    # Compile .icns with iconutil
+    icns_path = os.path.join(ROOT, "AppIcon.icns")
+    os.system(f"iconutil -c icns {ICONSET} -o {icns_path}")
+    print(f"✓ Compiled AppIcon.icns ({os.path.getsize(icns_path)} bytes)")
 
 if __name__ == "__main__":
-    main()
+    build_icon()

@@ -6,15 +6,15 @@
 	<dict>
 		<key>Resources/AppIcon.icns</key>
 		<data>
-		UOiIq1TNMa7hAP+GGfIIt2Cu2Vo=
+		6kJNT6We1XQJQvrXjhEFlc8sZRI=
 		</data>
 		<key>Resources/MenuBarIcon/menubar-icon.png</key>
 		<data>
-		KTXPpeNwPOHblraf7CPIlGuioNM=
+		9rhJUrriG6HPLWH5XJKv2t8ip90=
 		</data>
 		<key>Resources/MenuBarIcon/menubar-icon@2x.png</key>
 		<data>
-		roSE+wGR4UyVa+wB0OXoQ8t61TY=
+		t5smYlJDwI0Pbdfyud85pDNNlF0=
 		</data>
 		<key>Resources/Models/ggml-small.en-q5_1.bin</key>
 		<data>
@@ -92,21 +92,21 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			lNOuJlEvIYR4W+wC0HpBcYurcUrzQ3Cd+bYfGh7ZJxs=
+			6cPfLwZHhP6vvSCF6Yg7KRK88Y25oS+D5bLPN33O87Y=
 			</data>
 		</dict>
 		<key>Resources/MenuBarIcon/menubar-icon.png</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			MMgADalN6ZIoPyRn173MNUgJ4KfMAcwcA4pRDO/R38Y=
+			/uBY4Ox7s5D3Z+s7rg/vgeITl2ou+w2vKn98UGlmL5U=
 			</data>
 		</dict>
 		<key>Resources/MenuBarIcon/menubar-icon@2x.png</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			lPzD3k2+ou+07+mLlY7NLGiswlkXC9k3F5asL6iyyYw=
+			nTVgQJR4Qxz7efQn9iFnE+KiKqxlDAYuvlj/+1oLRYM=
 			</data>
 		</dict>
 		<key>Resources/Models/ggml-small.en-q5_1.bin</key>
