@@ -243,6 +243,36 @@ graph TD
 
 ---
 
+## ⚠️ Ported Project Notice & Reporting Issues
+
+> [!NOTE]
+> **Utter is a complete bi-ported native macOS application** bringing together high-performance C++ `whisper.cpp` Metal bindings, CoreAudio system taps, and Apple Intelligence FoundationModels inside a unified SwiftUI Liquid Glass architecture.
+>
+> Because this is a complex ported application, **there might still be occasional edge-case bugs, UI quirks, or hardware-specific lag/latency issues** on particular Mac configurations (Intel vs Apple Silicon M1/M2/M3/M4 or non-standard external audio interfaces).
+>
+> We actively welcome and appreciate all community feedback, issue reports, and diagnostic logs to help us make Utter rock-solid for everyone!
+
+### 🐛 How to Report Bugs or Performance Issues
+
+If you encounter a crash, audio dropout, UI lag, or unexpected behavior:
+
+1. **Check or Open an Issue**: Visit our [GitHub Issue Tracker](https://github.com/h3x-levi/Utter/issues).
+2. **Include Your System Info**:
+   - macOS version (e.g. `macOS 14.5 Sonoma` or `macOS 15.0 Sequoia` via `sw_vers`)
+   - Mac model (e.g. MacBook Pro M3, MacBook Air M1, Mac Studio M2 Max, Intel iMac)
+   - Active input device (Built-in Microphone, AirPods, USB mic, etc.)
+3. **Attach Diagnostic Logs**:
+   - Open **Utter Settings** (`⌃ ⌥ U` or click the menu bar icon → *Settings*).
+   - Go to the **Diagnostics & Telemetry** pane.
+   - Click **"Reveal Logs"** to open Utter's local diagnostic reports folder (`~/Library/Logs/DiagnosticReports/` or Utter crash logs).
+   - Attach or paste relevant log snippets in your issue description.
+4. **Describe the Steps to Reproduce**:
+   - What key was pressed (e.g. `Fn`, `⌃⌥Space`)?
+   - What application had the active text cursor?
+   - What was the expected vs. actual behavior?
+
+---
+
 ## 📄 License
 
 Utter is distributed under the **Apache License 2.0**. See [`LICENSE`](LICENSE) for complete terms.
