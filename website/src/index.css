@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,700;1,400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -22,6 +22,28 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @layer utilities {
+  /* Expressive Font Family Helpers */
+  .font-handwriting {
+    font-family: 'Caveat', cursive, sans-serif;
+  }
+
+  .font-serif-italic {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-style: italic;
+  }
+
+  .font-space-mono {
+    font-family: 'Space Mono', monospace;
+  }
+
+  .font-display-heavy {
+    font-family: 'Bricolage Grotesque', sans-serif;
+  }
+
+  .font-mono-sm {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
   /* Premium Opaque White Card */
   .card-opaque {
     background-color: #ffffff;
@@ -53,15 +75,34 @@ h1, h2, h3, h4, h5, h6 {
   /* Colorful Accent Glows */
   .bg-colorful-mesh {
     background: 
-      radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
-      radial-gradient(circle at 85% 25%, rgba(236, 72, 153, 0.08) 0%, transparent 45%),
-      radial-gradient(circle at 50% 60%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
-      radial-gradient(circle at 80% 85%, rgba(245, 158, 11, 0.07) 0%, transparent 40%),
+      radial-gradient(circle at 12% 18%, rgba(99, 102, 241, 0.09) 0%, transparent 40%),
+      radial-gradient(circle at 88% 22%, rgba(236, 72, 153, 0.09) 0%, transparent 45%),
+      radial-gradient(circle at 50% 55%, rgba(16, 185, 129, 0.07) 0%, transparent 50%),
+      radial-gradient(circle at 75% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
       #fafafa;
   }
 
-  .font-mono-sm {
-    font-family: 'JetBrains Mono', monospace;
+  /* Playful Sticker Badge */
+  .sticker-badge {
+    cursor: grab;
+    user-select: none;
+    transition: box-shadow 0.15s ease;
+  }
+  .sticker-badge:active {
+    cursor: grabbing;
+  }
+
+  /* Marquee animation */
+  @keyframes marquee {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-marquee {
+    animation: marquee 28s linear infinite;
+  }
+  .animate-marquee:hover {
+    animation-play-state: paused;
   }
 }
 
