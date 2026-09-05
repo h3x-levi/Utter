@@ -3,8 +3,8 @@ import { Download, Github, Shield, Sparkles, Cpu, Check } from 'lucide-react';
 
 export default function DownloadSection() {
   return (
-    <section className="py-24 px-4 bg-colorful-mesh border-t border-black/[0.06]">
-      <div className="max-w-4xl mx-auto text-center">
+    <section className="py-24 px-4 sm:px-8 bg-colorful-mesh/90 backdrop-blur-md border-t border-black/[0.06] w-full">
+      <div className="w-full max-w-[94vw] 2xl:max-w-[1500px] mx-auto text-center">
         <div className="card-opaque p-10 sm:p-16 shadow-2xl relative overflow-hidden bg-white">
           {/* Subtle colorful aura */}
           <div

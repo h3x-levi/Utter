@@ -6,8 +6,8 @@ export default function UtterMemeMatrix() {
   const [activeReaction, setActiveReaction] = useState('utter');
 
   return (
-    <section className="py-24 px-4 bg-[#fafafa] border-t border-black/[0.06]">
-      <div className="max-w-5xl mx-auto">
+    <section className="py-24 px-4 sm:px-8 bg-[#fafafa]/80 backdrop-blur-md border-t border-black/[0.06] w-full">
+      <div className="w-full max-w-[94vw] 2xl:max-w-[1600px] mx-auto">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono font-bold mb-3">
@@ -18,7 +18,7 @@ export default function UtterMemeMatrix() {
             Don't mutter. Just Utter.
           </h2>
           <p className="text-base text-zinc-600 font-normal leading-relaxed">
-            The tragic comedy of paying \$15/month for someone else to run open-source Whisper in a distant datacenter.
+            The tragic comedy of paying $15/month for someone else to run open-source Whisper in a distant datacenter.
           </p>
         </div>
 

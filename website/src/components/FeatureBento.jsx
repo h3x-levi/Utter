@@ -61,9 +61,9 @@ export default function FeatureBento() {
   ];
 
   return (
-    <section id="features" className="py-24 px-4 bg-white border-t border-black/[0.06]">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-16">
+    <section id="features" className="py-24 px-4 sm:px-8 bg-white/75 backdrop-blur-md border-t border-black/[0.06] w-full">
+      <div className="w-full max-w-[94vw] 2xl:max-w-[1700px] mx-auto">
+        <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200/80 px-3 py-1 rounded-full">
             Engineered for macOS Power Users
           </span>
@@ -76,7 +76,7 @@ export default function FeatureBento() {
         </div>
 
         {/* 6-Card Bento Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 2xl:gap-8">
           {features.map((feat, idx) => (
             <motion.div
               key={idx}

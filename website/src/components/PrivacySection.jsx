@@ -3,8 +3,8 @@ import { ShieldCheck, Lock, WifiOff, Terminal, FileCode, Check } from 'lucide-re
 
 export default function PrivacySection() {
   return (
-    <section id="privacy" className="py-24 px-4 bg-zinc-50 border-t border-black/[0.06]">
-      <div className="max-w-5xl mx-auto">
+    <section id="privacy" className="py-24 px-4 sm:px-8 bg-zinc-50/80 backdrop-blur-md border-t border-black/[0.06] w-full">
+      <div className="w-full max-w-[94vw] 2xl:max-w-[1600px] mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold mb-3">
             <ShieldCheck size={14} className="text-emerald-600" />

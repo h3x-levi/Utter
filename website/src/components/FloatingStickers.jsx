@@ -4,17 +4,17 @@ import { motion } from 'framer-motion';
 export default function FloatingStickers() {
   const stickers = [
     {
-      id: 'postit',
+      id: 'demure',
       text: (
         <span>
-          <span className="text-amber-800 font-bold block text-sm mb-0.5">📌 Note to self:</span>
-          Hold Fn to speak. Let go to flex. 💅
+          <span className="text-pink-800 font-bold block text-xs uppercase tracking-wider mb-0.5">🎀 Cutesy Mode</span>
+          Very demure. Very mindful. Zero cloud surveillance. 💅
         </span>
       ),
-      font: 'font-handwriting text-lg sm:text-xl leading-snug',
-      bg: 'bg-[#fef08a] text-zinc-900 border-[#fde047]',
-      initialPos: 'top-28 left-2 lg:left-4',
-      rotation: -5,
+      font: 'font-serif-italic text-sm sm:text-base font-semibold text-pink-950',
+      bg: 'bg-pink-100 text-pink-950 border-pink-300 shadow-pink-100',
+      pos: 'top-24 left-[3%] xl:left-[6%]',
+      rotation: -6,
       delay: 0.1,
     },
     {
@@ -28,80 +28,85 @@ export default function FloatingStickers() {
       ),
       font: 'font-display-heavy text-xs sm:text-sm',
       bg: 'bg-rose-100 text-rose-950 border-rose-300',
-      initialPos: 'top-32 right-2 lg:right-6',
-      rotation: 4,
+      pos: 'top-28 right-[3%] xl:right-[6%]',
+      rotation: 5,
       delay: 0.2,
     },
     {
-      id: 'speed-brrr',
-      text: '180 WPM go BRRRRRR 🏎️💨',
-      font: 'font-space-mono text-[11px] sm:text-xs font-bold tracking-tighter',
-      bg: 'bg-lime-200 text-lime-950 border-lime-400',
-      initialPos: 'top-[44%] -left-2 lg:left-4 hidden md:block',
-      rotation: -3,
+      id: 'chat-real',
+      text: 'Chat is this real?! 180 WPM with 0ms cloud lag 🤯🔥',
+      font: 'font-display-heavy text-xs sm:text-sm tracking-tight text-amber-950',
+      bg: 'bg-amber-100 text-amber-950 border-amber-300',
+      pos: 'top-[42%] left-[1%] xl:left-[4%] hidden lg:block',
+      rotation: -4,
       delay: 0.3,
     },
     {
-      id: 'siri-sass',
-      text: '“Siri could literally never.” ✨',
-      font: 'font-serif-italic text-sm sm:text-base font-semibold text-purple-950',
-      bg: 'bg-purple-100 border-purple-300 shadow-purple-100',
-      initialPos: 'top-[42%] -right-2 lg:right-4 hidden md:block',
-      rotation: 5,
+      id: 'aura-points',
+      text: (
+        <span>
+          <span className="text-emerald-700 font-bold block text-xs mb-0.5">+10,000 AURA</span>
+          Dictating 2,000 lines of Swift on an airplane with Wi-Fi off ✈️🕶️
+        </span>
+      ),
+      font: 'font-space-mono text-[11px] sm:text-xs font-bold text-emerald-950',
+      bg: 'bg-emerald-100 border-emerald-300 shadow-emerald-100',
+      pos: 'top-[44%] right-[1%] xl:right-[4%] hidden lg:block',
+      rotation: 4,
       delay: 0.4,
     },
     {
-      id: 'fbi-roast',
-      text: 'Zero telemetry. The FBI agent in your webcam is bored 😴💤',
-      font: 'font-handwriting text-lg leading-tight text-sky-950',
-      bg: 'bg-sky-100 border-sky-300',
-      initialPos: 'bottom-8 left-2 lg:left-8 hidden lg:block',
-      rotation: -4,
+      id: 'cooked-kb',
+      text: 'My mechanical keyboard is officially cooked 💀🍳',
+      font: 'font-handwriting text-xl leading-tight text-zinc-950',
+      bg: 'bg-[#fef08a] border-[#fde047]',
+      pos: 'bottom-8 left-[4%] xl:left-[8%] hidden xl:block',
+      rotation: -3,
       delay: 0.5,
     },
     {
-      id: 'cloud-roast',
+      id: 'gigachad-m4',
       text: (
-        <span className="block font-mono text-[10px] leading-tight">
-          <span className="text-rose-600 block font-bold">● Cloud APIs: 1400ms Lag</span>
-          <span className="text-emerald-600 block font-bold mt-0.5">● Utter on Metal: 168ms 🗿</span>
+        <span className="block font-mono text-[11px] leading-tight">
+          <span className="text-rose-600 block font-bold">● Cloud APIs: ⚠️ 503 Outage</span>
+          <span className="text-emerald-700 block font-bold mt-1">● Utter on Apple Silicon: 🗿🗿🗿</span>
         </span>
       ),
       font: 'font-mono-sm',
       bg: 'bg-zinc-100 text-zinc-900 border-zinc-300',
-      initialPos: 'bottom-8 right-2 lg:right-8 hidden lg:block',
+      pos: 'bottom-8 right-[4%] xl:right-[8%] hidden xl:block',
       rotation: 3,
       delay: 0.6,
     },
   ];
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-20 overflow-visible max-w-7xl mx-auto">
+    <div className="absolute inset-0 pointer-events-none z-20 overflow-visible w-full">
       {stickers.map((s) => (
         <motion.div
           key={s.id}
           drag
           dragElastic={0.15}
-          dragConstraints={{ left: -100, right: 100, top: -100, bottom: 100 }}
+          dragConstraints={{ left: -140, right: 140, top: -120, bottom: 120 }}
           whileHover={{ scale: 1.08, rotate: 0, zIndex: 50 }}
           whileDrag={{ scale: 1.15, rotate: 0, zIndex: 60, cursor: 'grabbing' }}
           initial={{ opacity: 0, scale: 0.8, rotate: s.rotation }}
           animate={{
             opacity: 1,
             scale: 1,
-            rotate: [s.rotation - 1.5, s.rotation + 1.5, s.rotation - 1.5],
-            y: [0, -6, 0],
+            rotate: [s.rotation - 1.2, s.rotation + 1.2, s.rotation - 1.2],
+            y: [0, -7, 0],
           }}
           transition={{
-            y: { duration: 4 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
-            rotate: { duration: 5 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
+            y: { duration: 4.5 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
+            rotate: { duration: 5.5 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
             opacity: { duration: 0.4, delay: s.delay },
             scale: { duration: 0.4, delay: s.delay },
           }}
-          className={`absolute ${s.initialPos} pointer-events-auto sticker-badge px-3.5 py-2.5 rounded-2xl border-2 shadow-md hover:shadow-xl transition-shadow ${s.bg} ${s.font}`}
+          className={`absolute ${s.pos} pointer-events-auto sticker-badge px-4 py-3 rounded-2xl border-2 shadow-lg hover:shadow-2xl transition-shadow ${s.bg} ${s.font}`}
         >
           {s.text}
-          <div className="text-[9px] font-sans opacity-40 font-normal tracking-normal text-right mt-0.5 select-none">
+          <div className="text-[9px] font-sans opacity-40 font-normal tracking-normal text-right mt-1 select-none">
             drag me ✋
           </div>
         </motion.div>

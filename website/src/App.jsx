@@ -7,15 +7,19 @@ import UtterMemeMatrix from './components/UtterMemeMatrix';
 import PrivacySection from './components/PrivacySection';
 import DownloadSection from './components/DownloadSection';
 import Footer from './components/Footer';
+import AnimatedAtmosphere from './components/AnimatedAtmosphere';
 
 function App() {
   return (
-    <div className="min-h-screen bg-[#fafafa] text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden bg-[#fafafa]/80">
+      {/* 1. Serene Grassy Dune Landscape & Floating Aurora Atmosphere */}
+      <AnimatedAtmosphere />
+
       {/* Floating Single Navbar */}
       <Navbar />
 
       {/* Main Content Flow */}
-      <main>
+      <main className="relative z-10">
         <Hero />
         <UtterMemeTicker />
         <FeatureBento />

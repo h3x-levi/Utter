@@ -9,7 +9,7 @@ export default function Navbar() {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="white-glass flex items-center justify-between px-3.5 py-2.5 rounded-full pointer-events-auto border border-black/[0.08] shadow-lg max-w-4xl w-full"
+        className="white-glass flex items-center justify-between px-4 sm:px-6 py-2.5 rounded-full pointer-events-auto border border-black/[0.08] shadow-lg w-full max-w-[94vw] 2xl:max-w-[1600px]"
       >
         {/* Brand */}
         <a href="#" className="flex items-center gap-2.5 pl-2">
