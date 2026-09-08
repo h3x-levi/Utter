@@ -1,58 +1,48 @@
-import React, { Suspense, lazy } from 'react';
-import { useReducedMotion } from 'framer-motion';
-
-const ShaderGradientHero = lazy(() => import('./ShaderGradientHero'));
-const AmbientOrbs = lazy(() => import('./AmbientOrbs'));
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
-}
-
-function AtmosphereFallback() {
-  return (
-    <div
-      className="fixed inset-0 z-0 pointer-events-none"
-      style={{
-        background: 'radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.2) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.2) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.15) 0%, transparent 50%), radial-gradient(circle at 90% 10%, rgba(245, 158, 11, 0.15) 0%, transparent 40%), #fafafa'
-      }}
-    />
-  );
-}
+import React from 'react';
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 
 export default function AnimatedAtmosphere() {
   const prefersReducedMotion = useReducedMotion();
+  const { scrollY } = useScroll();
 
-  if (prefersReducedMotion) {
-    return <AtmosphereFallback />;
-  }
+  // Subtle natural parallax as user scrolls down the page
+  const y = useTransform(scrollY, [0, 4000], [0, -160]);
+  const scale = useTransform(scrollY, [0, 4000], [1, 1.06]);
 
   return (
-    <>
-      <ErrorBoundary fallback={<AtmosphereFallback />}>
-        <Suspense fallback={<AtmosphereFallback />}>
-          <ShaderGradientHero />
-        </Suspense>
-      </ErrorBoundary>
-      
-      <ErrorBoundary fallback={null}>
-        <Suspense fallback={null}>
-          <AmbientOrbs />
-        </Suspense>
-      </ErrorBoundary>
-    </>
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
+      {/* 1. Serene Grassy Dune & Frosted Landscape (Cooldock luxury aesthetic) */}
+      <motion.div
+        style={prefersReducedMotion ? {} : { y, scale }}
+        className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)]"
+      >
+        <img
+          src="/assets/hilly_bg.jpg"
+          alt=""
+          className="w-full h-full object-cover object-center filter brightness-[1.03] contrast-[1.02]"
+          loading="eager"
+        />
+      </motion.div>
+
+      {/* 2. Delicate Frosted Glass Tint - Keeps landscape visible while guaranteeing text legibility */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 15%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.45) 55%, rgba(250, 249, 246, 0.65) 100%)',
+          backdropFilter: 'blur(1px)',
+          WebkitBackdropFilter: 'blur(1px)',
+        }}
+      />
+
+      {/* 3. Golden Hour Soft Ambient Glow */}
+      <div
+        className="absolute inset-0 opacity-30 mix-blend-soft-light pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(circle at 25% 15%, rgba(255, 237, 213, 0.9) 0%, transparent 60%), radial-gradient(circle at 80% 85%, rgba(224, 231, 255, 0.7) 0%, transparent 60%)',
+        }}
+      />
+    </div>
   );
 }

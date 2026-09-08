@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import UtterMemeTicker from './components/UtterMemeTicker';
-import ScreenshotShowcase from './components/ScreenshotShowcase';
 import FeatureBento from './components/FeatureBento';
 import PrivacySection from './components/PrivacySection';
 import UtterMemeMatrix from './components/UtterMemeMatrix';
@@ -43,45 +42,42 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden bg-[#fafafa]">
-      {/* Immersive Background: Shader Gradient + R3F Ambient Orbs */}
+    <div className="min-h-screen text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+      {/* Serene Grassy Dune & Frosted Landscape Background */}
       <AnimatedAtmosphere />
 
-      {/* Floating Navbar */}
+      {/* Floating Frosted Pill Navbar */}
       <Navbar onOpenModal={handleOpenModal} />
 
-      {/* Main Content Flow */}
+      {/* Main Narrative Flow */}
       <main className="relative z-10">
-        {/* 1. Hero - asymmetric layout with real screenshot, fades on scroll */}
+        {/* 1. Hero: Asymmetric layout with real app mockup & floating Utter Pill */}
         <Hero />
 
-        {/* 2. Meme Ticker - single marquee (max 1 per page rule) */}
+        {/* 2. Single Marquee Soundbites Ticker */}
         <UtterMemeTicker />
 
-        {/* 3. Screenshot Showcase - GSAP horizontal scroll-driven pan */}
-        <ScreenshotShowcase />
-
-        {/* 4. Feature Bento - asymmetric grid with real screenshots */}
+        {/* 3. Interactive Feature Stories: Dictation, Models, Diarization, Pixel Cat, Vocabulary */}
         <section id="features">
           <FeatureBento />
         </section>
 
-        {/* 5. Privacy - GSAP sticky-stack cards */}
+        {/* 4. Air-Gapped Privacy Architecture & Terminal Verification */}
         <section id="privacy">
           <PrivacySection />
         </section>
 
-        {/* 6. Meme Matrix - personality section */}
+        {/* 5. The Cloud Hostage vs The Apple Silicon Flex */}
         <UtterMemeMatrix />
 
-        {/* 7. Download CTA */}
+        {/* 6. High-Conversion Download CTA */}
         <DownloadSection />
       </main>
 
-      {/* Footer */}
+      {/* 7. Consolidated Footer */}
       <Footer onOpenModal={handleOpenModal} />
 
-      {/* Modals: Connect (merged with Contact) + Support */}
+      {/* Consolidated Modals */}
       <ConnectModal
         isOpen={activeModal === 'connect'}
         onClose={handleCloseModal}
