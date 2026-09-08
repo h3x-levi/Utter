@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Download, Github, Sparkles } from 'lucide-react';
+import { Download, Github, Sparkles, MessageCircle, HelpCircle, Mail, Layers } from 'lucide-react';
 
-export default function Navbar() {
+export default function Navbar({ onOpenModal }) {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4 pointer-events-none">
       <motion.nav
@@ -21,15 +21,49 @@ export default function Navbar() {
         </a>
 
         {/* Links */}
-        <div className="hidden md:flex items-center gap-6 text-xs font-medium text-zinc-600">
-          <a href="#demo" className="hover:text-zinc-900 transition-colors">Interactive Demo</a>
-          <a href="#models" className="hover:text-zinc-900 transition-colors">Speech Models</a>
+        <div className="hidden lg:flex items-center gap-5 text-xs font-medium text-zinc-600">
+          <a href="#showcase-3d" className="hover:text-zinc-900 transition-colors">3D Carousel</a>
+          <a href="#demo" className="hover:text-zinc-900 transition-colors">Studio Demo</a>
           <a href="#features" className="hover:text-zinc-900 transition-colors">Features</a>
           <a href="#privacy" className="hover:text-zinc-900 transition-colors">Air-Gapped Privacy</a>
+          <button
+            onClick={() => onOpenModal('connect')}
+            className="hover:text-zinc-900 transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Connect</span>
+          </button>
+          <button
+            onClick={() => onOpenModal('support')}
+            className="hover:text-zinc-900 transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Support</span>
+          </button>
+          <button
+            onClick={() => onOpenModal('contact')}
+            className="hover:text-zinc-900 transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Contact</span>
+          </button>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* Quick Support / Contact buttons for medium screens */}
+          <div className="hidden sm:flex lg:hidden items-center gap-2 mr-1 text-xs">
+            <button
+              onClick={() => onOpenModal('support')}
+              className="text-zinc-600 hover:text-zinc-900 px-2 py-1 cursor-pointer"
+            >
+              Support
+            </button>
+            <button
+              onClick={() => onOpenModal('contact')}
+              className="text-zinc-600 hover:text-zinc-900 px-2 py-1 cursor-pointer"
+            >
+              Contact
+            </button>
+          </div>
+
           <a
             href="https://github.com/h3x-levi/Utter"
             target="_blank"

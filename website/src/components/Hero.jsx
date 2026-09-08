@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, Github, Sparkles, Zap, Shield, Cpu } from 'lucide-react';
+import Hero3DSpiralCarousel from './Hero3DSpiralCarousel';
 import InteractiveMacStudio from './InteractiveMacStudio';
 import FloatingStickers from './FloatingStickers';
 
@@ -77,7 +78,7 @@ export default function Hero() {
         </motion.div>
 
         {/* Key Metrics Chips */}
-        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs font-semibold text-zinc-700 mb-14">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs font-semibold text-zinc-700 mb-12">
           <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-black/[0.08] shadow-sm">
             <Zap size={14} className="text-amber-500" />
             <span>168ms Latency</span>
@@ -96,8 +97,13 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* The Wide Interactive Centerpiece Studio */}
+        {/* 3D Scrollable Spiraling Carousel */}
         <div className="w-full">
+          <Hero3DSpiralCarousel />
+        </div>
+
+        {/* The Wide Interactive Centerpiece Studio */}
+        <div className="w-full mt-10">
           <InteractiveMacStudio />
         </div>
       </div>
