@@ -1,200 +1,187 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Github, MessageCircle, Twitter, Heart, Sparkles, Terminal, Bell, CheckCircle2, ArrowUpRight, Share2, Code } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { X, Github, Twitter, Mail } from 'lucide-react';
 
 export default function ConnectModal({ isOpen, onClose }) {
-  const [emailSubscribed, setEmailSubscribed] = useState(false);
-  const [subEmail, setSubEmail] = useState('');
+  const shouldReduceMotion = useReducedMotion();
+  const [activeTab, setActiveTab] = useState('Community');
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape' && isOpen) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleSubscribe = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!subEmail) return;
-    setEmailSubscribed(true);
+    if (name && email && message) {
+      setIsSubmitted(true);
+      setName('');
+      setEmail('');
+      setMessage('');
+      setTimeout(() => {
+        setIsSubmitted(false);
+      }, 3000);
+    }
   };
 
-  if (!isOpen) return null;
+  const overlayAnim = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 }
+  };
+
+  const modalAnim = shouldReduceMotion ? {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 }
+  } : {
+    initial: { opacity: 0, scale: 0.95 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 0.95 }
+  };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-        />
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4">
+          <motion.div
+            {...overlayAnim}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+          />
 
-        {/* Modal Window */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden z-10 my-8"
-        >
-          {/* Window Header */}
-          <div className="h-12 bg-zinc-100/90 border-b border-black/5 px-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-black/10" />
-              <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-black/10" />
-              <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-black/10" />
-              <span className="text-xs font-semibold text-zinc-700 ml-2">Connect with Utter Community</span>
-            </div>
+          <motion.div
+            {...modalAnim}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto mt-[15vh] p-6 z-10"
+          >
             <button
               onClick={onClose}
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-zinc-100 text-zinc-500 transition-colors active:scale-[0.97]"
               aria-label="Close modal"
-              className="w-7 h-7 rounded-full bg-zinc-200/80 hover:bg-zinc-300 text-zinc-700 flex items-center justify-center transition-colors cursor-pointer"
             >
-              <X size={15} />
+              <X size={20} />
             </button>
-          </div>
 
-          <div className="p-6 sm:p-8 space-y-6">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-mono font-bold mb-2">
-                <Sparkles size={12} className="text-indigo-600" />
-                Community & Developer Ecosystem
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 tracking-tight">
-                Join the local AI voice movement.
-              </h2>
-              <p className="text-xs sm:text-sm text-zinc-500 mt-1">
-                Utter is built openly with developers, researchers, and writers around the globe. Join discussions, share companion packs, and request features.
-              </p>
+            <div className="flex gap-6 border-b border-zinc-100 mb-6 mt-2">
+              <button
+                onClick={() => setActiveTab('Community')}
+                className={`pb-3 text-sm transition-colors active:scale-[0.97] ${activeTab === 'Community' ? 'border-b-2 border-zinc-900 font-bold text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+              >
+                Community
+              </button>
+              <button
+                onClick={() => setActiveTab('Contact')}
+                className={`pb-3 text-sm transition-colors active:scale-[0.97] ${activeTab === 'Contact' ? 'border-b-2 border-zinc-900 font-bold text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+              >
+                Contact
+              </button>
             </div>
 
-            {/* Connection Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* GitHub */}
-              <a
-                href="https://github.com/h3x-levi/Utter"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="card-opaque-sm p-4 hover:border-black/30 transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-9 h-9 rounded-xl bg-zinc-900 text-white flex items-center justify-center">
-                      <Github size={18} />
+            <div className="min-h-[250px]">
+              {activeTab === 'Community' ? (
+                <div className="space-y-4">
+                  <a
+                    href="https://github.com/h3x-levi/Utter"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-4 p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-colors group active:scale-[0.97]"
+                  >
+                    <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-900">
+                      <Github size={20} />
                     </div>
-                    <ArrowUpRight size={16} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-900 mb-1">GitHub Repository</h3>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    Fork the codebase, explore whisper.cpp C-FFI bridges, submit pull requests, or star the project.
-                  </p>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-400 mt-3 block">h3x-levi/Utter</span>
-              </a>
-
-              {/* Discord */}
-              <a
-                href="https://discord.gg"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="card-opaque-sm p-4 hover:border-indigo-300 transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
-                      <MessageCircle size={18} />
+                    <div>
+                      <h3 className="font-bold text-zinc-900 text-sm">GitHub</h3>
+                      <p className="text-xs text-zinc-500">View source code and contribute</p>
                     </div>
-                    <ArrowUpRight size={16} className="text-zinc-400 group-hover:text-indigo-600 transition-colors" />
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-900 mb-1">Discord Community</h3>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    Chat with macOS engineers, share custom pixel pet sprite packs, and discover custom whisper prompts.
-                  </p>
-                </div>
-                <span className="text-[11px] font-mono text-indigo-600 mt-3 block">discord.gg/utter</span>
-              </a>
+                  </a>
 
-              {/* X / Twitter */}
-              <a
-                href="https://twitter.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="card-opaque-sm p-4 hover:border-zinc-400 transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-9 h-9 rounded-xl bg-zinc-100 text-zinc-900 border border-zinc-200 flex items-center justify-center">
-                      <Twitter size={18} />
+                  <a
+                    href="https://twitter.com/utter_macos"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-4 p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-colors group active:scale-[0.97]"
+                  >
+                    <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-900">
+                      <Twitter size={20} />
                     </div>
-                    <ArrowUpRight size={16} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-900 mb-1">X / Twitter Updates</h3>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    Follow release drops, preview benchmarks against cloud dictation, and feature demos.
-                  </p>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-500 mt-3 block">@utter_macos</span>
-              </a>
+                    <div>
+                      <h3 className="font-bold text-zinc-900 text-sm">Twitter / X</h3>
+                      <p className="text-xs text-zinc-500">Follow for updates and announcements</p>
+                    </div>
+                  </a>
 
-              {/* Open Source Specs */}
-              <div className="card-opaque-sm p-4 bg-zinc-50 border-zinc-200/80 flex flex-col justify-between">
-                <div>
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
-                    <Code size={18} />
-                  </div>
-                  <h3 className="font-bold text-sm text-zinc-900 mb-1">MIT Open Source</h3>
-                  <p className="text-xs text-zinc-500 leading-relaxed">
-                    100% free software forever. No proprietary cloud backends. No lock-in or telemetry.
-                  </p>
-                </div>
-                <span className="text-[11px] font-mono text-emerald-700 font-bold mt-3 block">Pure Swift & C++</span>
-              </div>
-            </div>
-
-            {/* Newsletter / Release Notification */}
-            <div className="p-5 rounded-2xl bg-zinc-900 text-white shadow-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Bell size={16} className="text-amber-400" />
-                <h4 className="font-bold text-sm">Release Notifications</h4>
-              </div>
-              <p className="text-xs text-zinc-400 mb-3 leading-relaxed">
-                Receive notifications when new native DMG updates, CoreML models, or companion packs release. Zero spam.
-              </p>
-
-              {emailSubscribed ? (
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-800">
-                  <CheckCircle2 size={16} />
-                  <span>Subscribed! You will receive new version alerts.</span>
+                  <a
+                    href="mailto:support@utter.run"
+                    className="flex items-center gap-4 p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 transition-colors group active:scale-[0.97]"
+                  >
+                    <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
+                      <Mail size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-zinc-900 text-sm">Email Support</h3>
+                      <p className="text-xs text-zinc-500">Reach out at support@utter.run</p>
+                    </div>
+                  </a>
                 </div>
               ) : (
-                <form onSubmit={handleSubscribe} className="flex gap-2">
-                  <input
-                    type="email"
-                    required
-                    placeholder="dev@macbook.local"
-                    value={subEmail}
-                    onChange={(e) => setSubEmail(e.target.value)}
-                    className="flex-1 px-3.5 py-2 rounded-xl text-xs bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-white"
-                  />
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {isSubmitted && (
+                    <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm border border-emerald-100 mb-4">
+                      Message sent successfully! We will get back to you soon.
+                    </div>
+                  )}
+                  
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Your Name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Your Email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
+                    />
+                  </div>
+                  <div>
+                    <textarea
+                      required
+                      placeholder="How can we help you?"
+                      rows={4}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent transition-shadow"
+                    />
+                  </div>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-white text-zinc-900 font-bold text-xs hover:bg-zinc-200 transition-colors shrink-0 cursor-pointer"
+                    className="w-full bg-zinc-950 text-white rounded-full py-3 text-sm font-bold active:scale-[0.97] transition-transform hover:bg-zinc-800"
                   >
-                    Notify Me
+                    Send Message
                   </button>
                 </form>
               )}
             </div>
-          </div>
-        </motion.div>
-      </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }

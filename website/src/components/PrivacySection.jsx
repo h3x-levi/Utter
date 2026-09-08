@@ -1,75 +1,106 @@
-import React from 'react';
-import { ShieldCheck, Lock, WifiOff, Terminal, FileCode, Check } from 'lucide-react';
+import { useRef, useEffect } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useReducedMotion } from 'framer-motion';
+import { Shield, Wifi, Eye } from 'lucide-react';
+
+gsap.registerPlugin(ScrollTrigger);
+
+const cards = [
+  {
+    title: 'Zero Cloud',
+    icon: Shield,
+    iconColor: 'text-emerald-500',
+    bgColor: 'bg-emerald-50/60',
+    desc: 'Your voice data never leaves your Mac. Every transcription runs locally through whisper.cpp on Apple Silicon Metal GPU. No server, no upload, no exceptions.'
+  },
+  {
+    title: 'Zero Telemetry',
+    icon: Eye,
+    iconColor: 'text-indigo-500',
+    bgColor: 'bg-indigo-50/60',
+    desc: 'Utter collects exactly zero usage analytics. No crash reports phoned home, no feature tracking, no A/B testing on your workflow. What you say stays between you and your Mac.'
+  },
+  {
+    title: 'Zero Network',
+    icon: Wifi,
+    iconColor: 'text-amber-500',
+    bgColor: 'bg-amber-50/60',
+    desc: 'During transcription, Utter opens exactly 0 network sockets. Verify it yourself in Activity Monitor. The app works fully offline, always.'
+  }
+];
 
 export default function PrivacySection() {
+  const containerRef = useRef(null);
+  const shouldReduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (shouldReduceMotion) return;
+    
+    const mm = gsap.matchMedia();
+    
+    mm.add('(min-width: 768px)', () => {
+      const cardElements = gsap.utils.toArray('.privacy-card');
+      
+      cardElements.forEach((card, i) => {
+        if (i === cardElements.length - 1) return;
+        
+        const nextCard = cardElements[i + 1];
+        const cardInner = card.querySelector('.privacy-card-inner');
+        
+        ScrollTrigger.create({
+          trigger: card,
+          start: 'top top',
+          endTrigger: nextCard,
+          end: 'top top',
+          pin: true,
+          pinSpacing: false,
+        });
+
+        gsap.to(cardInner, {
+          scale: 0.92,
+          opacity: 0.55,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: nextCard,
+            start: 'top bottom',
+            end: 'top top',
+            scrub: true,
+          }
+        });
+      });
+    });
+    
+    return () => mm.revert();
+  }, [shouldReduceMotion]);
+
   return (
-    <section id="privacy" className="py-24 px-4 sm:px-8 bg-zinc-50/80 backdrop-blur-md border-t border-black/[0.06] w-full">
-      <div className="w-full max-w-[94vw] 2xl:max-w-[1600px] mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-900 mb-4">
-            Air-gapped by architecture.
-          </h2>
-          <p className="text-base text-zinc-600 leading-relaxed">
-            Unlike cloud dictation tools, Utter physically lacks the code to transmit your voice. No audio leaves your Mac, no subscriptions, and no tracking.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Left Feature List */}
-          <div className="lg:col-span-6 space-y-4">
-            {[
-              { title: "Zero Network Entitlements", desc: "Utter's macOS codesign sandbox profile has no network client entitlement. The OS kernel forbids outbound socket creation." },
-              { title: "No Analytics or Telemetry SDKs", desc: "No Sentry, no Mixpanel, no PostHog, no Google Analytics. Grep the compiled binary yourself." },
-              { title: "Offline Model Execution", desc: "Whisper neural weights run on your Apple Silicon Neural Engine & GPU in unified memory. Airplane mode works 100%." },
-              { title: "Local Note Storage", desc: "Transcriptions and meeting records save directly to your ~/Library/Application Support/Utter in plain Markdown." },
-            ].map((item, idx) => (
-              <div key={idx} className="card-opaque-sm p-4 flex items-start gap-3.5">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <Check size={14} className="stroke-[3]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-900">{item.title}</h3>
-                  <p className="text-xs text-zinc-600 mt-0.5 leading-relaxed">{item.desc}</p>
-                </div>
+    <div ref={containerRef} className="w-full bg-[#fafafa]">
+      {cards.map((card, i) => {
+        const Icon = card.icon;
+        return (
+          <section
+            key={i}
+            className={`privacy-card w-full ${
+              shouldReduceMotion 
+                ? 'py-20 flex flex-col items-center justify-center p-6' 
+                : 'md:sticky md:top-0 md:min-h-[100dvh] flex items-center justify-center p-6 md:p-0 mb-8 md:mb-0'
+            }`}
+          >
+            <div className={`privacy-card-inner w-full max-w-4xl mx-auto rounded-3xl p-10 md:p-16 shadow-lg border border-zinc-200/50 ${card.bgColor} flex flex-col items-center justify-center text-center backdrop-blur-sm`}>
+              <div className={`p-4 rounded-2xl bg-white shadow-sm mb-8 ${card.iconColor}`}>
+                <Icon size={48} strokeWidth={1.5} />
               </div>
-            ))}
-          </div>
-
-          {/* Right Terminal Verification Box */}
-          <div className="lg:col-span-6">
-            <div className="rounded-3xl bg-zinc-900 text-zinc-100 shadow-2xl overflow-hidden border border-black/10">
-              <div className="h-10 bg-zinc-800/80 px-4 flex items-center justify-between border-b border-zinc-700">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                  <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                  <span className="text-[11px] font-mono text-zinc-400 ml-2">Terminal: Security Audit</span>
-                </div>
-                <span className="text-[10px] font-mono text-emerald-400 font-bold">100% AIR-GAPPED</span>
-              </div>
-
-              <div className="p-5 font-mono text-xs space-y-4 text-zinc-300">
-                <div>
-                  <p className="text-zinc-500"># Verify open sockets while dictating:</p>
-                  <p className="text-emerald-300 font-bold">$ lsof -i -P | grep -i utter</p>
-                  <p className="text-zinc-500 italic"># (no output: 0 open network sockets)</p>
-                </div>
-
-                <div>
-                  <p className="text-zinc-500"># Check sandbox entitlements:</p>
-                  <p className="text-emerald-300 font-bold">$ codesign -d --entitlements :- /Applications/Utter.app</p>
-                  <p className="text-zinc-400">{`<key>com.apple.security.network.client</key>`} <strong className="text-rose-400">NO</strong></p>
-                </div>
-
-                <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-[11px]">
-                  <span className="text-zinc-500">Binary Integrity:</span>
-                  <span className="text-emerald-400 font-mono font-bold">SHA-256 Verified Clean</span>
-                </div>
-              </div>
+              <h2 className="text-4xl md:text-5xl font-bold text-zinc-900 mb-6 tracking-tight">
+                {card.title}
+              </h2>
+              <p className="text-lg text-zinc-600 max-w-2xl leading-relaxed">
+                {card.desc}
+              </p>
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
+          </section>
+        );
+      })}
+    </div>
   );
 }

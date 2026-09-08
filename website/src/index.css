@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,700;1,400&display=swap');
+/* Fonts loaded via index.html <link> tags for better performance */
 
 @tailwind base;
 @tailwind components;
