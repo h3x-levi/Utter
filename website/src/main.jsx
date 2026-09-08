@@ -21,7 +21,7 @@ class GlobalErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-[#09090b] text-white flex flex-col items-center justify-center p-6 text-center">
-          <h1 className="text-3xl font-bold mb-4">Utter — Safe Mode Active</h1>
+          <h1 className="text-3xl font-bold mb-4">Utter: Safe Mode Active</h1>
           <p className="text-zinc-400 max-w-md mb-6">
             A component encountered an issue during rendering. Reloading to restore interface.
           </p>

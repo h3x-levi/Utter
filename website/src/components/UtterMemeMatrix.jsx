@@ -10,10 +10,6 @@ export default function UtterMemeMatrix() {
       <div className="w-full max-w-[94vw] 2xl:max-w-[1600px] mx-auto">
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono font-bold mb-3">
-            <Sparkles size={13} className="text-rose-600" />
-            The Ultimate Reality Check
-          </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-900 mb-3">
             Don't mutter. Just Utter.
           </h2>
@@ -45,7 +41,7 @@ export default function UtterMemeMatrix() {
               <div className="space-y-4">
                 {[
                   { title: "1,400ms Lag", desc: "Audio compresses, flies over HTTPS to Virginia, queues in server line, flies back." },
-                  { title: "$8–$15 / Month Subscription", desc: "Pay rent every single month for technology OpenAI gave away for free." },
+                  { title: "$8-15 / Month Subscription", desc: "Pay rent every single month for technology OpenAI gave away for free." },
                   { title: "Voice Telemetry", desc: "Your unreleased Swift code and whispered passwords sit in another company's logs." },
                   { title: "Dies on Airplanes", desc: "Seatbelt sign turns on, Wi-Fi drops, and your dictation app turns into an empty brick." },
                   { title: "Server 503 Outages", desc: "“We are experiencing unusually high traffic. Please type with your hands like a peasant.”" },

@@ -6,10 +6,6 @@ export default function PrivacySection() {
     <section id="privacy" className="py-24 px-4 sm:px-8 bg-zinc-50/80 backdrop-blur-md border-t border-black/[0.06] w-full">
       <div className="w-full max-w-[94vw] 2xl:max-w-[1600px] mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-mono font-bold mb-3">
-            <ShieldCheck size={14} className="text-emerald-600" />
-            Zero Telemetry · Zero Cloud
-          </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-900 mb-4">
             Air-gapped by architecture.
           </h2>
@@ -47,7 +43,7 @@ export default function PrivacySection() {
                   <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
                   <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
                   <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-                  <span className="text-[11px] font-mono text-zinc-400 ml-2">Terminal — Security Audit</span>
+                  <span className="text-[11px] font-mono text-zinc-400 ml-2">Terminal: Security Audit</span>
                 </div>
                 <span className="text-[10px] font-mono text-emerald-400 font-bold">100% AIR-GAPPED</span>
               </div>
@@ -56,7 +52,7 @@ export default function PrivacySection() {
                 <div>
                   <p className="text-zinc-500"># Verify open sockets while dictating:</p>
                   <p className="text-emerald-300 font-bold">$ lsof -i -P | grep -i utter</p>
-                  <p className="text-zinc-500 italic"># (no output — 0 open network sockets)</p>
+                  <p className="text-zinc-500 italic"># (no output: 0 open network sockets)</p>
                 </div>
 
                 <div>

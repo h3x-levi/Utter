@@ -46,7 +46,7 @@ export default function Hero() {
           transition={{ duration: 0.4 }}
           className="text-lg sm:text-xl text-zinc-700 max-w-3xl mb-8 leading-relaxed font-normal"
         >
-          Hold a key, speak naturally, release. Utter transcribes at <strong className="text-zinc-950 font-bold">180 WPM</strong> using local Whisper models in unified memory — zero cloud, zero telemetry, zero latency.
+          Hold a key, speak naturally, release. Utter transcribes at <strong className="text-zinc-950 font-bold">180 WPM</strong> using local Whisper models in unified memory: zero cloud, zero telemetry, zero latency.
         </motion.p>
 
         {/* Action Buttons */}
@@ -58,7 +58,7 @@ export default function Hero() {
         >
           <a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="flex items-center gap-2.5 bg-zinc-950 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-xl hover:shadow-2xl transition-all active:scale-95"
+            className="flex items-center gap-2.5 bg-zinc-950 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-xl hover:shadow-2xl transition-transform transition-colors duration-150 ease-out active:scale-95 cursor-pointer"
           >
             <Download size={17} />
             Download for Mac
@@ -69,7 +69,7 @@ export default function Hero() {
             href="https://github.com/h3x-levi/Utter"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2.5 bg-white text-zinc-900 hover:text-black border border-black/10 px-7 py-4 rounded-full font-semibold text-sm shadow-sm hover:bg-zinc-50 transition-all active:scale-95"
+            className="flex items-center gap-2.5 bg-white text-zinc-900 hover:text-black border border-black/10 px-7 py-4 rounded-full font-semibold text-sm shadow-sm hover:bg-zinc-50 transition-transform transition-colors duration-150 ease-out active:scale-95 cursor-pointer"
           >
             <Github size={17} />
             View on GitHub

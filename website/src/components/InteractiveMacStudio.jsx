@@ -70,7 +70,7 @@ export default function InteractiveMacStudio() {
           <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-black/10" />
           <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-black/10" />
           <span className="text-xs font-semibold text-zinc-700 ml-2 hidden sm:inline">
-            Utter for macOS — Production System Simulator
+            Utter for macOS: Production System Simulator
           </span>
         </div>
 
@@ -328,7 +328,7 @@ export default function InteractiveMacStudio() {
                 <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
                 <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
                 <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
-                <span className="text-zinc-300 font-semibold ml-2">Utter Notes — Meeting Transcription & AI Notebook</span>
+                <span className="text-zinc-300 font-semibold ml-2">Utter Notes: Meeting Transcription & AI Notebook</span>
               </div>
               <div className="flex items-center gap-1.5 font-mono text-[11px] bg-zinc-800 px-2 py-0.5 rounded">
                 <span>🎙️ Utter Active</span>
@@ -484,7 +484,7 @@ export default function InteractiveMacStudio() {
             {/* Title from app screenshot */}
             <div className="mb-8">
               <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest block mb-1">
-                Utter — Articulated Quadruped Desktop Pets
+                Utter: Articulated Quadruped Desktop Pets
               </span>
               <h3 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 4-Limb Articulated Vector Companions

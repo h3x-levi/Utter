@@ -1,7 +1,8 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export default function FloatingStickers() {
+  const shouldReduceMotion = useReducedMotion();
   const stickers = [
     {
       id: 'demure',
@@ -85,19 +86,27 @@ export default function FloatingStickers() {
       {stickers.map((s) => (
         <motion.div
           key={s.id}
-          drag
+          drag={!shouldReduceMotion}
           dragElastic={0.15}
           dragConstraints={{ left: -140, right: 140, top: -120, bottom: 120 }}
-          whileHover={{ scale: 1.08, rotate: 0, zIndex: 50 }}
-          whileDrag={{ scale: 1.15, rotate: 0, zIndex: 60, cursor: 'grabbing' }}
+          whileHover={shouldReduceMotion ? { scale: 1.02 } : { scale: 1.08, rotate: 0, zIndex: 50 }}
+          whileDrag={shouldReduceMotion ? undefined : { scale: 1.15, rotate: 0, zIndex: 60, cursor: 'grabbing' }}
           initial={{ opacity: 0, scale: 0.8, rotate: s.rotation }}
-          animate={{
+          animate={shouldReduceMotion ? {
+            opacity: 1,
+            scale: 1,
+            rotate: s.rotation,
+            y: 0,
+          } : {
             opacity: 1,
             scale: 1,
             rotate: [s.rotation - 1.2, s.rotation + 1.2, s.rotation - 1.2],
             y: [0, -7, 0],
           }}
-          transition={{
+          transition={shouldReduceMotion ? {
+            opacity: { duration: 0.3 },
+            scale: { duration: 0.3 },
+          } : {
             y: { duration: 4.5 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
             rotate: { duration: 5.5 + Math.random() * 2, repeat: Infinity, ease: 'easeInOut' },
             opacity: { duration: 0.4, delay: s.delay },
@@ -107,7 +116,7 @@ export default function FloatingStickers() {
         >
           {s.text}
           <div className="text-[9px] font-sans opacity-40 font-normal tracking-normal text-right mt-1 select-none">
-            drag me ✋
+            {shouldReduceMotion ? 'sticker' : 'drag me ✋'}
           </div>
         </motion.div>
       ))}

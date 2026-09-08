@@ -32,7 +32,7 @@ export default function DownloadSection() {
             <div className="flex flex-wrap items-center justify-center gap-3.5 mb-8">
               <a
                 href="https://github.com/h3x-levi/Utter/releases/latest"
-                className="flex items-center gap-2.5 bg-zinc-900 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-lg hover:shadow-xl transition-all active:scale-95"
+                className="flex items-center gap-2.5 bg-zinc-900 text-white hover:bg-black px-8 py-4 rounded-full font-bold text-sm shadow-lg hover:shadow-xl transition-colors transition-transform duration-150 ease-out active:scale-95"
               >
                 <Download size={18} />
                 Download for Mac
@@ -43,7 +43,7 @@ export default function DownloadSection() {
                 href="https://github.com/h3x-levi/Utter"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2.5 bg-zinc-100 text-zinc-800 hover:text-black hover:bg-zinc-200/80 px-7 py-4 rounded-full font-semibold text-sm transition-all active:scale-95"
+                className="flex items-center gap-2.5 bg-zinc-100 text-zinc-800 hover:text-black hover:bg-zinc-200/80 px-7 py-4 rounded-full font-semibold text-sm transition-colors transition-transform duration-150 ease-out active:scale-95"
               >
                 <Github size={18} />
                 View Source on GitHub

@@ -123,3 +123,31 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1aa;
 }
+
+/* Tactile Active Press Feedback (Emil Kowalski Design Standard) */
+button:active, 
+a[class*="active:scale"]:active {
+  transform: scale(0.97);
+}
+
+/* Accessibility: Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-marquee {
+    animation: none !important;
+  }
+}
+
+/* Accessibility: Prefers Reduced Transparency (Apple HIG standard) */
+@media (prefers-reduced-transparency: reduce) {
+  .white-glass {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

@@ -1,16 +1,18 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export default function AnimatedAtmosphere() {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
       {/* 1. Serene Grassy Dune / Hilly Landscape Layer */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? { scale: 1, y: 0 } : {
           scale: [1, 1.03, 1],
           y: [0, -10, 0],
         }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0 } : {
           duration: 16,
           repeat: Infinity,
           ease: "easeInOut",
@@ -24,12 +26,12 @@ export default function AnimatedAtmosphere() {
       {/* 2. Floating Colorful Aurora Auras */}
       {/* Warm Sunset Amber */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? { x: 0, y: 0, scale: 1 } : {
           x: [0, 60, -40, 0],
           y: [0, -50, 40, 0],
           scale: [1, 1.15, 0.95, 1],
         }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0 } : {
           duration: 18,
           repeat: Infinity,
           ease: "easeInOut",
@@ -42,12 +44,12 @@ export default function AnimatedAtmosphere() {
 
       {/* Radiant Violet / Indigo */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? { x: 0, y: 0, scale: 1 } : {
           x: [0, -70, 50, 0],
           y: [0, 60, -30, 0],
           scale: [1, 1.1, 0.9, 1],
         }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0 } : {
           duration: 22,
           repeat: Infinity,
           ease: "easeInOut",
@@ -60,12 +62,12 @@ export default function AnimatedAtmosphere() {
 
       {/* Fresh Emerald / Sage */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? { x: 0, y: 0, scale: 1 } : {
           x: [0, 40, -60, 0],
           y: [0, -40, 50, 0],
           scale: [0.95, 1.12, 1, 0.95],
         }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0 } : {
           duration: 20,
           repeat: Infinity,
           ease: "easeInOut",
@@ -78,12 +80,12 @@ export default function AnimatedAtmosphere() {
 
       {/* Soft Rose Pink */}
       <motion.div
-        animate={{
+        animate={shouldReduceMotion ? { x: 0, y: 0, scale: 1 } : {
           x: [0, -50, 40, 0],
           y: [0, 50, -40, 0],
           scale: [1, 0.95, 1.1, 1],
         }}
-        transition={{
+        transition={shouldReduceMotion ? { duration: 0 } : {
           duration: 24,
           repeat: Infinity,
           ease: "easeInOut",

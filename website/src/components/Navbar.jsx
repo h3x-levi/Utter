@@ -42,7 +42,7 @@ export default function Navbar() {
 
           <a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black transition-all text-xs font-bold px-4 py-2 rounded-full shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black transition-colors transition-transform duration-150 ease-out text-xs font-bold px-4 py-2 rounded-full shadow-sm active:scale-95"
           >
             <Download size={13} />
             Download
