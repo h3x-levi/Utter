@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
+import CodeCompanionCanvas from './CodeCompanionCanvas';
 
 export default function CompanionPlayground() {
   const [petMood, setPetMood] = useState('Happy');
@@ -92,17 +93,13 @@ export default function CompanionPlayground() {
                 </motion.div>
               ))}
 
-              {/* Pet Image */}
-              <div className="my-auto">
-                <img
-                  src="/assets/screenshots/feature-companion-showcase.png"
-                  alt="Pixel Companion Showcase"
-                  className="w-full max-w-xs rounded-lg border border-zinc-800 shadow-xl"
-                />
+              {/* Pet Canvas */}
+              <div className="my-auto flex justify-center">
+                <CodeCompanionCanvas species="cat" isGinger={true} action={petMood.toLowerCase().includes('purr') ? 'delighted' : 'knead'} width={180} height={180} />
               </div>
 
-              <div className="text-xs font-mono text-zinc-500">
-                4 Bundled Sprite Packs (Cat, Calico, Tuxedo, Corgi)
+              <div className="text-xs font-mono text-zinc-400">
+                4 Authentic Companions (Charcoal Cat, Ginger Cat, Pixel Dog, Pixel Panda)
               </div>
             </div>
 

@@ -1,131 +1,125 @@
 import React from 'react';
-import { Github, Heart } from 'lucide-react';
+import { Github, Heart, Shield, Terminal, ArrowUpRight } from 'lucide-react';
 
 export default function Footer({ onOpenModal }) {
   return (
-    <footer className="pt-16 pb-10 px-6 sm:px-10 lg:px-16 bg-white/95 backdrop-blur-md border-t border-black/[0.08] text-xs text-zinc-500 relative z-10 w-full">
-      <div className="w-full max-w-[1400px] mx-auto">
-        {/* 3-Column Directory + Brand */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-          {/* Brand Col */}
-          <div className="col-span-2 md:col-span-1 space-y-3">
-            <div className="flex items-center gap-2.5">
-              <img src="/assets/app-icon.png" alt="Utter" className="w-7 h-7 rounded-lg shadow-sm" />
-              <span className="font-bold text-base text-zinc-900 tracking-tight">Utter</span>
+    <footer className="relative border-t border-white/10 bg-zinc-950/80 backdrop-blur-2xl text-zinc-400 py-16 px-4 sm:px-6 lg:px-12 w-full">
+      <div className="max-w-[1360px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-10 items-start">
+        {/* Brand Column (5 cols) */}
+        <div className="md:col-span-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl overflow-hidden shadow-md">
+              <img
+                src="/assets/app-icon.png"
+                alt="Utter Icon"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
             </div>
-            <p className="text-xs text-zinc-500 leading-relaxed max-w-xs">
-              Native on-device speech dictation for macOS. 180 WPM on Apple Silicon unified memory.
-            </p>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-mono font-bold border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Air-Gapped: 0 Sockets
-            </div>
+            <span className="font-bold text-lg text-white">Utter</span>
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+              macOS
+            </span>
           </div>
-
-          {/* Product */}
-          <div className="space-y-3">
-            <h4 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Product</h4>
-            <ul className="space-y-2">
-              <li><a href="#features" className="hover:text-zinc-900 transition-colors duration-150">Features</a></li>
-              <li><a href="#privacy" className="hover:text-zinc-900 transition-colors duration-150">Privacy</a></li>
-              <li>
-                <a
-                  href="https://github.com/h3x-levi/Utter/releases/latest"
-                  className="hover:text-zinc-900 transition-colors duration-150"
-                >
-                  Download
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/h3x-levi/Utter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-zinc-900 transition-colors duration-150 inline-flex items-center gap-1"
-                >
-                  <Github size={11} />
-                  GitHub
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Support */}
-          <div className="space-y-3">
-            <h4 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Support</h4>
-            <ul className="space-y-2">
-              <li>
-                <button
-                  onClick={() => onOpenModal('support')}
-                  className="hover:text-zinc-900 transition-colors duration-150 cursor-pointer"
-                >
-                  FAQ
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => onOpenModal('support')}
-                  className="hover:text-zinc-900 transition-colors duration-150 cursor-pointer"
-                >
-                  Bug Report
-                </button>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/h3x-levi/Utter/issues"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-zinc-900 transition-colors duration-150"
-                >
-                  Issues
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Connect */}
-          <div className="space-y-3">
-            <h4 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Connect</h4>
-            <ul className="space-y-2">
-              <li>
-                <button
-                  onClick={() => onOpenModal('connect')}
-                  className="hover:text-zinc-900 transition-colors duration-150 cursor-pointer"
-                >
-                  Contact Us
-                </button>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/h3x-levi/Utter"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-zinc-900 transition-colors duration-150"
-                >
-                  Community
-                </a>
-              </li>
-              <li>
-                <a
-                  href="mailto:support@utter.run"
-                  className="hover:text-zinc-900 transition-colors duration-150"
-                >
-                  support@utter.run
-                </a>
-              </li>
-            </ul>
+          <p className="text-xs sm:text-sm text-zinc-400 max-w-[400px] leading-relaxed">
+            Native, zero-latency voice dictation engineered exclusively for macOS. Powered by whisper.cpp with Apple Silicon Metal acceleration and 100% on-device privacy.
+          </p>
+          <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
+            <span>Apache 2.0 License</span>
+            <span>•</span>
+            <span>100% Free & Open Source</span>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t border-black/[0.06] gap-3">
-          <p className="text-zinc-400 text-[11px]">
-            &copy; {new Date().getFullYear()} Utter. Free and open source. Built with{' '}
-            <Heart size={10} className="inline text-red-400" /> on macOS.
-          </p>
-          <p className="text-zinc-400 text-[11px] font-mono">
-            whisper.cpp + Apple Silicon Metal GPU
-          </p>
+        {/* Navigation Links (3 cols) */}
+        <div className="md:col-span-3 space-y-3">
+          <div className="text-xs font-mono uppercase tracking-wider text-zinc-200">
+            Product
+          </div>
+          <ul className="space-y-2 text-xs sm:text-sm">
+            <li>
+              <a href="#playground" className="hover:text-white transition-colors">
+                Interactive Playground
+              </a>
+            </li>
+            <li>
+              <a href="#architecture" className="hover:text-white transition-colors">
+                Zero-Latency Architecture
+              </a>
+            </li>
+            <li>
+              <a href="#companions" className="hover:text-white transition-colors">
+                Desktop Pixel Pets
+              </a>
+            </li>
+            <li>
+              <a href="#transforms" className="hover:text-white transition-colors">
+                Apple Intelligence Transforms
+              </a>
+            </li>
+            <li>
+              <a href="#privacy" className="hover:text-white transition-colors">
+                Air-Gapped Privacy Vault
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        {/* Community & Docs (4 cols) */}
+        <div className="md:col-span-4 space-y-3">
+          <div className="text-xs font-mono uppercase tracking-wider text-zinc-200">
+            Resources & Links
+          </div>
+          <ul className="space-y-2 text-xs sm:text-sm">
+            <li>
+              <a
+                href="https://github.com/h3x-levi/Utter"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+              >
+                <span>GitHub Repository</span>
+                <ArrowUpRight size={12} />
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://github.com/h3x-levi/Utter/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 hover:text-white transition-colors"
+              >
+                <span>Release Notes & Checksums</span>
+                <ArrowUpRight size={12} />
+              </a>
+            </li>
+            <li>
+              <button
+                onClick={() => onOpenModal && onOpenModal('connect')}
+                className="hover:text-white transition-colors text-left"
+              >
+                Join Community (Discord / X)
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => onOpenModal && onOpenModal('support')}
+                className="hover:text-white transition-colors text-left"
+              >
+                Support & Diagnostics Guide
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Bottom Bar */}
+      <div className="max-w-[1360px] mx-auto mt-12 pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500 font-mono">
+        <div>© 2026 Utter. Made for creators, engineers, and researchers.</div>
+        <div className="flex items-center gap-1">
+          <span>Crafted with native Swift & Metal</span>
         </div>
       </div>
     </footer>

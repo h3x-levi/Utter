@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Mic, Volume2, Sparkles, Cpu, BookOpen, Layers, Check, Play, Pause, Heart, Terminal } from 'lucide-react';
+import CodeCompanionCanvas from './CodeCompanionCanvas';
 
 export default function FeatureBento() {
   const shouldReduceMotion = useReducedMotion();
@@ -279,13 +280,8 @@ export default function FeatureBento() {
               </div>
             </div>
 
-            <div className="rounded-xl overflow-hidden border border-black/[0.06] bg-white/70">
-              <img
-                src="/assets/screenshots/05b_companion_customize.png"
-                alt="Utter Companion customization"
-                className="w-full h-32 object-cover object-top"
-                loading="lazy"
-              />
+            <div className="rounded-xl overflow-hidden border border-black/[0.06] bg-zinc-950/80 flex items-center justify-center p-2">
+              <CodeCompanionCanvas species="cat" isGinger={true} action={companionState === 'resting' ? 'loaf' : companionState === 'typing' ? 'knead' : 'delighted'} width={130} height={130} />
             </div>
           </motion.div>
 

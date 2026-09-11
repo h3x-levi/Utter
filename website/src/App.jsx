@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
-import Hero from './components/Hero';
-import UtterMemeTicker from './components/UtterMemeTicker';
-import FeatureBento from './components/FeatureBento';
-import PrivacySection from './components/PrivacySection';
-import UtterMemeMatrix from './components/UtterMemeMatrix';
-import DownloadSection from './components/DownloadSection';
-import Footer from './components/Footer';
 import AnimatedAtmosphere from './components/AnimatedAtmosphere';
+import Navbar from './components/Navbar';
+import Hero3D from './components/Hero3D';
+import RealAppShowcase from './components/RealAppShowcase';
+import InteractiveDictationStage from './components/InteractiveDictationStage';
+import ArchitectureScrollStory from './components/ArchitectureScrollStory';
+import CompanionHabitat from './components/CompanionHabitat';
+import TransformsStudio from './components/TransformsStudio';
+import DualStreamMeetingStudio from './components/DualStreamMeetingStudio';
+import PrivacyVerificationVault from './components/PrivacyVerificationVault';
+import BenchmarkMatrix from './components/BenchmarkMatrix';
+import ThemeShowcase from './components/ThemeShowcase';
+import DownloadHub from './components/DownloadHub';
+import Footer from './components/Footer';
 import ConnectModal from './components/ConnectModal';
 import SupportModal from './components/SupportModal';
 
-function App() {
+export default function App() {
+  const [theme, setTheme] = useState('system-glass');
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
 
+  // Sync theme attribute on document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // Handle URL hash changes for modals
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.toLowerCase();
@@ -42,42 +55,60 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen text-zinc-900 font-sans selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
-      {/* Serene Grassy Dune & Frosted Landscape Background */}
-      <AnimatedAtmosphere />
+    <div className="min-h-screen text-zinc-100 font-sans selection:bg-orange-500 selection:text-white relative overflow-x-hidden transition-colors duration-400">
+      {/* 1. Serene Grassy Dune Landscape, Living Colorful Auroras, and 3D Acoustic Wave Ribbons */}
+      <AnimatedAtmosphere currentTheme={theme} />
 
-      {/* Floating Frosted Pill Navbar */}
-      <Navbar onOpenModal={handleOpenModal} />
+      {/* 2. Floating Frosted Pill Navbar */}
+      <Navbar
+        onOpenModal={handleOpenModal}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled((prev) => !prev)}
+      />
 
       {/* Main Narrative Flow */}
       <main className="relative z-10">
-        {/* 1. Hero: Asymmetric layout with real app mockup & floating Utter Pill */}
-        <Hero />
+        {/* 3. Hero: 3D Perspective macOS Display with Real Utter Screenshot & Interactive Floating Pill */}
+        <Hero3D />
 
-        {/* 2. Single Marquee Soundbites Ticker */}
-        <UtterMemeTicker />
+        {/* 4. Deep Dive: Real App Showcase with High-Res Screenshot Switcher */}
+        <RealAppShowcase />
 
-        {/* 3. Interactive Feature Stories: Dictation, Models, Diarization, Pixel Cat, Vocabulary */}
-        <section id="features">
-          <FeatureBento />
-        </section>
+        {/* 5. Real-Time Push-to-Talk Interactive Playground & Target Apps */}
+        <InteractiveDictationStage soundEnabled={soundEnabled} />
 
-        {/* 4. Air-Gapped Privacy Architecture & Terminal Verification */}
-        <section id="privacy">
-          <PrivacySection />
-        </section>
+        {/* 6. On-Device Architecture Pipeline (Capture -> whisper.cpp Metal -> Sub-200ms Injection) */}
+        <ArchitectureScrollStory />
 
-        {/* 5. The Cloud Hostage vs The Apple Silicon Flex */}
-        <UtterMemeMatrix />
+        {/* 7. Interactive Desktop Companion Habitat (Cat, Dog, Panda with 60 FPS motions) */}
+        <CompanionHabitat />
 
-        {/* 6. High-Conversion Download CTA */}
-        <DownloadSection />
+        {/* 8. Apple Intelligence Voice Transforms Studio */}
+        <TransformsStudio />
+
+        {/* 9. Dual-Stream Meeting Capture & Diarization */}
+        <DualStreamMeetingStudio />
+
+        {/* 10. Air-Gapped Privacy & Terminal Verification Vault */}
+        <PrivacyVerificationVault />
+
+        {/* 11. Benchmark Latency & Cost Matrix */}
+        <BenchmarkMatrix />
+
+        {/* 12. 7 Liquid Glass Themes Live Showcase */}
+        <ThemeShowcase
+          currentTheme={theme}
+          onSelectTheme={(t) => setTheme(t)}
+        />
+
+        {/* 13. High-Conversion Download & Verified Source Hub */}
+        <DownloadHub />
       </main>
 
-      {/* 7. Consolidated Footer */}
+      {/* 14. Liquid Glass Footer */}
       <Footer onOpenModal={handleOpenModal} />
 
-      {/* Consolidated Modals */}
+      {/* Interactive Modals */}
       <ConnectModal
         isOpen={activeModal === 'connect'}
         onClose={handleCloseModal}
@@ -89,5 +120,3 @@ function App() {
     </div>
   );
 }
-
-export default App;

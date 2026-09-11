@@ -1,48 +1,197 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 
-export default function AnimatedAtmosphere() {
+/**
+ * AnimatedAtmosphere: Ultra-premium native macOS Sonoma/Sequoia dark glass atmosphere.
+ * Replaces the old photographic hilly wallpaper with deep cosmic obsidian,
+ * living chromatic aurora meshes, and flowing acoustic 3D voice wave ribbons.
+ */
+export default function AnimatedAtmosphere({ currentTheme = 'system-glass' }) {
   const prefersReducedMotion = useReducedMotion();
   const { scrollY } = useScroll();
 
-  // Subtle natural parallax as user scrolls down the page
-  const y = useTransform(scrollY, [0, 4000], [0, -160]);
-  const scale = useTransform(scrollY, [0, 4000], [1, 1.06]);
+  // Subtle Parallax depth for the cosmic nebula layers
+  const nebulaY1 = useTransform(scrollY, [0, 4000], [0, -120]);
+  const nebulaY2 = useTransform(scrollY, [0, 4000], [0, -220]);
+  const waveY = useTransform(scrollY, [0, 4000], [0, -160]);
+
+  // Mouse position for subtle interactive aura illumination
+  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.3 });
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+      setMousePos({ x, y });
+    };
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none">
-      {/* 1. Serene Grassy Dune & Frosted Landscape (Cooldock luxury aesthetic) */}
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none bg-[#090a10]">
+      {/* 1. Deep Cosmic Obsidian Base Mesh with Radial Vignette */}
+      <div
+        className="absolute inset-0 bg-radial-gradient from-[#141522] via-[#0b0c14] to-[#07070b]"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 15%, #181928 0%, #0d0e18 45%, #07070b 100%)',
+        }}
+      />
+
+      {/* 2. Living Luminous Chromatic Auroras (macOS Sequoia / Sonoma Twilight Spectrum) */}
       <motion.div
-        style={prefersReducedMotion ? {} : { y, scale }}
-        className="absolute -inset-8 w-[calc(100%+4rem)] h-[calc(100%+4rem)]"
+        style={prefersReducedMotion ? {} : { y: nebulaY1 }}
+        className="absolute inset-0 pointer-events-none"
       >
-        <img
-          src="/assets/hilly_bg.jpg"
-          alt=""
-          className="w-full h-full object-cover object-center filter brightness-[1.03] contrast-[1.02]"
-          loading="eager"
+        {/* Deep Sunset Ember / Warm Glow (Top-Left / Center) */}
+        <motion.div
+          animate={
+            prefersReducedMotion
+              ? {}
+              : {
+                  x: [-30, 40, -30],
+                  y: [-20, 25, -20],
+                  scale: [1, 1.12, 1],
+                  opacity: [0.35, 0.48, 0.35],
+                }
+          }
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-24 left-[10%] w-[720px] h-[640px] rounded-full bg-gradient-to-tr from-[#f97316]/30 via-[#fb923c]/20 to-transparent blur-[140px]"
+        />
+
+        {/* Electric Indigo & Royal Purple Horizon (Top-Right) */}
+        <motion.div
+          animate={
+            prefersReducedMotion
+              ? {}
+              : {
+                  x: [40, -30, 40],
+                  y: [20, -30, 20],
+                  scale: [1.08, 0.95, 1.08],
+                  opacity: [0.38, 0.52, 0.38],
+                }
+          }
+          transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-10 -right-24 w-[780px] h-[700px] rounded-full bg-gradient-to-bl from-[#6366f1]/35 via-[#8b5cf6]/25 to-transparent blur-[150px]"
+        />
+
+        {/* Midnight Cyan Whisper Core (Center Mid-ground) */}
+        <motion.div
+          animate={
+            prefersReducedMotion
+              ? {}
+              : {
+                  x: [-25, 35, -25],
+                  y: [30, -20, 30],
+                  scale: [0.95, 1.1, 0.95],
+                }
+          }
+          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/3 left-1/4 w-[650px] h-[600px] rounded-full bg-gradient-to-tr from-[#06b6d4]/25 via-[#3b82f6]/18 to-transparent blur-[140px]"
+        />
+
+        {/* Deep Rose & Magenta Velvet Accent (Lower Right) */}
+        <motion.div
+          animate={
+            prefersReducedMotion
+              ? {}
+              : {
+                  x: [30, -20, 30],
+                  y: [-15, 25, -15],
+                  scale: [1, 1.15, 1],
+                }
+          }
+          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute bottom-20 right-[15%] w-[680px] h-[580px] rounded-full bg-gradient-to-tl from-[#ec4899]/20 via-[#a855f7]/18 to-transparent blur-[150px]"
         />
       </motion.div>
 
-      {/* 2. Delicate Frosted Glass Tint - Keeps landscape visible while guaranteeing text legibility */}
+      {/* 3. Interactive Cursor Spotlight (Subtle ambient follow) */}
       <div
-        className="absolute inset-0"
+        className="absolute w-[600px] h-[600px] rounded-full pointer-events-none transition-all duration-700 ease-out -translate-x-1/2 -translate-y-1/2 blur-[130px] opacity-25"
         style={{
-          background:
-            'radial-gradient(ellipse at 50% 15%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.45) 55%, rgba(250, 249, 246, 0.65) 100%)',
-          backdropFilter: 'blur(1px)',
-          WebkitBackdropFilter: 'blur(1px)',
+          left: `${mousePos.x * 100}%`,
+          top: `${mousePos.y * 100}%`,
+          background: 'radial-gradient(circle, rgba(249,115,22,0.3) 0%, rgba(99,102,241,0.15) 50%, transparent 70%)',
         }}
       />
 
-      {/* 3. Golden Hour Soft Ambient Glow */}
+      {/* 4. Flowing 3D Acoustic Wave Ribbons (Speech Audio Spectrum Physics) */}
+      <motion.div
+        style={prefersReducedMotion ? {} : { y: waveY }}
+        className="absolute inset-0 pointer-events-none opacity-40 mix-blend-screen"
+      >
+        <svg
+          className="w-full h-full"
+          xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="none"
+          viewBox="0 0 1440 900"
+        >
+          <defs>
+            <linearGradient id="acousticWaveGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#f97316" stopOpacity="0.85" />
+              <stop offset="35%" stopColor="#ec4899" stopOpacity="0.75" />
+              <stop offset="70%" stopColor="#6366f1" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.85" />
+            </linearGradient>
+
+            <linearGradient id="acousticWaveGrad2" x1="100%" y1="0%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.7" />
+              <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.7" />
+            </linearGradient>
+          </defs>
+
+          {/* Primary Speech Ribbon */}
+          <motion.path
+            d="M0,380 C320,280 480,480 800,380 C1120,280 1280,420 1440,340 L1440,900 L0,900 Z"
+            fill="url(#acousticWaveGrad1)"
+            opacity="0.22"
+            animate={
+              prefersReducedMotion
+                ? {}
+                : {
+                    d: [
+                      "M0,380 C320,280 480,480 800,380 C1120,280 1280,420 1440,340 L1440,900 L0,900 Z",
+                      "M0,420 C320,460 480,300 800,430 C1120,360 1280,300 1440,390 L1440,900 L0,900 Z",
+                      "M0,380 C320,280 480,480 800,380 C1120,280 1280,420 1440,340 L1440,900 L0,900 Z",
+                    ],
+                  }
+            }
+            transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          {/* Harmonic Counter-Wave Ribbon */}
+          <motion.path
+            d="M0,560 C360,480 600,660 960,540 C1200,460 1340,600 1440,530 L1440,900 L0,900 Z"
+            fill="url(#acousticWaveGrad2)"
+            opacity="0.18"
+            animate={
+              prefersReducedMotion
+                ? {}
+                : {
+                    d: [
+                      "M0,560 C360,480 600,660 960,540 C1200,460 1340,600 1440,530 L1440,900 L0,900 Z",
+                      "M0,520 C360,600 600,480 960,580 C1200,530 1340,470 1440,560 L1440,900 L0,900 Z",
+                      "M0,560 C360,480 600,660 960,540 C1200,460 1340,600 1440,530 L1440,900 L0,900 Z",
+                    ],
+                  }
+            }
+            transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </svg>
+      </motion.div>
+
+      {/* 5. Subtle Ultra-Fine Studio Grid & Frosted Vignette */}
       <div
-        className="absolute inset-0 opacity-30 mix-blend-soft-light pointer-events-none"
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
-          background:
-            'radial-gradient(circle at 25% 15%, rgba(255, 237, 213, 0.9) 0%, transparent 60%), radial-gradient(circle at 80% 85%, rgba(224, 231, 255, 0.7) 0%, transparent 60%)',
+          backgroundImage: `linear-gradient(to right, rgba(255, 255, 255, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.25) 1px, transparent 1px)`,
+          backgroundSize: '48px 48px',
         }}
       />
+
+      {/* 6. High-Contrast Vignette for Razor-Sharp Text Readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#090a10]/60 via-transparent to-[#07070b]/90 pointer-events-none" />
     </div>
   );
 }

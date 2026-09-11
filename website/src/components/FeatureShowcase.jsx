@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import CodeCompanionCanvas from './CodeCompanionCanvas';
 
 const features = [
   {
@@ -11,27 +12,27 @@ const features = [
     image: '/assets/screenshots/hero-main.png',
   },
   {
-    id: 'meetings',
-    title: 'Meeting Transcription',
-    heading: 'Transcribe meetings with speaker attribution.',
+    id: 'notes',
+    title: 'Notes & Meetings',
+    heading: 'Record and transcribe meetings.',
     description:
-      'Dual-channel capture for Zoom, Google Meet, and Teams. Automatically separates your microphone from the remote system audio with per-speaker timestamps.',
+      'Capture microphone and system audio simultaneously. Generates clean markdown notes with timestamps, key decisions, and action items — completely offline.',
     image: '/assets/screenshots/04_notes_studio.png',
   },
   {
     id: 'transforms',
-    title: 'AI Transforms',
-    heading: 'Polish text with Apple Intelligence.',
+    title: 'Voice Transforms',
+    heading: 'Transform text with your voice.',
     description:
-      'Clean grammar and filler words, extract action items, generate Swift docstrings — all processed securely on-device using local Foundation Models.',
+      'Select any text, press a hotkey, speak an instruction like "make this concise" or "fix grammar". Powered by on-device Apple Intelligence.',
     image: '/assets/screenshots/10_transforms_hub.png',
   },
   {
     id: 'models',
     title: 'Speech Models',
-    heading: 'Choose your Whisper model.',
+    heading: 'Your choice of Whisper models.',
     description:
-      'From Tiny (39 MB) to Large-v3-Turbo (809 MB). Small.en is bundled out of the box — zero downloads needed. Swap models anytime with one click.',
+      'Bundle the optimized ggml-small.en-q5_1 model or download larger multilingual models. All running locally on Apple Silicon GPU with Metal acceleration.',
     image: '/assets/screenshots/06_model_chooser.png',
   },
   {
@@ -39,8 +40,8 @@ const features = [
     title: 'Pixel Companions',
     heading: 'Desktop coding companions.',
     description:
-      'Retro pixel pets that sit on your desktop, track your cursor, react to voice amplitude, and play with yarn while you dictate. Classic Cat, Calico, Tuxedo, and Corgi.',
-    image: '/assets/screenshots/05b_companion_customize.png',
+      'Procedural code-rendered pixel pets that sit on your desktop, track your cursor with integer-pixel eyes, react to voice amplitude, and knead keypads. Zero PNG artwork.',
+    image: null,
   },
   {
     id: 'dictionary',
@@ -98,13 +99,19 @@ const FeatureShowcase = () => {
                   transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   className="glass-panel p-2 overflow-hidden cursor-pointer shadow-[0_20px_50px_rgba(0,0,0,0.1)]"
                 >
-                  <motion.img
-                    whileHover={{ scale: 1.08 }}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                    src={feature.image}
-                    alt={feature.heading}
-                    className="w-full h-auto rounded-[22px]"
-                  />
+                  {feature.id === 'companions' ? (
+                    <div className="w-full aspect-[16/10] flex items-center justify-center bg-zinc-950 rounded-[22px]">
+                      <CodeCompanionCanvas species="cat" isGinger={true} action="knead" width={220} height={220} />
+                    </div>
+                  ) : (
+                    <motion.img
+                      whileHover={{ scale: 1.08 }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                      src={feature.image}
+                      alt={feature.heading}
+                      className="w-full h-auto rounded-[22px]"
+                    />
+                  )}
                 </motion.div>
               </motion.div>
             </div>

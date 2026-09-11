@@ -1,62 +1,152 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Download, Github } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Download, Github, Sparkles, Shield, Cpu, Menu, X, Volume2, VolumeX } from 'lucide-react';
 
-export default function Navbar({ onOpenModal }) {
+export default function Navbar({ onOpenModal, soundEnabled, onToggleSound }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const navLinks = [
+    { label: 'Showcase', href: '#showcase' },
+    { label: 'Playground', href: '#playground' },
+    { label: 'Architecture', href: '#architecture' },
+    { label: 'Companions', href: '#companions' },
+    { label: 'AI Transforms', href: '#transforms' },
+    { label: 'Privacy Vault', href: '#privacy' },
+    { label: 'Benchmarks', href: '#benchmarks' },
+  ];
+
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4 pointer-events-none">
-      <motion.nav
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
-        className="white-glass flex items-center justify-between px-4 sm:px-6 py-2.5 rounded-full pointer-events-auto border border-black/[0.08] shadow-lg w-full max-w-[1400px]"
-        style={{ maxHeight: 64 }}
+    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 sm:px-6 py-4 transition-all duration-300 pointer-events-none">
+      <div
+        className={`pointer-events-auto flex items-center justify-between gap-4 px-4 sm:px-6 py-2.5 rounded-full transition-all duration-300 w-full max-w-[1240px] ${
+          scrolled
+            ? 'liquid-glass-pill shadow-2xl backdrop-blur-2xl bg-zinc-950/80 border-white/10'
+            : 'bg-zinc-950/40 backdrop-blur-xl border border-white/5'
+        }`}
       >
-        {/* Brand */}
-        <a href="#" className="flex items-center gap-2.5 pl-1">
-          <img src="/assets/app-icon.png" alt="Utter" className="w-7 h-7 rounded-lg shadow-sm" />
-          <span className="font-bold text-sm tracking-tight text-zinc-900">Utter</span>
+        {/* Brand & Version Badge */}
+        <a href="#" className="flex items-center gap-3 group">
+          <div className="relative w-8 h-8 rounded-xl overflow-hidden shadow-md group-hover:scale-105 transition-transform duration-200">
+            <img
+              src="/assets/app-icon.png"
+              alt="Utter Icon"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/20 to-transparent pointer-events-none" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-base tracking-tight text-white group-hover:text-orange-400 transition-colors">
+              Utter
+            </span>
+            <span className="hidden sm:inline-flex text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">
+              macOS • v1.1.56
+            </span>
+          </div>
         </a>
 
-        {/* Nav Links */}
-        <div className="hidden md:flex items-center gap-5 text-xs font-medium text-zinc-600">
-          <a href="#features" className="hover:text-zinc-900 transition-colors duration-150">Features</a>
-          <a href="#privacy" className="hover:text-zinc-900 transition-colors duration-150">Privacy</a>
-          <button
-            onClick={() => onOpenModal('support')}
-            className="hover:text-zinc-900 transition-colors duration-150 cursor-pointer"
-          >
-            Support
-          </button>
-          <button
-            onClick={() => onOpenModal('connect')}
-            className="hover:text-zinc-900 transition-colors duration-150 cursor-pointer"
-          >
-            Connect
-          </button>
-        </div>
+        {/* Desktop Nav Links */}
+        <nav className="hidden md:flex items-center gap-1.5 text-xs font-medium text-zinc-400">
+          {navLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="px-3.5 py-1.5 rounded-full hover:text-white hover:bg-white/5 transition-all duration-150"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
 
-        {/* Actions */}
+        {/* Right Actions */}
         <div className="flex items-center gap-2">
+          {/* Sound Wave FX Toggle */}
+          <button
+            onClick={onToggleSound}
+            className="hidden sm:flex items-center justify-center w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/10 transition-colors"
+            title={soundEnabled ? 'Mute audio cues' : 'Enable audio cues'}
+            aria-label="Toggle sound cues"
+          >
+            {soundEnabled ? <Volume2 size={14} className="text-orange-400" /> : <VolumeX size={14} />}
+          </button>
+
+          {/* GitHub Stars Link */}
           <a
             href="https://github.com/h3x-levi/Utter"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full text-zinc-700 hover:text-black hover:bg-black/5 transition-colors duration-150"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
           >
-            <Github size={14} />
-            GitHub
+            <Github size={13} />
+            <span>GitHub</span>
           </a>
 
+          {/* Direct Download CTA */}
           <a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black transition-transform transition-colors duration-150 ease-out text-xs font-bold px-4 py-2 rounded-full shadow-sm active:scale-[0.97]"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold text-zinc-950 bg-gradient-to-r from-orange-400 to-amber-300 hover:from-orange-300 hover:to-amber-200 shadow-lg shadow-orange-500/20 transition-all duration-200 active:scale-95"
           >
             <Download size={13} />
-            Download
+            <span className="hidden xs:inline">Download</span>
+            <span className="font-mono text-[10px] opacity-80">.dmg</span>
           </a>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white"
+            aria-label="Toggle mobile menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
-      </motion.nav>
-    </div>
+      </div>
+
+      {/* Mobile Dropdown Menu */}
+      {mobileMenuOpen && (
+        <div className="pointer-events-auto absolute top-18 left-4 right-4 liquid-glass rounded-2xl p-5 border border-white/10 shadow-2xl flex flex-col gap-3 md:hidden z-50">
+          {navLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-sm font-medium text-zinc-300 hover:text-orange-400 py-1"
+            >
+              {link.label}
+            </a>
+          ))}
+          <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+            <a
+              href="https://github.com/h3x-levi/Utter"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs text-zinc-400 hover:text-white"
+            >
+              <Github size={14} />
+              <span>GitHub Repository</span>
+            </a>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                if (onOpenModal) onOpenModal('connect');
+              }}
+              className="text-xs text-orange-400 font-medium"
+            >
+              Join Community
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, PhoneCall, Sparkles, Cpu, BookOpen, Heart, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import CodeCompanionCanvas from './CodeCompanionCanvas';
 
 export default function AssetTransitionShowcase() {
   const [activeAssetIndex, setActiveAssetIndex] = useState(0);
@@ -38,18 +39,18 @@ export default function AssetTransitionShowcase() {
     },
     {
       id: 'companions',
-      title: 'Articulated Desktop Pixel Pets',
-      badge: 'Retro Desktop Companions',
-      description: 'Nostalgic, interactive pixel companions that sit on your desktop, track your cursor gaze with their eyes, monitor your typing cadence, react to speech amplitude, and play with yarn while you dictate.',
-      image: '/assets/screenshots/feature-companion-showcase.png',
+      title: 'Procedural Desktop Pixel Pets',
+      badge: 'Code-Rendered Companions',
+      description: 'Nostalgic, interactive pixel companions drawn purely in code (0 PNGs) that sit on your desktop, track your cursor gaze with their eyes, monitor your typing cadence, react to speech amplitude, and celebrate milestones.',
+      image: null,
       icon: <Heart className="w-4 h-4 text-white" />,
       accentColor: '#ec4899',
       metrics: [
-        { label: 'Packs', value: '4 Bundled' },
-        { label: 'Behaviors', value: '12 Moods' },
-        { label: 'Physics', value: 'Yarn & Laser' },
+        { label: 'Runtime', value: '100% Code' },
+        { label: 'Sprites', value: '0 PNGs' },
+        { label: 'Render', value: '< 0.1ms' },
       ],
-      features: ['Classic Cat, Calico, Tuxedo & Corgi', 'Click-to-pet friendship leveling', 'Custom sprite pack JSON loader'],
+      features: ['Ginger Cat, Charcoal Cat, Pixel Dog & Panda', 'Integer-pixel eye gaze tracking', 'Sub-millisecond procedural draw calls'],
     },
     {
       id: 'models',
@@ -211,11 +212,17 @@ export default function AssetTransitionShowcase() {
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                   className="w-full relative rounded-2xl overflow-hidden bg-[#101014] border border-zinc-700/80 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2"
                 >
-                  <img
-                    src={current.image}
-                    alt={current.title}
-                    className="w-full rounded-xl object-cover shadow-2xl"
-                  />
+                  {current.id === 'companions' ? (
+                    <div className="w-full aspect-[16/10] flex items-center justify-center bg-zinc-950 rounded-xl">
+                      <CodeCompanionCanvas species="cat" isGinger={true} action="knead" width={220} height={220} />
+                    </div>
+                  ) : (
+                    <img
+                      src={current.image}
+                      alt={current.title}
+                      className="w-full rounded-xl object-cover shadow-2xl"
+                    />
+                  )}
                   {/* Subtle rim highlight reflection */}
                   <div className="absolute inset-0 rounded-2xl pointer-events-none border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]"></div>
                 </motion.div>
