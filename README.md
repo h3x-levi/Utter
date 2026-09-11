@@ -42,7 +42,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 - ⚡ **Zero Network Latency**: Zero servers, zero telemetry, zero accounts, zero subscriptions, and zero rate limits.
 - 🎯 **Context-Aware Precision**: Automatically adapts capitalization, spacing, and punctuation to code, chat, or long-form prose.
 - 🎨 **Liquid Glass Design System**: Built with authentic macOS 13.3–15+ design tokens, vibrant translucency, Bento grids, and 7 bespoke themes.
-- 🐾 **Articulated Desktop Companions**: Interactive pixel pets (Cat, Dog, Panda) that react to your speaking cadence and typing rhythms in real-time.
+- 🐾 **Procedural Vector Companions**: Built-in Charcoal Cat, Ginger Cat, Pixel Dog, and Pixel Panda drawn 100% in code (0 PNG assets) with real-time cursor pupil tracking.
 
 ---
 
@@ -52,7 +52,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 
 - **Global Push-to-Talk**: Hold **`Fn`** (or Right **`⌥`**, Right **`⌘`**, Right **`⌃`**), speak your thought, and release. Utter injects clean sentences directly into your active input field.
 - **Hands-Free Lock (`⌃⌥Space`)**: Latch recording mode for long-form dictation, brainstorming, or lectures. Auto-settles upon pausing or manual toggle.
-- **Fluid Floating Pill**: Non-intrusive HUD capsule with live RMS waveform metering and seamless morphing transitions.
+- **Fluid Floating Pill**: Non-intrusive HUD capsule with live RMS waveform metering and seamless morphing transitions across 7 distinct states.
 
 <div align="center">
   <img src="Assets/screenshots/feature-pill-lineup.png" alt="Dynamic Liquid Glass Pill Morphing" width="100%" />
@@ -79,7 +79,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
   - *"Fix punctuation and tone"*
   - *"Translate into Japanese"*
   - *"Extract bulleted action items"*
-- **On-Device Foundation Models**: Powered locally via macOS `FoundationModels` framework with fallback to offline heuristics.
+- **On-Device Foundation Models**: Powered locally via macOS `FoundationModels` framework with fallback to offline heuristics or local Ollama instances.
 - **Custom AI Commands**: Craft bespoke reusable prompt templates tailored to your personal coding or writing workflow.
 
 <div align="center">
@@ -100,27 +100,35 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 
 ---
 
-### 🐾 Articulated Quadruped Desktop Companions
+### 🐾 Procedural Vector Desktop Companions
 
-- **Desktop Pixel Pets**: An optional interactive companion (Cat, Dog, Panda) that floats on your desktop and reacts dynamically to speaking volume, transcription speed, and typing cadence.
-- **Full-Body Articulated Motions**:
-  - 🐾 **4-Leg Walking Cycles**: Natural diagonal limb cadence.
-  - 🧶 **Biscuit Kneading**: Sinusoidal arm push gestures.
-  - 🤔 **Chin-Scratch Thinking**: Arm raised to chin with thoughtful head tilts.
-  - 🍞 **Loaf Mode**: Four limbs tucked cleanly underneath during resting/sleep.
-  - 🎉 **Celebration Hands**: Joyful raised paws during fast speech flow.
-  - 🪂 **Dangle Physics**: Limbs and tail dangle with gravity when dragged across displays.
-- **60 FPS Vector Engine**: Rendered asynchronously on background CoreGraphics queues with zero main-thread CPU impact.
+Utter features optional procedural companions drawn 100% in code at runtime ([`CodePixelCat.swift`](Sources/UtterKit/Companion/CodePixelCat.swift)) — zero PNG images are loaded or bundled:
+
+- 🐱 **Charcoal Cat** (`pixel-cat-gray`): Sleek slate-charcoal coat, white chest bib & snout, bright cyan eyes with glossy specular catchlights, and friendly waving paw.
+- 🐱 **Ginger Cat** (`pixel-cat-orange`): Warm ginger tabby with orange tiger stripes, white chest bib, sparkling emerald green eyes, and waving paw.
+- 🐶 **Pixel Dog** (`dog`): Golden puppy coat, drooping floppy brown ears, cream muzzle, and happy open smile with pink tongue.
+- 🐼 **Pixel Panda** (`panda`): White chibi head, round black ears, classic angled black eye patches, black vest & arms, and pink toe bean pads.
 
 <div align="center">
-  <img src="Assets/screenshots/feature-companion-showcase.png" alt="Full-Body Articulated Companion Pets" width="100%" />
+  <img src="Assets/screenshots/character-selector.png" alt="Utter macOS Native Character Selector" width="100%" />
 </div>
+
+#### Interactive Motions & Physics:
+- 👋 **Wave Hello**: Waving front paw greeting with friendly ear twitches.
+- 🧶 **Biscuit Kneading**: Sinusoidal arm push gestures on mechanical keypads during dictation.
+- 🐾 **4-Leg Walking Cycles**: Articulated quadruped diagonal limb cadence across window bezels.
+- 🍞 **Loaf Sleep Mode**: Four limbs tucked cleanly underneath during resting/sleep with peaceful breathing animation.
+- 🤔 **Chin-Scratch Thinking**: Arm raised to chin with thoughtful head tilts while evaluating speech tokens.
+- 🎉 **Delighted Celebration**: Both paws raised in celebration during fast speech flow and coding streaks.
+- 👁️ **Real-Time Cursor Pupil Gaze**: Pupils smoothly track your cursor across any active display in real time.
+- 🪂 **Dangle Physics**: Limbs and tail dangle with natural gravity when dragged across displays.
+- ⚡ **Sub-Millisecond Draw Calls**: Rendered asynchronously on background CoreGraphics queues at 60 FPS with 0% main-thread CPU overhead.
 
 ---
 
 ### 🎛️ Speech Model Chooser & Benchmark Selection
 
-Utter bundles the high-accuracy `ggml-small.en-q5_1.bin` model (181MB) for instant out-of-the-box operation and supports downloading specialized multilingual and quantized Whisper models directly within the app.
+Utter bundles the high-accuracy `ggml-small.en-q5_1.bin` model (181MB) for instant out-of-the-box operation and supports downloading specialized multilingual and quantized Whisper models directly within the app (Tiny, Base, Small, Distil-Whisper, Large-v3-Turbo).
 
 <div align="center">
   <img src="Assets/screenshots/feature-speech-models.png" alt="Speech Model Chooser" width="94%" />
@@ -172,19 +180,26 @@ Crafted with pixel-perfect macOS typography, high-contrast borders, and adaptive
 
 ## 🚀 Quick Start
 
-### 1. Download
-Download the latest DMG release from [GitHub Releases](https://github.com/h3x-levi/Utter/releases/latest):
+### 1. Install via Homebrew (Recommended)
+
 ```bash
-# Or download directly from terminal:
-curl -LO https://github.com/h3x-levi/Utter/releases/download/v1.1.47/Utter-1.1.47.dmg
+brew install --cask utter
 ```
 
-### 2. Install
-1. Double-click `Utter-1.1.47.dmg`.
+### 2. Or Download Directly
+
+Download the latest DMG release from [GitHub Releases](https://github.com/h3x-levi/Utter/releases/latest):
+```bash
+# Direct download from terminal:
+curl -LO https://github.com/h3x-levi/Utter/releases/download/v1.1.56/Utter-1.1.56.dmg
+```
+
+1. Double-click `Utter-1.1.56.dmg`.
 2. Drag **Utter.app** into your **Applications** folder.
 3. Launch **Utter** from Spotlight or Applications.
 
 ### 3. Grant macOS Permissions
+
 Upon first launch, Utter will guide you through granting two standard macOS permissions:
 - **Microphone**: Required for capturing spoken audio.
 - **Accessibility**: Required for detecting your chosen global push-to-talk hotkey and injecting transcribed text into active applications.
@@ -212,7 +227,7 @@ swift build -c release
 ```
 The compiled application and installer will be located in:
 - `build/Utter.app`
-- `build/Utter-1.1.47.dmg`
+- `build/Utter-1.1.56.dmg`
 
 ---
 
@@ -238,7 +253,7 @@ graph TD
     Polish --> AI[Apple Intelligence Local LLM Engine]
     AI --> Injector
     
-    Pill --> Companion[Articulated 60FPS Companion Pet]
+    Pill --> Companion[Procedural 60FPS Companion Engine]
 ```
 
 ---
