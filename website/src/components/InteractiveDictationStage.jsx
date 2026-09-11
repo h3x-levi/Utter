@@ -109,18 +109,26 @@ export default function InteractiveDictationStage({ soundEnabled }) {
           const Icon = app.appIcon;
           const isActive = selectedApp.id === app.id;
           return (
-            <button
+            <motion.button
               key={app.id}
               onClick={() => setSelectedApp(app)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all duration-200 border ${
+              whileTap={{ scale: 0.95 }}
+              className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-colors border ${
                 isActive
-                  ? 'bg-zinc-800 text-white border-orange-500/50 shadow-md shadow-orange-500/10'
-                  : 'bg-zinc-900/60 text-zinc-400 border-white/5 hover:bg-zinc-800/60 hover:text-zinc-200'
+                  ? 'text-white border-transparent'
+                  : 'text-zinc-400 border-white/5 hover:text-zinc-200 hover:border-white/10'
               }`}
             >
-              <Icon size={14} className={isActive ? 'text-orange-400' : 'text-zinc-400'} />
-              <span>{app.appName}</span>
-            </button>
+              {isActive && (
+                <motion.div
+                  layoutId="activeDictationAppPill"
+                  className="absolute inset-0 bg-zinc-800 rounded-xl border border-orange-500/50 shadow-md shadow-orange-500/15"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+              <Icon size={14} className={`relative z-10 transition-colors ${isActive ? 'text-orange-400' : 'text-zinc-500'}`} />
+              <span className="relative z-10">{app.appName}</span>
+            </motion.button>
           );
         })}
       </div>
@@ -139,14 +147,17 @@ export default function InteractiveDictationStage({ soundEnabled }) {
             </div>
 
             {/* Giant Push-to-Talk Button */}
-            <button
+            <motion.button
               onMouseDown={startRecording}
               onMouseUp={stopRecordingAndTranscribe}
               onTouchStart={startRecording}
               onTouchEnd={stopRecordingAndTranscribe}
-              className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center gap-2 cursor-pointer select-none transition-all duration-200 active:scale-95 shadow-2xl ${
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full flex flex-col items-center justify-center gap-2 cursor-pointer select-none shadow-2xl transition-all duration-200 ${
                 stageState === 'listening'
-                  ? 'bg-gradient-to-tr from-orange-600 to-amber-500 text-white ring-8 ring-orange-500/30 scale-105 animate-pulse'
+                  ? 'bg-gradient-to-tr from-orange-600 to-amber-500 text-white ring-8 ring-orange-500/30'
                   : 'bg-zinc-900 text-zinc-200 border-2 border-orange-500/40 hover:border-orange-400 hover:shadow-orange-500/20'
               }`}
             >
@@ -154,7 +165,7 @@ export default function InteractiveDictationStage({ soundEnabled }) {
               <span className="text-[11px] font-bold uppercase tracking-wider">
                 {stageState === 'listening' ? 'Listening...' : 'Hold to Talk'}
               </span>
-            </button>
+            </motion.button>
 
             <div className="mt-6 text-xs text-zinc-400 flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[11px] border border-white/5">

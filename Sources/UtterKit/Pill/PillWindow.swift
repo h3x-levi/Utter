@@ -1329,14 +1329,17 @@ struct PillContent: View {
 
 /// A symbol that remains crisp and high-contrast over any wallpaper.
 struct AdaptivePillGlyph: View {
+    static let outerInk = Color.white
+    static let innerInk = Color.black
+
     let systemName: String
     let size: CGFloat
 
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: size, weight: .semibold))
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.40), radius: 1, x: 0, y: 0.5)
+            .foregroundStyle(Self.outerInk)
+            .shadow(color: Self.innerInk.opacity(0.40), radius: 1, x: 0, y: 0.5)
             .accessibilityHidden(true)
     }
 }

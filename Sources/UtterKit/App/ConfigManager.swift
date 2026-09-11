@@ -10,7 +10,7 @@ final class ConfigManager {
     static let shared = ConfigManager()
 
     /// Marketing version, read from the bundle at launch.
-    private(set) var appVersion: String = "1.1.56"
+    private(set) var appVersion: String = "1.1.57"
 
     private init() {}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Wand2, ArrowRight, Check, RefreshCw, Cpu, ShieldCheck } from 'lucide-react';
 
 const PRESET_TRANSFORMS = [
@@ -77,20 +77,31 @@ export default function TransformsStudio() {
 
       {/* Transform Options Selector */}
       <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap mb-10">
-        {PRESET_TRANSFORMS.map((item, idx) => (
-          <button
-            key={item.id}
-            onClick={() => handleApplyTransform(idx)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium border transition-all duration-200 ${
-              activePresetIndex === idx
-                ? 'bg-purple-600/30 text-purple-200 border-purple-500/50 shadow-lg shadow-purple-500/10 font-semibold'
-                : 'bg-zinc-900/60 text-zinc-400 border-white/5 hover:bg-zinc-800/60 hover:text-zinc-200'
-            }`}
-          >
-            <Wand2 size={13} className={activePresetIndex === idx ? 'text-purple-400' : 'text-zinc-500'} />
-            <span>"{item.voiceCommand}"</span>
-          </button>
-        ))}
+        {PRESET_TRANSFORMS.map((item, idx) => {
+          const isSelected = activePresetIndex === idx;
+          return (
+            <motion.button
+              key={item.id}
+              onClick={() => handleApplyTransform(idx)}
+              whileTap={{ scale: 0.96 }}
+              className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium border transition-colors ${
+                isSelected
+                  ? 'text-purple-200 border-transparent font-semibold'
+                  : 'text-zinc-400 border-white/5 hover:text-zinc-200 hover:border-white/10'
+              }`}
+            >
+              {isSelected && (
+                <motion.div
+                  layoutId="activeTransformPill"
+                  className="absolute inset-0 bg-purple-600/30 border border-purple-500/60 rounded-xl shadow-lg shadow-purple-500/20"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
+              <Wand2 size={13} className={`relative z-10 ${isSelected ? 'text-purple-400' : 'text-zinc-500'}`} />
+              <span className="relative z-10">"{item.voiceCommand}"</span>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Before / After Interactive Transformer Card */}
@@ -140,15 +151,33 @@ export default function TransformsStudio() {
                 </span>
               </div>
 
-              {isTransforming ? (
-                <div className="min-h-[140px] flex items-center justify-center text-xs font-mono text-purple-300 animate-pulse">
-                  Executing Apple FoundationModel in RAM...
-                </div>
-              ) : (
-                <p className="text-white font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
-                  {displayText}
-                </p>
-              )}
+              <div className="min-h-[140px] flex items-center">
+                <AnimatePresence mode="wait">
+                  {isTransforming ? (
+                    <motion.div
+                      key="transforming"
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      className="w-full flex items-center justify-center text-xs font-mono text-purple-300 animate-pulse"
+                    >
+                      Executing Apple FoundationModel in RAM...
+                    </motion.div>
+                  ) : (
+                    <motion.p
+                      key={preset.id}
+                      initial={{ opacity: 0, y: 4, filter: 'blur(4px)' }}
+                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, y: -4, filter: 'blur(4px)' }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                      className="text-white font-mono text-xs sm:text-sm leading-relaxed whitespace-pre-wrap"
+                    >
+                      {displayText}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             <div className="pt-4 mt-6 border-t border-white/5 flex items-center justify-between text-xs text-zinc-400 font-mono">

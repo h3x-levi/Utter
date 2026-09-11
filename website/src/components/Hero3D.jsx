@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import { Download, Terminal, Copy, Check, Mic, Zap, Shield, Cpu, Sparkles, Eye } from 'lucide-react';
 
 const PILL_STATES = [
@@ -33,20 +33,31 @@ export default function Hero3D() {
   const [activePillState, setActivePillState] = useState('listening');
   const [isSimulating, setIsSimulating] = useState(false);
   const [copiedBrew, setCopiedBrew] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const displayRef = useRef(null);
 
-  // Mouse 3D perspective tilt calculation
+  // High-Performance Apple Spring Perspective Tilt (Zero React State Re-renders)
+  const mouseNormX = useMotionValue(0);
+  const mouseNormY = useMotionValue(0);
+
+  const rawRotateX = useTransform(mouseNormY, [-0.5, 0.5], [7, -7]);
+  const rawRotateY = useTransform(mouseNormX, [-0.5, 0.5], [-7, 7]);
+
+  const springRotateX = useSpring(rawRotateX, { stiffness: 180, damping: 26 });
+  const springRotateY = useSpring(rawRotateY, { stiffness: 180, damping: 26 });
+
+  // Mouse 3D perspective tilt calculation without component re-renders
   const handleMouseMove = (e) => {
     if (!displayRef.current) return;
     const rect = displayRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setMousePos({ x: x * 12, y: -y * 12 });
+    mouseNormX.set(x);
+    mouseNormY.set(y);
   };
 
   const handleMouseLeave = () => {
-    setMousePos({ x: 0, y: 0 });
+    mouseNormX.set(0);
+    mouseNormY.set(0);
   };
 
   const handleCopyBrew = () => {
@@ -121,20 +132,26 @@ export default function Hero3D() {
           transition={{ duration: 0.45, delay: 0.15 }}
           className="flex flex-wrap items-center justify-center gap-3.5 mb-7"
         >
-          {/* Primary DMG Release Download */}
-          <a
+          {/* Primary DMG Release Download with Tactile Spring Press */}
+          <motion.a
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full text-sm font-bold text-zinc-950 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200 hover:from-orange-300 hover:to-yellow-100 shadow-2xl shadow-orange-500/30 active:scale-95 transition-all duration-150"
+            className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full text-sm font-bold text-zinc-950 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200 hover:from-orange-300 hover:to-yellow-100 shadow-2xl shadow-orange-500/30 transition-all select-none"
           >
             <Download size={17} />
             <span>Download for Mac (.dmg)</span>
             <span className="text-[11px] font-mono opacity-80 pl-1 border-l border-black/20">v1.1.56</span>
-          </a>
+          </motion.a>
 
-          {/* Workable Homebrew Cask Install Pill */}
-          <button
+          {/* Workable Homebrew Cask Install Pill with Tactile Spring Press */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             onClick={handleCopyBrew}
-            className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-full text-xs sm:text-sm font-mono text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800/90 border border-white/20 shadow-xl transition-all active:scale-95"
+            className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-full text-xs sm:text-sm font-mono text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800/90 border border-white/20 shadow-xl transition-all select-none"
             title="Click to copy Homebrew install command"
           >
             <Terminal size={15} className="text-orange-400" />
@@ -146,7 +163,7 @@ export default function Hero3D() {
             ) : (
               <Copy size={13} className="text-zinc-400" />
             )}
-          </button>
+          </motion.button>
         </motion.div>
 
         {/* Metric Chips */}
@@ -178,14 +195,15 @@ export default function Hero3D() {
         ref={displayRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        initial={{ opacity: 0, scale: 0.92, y: 25 }}
+        initial={{ opacity: 0, scale: 0.94, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
         style={{
-          transform: `perspective(1200px) rotateX(${mousePos.y}deg) rotateY(${mousePos.x}deg)`,
-          transition: 'transform 0.15s ease-out',
+          transformPerspective: 1200,
+          rotateX: springRotateX,
+          rotateY: springRotateY,
         }}
-        className="w-full max-w-[1160px] mx-auto relative rounded-3xl p-2.5 sm:p-3.5 liquid-glass border border-white/25 shadow-2xl overflow-hidden group"
+        className="w-full max-w-[1160px] mx-auto relative rounded-3xl p-2.5 sm:p-3.5 liquid-glass border border-white/25 shadow-2xl overflow-hidden group gpu-accelerate"
       >
         {/* macOS Window Frame Header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/90 rounded-t-2xl border-b border-white/10 select-none">
@@ -198,24 +216,32 @@ export default function Hero3D() {
             </span>
           </div>
 
-          {/* Interactive Pill State Switcher */}
-          <div className="flex items-center gap-1.5 bg-black/60 p-1 rounded-xl border border-white/10">
-            {PILL_STATES.map((st) => (
-              <button
-                key={st.id}
-                onClick={() => {
-                  setActivePillState(st.id);
-                  setIsSimulating(true);
-                }}
-                className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-all ${
-                  activePillState === st.id
-                    ? 'bg-orange-500 text-zinc-950 font-bold shadow-md'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {st.label}
-              </button>
-            ))}
+          {/* Interactive Pill State Switcher with Apple Sliding Spring Pill */}
+          <div className="flex items-center gap-1 bg-black/60 p-1 rounded-xl border border-white/10">
+            {PILL_STATES.map((st) => {
+              const isSelected = activePillState === st.id;
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => {
+                    setActivePillState(st.id);
+                    setIsSimulating(true);
+                  }}
+                  className={`relative px-3 py-1 rounded-lg text-[11px] font-mono transition-colors duration-150 z-10 select-none ${
+                    isSelected ? 'text-zinc-950 font-bold' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {isSelected && (
+                    <motion.div
+                      layoutId="heroPillTab"
+                      className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-300 rounded-lg shadow-md -z-10"
+                      transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                    />
+                  )}
+                  <span>{st.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="text-xs font-mono text-emerald-400 hidden md:flex items-center gap-1.5">

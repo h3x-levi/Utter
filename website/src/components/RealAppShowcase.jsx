@@ -30,7 +30,7 @@ const APP_FEATURES = [
       'Utter lives as a fluid HUD capsule hovering over your screen margins or menu bar. It morphs smoothly across 7 distinct states with live RMS waveforms and sub-200ms processing feedback.',
     highlights: [
       'Sub-5ms global push-to-talk activation via Fn or ⌥',
-      'Continuous Hands-Free Lock toggle (⌃⌥Space)',
+      'Double-tap Fn (or ⌃⌥Space) for continuous hands-free dictation',
       'Zero screen obstruction — adapts to active app windows',
     ],
   },
@@ -129,7 +129,7 @@ export default function RealAppShowcase() {
   const activeCompanion = COMPANION_PRESETS[companionPetIndex];
 
   return (
-    <section id="features-showcase" className="relative py-28 px-4 sm:px-6 lg:px-12 w-full max-w-[1360px] mx-auto z-10">
+    <section id="showcase" className="relative py-28 px-4 sm:px-6 lg:px-12 w-full max-w-[1360px] mx-auto z-10">
       {/* Header */}
       <div className="flex flex-col items-center text-center mb-16">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-pill text-xs font-mono text-orange-400 mb-4 border border-orange-500/20">
@@ -144,8 +144,8 @@ export default function RealAppShowcase() {
         </p>
       </div>
 
-      {/* Feature Tab Navigation */}
-      <div className="flex items-center justify-center gap-2 flex-wrap mb-10">
+      {/* Feature Tab Navigation with Apple Sliding Spring Pill */}
+      <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap mb-10 p-1.5 rounded-3xl bg-black/40 border border-white/10 backdrop-blur-xl max-w-fit mx-auto">
         {APP_FEATURES.map((feature, idx) => {
           const Icon = feature.icon;
           const isSelected = activeTab === idx;
@@ -153,12 +153,19 @@ export default function RealAppShowcase() {
             <button
               key={feature.id}
               onClick={() => setActiveTab(idx)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all duration-200 border ${
+              className={`relative flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl text-xs sm:text-sm font-medium transition-colors duration-150 select-none z-10 ${
                 isSelected
-                  ? 'bg-orange-500 text-zinc-950 font-bold border-orange-400 shadow-lg shadow-orange-500/20 scale-[1.02]'
-                  : 'liquid-glass text-zinc-300 hover:text-white hover:bg-zinc-800/60 border-white/10'
+                  ? 'text-zinc-950 font-bold'
+                  : 'text-zinc-300 hover:text-white'
               }`}
             >
+              {isSelected && (
+                <motion.div
+                  layoutId="activeFeaturePill"
+                  className="absolute inset-0 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200 rounded-2xl shadow-lg shadow-orange-500/25 -z-10"
+                  transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                />
+              )}
               <Icon size={15} />
               <span>{feature.title}</span>
             </button>
@@ -219,22 +226,32 @@ export default function RealAppShowcase() {
                   </div>
                 </div>
 
-                {/* Action Trigger Bar */}
+                {/* Action Trigger Bar with Spring Indicator */}
                 <div className="flex items-center justify-between pt-3 border-t border-white/10 flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5">
-                    {COMPANION_ACTIONS.map((act) => (
-                      <button
-                        key={act.id}
-                        onClick={() => setCompanionAction(act.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition-all ${
-                          companionAction === act.id
-                            ? 'bg-orange-500 text-zinc-950 font-bold shadow-sm'
-                            : 'bg-white/5 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {act.icon} {act.label}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/40 border border-white/5">
+                    {COMPANION_ACTIONS.map((act) => {
+                      const isActSelected = companionAction === act.id;
+                      return (
+                        <button
+                          key={act.id}
+                          onClick={() => setCompanionAction(act.id)}
+                          className={`relative px-2.5 py-1 rounded-lg text-[11px] font-mono transition-colors duration-150 z-10 select-none ${
+                            isActSelected
+                              ? 'text-zinc-950 font-bold'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {isActSelected && (
+                            <motion.div
+                              layoutId="activeCompanionActionPill"
+                              className="absolute inset-0 bg-orange-500 rounded-lg shadow-sm -z-10"
+                              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                            />
+                          )}
+                          <span>{act.icon} {act.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div className="text-[10px] font-mono text-amber-400/90 hidden sm:block">
@@ -243,26 +260,25 @@ export default function RealAppShowcase() {
                 </div>
               </div>
             ) : (
-              /* Real Native macOS App Screenshot */
-              <>
-                <AnimatePresence mode="wait">
+              /* Real Native macOS App Screenshot with Fluid Apple Crossfade */
+              <div className="relative w-full h-full min-h-[440px]">
+                <AnimatePresence>
                   <motion.img
                     key={current.image}
                     src={current.image}
                     alt={current.title}
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="w-full h-full object-cover object-top filter brightness-[1.02] contrast-[1.02]"
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full h-full object-cover object-top filter brightness-[1.02] contrast-[1.02] rounded-2xl"
                   />
                 </AnimatePresence>
-
                 {/* Subtle overlay pill */}
                 <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-zinc-950/80 backdrop-blur-md border border-white/15 text-[11px] font-mono text-zinc-300">
                   macOS Sonoma & Sequoia Native
                 </div>
-              </>
+              </div>
             )}
           </div>
 

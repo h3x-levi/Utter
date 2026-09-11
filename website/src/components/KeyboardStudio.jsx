@@ -6,6 +6,7 @@ export default function KeyboardStudio() {
 
   const hotkeys = [
     { name: 'Fn (Globe)', key: 'Fn', type: 'Push-to-Talk', desc: 'Hold down the Fn / Globe key in the bottom-left corner of your MacBook or Magic Keyboard.' },
+    { name: 'Double-Tap Fn', key: 'Fn × 2', type: 'Hands-Free', desc: 'Double-tap your hotkey to lock continuous hands-free dictation without holding down any keys.' },
     { name: 'Right Option', key: '⌥ Right', type: 'Push-to-Talk', desc: 'Ideal for right-hand resting position. Hold down Right Option while speaking.' },
     { name: 'Right Command', key: '⌘ Right', type: 'Push-to-Talk', desc: 'Ergonomic right-thumb hotkey. Dictate with natural hand placement.' },
     { name: 'Ctrl + Opt + Space', key: '⌃⌥␣', type: 'Toggle Mode', desc: 'Hands-free toggle mode. Press once to start dictating, press again to stop.' },

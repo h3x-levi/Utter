@@ -11,6 +11,8 @@ class UserData: ObservableObject {
     @Published var voiceCommandsEnabled: Bool = true
     @Published var spokenPunctuationEnabled: Bool = false // "period"/"comma" → symbols; off by default (words are ambiguous)
     @Published var hotkeyName: String = "Fn"
+    /// Double-tap the hotkey (e.g. Fn twice) to start or toggle hands-free dictation.
+    @Published var doubleTapHotkeyForHandsFree: Bool = true
     @Published var lastTranscription: String = ""
     @Published var appTheme: String = ThemeManager.systemThemeID
     @Published var customAICommands: [CustomAICommand] = []
@@ -355,6 +357,7 @@ class UserData: ObservableObject {
             "voiceCommands": voiceCommandsEnabled,
             "spokenPunctuation": spokenPunctuationEnabled,
             "hotkeyName": hotkeyName,
+            "doubleTapHotkeyForHandsFree": doubleTapHotkeyForHandsFree,
             "appTheme": appTheme,
             "scratchpad": scratchpad,
             "customAICommands": customCmdData,
@@ -434,7 +437,10 @@ class UserData: ObservableObject {
         if let vc = json["voiceCommands"] as? Bool { voiceCommandsEnabled = vc }
         if let sp = json["spokenPunctuation"] as? Bool { spokenPunctuationEnabled = sp }
         if let hn = json["hotkeyName"] as? String { hotkeyName = hn }
-        if let theme = json["appTheme"] as? String { appTheme = theme }
+        if let dth = json["doubleTapHotkeyForHandsFree"] as? Bool { doubleTapHotkeyForHandsFree = dth }
+        if let theme = json["appTheme"] as? String {
+            appTheme = (theme == "ember") ? ThemeManager.systemThemeID : theme
+        }
         if let pad = json["scratchpad"] as? String { scratchpad = pad }
         if let v = json["alwaysShowPill"] as? Bool { alwaysShowPill = v }
         if let v = json["showInDock"] as? Bool { showInDock = v }

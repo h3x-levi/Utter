@@ -11,6 +11,15 @@
   --theme-border: rgba(255, 255, 255, 0.12);
   --theme-text: #f4f4f5;
   --theme-text-muted: #a1a1aa;
+  --ease-apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-apple-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-apple-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
 }
 
 /* 7 Bespoke Native macOS Themes */
@@ -141,13 +150,21 @@ h1, h2, h3, h4, h5, h6 {
   .gradient-text-accent {
     background: linear-gradient(135deg, #ffffff 30%, var(--theme-accent) 95%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
   .gradient-text-subtle {
     background: linear-gradient(180deg, #ffffff 40%, rgba(255, 255, 255, 0.55) 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+
+  .gpu-accelerate {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform;
   }
 }
 

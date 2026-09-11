@@ -42,25 +42,31 @@ export default function DownloadHub() {
         {/* Primary Action Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-3.5 mb-8">
           {/* Direct DMG Download */}
-          <a
+          <motion.a
             href="https://github.com/h3x-levi/Utter/releases/latest"
-            className="inline-flex items-center gap-3 px-8 py-3.5 rounded-full text-base font-bold text-zinc-950 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200 hover:from-orange-300 hover:to-yellow-100 shadow-2xl shadow-orange-500/25 active:scale-95 transition-all duration-150"
+            whileHover={{ scale: 1.03, y: -1 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+            className="inline-flex items-center gap-3 px-8 py-3.5 rounded-full text-base font-bold text-zinc-950 bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-200 hover:from-orange-300 hover:to-yellow-100 shadow-2xl shadow-orange-500/25 transition-colors"
           >
             <Download size={18} />
             <span>Download Utter for Mac (.dmg)</span>
-          </a>
+          </motion.a>
 
           {/* GitHub Releases Link */}
-          <a
+          <motion.a
             href="https://github.com/h3x-levi/Utter/releases"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs sm:text-sm font-semibold text-zinc-200 hover:text-white liquid-glass hover:bg-white/10 border border-white/15 transition-all active:scale-95"
+            whileHover={{ scale: 1.03, y: -1 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+            className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-xs sm:text-sm font-semibold text-zinc-200 hover:text-white liquid-glass hover:bg-white/10 border border-white/15 transition-colors"
           >
             <Github size={16} />
             <span>All Releases & Checksums</span>
             <ArrowUpRight size={13} />
-          </a>
+          </motion.a>
         </div>
 
         {/* Real Working Homebrew Command */}
@@ -71,9 +77,11 @@ export default function DownloadHub() {
               <Terminal size={15} className="text-orange-400 shrink-0" />
               <code className="text-orange-300 font-bold whitespace-nowrap">brew install --cask utter</code>
             </div>
-            <button
+            <motion.button
               onClick={handleCopyBrew}
-              className="ml-3 p-2 rounded-xl bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1.5"
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              className="ml-3 p-2 rounded-xl bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer"
               title="Copy Homebrew command"
             >
               {copied ? (
@@ -87,13 +95,17 @@ export default function DownloadHub() {
                   <span className="text-[11px] font-sans">Copy</span>
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* Specs & Hardware Compatibility Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8 border-t border-white/10 w-full max-w-[900px] text-left">
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-3 rounded-2xl hover:bg-white/5 transition-colors"
+          >
             <div className="p-2.5 rounded-xl bg-white/5 text-zinc-300 border border-white/5">
               <Apple size={18} />
             </div>
@@ -102,9 +114,13 @@ export default function DownloadHub() {
               <div className="text-sm font-semibold text-white">macOS 14 Sonoma & 15 Sequoia</div>
               <div className="text-xs text-zinc-400 mt-0.5">Compatible with macOS 13.3+</div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-3 rounded-2xl hover:bg-white/5 transition-colors"
+          >
             <div className="p-2.5 rounded-xl bg-white/5 text-zinc-300 border border-white/5">
               <Cpu size={18} />
             </div>
@@ -113,9 +129,13 @@ export default function DownloadHub() {
               <div className="text-sm font-semibold text-white">Apple Silicon (M1 / M2 / M3 / M4)</div>
               <div className="text-xs text-zinc-400 mt-0.5">Universal Binary with Intel AVX2</div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-3 rounded-2xl hover:bg-white/5 transition-colors"
+          >
             <div className="p-2.5 rounded-xl bg-white/5 text-zinc-300 border border-white/5">
               <Shield size={18} />
             </div>
@@ -124,7 +144,7 @@ export default function DownloadHub() {
               <div className="text-sm font-semibold text-white">Apache 2.0 (100% Free)</div>
               <div className="text-xs text-zinc-400 mt-0.5">Zero tracking, zero DRM</div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </motion.div>
     </section>

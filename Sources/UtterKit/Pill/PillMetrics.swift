@@ -121,18 +121,20 @@ enum PillMetrics {
     static func shellWidth(for state: PillState) -> CGFloat? {
         switch state {
         case .capturingNote: return noteContentWidth + horizontalPadding * 2
-        case .idle, .preparing, .processing, .recording, .notice, .error:
-            return minimumCapsuleWidth
-        case .handsFree, .capturingMemory:
-            return minimumCapsuleWidth + 16
+        case .idle, .processing: return minimumCapsuleWidth
+        case .preparing, .recording, .handsFree, .capturingMemory, .notice, .error: return nil
         }
     }
 
     /// The narrowest a state may draw, before its content has been measured.
     static func widthFloor(for state: PillState) -> CGFloat {
+        let meter = CGFloat(LevelMeter.barCount) * 3 + CGFloat(LevelMeter.barCount - 1) * 2.5
+        let row = horizontalPadding * 2 + 8 + Space.x2 + meter + Space.x2 + 30
         switch state {
+        case .recording:
+            return row
         case .handsFree, .capturingMemory:
-            return minimumCapsuleWidth + 16
+            return row + 10 + Space.x2
         default:
             return minimumCapsuleWidth
         }

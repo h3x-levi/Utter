@@ -4,6 +4,13 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [1.1.57] — September 2026
+
+- **Authentic Apple HIG Redesign**: Redesigned System Settings and Main App windows adhering to native macOS 14/15 Sonoma and Sequoia guidelines.
+- **Double-Tap Hotkey Hands-Free Mode**: Double-tap `Fn` (or configured hotkey) to engage continuous hands-free dictation without holding keys.
+- **Simple Apple-Designed SF Symbols**: Cleaned up sidebar navigation, settings options, and stat cards with native, unboxed vector SF Symbols (`mic`, `character.book.closed`, `text.quote`, `sparkles`, `note.text`, `pawprint`).
+- **Synchronized Assets & Website**: Refreshed AppKit window captures across documentation and website showcase.
+
 ## [1.1.56] — September 2026
 
 - Internal build — packaging and tooling updates

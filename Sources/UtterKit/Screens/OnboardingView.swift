@@ -111,12 +111,9 @@ struct OnboardingView: View {
 
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        stepContent
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+                    stepContent
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                        .padding(.vertical, Space.x3)
                 }
             }
 

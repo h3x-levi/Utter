@@ -45,7 +45,7 @@ export default function ConnectModal({ isOpen, onClose }) {
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             className="relative liquid-glass bg-zinc-950/95 text-zinc-100 rounded-3xl border border-white/15 shadow-2xl w-full max-w-lg p-6 sm:p-8 z-10"
           >
             <button
@@ -68,24 +68,28 @@ export default function ConnectModal({ isOpen, onClose }) {
 
             {/* Social Links */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <a
+              <motion.a
                 href="https://github.com/h3x-levi/Utter"
                 target="_blank"
                 rel="noopener noreferrer"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.97 }}
                 className="flex items-center gap-2.5 p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 text-xs font-semibold text-zinc-200 transition-colors"
               >
                 <Github size={16} />
                 <span>GitHub Repo</span>
-              </a>
-              <a
+              </motion.a>
+              <motion.a
                 href="https://twitter.com"
                 target="_blank"
                 rel="noopener noreferrer"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.97 }}
                 className="flex items-center gap-2.5 p-3 rounded-xl bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 text-xs font-semibold text-zinc-200 transition-colors"
               >
                 <Twitter size={16} className="text-sky-400" />
                 <span>Follow on X</span>
-              </a>
+              </motion.a>
             </div>
 
             {/* Direct Feedback Form */}
@@ -98,7 +102,7 @@ export default function ConnectModal({ isOpen, onClose }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60"
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
 
               <input
@@ -107,7 +111,7 @@ export default function ConnectModal({ isOpen, onClose }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60"
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
 
               <textarea
@@ -116,13 +120,15 @@ export default function ConnectModal({ isOpen, onClose }) {
                 onChange={(e) => setMessage(e.target.value)}
                 required
                 rows={3}
-                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60 resize-none"
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60 resize-none transition-colors"
               />
 
-              <button
+              <motion.button
                 type="submit"
                 disabled={isSubmitted}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-400 to-amber-300 hover:from-orange-300 hover:to-amber-200 text-zinc-950 text-xs font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                whileTap={{ scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-400 to-amber-300 hover:from-orange-300 hover:to-amber-200 text-zinc-950 text-xs font-bold shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 {isSubmitted ? (
                   <>
@@ -135,7 +141,7 @@ export default function ConnectModal({ isOpen, onClose }) {
                     <span>Send Message</span>
                   </>
                 )}
-              </button>
+              </motion.button>
             </form>
           </motion.div>
         </div>

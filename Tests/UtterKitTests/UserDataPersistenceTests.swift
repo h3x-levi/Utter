@@ -30,9 +30,11 @@ struct UserDataPersistenceTests {
         saved.customAICommands = [
             CustomAICommand(trigger: "make concise", systemPrompt: "Shorten it.")
         ]
+        saved.doubleTapHotkeyForHandsFree = false
         saved.save()
 
         let loaded = UserData(storageDir: directory)
+        #expect(loaded.doubleTapHotkeyForHandsFree == false)
         #expect(loaded.dictionaryWords == saved.dictionaryWords)
         #expect(loaded.snippets.map(\.trigger) == ["sig"])
         #expect(loaded.snippets.map(\.expansion) == ["Kind regards"])

@@ -48,233 +48,199 @@ struct GeneralSettingsContent: View {
     }
 
     var body: some View {
-        // `Form` + `Section`, not a `VStack` of `SettingsCard`s.
-        //
-        // What this buys, and it is not decoration: `.formStyle(.grouped)` is the macOS settings
-        // group — the system's inset rounded container, its own row separators, its own row
-        // insets, and label/control alignment shared across every row in the group. The cards it
-        // replaces drew a `BentoTile` surface and then hand-placed a `HairlineDivider()` between
-        // each pair of rows; five of those divider calls are deleted from this pane and eight
-        // more from Speech, leaving none in the file. `SettingsCard` and `HairlineDivider` both
-        // stay defined below — Companion, Diagnostics and Home still call them.
-        //
-        // Section titles are the plain `Section("…")` string, so they are real headers to
-        // VoiceOver rather than a `Text` that happens to sit above the rows.
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.groupGap) {
-                SettingsCard(title: "Account") {
-                    HStack(spacing: Space.x4) {
-                        ZStack {
-                            Circle()
-                                .fill(userData.isAuthenticated ? Tint.accent.opacity(0.15) : Color.primary.opacity(0.08))
-                                .frame(width: 40, height: 40)
-                            Image(systemName: userData.isAuthenticated ? "person.crop.circle.fill" : "person.crop.circle.badge.checkmark")
-                                .font(.system(size: 22))
-                                .foregroundStyle(userData.isAuthenticated ? Tint.accent : Ink.secondary)
+        VStack(alignment: .leading, spacing: Space.x5) {
+            // Account
+            AppleSettingsSection(title: "ACCOUNT") {
+                HStack(spacing: Space.x4) {
+                    ZStack {
+                        Circle()
+                            .fill(userData.isAuthenticated ? Tint.accent.opacity(0.15) : Color.primary.opacity(0.08))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: userData.isAuthenticated ? "person.crop.circle.fill" : "person.crop.circle.badge.checkmark")
+                            .font(.system(size: 20))
+                            .foregroundStyle(userData.isAuthenticated ? Tint.accent : Ink.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(userData.isAuthenticated ? (userData.userDisplayName.isEmpty ? "Connected User" : userData.userDisplayName) : "Guest Mode (Offline)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Ink.primary)
+                        Text(userData.isAuthenticated ? "\(userData.userEmail) · \(userData.authProvider)" : "All preferences and transcripts are stored locally on this Mac.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Ink.secondary)
+                    }
+
+                    Spacer()
+
+                    if userData.isAuthenticated {
+                        Button("Sign Out") {
+                            userData.signOut()
                         }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(userData.isAuthenticated ? (userData.userDisplayName.isEmpty ? "Connected User" : userData.userDisplayName) : "Guest Mode (Offline)")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(userData.isAuthenticated ? "\(userData.userEmail) · \(userData.authProvider)" : "Preferences and transcripts are stored locally.")
-                                .font(.caption)
-                                .foregroundStyle(Ink.secondary)
-                        }
-
-                        Spacer()
-
-                        if userData.isAuthenticated {
-                            Button("Sign Out") {
-                                userData.signOut()
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    } else {
+                        Button {
+                            userData.signInWithGoogle()
+                        } label: {
+                            HStack(spacing: 6) {
+                                GoogleVectorLogo(size: 12)
+                                Text("Sign in with Google")
+                                    .font(.system(size: 12, weight: .medium))
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        } else {
-                            Button {
-                                userData.signInWithGoogle()
-                            } label: {
-                                HStack(spacing: Space.x2) {
-                                    GoogleVectorLogo(size: 13)
-                                    Text("Sign in with Google")
-                                        .font(.caption.weight(.medium))
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .padding(.vertical, 2)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
 
-                SettingsCard(title: "App") {
-                    SettingsToggle(
-                        title: "Launch at login",
-                        description: "Start Utter automatically when you log in.",
-                        isOn: launchAtLoginBinding
-                    )
-
-                    HairlineDivider()
-
-                    SettingsToggle(
-                        title: "Always show the pill",
-                        description: "Keep it on screen. When off, it appears only while dictating.",
-                        isOn: $userData.alwaysShowPill
-                    )
-                    .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
-
-                    HairlineDivider()
-
-                    SettingsToggle(
-                        title: "Show in Dock",
-                        description: "Utter lives in the menu bar. Turn this on to add a Dock icon too.",
-                        isOn: $userData.showInDock
-                    )
-                    .onChange(of: userData.showInDock) { _ in userData.save() }
-
-                    HairlineDivider()
-
-                    SettingsToggle(
-                        title: "Offer to transcribe calls",
-                        description: "Offers when a supported calling app is actively using your microphone and speakers. Includes Zoom, Teams, FaceTime, Webex, Slack, Discord, WhatsApp, Signal, and more. Start browser meetings manually from Notes. Nothing is recorded unless you accept. Needs Screen Recording, below, to capture the other people and not just you.",
-                        isOn: $userData.offerToTranscribeCalls
-                    )
-                    .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
-                }
-
-                SettingsCard(title: "Sound") {
-                    SettingsToggle(
-                        title: "Dictation sounds",
-                        description: "Soft cues when recording starts, stops, and finishes.",
-                        isOn: $userData.soundsEnabled
-                    )
-                    .onChange(of: userData.soundsEnabled) { _ in
-                        userData.save()
-                        if userData.soundsEnabled { SoundPlayer.playDone() }
-                    }
-
-                    HairlineDivider()
-
-                    SettingsToggle(
-                        title: "Pause other audio while dictating",
-                        description: "Sends the play/pause key so music doesn\u{2019}t bleed into the microphone.",
-                        isOn: $userData.muteMusicWhileDictating
-                    )
-                    .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
-                }
-
-                SettingsCard(title: "Notes") {
-                    Text("When you dictate into Utter").typo(.body)
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        SettingsRadioButton(
-                            title: "Add to the open note",
-                            value: true,
-                            selection: $userData.captureAppendsToOpenNote
-                        )
-                        SettingsRadioButton(
-                            title: "Always start a new note",
-                            value: false,
-                            selection: $userData.captureAppendsToOpenNote
-                        )
-                    }
-                    .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
-                }
-
-                SettingsCard(title: "Hotkey") {
-                    Text("Hold this key to dictate. Release to transcribe.").typo(.caption)
-
-                    VStack(alignment: .leading, spacing: Space.x2) {
+            // Dictation Shortcut Section (Matches Apple System Settings Dictation)
+            let currentOpt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
+            AppleSettingsSection(
+                title: "DICTATION SHORTCUT",
+                footer: "Hold \(userData.hotkeyName) to record and release to transcribe. \(currentOpt.description) \(currentOpt.impact)"
+            ) {
+                AppleSettingsRow(title: "Shortcut Key", subtitle: "Press and hold key to dictate") {
+                    Picker("", selection: $userData.hotkeyName) {
                         ForEach(HotkeyOption.options) { option in
-                            SettingsRadioButton(
-                                title: option.name,
-                                value: option.name,
-                                selection: $userData.hotkeyName
-                            )
+                            Text(option.name).tag(option.name)
                         }
                     }
+                    .pickerStyle(.menu)
+                    .frame(width: 170)
                     .onChange(of: userData.hotkeyName) { _ in
                         userData.save()
                         NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
                     }
-
-                    let opt = HotkeyOption.options.first { $0.name == userData.hotkeyName } ?? HotkeyOption.options[0]
-                    VStack(alignment: .leading, spacing: Space.x1) {
-                        Text(opt.description)
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(opt.impact)
-                            .typo(.caption, ink: opt.impact.hasPrefix("Use with caution")
-                                  ? Tint.warningText : Ink.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
-                               value: userData.hotkeyName)
                 }
 
-                SettingsCard(title: "Other shortcuts") {
-                    let handsFreeHoldTap = (axGranted && HoldTap.isAvailable)
-                        ? HoldTap.binding(for: .handsFree) : nil
+                AppleSettingsDivider()
 
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        ShortcutHint(keys: KeyChord.handsFree.keycaps,
-                                     caption: ShortcutAction.handsFree.label,
-                                     spokenKeys: KeyChord.handsFree.spelled)
-                        if let handsFreeHoldTap {
-                            ShortcutHint(keys: handsFreeHoldTap.keycaps(holdKey: userData.hotkeyName),
-                                         caption: "while dictating",
-                                         spokenKeys: handsFreeHoldTap.spelled(holdKey: userData.hotkeyName))
-                        }
-                        Text("Starts recording without holding anything, and keeps going until you press it again or stop speaking for three seconds.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let handsFreeHoldTap {
-                            Text("Already dictating? Keep \(userData.hotkeyName) down and tap \(handsFreeHoldTap.keyLabel) — that recording keeps going after you let go. Tap it again to finish, or just stop talking.")
-                                .typo(.caption)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    HairlineDivider()
-
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        ShortcutHint(keys: KeyChord.noteCapture.keycaps,
-                                     caption: ShortcutAction.noteCapture.label,
-                                     spokenKeys: KeyChord.noteCapture.spelled)
-                        Text("Press it, say what you want to keep, then press it again \u{2014} or simply stop talking, as with hands-free. The text goes to your notes instead of the app in front: into the note that is open, or a new one, following the Notes setting above. Pressing it while already dictating redirects that recording into a note.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Or say \u{201C}start a new note\u{201D} or \u{201C}continue the note\u{201D} while dictating: the phrase is the command, and whatever you say next is filed there. Needs Voice commands, under Speech.")
-                            .typo(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if handsFreeHoldTap != nil {
-                            Text("This one has no hold-and-tap spelling: macOS keeps Fn and N for Notification Center.")
-                                .typo(.caption)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-
-                SettingsCard(title: "Permissions") {
-                    PermRow(need: .core(granted: axGranted), label: "Accessibility",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-                    HairlineDivider()
-                    PermRow(need: .core(granted: micGranted), label: "Microphone",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-                    HairlineDivider()
-                    PermRow(need: .screenRecording(granted: screenGranted,
-                                                   offersToTranscribeCalls: userData.offerToTranscribeCalls,
-                                                   meetingCaptureUnderway: meeting.state != .idle),
-                            label: "Screen Recording",
-                            url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-                }
-
-                SettingsCard(title: "The pill") {
-                    Text("Long-press the pill for two seconds to open the Utter window.")
-                        .typo(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
+                AppleSettingsToggle(
+                    title: "Press \(userData.hotkeyName) Key Twice",
+                    subtitle: "Double-tap to start or stop hands-free dictation without holding",
+                    isOn: $userData.doubleTapHotkeyForHandsFree
+                )
+                .onChange(of: userData.doubleTapHotkeyForHandsFree) { _ in
+                    userData.save()
                 }
             }
-            .padding(.horizontal, Space.pageInset)
-            .padding(.bottom, Space.pageInset)
+
+            // App Settings
+            AppleSettingsSection(title: "APP") {
+                AppleSettingsToggle(
+                    title: "Launch at login",
+                    subtitle: "Start Utter automatically when you log in",
+                    isOn: launchAtLoginBinding
+                )
+                AppleSettingsDivider()
+                AppleSettingsToggle(
+                    title: "Always show the pill",
+                    subtitle: "Keep floating pill visible on screen when idle",
+                    isOn: $userData.alwaysShowPill
+                )
+                .onChange(of: userData.alwaysShowPill) { _ in userData.save() }
+                AppleSettingsDivider()
+                AppleSettingsToggle(
+                    title: "Show in Dock",
+                    subtitle: "Display an application icon in the macOS Dock",
+                    isOn: $userData.showInDock
+                )
+                .onChange(of: userData.showInDock) { _ in userData.save() }
+                AppleSettingsDivider()
+                AppleSettingsToggle(
+                    title: "Offer to transcribe calls",
+                    subtitle: "Detect Zoom, Teams, FaceTime, Webex, Slack, and Discord calls",
+                    isOn: $userData.offerToTranscribeCalls
+                )
+                .onChange(of: userData.offerToTranscribeCalls) { _ in userData.save() }
+            }
+
+            // Sound
+            AppleSettingsSection(title: "SOUND") {
+                AppleSettingsToggle(
+                    title: "Dictation sounds",
+                    subtitle: "Play soft cues when recording starts, stops, and completes",
+                    isOn: $userData.soundsEnabled
+                )
+                .onChange(of: userData.soundsEnabled) { _ in
+                    userData.save()
+                    if userData.soundsEnabled { SoundPlayer.playDone() }
+                }
+                AppleSettingsDivider()
+                AppleSettingsToggle(
+                    title: "Pause music while dictating",
+                    subtitle: "Pauses media playback so audio does not bleed into the microphone",
+                    isOn: $userData.muteMusicWhileDictating
+                )
+                .onChange(of: userData.muteMusicWhileDictating) { _ in userData.save() }
+            }
+
+            // Notes target
+            AppleSettingsSection(title: "NOTES") {
+                AppleSettingsRow(title: "When dictating into Utter", subtitle: "Choose default note capture destination") {
+                    Picker("", selection: $userData.captureAppendsToOpenNote) {
+                        Text("Add to open note").tag(true)
+                        Text("Always start a new note").tag(false)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 190)
+                    .onChange(of: userData.captureAppendsToOpenNote) { _ in userData.save() }
+                }
+            }
+
+            // Keyboard Shortcuts
+            AppleSettingsSection(
+                title: "OTHER SHORTCUTS",
+                footer: "Hands-free records continuously until toggled off or 3 seconds of silence."
+            ) {
+                AppleSettingsRow(title: "Hands-Free Dictation", subtitle: "Toggle hands-free recording on/off") {
+                    HStack(spacing: 4) {
+                        Keycap(key: "⌃")
+                        Keycap(key: "⌥")
+                        Keycap(key: "Space")
+                    }
+                }
+                AppleSettingsDivider()
+                AppleSettingsRow(title: "Take a Note", subtitle: "Dictate directly into Utter notes") {
+                    HStack(spacing: 4) {
+                        Keycap(key: "⌃")
+                        Keycap(key: "⌥")
+                        Keycap(key: "N")
+                    }
+                }
+                AppleSettingsDivider()
+                AppleSettingsRow(title: "Remember", subtitle: "Capture a private thought or memory") {
+                    HStack(spacing: 4) {
+                        Keycap(key: "⌃")
+                        Keycap(key: "⌥")
+                        Keycap(key: "R")
+                    }
+                }
+            }
+
+            // Permissions
+            AppleSettingsSection(title: "PERMISSIONS") {
+                PermRow(need: .core(granted: axGranted), label: "Accessibility",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                AppleSettingsDivider()
+                PermRow(need: .core(granted: micGranted), label: "Microphone",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                AppleSettingsDivider()
+                PermRow(need: .screenRecording(granted: screenGranted,
+                                               offersToTranscribeCalls: userData.offerToTranscribeCalls,
+                                               meetingCaptureUnderway: meeting.state != .idle),
+                        label: "Screen Recording",
+                        url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+            }
         }
         .onAppear { readiness.startPolling() }
         .onDisappear { readiness.stopPolling() }
@@ -649,248 +615,233 @@ struct PermRow: View {
 /// Utter has no accounts, endpoints, or credentials to configure, so this pane
 /// states plainly what runs where instead of offering settings that don't exist —
 /// and it is where Reset Utter lives.
-///
-/// Reset Utter lives here so destructive data controls stay with the rest of Settings.
 struct PrivacySettingsContent: View {
     @ObservedObject private var readiness = ReadinessMonitor.shared
     private var aiState: LocalAIEngine.Availability { readiness.aiState }
 
     var body: some View {
-        Form {
-            Section("AI commands") {
-                LockedRow(label: "Engine", value: "Apple Intelligence")
-                LockedRow(label: "Runs on", value: "This Mac")
-                Label {
-                    Text(aiState.message)
-                        .typo(.caption, ink: Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: aiState.isReady ? "checkmark.circle.fill"
-                                                      : "exclamationmark.circle.fill")
-                        .foregroundStyle(aiState.isReady ? Tint.successText : Tint.warningText)
+        VStack(alignment: .leading, spacing: Space.x5) {
+            AppleSettingsSection(title: "AI COMMANDS") {
+                AppleSettingsRow(title: "Engine", subtitle: "Runs on this Mac") {
+                    Text("Apple Intelligence")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Ink.secondary)
+                }
+                AppleSettingsDivider()
+                AppleSettingsRow(title: "Status", subtitle: aiState.message) {
+                    HStack(spacing: 6) {
+                        Image(systemName: aiState.isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .foregroundStyle(aiState.isReady ? Tint.successText : Tint.warningText)
+                        Text(aiState.isReady ? "Ready" : "Setup Required")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Ink.primary)
+                    }
                 }
 
                 if case .appleIntelligenceOff = aiState {
-                    GlassButton(title: "Open Apple Intelligence Settings", size: .regular) {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?AppleIntelligence") {
-                            NSWorkspace.shared.open(url)
+                    AppleSettingsDivider()
+                    HStack {
+                        Spacer()
+                        Button("Open Apple Intelligence Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?AppleIntelligence") {
+                                NSWorkspace.shared.open(url)
+                            }
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                 }
             }
 
-            policySection("Nothing leaves this Mac", icon: "wifi.slash", items: [
-                "Downloading a larger speech model is the only time Utter uses the network, and only when you ask",
-                "Speech recognition runs on a Whisper model bundled inside the app",
-                "AI commands run on Apple’s on-device language model",
-                "No account, no API keys, no usage limits, and it works offline",
-                "Your voice and text never leave this Mac",
-            ])
+            AppleSettingsSection(title: "NOTHING LEAVES THIS MAC") {
+                privacyItem("Speech recognition runs on a Whisper model bundled inside the app")
+                AppleSettingsDivider()
+                privacyItem("AI commands run on Apple’s on-device language model")
+                AppleSettingsDivider()
+                privacyItem("No account, no API keys, no telemetry, and it works 100% offline")
+                AppleSettingsDivider()
+                privacyItem("Your voice and text never leave this Mac")
+            }
 
-            policySection("Audio recording", icon: "waveform.badge.mic", items: [
-                "Audio is captured in memory only while you hold the record key",
-                "No audio files are ever written to disk",
-                "Audio is discarded from memory immediately after transcription",
-                "The microphone is only active during recording — never in the background",
-            ])
+            AppleSettingsSection(title: "AUDIO RECORDING") {
+                privacyItem("Audio is captured in memory only while holding the record key")
+                AppleSettingsDivider()
+                privacyItem("No audio files are ever written to disk")
+                AppleSettingsDivider()
+                privacyItem("Audio is discarded from memory immediately after transcription")
+                AppleSettingsDivider()
+                privacyItem("The microphone is only active during recording — never in the background")
+            }
 
-            policySection("Your data stays on your device", icon: "lock.shield.fill", items: [
-                "Transcription history is stored locally, in your user Library folder",
-                "Dictionary words, snippets, and preferences are saved on-device only",
-                "No analytics, telemetry, or usage tracking of any kind",
-                "Nothing is synced to a cloud service or shared with third parties",
-            ])
+            AppleSettingsSection(title: "PERMISSIONS") {
+                privacyItem("Microphone: required to capture your voice for transcription")
+                AppleSettingsDivider()
+                privacyItem("Accessibility: required to type text into other applications")
+                AppleSettingsDivider()
+                privacyItem("Screen Recording: only if you record a meeting — captures audio only")
+            }
 
-            policySection("Permissions", icon: "hand.raised.fill", items: [
-                "Microphone: required to capture your voice for transcription",
-                "Accessibility: required to type text into other applications",
-                "Screen Recording: only if you record a meeting — it captures audio, never the screen",
-                "You can revoke permissions at any time in System Settings",
-            ])
-
-            Section("Reset") {
-                Text("Resetting erases all history, notes, installed companion packs, dictionary words, snippets, custom commands, and preferences.")
-                    .typo(.callout)
-                Text("Uninstalling the app removes the binary but leaves saved data behind.")
-                    .typo(.callout)
-                DataResetSection()
+            AppleSettingsSection(
+                title: "RESET",
+                footer: "Resetting erases all history, notes, installed companion packs, dictionary words, snippets, custom commands, and preferences."
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Erase all local data and restore default settings.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Ink.secondary)
+                    DataResetSection()
+                }
+                .padding(14)
             }
         }
-        .settingsForm()
         .onAppear { readiness.startPolling() }
         .onDisappear { readiness.stopPolling() }
     }
 
-    private func policySection(_ title: String, icon: String, items: [String]) -> some View {
-        Section {
-            ForEach(items, id: \.self) { item in
-                Label(item, systemImage: "checkmark")
-                    .typo(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } header: {
-            Label(title, systemImage: icon)
+    private func privacyItem(_ text: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Tint.success)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(Ink.primary)
+            Spacer()
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
 
 // MARK: - Speech
 
 /// Everything about how speech is recognised.
-///
-/// The model chooser used to sit under Privacy, which was the wrong home: it is a
-/// speed/accuracy decision, not a privacy one. Privacy now only states what
-/// leaves the machine (nothing), and the download lives here beside the language
-/// and punctuation settings it actually relates to.
 struct SpeechSettingsContent: View {
     @ObservedObject private var userData = UserData.shared
 
     var body: some View {
-        Form {
-            Section("Model") {
+        VStack(alignment: .leading, spacing: Space.x5) {
+            AppleSettingsSection(title: "MODEL") {
                 ModelChooserView(compact: true)
+                    .padding(14)
             }
 
-            // Eight `HairlineDivider()`s are gone from this section — seven between the switches
-            // and one above the language row: the group draws its own separator between every
-            // row, which is the thing they were imitating.
-            Section("Recognition") {
-                SettingsToggle(
+            AppleSettingsSection(title: "RECOGNITION") {
+                AppleSettingsToggle(
                     title: "Fix sentence structure",
-                    description: "Repunctuates what you dictate using the on-device language model. Whisper guesses punctuation from pauses, so it puts a comma at every breath; this splits run-on sentences properly. Words are never changed.",
+                    subtitle: "Repunctuates what you dictate using the on-device language model without changing words",
                     isOn: $userData.sentencePolishEnabled
                 )
                 .onChange(of: userData.sentencePolishEnabled) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Spoken punctuation",
-                    description: "Turns spoken \"period\" into \".\", \"comma\" into \",\", and so on.",
+                    subtitle: "Turns spoken \"period\" into \".\", \"comma\" into \",\", and so on",
                     isOn: $userData.spokenPunctuationEnabled
                 )
                 .onChange(of: userData.spokenPunctuationEnabled) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Voice commands",
-                    description: "Say a command name to run it instead of typing the words.",
+                    subtitle: "Say a command name to run it instead of typing the words",
                     isOn: $userData.voiceCommandsEnabled
                 )
                 .onChange(of: userData.voiceCommandsEnabled) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Prefer your dictionary words",
-                    description: "Tells the speech model your dictionary words before it listens, so unusual names are heard correctly instead of being repaired afterwards. Only affects recognition once you have added words.",
+                    subtitle: "Tells the speech model your dictionary words before it listens, so unusual names are heard correctly",
                     isOn: $userData.speechBiasEnabled
                 )
                 .onChange(of: userData.speechBiasEnabled) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Match the app you’re writing in",
-                    description: "Keeps chat messages short and email in full sentences. Adjusts punctuation and formality only — never your words.",
+                    subtitle: "Keeps chat messages short and email in full sentences without altering words",
                     isOn: $userData.perAppToneEnabled
                 )
                 .onChange(of: userData.perAppToneEnabled) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Read text around the cursor",
-                    description: "Uses the words just before your cursor as a hint, so names already on screen are recognised and new text continues the sentence properly. Read on-device only, never saved, never sent anywhere. Skipped in password fields.",
+                    subtitle: "Uses words near your cursor as an on-device hint so new text flows naturally",
                     isOn: $userData.useSurroundingContext
                 )
                 .onChange(of: userData.useSurroundingContext) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Keep dictation history",
-                    description: "Utter keeps a searchable log of what you dictated. Turn this off to stop recording it.",
+                    subtitle: "Utter keeps a private searchable log of past dictations on this Mac",
                     isOn: $userData.keepHistory
                 )
                 .onChange(of: userData.keepHistory) { _ in userData.save() }
 
-                SettingsToggle(
+                AppleSettingsDivider()
+
+                AppleSettingsToggle(
                     title: "Show words as you speak",
-                    description: "Displays a rough live transcript in the pill while you talk. It is a preview only — the final text is transcribed properly when you stop. Uses noticeably more battery.",
+                    subtitle: "Displays a rough live transcript preview in the pill while you talk",
                     isOn: $userData.livePreviewEnabled
                 )
                 .onChange(of: userData.livePreviewEnabled) { _ in userData.save() }
 
-                // `LabeledContent`, which is what a read-only label/value row is. The `HStack` +
-                // `Spacer()` this replaces was hand-building the one thing the row needed —
-                // label leading, value trailing — and getting it *only* visually: the chip and
-                // the label were two unrelated elements to VoiceOver, so "English" was
-                // announced with nothing to say what it was the language of.
-                //
-                // The label keeps its own `VStack` rather than passing two `Text`s to the
-                // builder. A title-plus-description label is not in `LabeledContent`'s
-                // interface (the SDK gives `label:` a plain `ViewBuilder`), so how it would lay
-                // two `Text`s out is not something this file can promise; a `VStack` is. The
-                // inks stay the app's measured tokens for the same reason they do elsewhere —
-                // `LabeledContent` styles one side of the row `secondaryLabelColor`, which
-                // measures 4.01:1 on these translucent tiles, under the 4.5:1 floor `Ink`
-                // exists to hold.
-                LabeledContent {
+                AppleSettingsDivider()
+
+                AppleSettingsRow(title: "Language", subtitle: "The bundled speech model is English-only") {
                     GlassChip(text: "English")
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Language").typo(.body)
-                        Text("The bundled speech model is English-only.").typo(.caption)
-                    }
                 }
             }
         }
-        .settingsForm()
     }
 }
 
 // MARK: - About
 
 /// The About pane.
-///
-/// `Typo.wordmark` for the app name, which is the one token this is allowed to be:
-/// it was `.font(.system(size: 20, weight: .bold, design: .rounded))`, breaking two
-/// written rules at once, both in the `Typo` header comment in DesignTokens.swift:
-/// "Only three weights ship: regular, medium, semibold", and "`.rounded` survives in
-/// exactly one place: the wordmark". The app name set beside its own 64pt icon *is*
-/// the wordmark, and
-/// `Typo.wordmark` (19pt semibold rounded) is the token that exists for it, so the
-/// rounded face is kept legitimately and the bold weight goes.
-///
-/// Note the remaining raw `.font(.system(size:))` calls in this file are all on
-/// `Image(systemName:)`. A symbol's point size is a glyph metric, not a step on the
-/// type scale — `BentoTile`, `EmptyStateView` and `GlassChip` in `DesignSystem/` all
-/// size their glyphs the same way — so they are deliberately left alone.
 struct AboutContent: View {
     var body: some View {
-        // A `Form` here too, for the version row and for the inset: this pane sits in the same
-        // detail column as the other three, and a bare centred stack was the one that did not
-        // line up with them.
-        Form {
-            // Headerless — the wordmark is the heading. The stack stays a stack because
-            // centring an icon over a wordmark is not a label/value relationship; what it
-            // gains from the section is the group's margin, in place of the hand-set
-            // `.padding(.top, Space.x5)`.
-            Section {
+        VStack(alignment: .leading, spacing: Space.x5) {
+            AppleSettingsSection {
                 VStack(spacing: Space.x3) {
                     AppIconView(size: 64)
 
-                    Text("Utter").typo(.wordmark)
+                    Text("Utter")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Ink.primary)
 
                     Text("Private voice to text, powered by Whisper on your Mac")
-                        .typo(.caption, ink: Ink.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Ink.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, Space.x3)
+                .padding(.vertical, Space.x4)
             }
 
-            Section {
-                // Was `Text("Version \(…)")` centred under the wordmark. As a
-                // `LabeledContent` it is a real label/value row — the form pairs the two for
-                // VoiceOver, and it is how System Settings presents a version. `.enabled`
-                // selection because a version number's job is to be quoted into a bug report.
-                LabeledContent("Version", value: ConfigManager.shared.appVersion)
-                    .textSelection(.enabled)
+            AppleSettingsSection {
+                AppleSettingsRow(title: "Version") {
+                    Text(ConfigManager.shared.appVersion)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Ink.secondary)
+                        .textSelection(.enabled)
+                }
             }
         }
-        .settingsForm()
     }
 }
 

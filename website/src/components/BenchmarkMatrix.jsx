@@ -98,18 +98,26 @@ export default function BenchmarkMatrix() {
           </div>
 
           <div className="lg:col-span-6 grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/5 text-center">
+            <motion.div
+              whileHover={{ y: -2, scale: 1.02 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="p-4 rounded-2xl bg-zinc-950/80 border border-white/5 text-center shadow-lg"
+            >
               <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-400 mb-1">
                 ${annualCloudCost}
               </div>
               <div className="text-xs text-zinc-400 font-mono">Saved Per Year vs Cloud Apps</div>
-            </div>
-            <div className="p-4 rounded-2xl bg-zinc-950/80 border border-white/5 text-center">
+            </motion.div>
+            <motion.div
+              whileHover={{ y: -2, scale: 1.02 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="p-4 rounded-2xl bg-zinc-950/80 border border-white/5 text-center shadow-lg"
+            >
               <div className="text-2xl sm:text-3xl font-black font-mono text-amber-400 mb-1">
                 ~{timeSavedHoursPerYear} hrs
               </div>
               <div className="text-xs text-zinc-400 font-mono">Time Saved vs Typing</div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -132,7 +140,7 @@ export default function BenchmarkMatrix() {
               {COMPARISON_ROWS.map((row, idx) => (
                 <tr
                   key={row.feature}
-                  className={`transition-colors ${row.highlight ? 'bg-white/[0.02]' : ''} hover:bg-white/[0.04]`}
+                  className={`transition-colors duration-150 ${row.highlight ? 'bg-white/[0.02]' : ''} hover:bg-white/[0.06]`}
                 >
                   <td className="py-4 px-6 font-medium text-zinc-200">{row.feature}</td>
                   <td className="py-4 px-6 font-bold text-white bg-orange-500/5 border-x border-orange-500/20">

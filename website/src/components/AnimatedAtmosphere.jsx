@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
+import React, { useEffect } from 'react';
+import { motion, useScroll, useTransform, useReducedMotion, useMotionValue, useSpring } from 'framer-motion';
 
 /**
  * AnimatedAtmosphere: Ultra-premium native macOS Sonoma/Sequoia dark glass atmosphere.
  * Replaces the old photographic hilly wallpaper with deep cosmic obsidian,
  * living chromatic aurora meshes, and flowing acoustic 3D voice wave ribbons.
+ * Tuned with Apple fluid physics and GPU-accelerated compositor rendering.
  */
 export default function AnimatedAtmosphere({ currentTheme = 'system-glass' }) {
   const prefersReducedMotion = useReducedMotion();
@@ -12,20 +13,24 @@ export default function AnimatedAtmosphere({ currentTheme = 'system-glass' }) {
 
   // Subtle Parallax depth for the cosmic nebula layers
   const nebulaY1 = useTransform(scrollY, [0, 4000], [0, -120]);
-  const nebulaY2 = useTransform(scrollY, [0, 4000], [0, -220]);
   const waveY = useTransform(scrollY, [0, 4000], [0, -160]);
 
-  // Mouse position for subtle interactive aura illumination
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.3 });
+  // High-Performance GPU Cursor Spotlight (Apple Spring Physics, Zero Layout Thrashing)
+  const mouseX = useMotionValue(typeof window !== 'undefined' ? window.innerWidth * 0.5 : 500);
+  const mouseY = useMotionValue(typeof window !== 'undefined' ? window.innerHeight * 0.3 : 300);
+
+  // Apple critically damped spring: smooth, non-oscillating, 1:1 fluid tracking
+  const springX = useSpring(mouseX, { stiffness: 120, damping: 22, mass: 0.8 });
+  const springY = useSpring(mouseY, { stiffness: 120, damping: 22, mass: 0.8 });
+
   useEffect(() => {
     const handleMouseMove = (e) => {
-      const x = e.clientX / window.innerWidth;
-      const y = e.clientY / window.innerHeight;
-      setMousePos({ x, y });
+      mouseX.set(e.clientX);
+      mouseY.set(e.clientY);
     };
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  }, [mouseX, mouseY]);
 
   return (
     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden select-none bg-[#090a10]">
@@ -105,12 +110,14 @@ export default function AnimatedAtmosphere({ currentTheme = 'system-glass' }) {
         />
       </motion.div>
 
-      {/* 3. Interactive Cursor Spotlight (Subtle ambient follow) */}
-      <div
-        className="absolute w-[600px] h-[600px] rounded-full pointer-events-none transition-all duration-700 ease-out -translate-x-1/2 -translate-y-1/2 blur-[130px] opacity-25"
+      {/* 3. Interactive Cursor Spotlight (Apple Spring Physics, GPU Compositor) */}
+      <motion.div
+        className="absolute top-0 left-0 w-[600px] h-[600px] rounded-full pointer-events-none blur-[130px] opacity-25 gpu-accelerate"
         style={{
-          left: `${mousePos.x * 100}%`,
-          top: `${mousePos.y * 100}%`,
+          x: springX,
+          y: springY,
+          translateX: '-50%',
+          translateY: '-50%',
           background: 'radial-gradient(circle, rgba(249,115,22,0.3) 0%, rgba(99,102,241,0.15) 50%, transparent 70%)',
         }}
       />

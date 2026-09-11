@@ -64,6 +64,11 @@ struct VersionEntry: Identifiable {
 /// `GlassSurface.swift` records why.
 struct WhatsNewView: View {
     private let versions: [VersionEntry] = [
+        VersionEntry(id: "1.1.57", version: "1.1.57", date: "September 2026", highlights: [
+            "Authentic Apple HIG Redesign for System Settings and Main App windows",
+            "Double-Tap Hotkey (Fn) to lock continuous hands-free dictation without holding keys",
+            "Simple, clean Apple SF Symbols across navigation, settings, and stat cards",
+        ]),
         VersionEntry(id: "1.1.56", version: "1.1.56", date: "September 2026", highlights: [
             "Internal build — packaging and tooling updates",
         ]),

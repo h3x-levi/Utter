@@ -11,7 +11,7 @@ public enum IssueCategory: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .bug: return "ladybug.fill"
+        case .bug: return "ant.fill"
         case .audio: return "waveform.badge.mic"
         case .performance: return "bolt.badge.clock.fill"
         case .feature: return "lightbulb.fill"

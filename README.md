@@ -51,7 +51,8 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 ### 🎙️ Global Push-to-Talk & Hands-Free Dictation
 
 - **Global Push-to-Talk**: Hold **`Fn`** (or Right **`⌥`**, Right **`⌘`**, Right **`⌃`**), speak your thought, and release. Utter injects clean sentences directly into your active input field.
-- **Hands-Free Lock (`⌃⌥Space`)**: Latch recording mode for long-form dictation, brainstorming, or lectures. Auto-settles upon pausing or manual toggle.
+- **Double-Tap Hotkey for Hands-Free**: Double-tap **`Fn`** (or your chosen hotkey) to lock hands-free dictation without holding down any keys. Tap again or press `Escape` to finish.
+- **Hands-Free Lock Shortcut (`⌃⌥Space`)**: Alternative global shortcut to latch recording mode for long-form dictation, brainstorming, or lectures.
 - **Fluid Floating Pill**: Non-intrusive HUD capsule with live RMS waveform metering and seamless morphing transitions across 7 distinct states.
 
 <div align="center">
@@ -171,6 +172,7 @@ Crafted with pixel-perfect macOS typography, high-contrast borders, and adaptive
 | Shortcut | Action | Scope |
 | :--- | :--- | :--- |
 | **`Hold Fn`** *(or `Right ⌥`, `Right ⌘`, `Right ⌃`)* | **Push-to-Talk**: Dictate into active cursor position | Global |
+| **`Double-Tap Fn`** *(or configured key)* | **Hands-Free Dictation**: Start or stop hands-free dictation without holding | Global |
 | **`⌃ ⌥ Space`** | **Toggle Hands-Free Mode**: Continuous dictation | Global |
 | **`⌃ ⌥ N`** | **Dictate to Notes**: Capture voice into notebook | Global |
 | **`⌃ ⌥ U`** | **Open Utter Workspace**: Access settings and history | Global |

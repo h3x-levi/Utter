@@ -40,6 +40,7 @@ struct ZZProductShotPreview {
         if ProcessInfo.processInfo.environment["UTTER_RENDER_COMPANIONS_ONLY"] != "1" {
             try captureWindowProductShots()
             try captureSettingsWindows()
+            try captureMainWindow()
         }
 
         try renderCompanionProductShots()
@@ -186,6 +187,61 @@ struct ZZProductShotPreview {
                 name: "companion-\(section.rawValue.lowercased())"
             )
         }
+        window.orderOut(nil)
+    }
+
+    private func captureMainWindow() throws {
+        let previousScreen = SidebarSelection.shared.item
+        defer {
+            SidebarSelection.shared.item = previousScreen
+        }
+
+        let sidebarController = NSHostingController(rootView: FlowSidebar())
+        sidebarController.sizingOptions = []
+        let contentController = NSHostingController(rootView: FlowContent())
+        contentController.sizingOptions = []
+
+        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
+        sidebarItem.minimumThickness = 168
+        sidebarItem.maximumThickness = 230
+        sidebarItem.canCollapse = false
+
+        let contentItem = NSSplitViewItem(viewController: contentController)
+        contentItem.minimumThickness = 600
+
+        let split = NSSplitViewController()
+        split.splitView.isVertical = true
+        split.addSplitViewItem(sidebarItem)
+        split.addSplitViewItem(contentItem)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1_180, height: 820),
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Utter"
+        window.contentViewController = split
+        let captureSize = NSSize(width: 1_180, height: 820)
+        window.contentMinSize = captureSize
+        window.setContentSize(captureSize)
+        window.center()
+        window.orderFrontRegardless()
+
+        for _ in 0..<3 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+            window.setContentSize(captureSize)
+        }
+
+        for (name, item) in [
+            ("main-dictation", SidebarItem.dictation),
+            ("main-notes", SidebarItem.notes),
+        ] {
+            SidebarSelection.shared.item = item
+            settleLayout()
+            try capture(window: window, name: name)
+        }
+
         window.orderOut(nil)
     }
 

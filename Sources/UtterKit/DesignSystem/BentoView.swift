@@ -40,43 +40,25 @@ struct BentoTile<Content: View>: View {
         .padding(Space.x4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isDark ? Color.black.opacity(0.35) : Color.white.opacity(0.65))
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Surface.raised)
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: isDark
-                            ? [Color.white.opacity(0.22), Color.white.opacity(0.04)]
-                            : [Color.white.opacity(0.85), Color.black.opacity(0.08)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Line.hairline, lineWidth: Line.width)
         }
         .shadow(
-            color: isDark ? Color.black.opacity(0.25) : Color.black.opacity(0.06),
-            radius: 8, x: 0, y: 3
+            color: isDark ? Color.clear : Color.black.opacity(0.04),
+            radius: 2, x: 0, y: 1
         )
     }
 
     private var header: some View {
         HStack(spacing: Space.x2) {
             if let systemImage {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill((tint ?? Ink.secondary).opacity(0.15))
-                        .frame(width: 22, height: 22)
-                    Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(tint ?? Ink.secondary)
-                }
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(tint ?? Ink.secondary)
             }
             if let title {
                 Text(title)
@@ -101,20 +83,15 @@ struct BentoStat: View {
         BentoTile {
             VStack(alignment: .leading, spacing: Space.x2) {
                 HStack {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(tint.opacity(0.16))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: systemImage)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(tint)
-                    }
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(tint)
                     Spacer()
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(value)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(Ink.primary)
                         .monospacedDigit()
                         .frame(height: 28, alignment: .bottom)

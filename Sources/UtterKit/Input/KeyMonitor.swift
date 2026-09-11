@@ -384,6 +384,11 @@ class KeyMonitor {
     private var globalKeyDownMonitor: Any?
     private var localKeyDownMonitor: Any?
     private var isKeyHeld = false
+    private var lastHotkeyPressTime: TimeInterval = 0
+    private var lastHotkeyReleaseTime: TimeInterval = 0
+    private var firstTapWasQuick: Bool = false
+    private let doubleTapIntervalThreshold: TimeInterval = 0.38
+    private let quickTapDurationThreshold: TimeInterval = 0.35
     /// Lazy so it can close over `dispatch`, which needs the callbacks `init` stores.
     private lazy var holdTapMonitor = HoldTapMonitor { [weak self] action in
         self?.dispatch(action)
@@ -442,6 +447,7 @@ class KeyMonitor {
         }
 
         var gestures = ["hold \(hotkeyName) to record",
+                        "double-tap \(hotkeyName) for hands-free",
                         "\(KeyChord.handsFree.symbols) hands-free",
                         "\(KeyChord.noteCapture.symbols) note",
                         "\(KeyChord.memoryCapture.symbols) remember"]
@@ -461,6 +467,9 @@ class KeyMonitor {
         localKeyDownMonitor = nil
         holdTapMonitor.stop()
         HoldTap.isAvailable = false
+        firstTapWasQuick = false
+        lastHotkeyReleaseTime = 0
+        lastHotkeyPressTime = 0
     }
 
     /// Restart monitoring (call after hotkey change)
@@ -474,20 +483,34 @@ class KeyMonitor {
         let hotkeyId = UserData.shared.hotkeyName
         let option = HotkeyOption.options.first { $0.name == hotkeyId } ?? HotkeyOption.options[0]
         let keyPressed = option.flagCheck(event)
+        let now = CACurrentMediaTime()
 
         if keyPressed && !isKeyHeld {
             isKeyHeld = true
-            // Arm hold-then-tap for exactly as long as the hotkey is down. This is the
-            // one place that knows the hotkey is held, whichever key it is, so the tap
-            // reads the state rather than re-deriving the hotkey from an event's flags —
-            // which cannot tell a right-hand modifier from its left twin anyway.
             holdTapMonitor.setHotkeyIsHeld(true)
-            DispatchQueue.main.async { self.onRecordStart() }
+
+            let isDoubleTap = UserData.shared.doubleTapHotkeyForHandsFree
+                && firstTapWasQuick
+                && (now - lastHotkeyReleaseTime) <= doubleTapIntervalThreshold
+
+            if isDoubleTap {
+                print("✨ Hotkey double-tap (\(option.name) twice) detected — toggling hands-free")
+                firstTapWasQuick = false
+                lastHotkeyReleaseTime = 0
+                suppressReleaseStop = true
+                DispatchQueue.main.async { self.onHandsFreeToggle() }
+            } else {
+                lastHotkeyPressTime = now
+                DispatchQueue.main.async { self.onRecordStart() }
+            }
         } else if !keyPressed && isKeyHeld {
             isKeyHeld = false
-            // Before the `suppressReleaseStop` return below: the hotkey is up either way,
-            // so a tapped key after this point belongs to the frontmost app.
             holdTapMonitor.setHotkeyIsHeld(false)
+
+            let pressDuration = now - lastHotkeyPressTime
+            firstTapWasQuick = (pressDuration < quickTapDurationThreshold)
+            lastHotkeyReleaseTime = now
+
             // Hands-free mode keeps recording even after the hotkey is released.
             if suppressReleaseStop {
                 print("🔒 Hotkey released but hands-free mode active — keeping recorder on")

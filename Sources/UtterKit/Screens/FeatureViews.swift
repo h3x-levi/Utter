@@ -568,7 +568,7 @@ struct CustomCommandsSection: View {
     var body: some View {
         BentoTile(
             title: "Your commands",
-            systemImage: "person.fill.questionmark",
+            systemImage: "slider.horizontal.3",
             accessory: AnyView(
                 GlassButton(title: "New command", systemImage: "plus", size: .small, action: onAdd)
             )

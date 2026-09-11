@@ -32,7 +32,7 @@ struct HomeView: View {
                 BentoStat(
                     value: history.totalWords.formatted(),
                     label: "Words Dictated",
-                    systemImage: "waveform.badge.mic",
+                    systemImage: "mic",
                     tint: Tint.accent
                 )
                 BentoStat(
@@ -44,13 +44,13 @@ struct HomeView: View {
                 BentoStat(
                     value: history.entries.count.formatted(),
                     label: "Dictations",
-                    systemImage: "sparkles",
+                    systemImage: "waveform",
                     tint: Color.purple
                 )
                 BentoStat(
                     value: history.streakDays > 0 ? "\(history.streakDays) Days" : "\u{2014}",
                     label: "Day Streak",
-                    systemImage: "flame.fill",
+                    systemImage: "flame",
                     tint: Color.orange
                 )
             }
@@ -532,33 +532,36 @@ struct WeeklyActivityChart: View {
         let isToday: Bool
     }
 
-    private var last7Days: [DayMetric] {
+    private static let dayFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEE"
+        return fmt
+    }()
+
+    private var chartData: (days: [DayMetric], maxCount: Int) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         var days: [DayMetric] = []
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "EEE"
+        var maximum = 10
 
         for offset in (0..<7).reversed() {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
             let nextDate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
             let count = history.entries.filter { $0.timestamp >= date && $0.timestamp < nextDate }.reduce(0) { $0 + $1.wordCount }
             let isToday = calendar.isDateInToday(date)
+            if count > maximum { maximum = count }
             days.append(DayMetric(
-                dayName: isToday ? "Today" : dayFormatter.string(from: date),
+                dayName: isToday ? "Today" : Self.dayFormatter.string(from: date),
                 date: date,
                 count: count,
                 isToday: isToday
             ))
         }
-        return days
-    }
-
-    private var maxCount: Int {
-        max(10, last7Days.map(\.count).max() ?? 10)
+        return (days, maximum)
     }
 
     var body: some View {
+        let (days, maxCount) = chartData
         BentoTile(
             title: "7-Day Dictation Activity",
             systemImage: "chart.bar.xaxis",
@@ -566,26 +569,25 @@ struct WeeklyActivityChart: View {
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
                 HStack(alignment: .bottom, spacing: Space.x3) {
-                    ForEach(last7Days) { metric in
+                    ForEach(days) { metric in
                         VStack(spacing: Space.x1) {
                             Text(metric.count > 0 ? "\(metric.count)" : "0")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(metric.isToday ? Tint.accent : Ink.secondary)
                                 .monospacedDigit()
 
-                            GeometryReader { _ in
-                                let heightFraction = CGFloat(metric.count) / CGFloat(maxCount)
-                                let barHeight = max(6, heightFraction * 44)
-                                VStack {
-                                    Spacer(minLength: 0)
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(
-                                            metric.isToday
-                                                ? LinearGradient(colors: [Tint.accent, Tint.accent.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                                                : LinearGradient(colors: [Color.primary.opacity(0.25), Color.primary.opacity(0.1)], startPoint: .top, endPoint: .bottom)
-                                        )
-                                        .frame(height: barHeight)
-                                }
+                            let heightFraction = CGFloat(metric.count) / CGFloat(maxCount)
+                            let barHeight = max(6, heightFraction * 44)
+
+                            VStack {
+                                Spacer(minLength: 0)
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(
+                                        metric.isToday
+                                            ? LinearGradient(colors: [Tint.accent, Tint.accent.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+                                            : LinearGradient(colors: [Color.primary.opacity(0.25), Color.primary.opacity(0.1)], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .frame(height: barHeight)
                             }
                             .frame(height: 48)
 

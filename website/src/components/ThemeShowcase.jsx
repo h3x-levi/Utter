@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Palette, Sparkles, Check } from 'lucide-react';
 
 const THEMES = [
@@ -75,12 +76,15 @@ export default function ThemeShowcase({ currentTheme, onSelectTheme }) {
         {THEMES.map((theme) => {
           const isSelected = currentTheme === theme.id;
           return (
-            <div
+            <motion.div
               key={theme.id}
               onClick={() => onSelectTheme(theme.id)}
-              className={`p-5 rounded-2xl liquid-glass border cursor-pointer transition-all duration-200 flex flex-col justify-between ${
+              whileHover={{ y: -4, scale: 1.015 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className={`p-5 rounded-2xl liquid-glass border cursor-pointer flex flex-col justify-between transition-colors ${
                 isSelected
-                  ? 'border-orange-400 ring-2 ring-orange-500/30 -translate-y-1 shadow-xl'
+                  ? 'border-orange-400/80 ring-2 ring-orange-500/30 shadow-xl shadow-orange-500/10'
                   : 'border-white/10 hover:border-white/20 hover:bg-zinc-900/40'
               }`}
             >
@@ -94,9 +98,14 @@ export default function ThemeShowcase({ currentTheme, onSelectTheme }) {
                     <h3 className="font-bold text-sm text-white">{theme.name}</h3>
                   </div>
                   {isSelected && (
-                    <span className="p-1 rounded-full bg-orange-500 text-zinc-950">
+                    <motion.span
+                      initial={{ scale: 0.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                      className="p-1 rounded-full bg-orange-500 text-zinc-950"
+                    >
                       <Check size={12} strokeWidth={3} />
-                    </span>
+                    </motion.span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed">
@@ -113,7 +122,7 @@ export default function ThemeShowcase({ currentTheme, onSelectTheme }) {
                   {isSelected ? 'Active' : 'Apply'}
                 </span>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

@@ -87,12 +87,9 @@ public struct LoginView: View {
             // Centered Scrollable Step Content
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        welcomeContent
-                        Spacer(minLength: 0)
-                    }
-                    .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+                    welcomeContent
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                        .padding(.vertical, Space.x3)
                 }
             }
 

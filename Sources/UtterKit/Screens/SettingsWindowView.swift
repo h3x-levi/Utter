@@ -230,8 +230,16 @@ struct SettingsSidebar: View {
     /// selectable at all; `ForEach` over `Identifiable` matches on `id` (a `String` here), and the
     /// selection is a `SettingsGroup`, so without the tag nothing would ever select.
     private func row(_ item: SettingsGroup) -> some View {
-        Label(item.title, systemImage: item.icon)
-            .tag(item)
+        Label {
+            Text(item.title)
+                .font(.system(size: 13, weight: selection.group == item ? .semibold : .regular))
+        } icon: {
+            Image(systemName: item.icon)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(selection.group == item ? Color.accentColor : Ink.secondary)
+                .frame(width: 20, alignment: .center)
+        }
+        .tag(item)
     }
 
     /// The selection binding, with the crossfade kept.
@@ -339,28 +347,23 @@ struct SettingsDetail: View {
     private var group: SettingsGroup { selection.group }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x3) {
-            Text(group.title)
-                .font(.title2.weight(.semibold))
-                .padding(.horizontal, Space.pageInset)
-                .padding(.top, Space.pageInset)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.x4) {
+                Text(group.title)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Ink.primary)
+                    .padding(.top, 4)
+                    .padding(.bottom, 2)
 
-            if group.ownsScrolling {
                 detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else {
-                ScrollView {
-                    detail
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Space.pageInset)
-                        .padding(.bottom, Space.pageInset)
-                }
-                // A pane is a new destination, not another document at the previous pane's
-                // absolute scroll offset. Recreate the scroller with the selection so Speech
-                // cannot open halfway through its model list after leaving a long General pane.
-                .id(group)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Space.pageInset)
+            .padding(.top, Space.pageInset)
+            .padding(.bottom, Space.pageInset)
         }
+        .id(group)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // `.ignoresSafeArea()` on the surface, not on the scroll view: the plane has to reach the
         // window's edges so the column's glass and the titlebar pocket have something to sample,
@@ -442,12 +445,24 @@ enum SettingsGroup: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
-        case .speech: return "waveform.badge.mic"
-        case .appearance: return "paintbrush"
-        case .companion: return "face.smiling"
-        case .privacy: return "lock.shield"
-        case .diagnostics: return "stethoscope"
+        case .speech: return "mic"
+        case .appearance: return "circle.lefthalf.filled"
+        case .companion: return "pawprint"
+        case .privacy: return "hand.raised"
+        case .diagnostics: return "wrench.and.screwdriver"
         case .about: return "info.circle"
+        }
+    }
+
+    var badgeColor: Color {
+        switch self {
+        case .general: return Color.gray
+        case .speech: return Color.blue
+        case .appearance: return Color.blue
+        case .companion: return Color.teal
+        case .privacy: return Color.blue
+        case .diagnostics: return Color.orange
+        case .about: return Color(nsColor: .secondaryLabelColor)
         }
     }
 
@@ -470,27 +485,14 @@ enum SettingsGroup: String, CaseIterable, Identifiable, Hashable {
 // MARK: - Appearance
 
 /// Theme selection, split out of General.
-///
-/// It was previously one card among many in a long General pane; with a real
-/// settings window there is room to give appearance its own group, which is also
-/// where a user looks for it.
-///
-/// `Form` + `Section` rather than `SettingsCard`, with the description moved from above the grid to
-/// the section's `footer`. That is the order System Settings uses — control first, explanation
-/// under it, in the footer's own secondary ink — and it is the reason the caption no longer sets
-/// `.typo(.caption)` or `fixedSize`: a grouped form's footer already carries that size, that ink
-/// and multi-line wrapping. The string itself is unchanged.
 struct AppearanceSettingsContent: View {
     var body: some View {
-        Form {
-            Section {
-                ThemeSwatchGrid()
-            } header: {
-                Text("Theme")
-            } footer: {
-                Text("Sets the appearance and accent colour, across the window and the pill.")
-            }
+        AppleSettingsSection(
+            title: "THEME",
+            footer: "Sets the appearance and accent colour, across the window and the pill."
+        ) {
+            ThemeSwatchGrid()
+                .padding(14)
         }
-        .settingsForm()
     }
 }

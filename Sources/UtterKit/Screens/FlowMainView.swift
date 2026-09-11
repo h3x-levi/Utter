@@ -32,16 +32,27 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
         .dictation, .dictionary, .snippets, .commands, .notes, .companion,
     ]
 
-    /// Outline glyphs. The reference uses outline icons throughout at a light
-    /// stroke weight — filled symbols read heavier and more consumer.
+    /// Simple, authentic Apple-designed SF Symbols.
     var icon: String {
         switch self {
-        case .dictation: return "waveform"
+        case .dictation: return "mic"
         case .dictionary: return "character.book.closed"
-        case .snippets: return "text.badge.plus"
+        case .snippets: return "text.quote"
         case .commands: return "sparkles"
-        case .notes: return "square.and.pencil"
-        case .companion: return "pawprint.fill"
+        case .notes: return "note.text"
+        case .companion: return "pawprint"
+        }
+    }
+
+    /// Native Apple app colorful squircle badge tint
+    var badgeColor: Color {
+        switch self {
+        case .dictation: return .blue
+        case .dictionary: return .orange
+        case .snippets: return .purple
+        case .commands: return .indigo
+        case .notes: return .yellow
+        case .companion: return .teal
         }
     }
     @MainActor
@@ -304,13 +315,17 @@ struct FlowSidebar: View {
     private var navRows: some View {
         List(selection: route) {
             ForEach(SidebarItem.primary) { item in
-                Label(item.rawValue, systemImage: item.icon)
-                    // The row pitch lives here, on the row's own content, because the modifier that
-                    // reads like the place for it does not work — see `Layout.mainSidebarRowHeight`
-                    // for the measurement. `minHeight`, not a fixed height, so a longer label or a
-                    // larger Dynamic Type setting still grows the row instead of clipping inside it.
-                    .frame(minHeight: Layout.mainSidebarRowHeight)
-                    .tag(item)
+                Label {
+                    Text(item.rawValue)
+                        .font(.system(size: 13, weight: selection.item == item ? .semibold : .regular))
+                } icon: {
+                    Image(systemName: item.icon)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(selection.item == item ? Color.accentColor : Ink.secondary)
+                        .frame(width: 20, alignment: .center)
+                }
+                .frame(minHeight: Layout.mainSidebarRowHeight)
+                .tag(item)
             }
         }
         .listStyle(.sidebar)
@@ -431,7 +446,11 @@ struct FlowContent: View {
                 // inside the other did to Notes.
                 column.frame(maxHeight: .infinity, alignment: .topLeading)
             } else {
-                ScrollView { column }
+                ScrollView {
+                    column
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .id(selected)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -451,7 +470,7 @@ struct FlowContent: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: Space.x1) {
                     Text(selected.rawValue)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(Ink.primary)
                     Text(selected.subtitle)
                         .font(.subheadline)

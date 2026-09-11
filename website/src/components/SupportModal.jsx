@@ -84,7 +84,7 @@ export default function SupportModal({ isOpen, onClose }) {
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             className="relative liquid-glass bg-zinc-950/95 text-zinc-100 rounded-3xl border border-white/15 shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 sm:p-8 z-10"
           >
             <button
@@ -113,7 +113,7 @@ export default function SupportModal({ isOpen, onClose }) {
                 placeholder="Search questions or diagnostic commands..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500/60 transition-colors"
               />
             </div>
 
@@ -129,16 +129,32 @@ export default function SupportModal({ isOpen, onClose }) {
                   >
                     <button
                       onClick={() => setExpandedFaq(isExpanded ? null : idx)}
-                      className="w-full px-4 py-3 text-left flex items-center justify-between gap-3 text-xs font-semibold text-zinc-200 hover:text-white"
+                      className="w-full px-4 py-3 text-left flex items-center justify-between gap-3 text-xs font-semibold text-zinc-200 hover:text-white transition-colors"
                     >
                       <span>{faq.q}</span>
-                      {isExpanded ? <ChevronUp size={14} className="text-orange-400" /> : <ChevronDown size={14} />}
+                      <motion.div
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+                        className="shrink-0"
+                      >
+                        <ChevronDown size={14} className={isExpanded ? 'text-orange-400' : 'text-zinc-400'} />
+                      </motion.div>
                     </button>
-                    {isExpanded && (
-                      <div className="px-4 pb-3.5 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/5 font-sans">
-                        {faq.a}
-                      </div>
-                    )}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-3.5 pt-1 text-xs text-zinc-400 leading-relaxed border-t border-white/5 font-sans">
+                            {faq.a}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
@@ -153,13 +169,14 @@ export default function SupportModal({ isOpen, onClose }) {
                   <div className="text-[11px] text-zinc-400 mb-2">{item.desc}</div>
                   <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 font-mono text-[11px] text-orange-400 border border-white/5">
                     <code>{item.cmd}</code>
-                    <button
+                    <motion.button
                       onClick={() => handleCopy(item.cmd)}
-                      className="p-1 text-zinc-400 hover:text-white"
+                      whileTap={{ scale: 0.9 }}
+                      className="p-1 text-zinc-400 hover:text-white transition-colors"
                       title="Copy command"
                     >
                       {copiedCmd === item.cmd ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               ))}

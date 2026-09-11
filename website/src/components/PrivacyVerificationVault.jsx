@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Terminal, CheckCircle2, Lock, EyeOff, ServerOff, Copy, Check } from 'lucide-react';
 
 const VERIFICATION_COMMANDS = [
@@ -70,20 +70,31 @@ export default function PrivacyVerificationVault() {
       <div className="liquid-glass rounded-3xl p-6 sm:p-10 border border-white/10 shadow-2xl relative overflow-hidden">
         {/* Terminal Header & Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-6 mb-6 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            {VERIFICATION_COMMANDS.map((tab, idx) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(idx)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-mono transition-all duration-150 border ${
-                  activeTab === idx
-                    ? 'bg-zinc-800 text-emerald-400 border-emerald-500/30 font-semibold'
-                    : 'bg-zinc-900/50 text-zinc-400 border-white/5 hover:text-zinc-200'
-                }`}
-              >
-                {tab.title}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            {VERIFICATION_COMMANDS.map((tab, idx) => {
+              const isSelected = activeTab === idx;
+              return (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => setActiveTab(idx)}
+                  whileTap={{ scale: 0.96 }}
+                  className={`relative px-3.5 py-1.5 rounded-xl text-xs font-mono transition-colors border ${
+                    isSelected
+                      ? 'text-emerald-400 border-transparent font-semibold'
+                      : 'text-zinc-400 border-white/5 hover:text-zinc-200 hover:border-white/10'
+                  }`}
+                >
+                  {isSelected && (
+                    <motion.div
+                      layoutId="activePrivacyTabPill"
+                      className="absolute inset-0 bg-zinc-800 rounded-xl border border-emerald-500/40 shadow-md shadow-emerald-500/15"
+                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.title}</span>
+                </motion.button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2">
@@ -91,33 +102,48 @@ export default function PrivacyVerificationVault() {
               <CheckCircle2 size={13} />
               <span>{current.status}</span>
             </span>
-            <button
+            <motion.button
               onClick={handleCopy}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5 transition-colors"
+              whileTap={{ scale: 0.92 }}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5 transition-colors cursor-pointer"
               title="Copy verification command"
             >
               {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* Live macOS Terminal Body */}
-        <div className="bg-zinc-950 rounded-2xl p-6 sm:p-8 font-mono text-xs sm:text-sm text-zinc-300 border border-white/5 shadow-inner overflow-x-auto">
+        <div className="bg-zinc-950 rounded-2xl p-6 sm:p-8 font-mono text-xs sm:text-sm text-zinc-300 border border-white/5 shadow-inner overflow-x-auto min-h-[160px]">
           <div className="flex items-center gap-2 text-zinc-500 pb-3 mb-4 border-b border-white/5 text-xs">
             <Terminal size={14} className="text-orange-400" />
             <span>zsh — darwin-arm64 — 80x24</span>
           </div>
-          <div className="text-emerald-400 mb-2 font-bold select-all">
-            {current.command}
-          </div>
-          <pre className="text-zinc-400 whitespace-pre-wrap leading-relaxed">
-            {current.output}
-          </pre>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={current.id}
+              initial={{ opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -3 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div className="text-emerald-400 mb-2 font-bold select-all">
+                {current.command}
+              </div>
+              <pre className="text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                {current.output}
+              </pre>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Feature Check Pillars */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8 pt-8 border-t border-white/5">
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-2 rounded-xl transition-colors hover:bg-white/5"
+          >
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <ServerOff size={18} />
             </div>
@@ -127,9 +153,13 @@ export default function PrivacyVerificationVault() {
                 No third-party APIs, no OpenAI keys required, no analytics trackers or remote logging.
               </p>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-2 rounded-xl transition-colors hover:bg-white/5"
+          >
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <EyeOff size={18} />
             </div>
@@ -139,9 +169,13 @@ export default function PrivacyVerificationVault() {
                 Safe for proprietary software codebases, legal documents, patient notes, and NDAs.
               </p>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex items-start gap-3">
+          <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="flex items-start gap-3 p-2 rounded-xl transition-colors hover:bg-white/5"
+          >
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <Shield size={18} />
             </div>
@@ -151,7 +185,7 @@ export default function PrivacyVerificationVault() {
                 Cryptographically signed and notarized by Apple. Runs natively in the macOS security sandbox.
               </p>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

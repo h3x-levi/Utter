@@ -330,13 +330,13 @@ struct DiagnosticsSettingsContent: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: Space.x2)
-                GlassButton(title: "Report Crash", systemImage: "ladybug", size: .small) {
+                GlassButton(title: "Report Crash", systemImage: "exclamationmark.bubble.fill", size: .small) {
                     AppDelegate.current?.openReportIssue(crashLog: log.content, category: .bug)
                 }
-                GlassButton(title: "Reveal in Finder", systemImage: "folder", size: .small) {
+                GlassButton(title: "Reveal in Finder", systemImage: "folder.fill", size: .small) {
                     model.reveal(log.url)
                 }
-                GlassButton(title: "Copy", systemImage: "doc.on.doc", size: .small) {
+                GlassButton(title: "Copy", systemImage: "doc.on.doc.fill", size: .small) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(log.content, forType: .string)
                 }
@@ -370,7 +370,7 @@ struct DiagnosticsSettingsContent: View {
                 .typo(.caption)
                 .fixedSize(horizontal: false, vertical: true)
 
-            GlassButton(title: "Open DiagnosticReports", systemImage: "folder", size: .small) {
+            GlassButton(title: "Open DiagnosticReports", systemImage: "folder.fill", size: .small) {
                 model.reveal(Self.systemReportsDirectory, isDirectory: true)
             }
         }
