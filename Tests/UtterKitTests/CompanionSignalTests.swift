@@ -37,7 +37,7 @@ struct CompanionSignalTests {
     @Test("Overheat needs the rate sustained, not just touched")
     func overheatNeedsSustain() {
         var typing = TypingActivity()
-        // 10 keys/s — comfortably over the 6.0 threshold — but only for 0.5s, which is
+        // 10 keys/s - comfortably over the 6.0 threshold - but only for 0.5s, which is
         // under the 1.2s sustain. A fast burst mid-sentence must not turn the cat red.
         var time = 0.0
         while time < 0.5 {
@@ -67,7 +67,7 @@ struct CompanionSignalTests {
         }
         #expect(typing.isOverheating)
 
-        // Hands off the keyboard. Only `update` runs from here — this is the case that
+        // Hands off the keyboard. Only `update` runs from here - this is the case that
         // needs `update` to exist at all, because a state that can only be changed by an
         // event can never end when the events stop.
         while time < 4.0 {
@@ -172,7 +172,7 @@ struct CompanionSignalTests {
         // Far away in both axes: a unit vector, so the eyes cannot leave their sockets however
         // far the cursor goes.
         //
-        // This asserted `dx == 1 && dy == 1`, which is per-axis clamping — and that is the one
+        // This asserted `dx == 1 && dy == 1`, which is per-axis clamping - and that is the one
         // shape of answer that breaks the promise in the line above. `SpritePack` draws the pupil
         // at `eyeAim.dx * eyeTravelPoints`, so the vector's *magnitude* is the distance from the
         // eye's centre: normalised, the pupil traces a circle of exactly `eyeTravelPoints` in
@@ -272,7 +272,7 @@ struct CompanionSignalTests {
         #expect(scroll.extension_ > 0)
         #expect(scroll.isUnrolled)
 
-        // Nothing happens until the retract delay passes — a pause between two flicks of
+        // Nothing happens until the retract delay passes - a pause between two flicks of
         // the same scroll should not snap the paper shut.
         scroll.update(at: 0.2, tick: 1.0 / 30.0)
         #expect(scroll.isUnrolled)
@@ -293,7 +293,7 @@ struct CompanionSignalTests {
         #expect(scroll.extension_ == 1)
     }
 
-    @Test("Scrolling the other way still unrolls — direction is not the signal")
+    @Test("Scrolling the other way still unrolls - direction is not the signal")
     func scrollDirectionAgnostic() {
         var up = ScrollActivity()
         up.record(delta: 100, at: 0)

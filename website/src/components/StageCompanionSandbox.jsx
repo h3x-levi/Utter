@@ -36,7 +36,7 @@ export default function StageCompanionSandbox() {
             <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
             <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
             <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-            <span className="text-xs font-semibold text-white/90 ml-3">Companion Workspace — Pixel Cat Sandbox</span>
+            <span className="text-xs font-semibold text-white/90 ml-3">Companion Workspace - Pixel Cat Sandbox</span>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">

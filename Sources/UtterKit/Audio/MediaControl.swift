@@ -5,7 +5,7 @@ import Cocoa
 /// macOS has no `AVAudioSession`, so an app cannot declare "I need the audio
 /// focus" the way it can on iOS. What it *can* do is send the same system-defined
 /// event the play/pause key on the keyboard sends, which every media app already
-/// listens for — Music, Spotify, browsers, VLC. That is deliberately the same
+/// listens for - Music, Spotify, browsers, VLC. That is deliberately the same
 /// mechanism the hardware key uses rather than a private framework: MediaRemote
 /// would give finer control but it is unsupported API.
 ///
@@ -20,7 +20,7 @@ enum MediaControl {
     ///
     /// There is no public way to ask "is something playing?", so this is
     /// best-effort: it sends a pause and remembers that it did. If nothing was
-    /// playing, the event is harmless — a pause with no player is a no-op — but a
+    /// playing, the event is harmless - a pause with no player is a no-op - but a
     /// player that was *stopped* would start on the matching resume, which is why
     /// `resumeIfPaused()` is the only thing allowed to undo it.
     static func pauseIfPlaying() {

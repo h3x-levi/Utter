@@ -6,7 +6,7 @@ import Foundation
 /// and output right now. The decision itself is `CallPresence`; this is the plumbing that feeds it.
 ///
 /// Deliberately thin. Everything that could be wrong in a way you would only find out by being
-/// annoyed by it — how long to wait, what counts, what to ignore — is in `CallPresence`, where it is
+/// annoyed by it - how long to wait, what counts, what to ignore - is in `CallPresence`, where it is
 /// a value type with tests. What is left here cannot be tested on this machine and is kept small
 /// enough to read: list the process objects, ask each one whether it is running input or output,
 /// exclude Utter's own pid, and hand two booleans to the decision.
@@ -14,7 +14,7 @@ import Foundation
 /// **Per process, not per device, and that is the whole design.** The first version read
 /// `kAudioDevicePropertyDeviceIsRunningSomewhere` on the default input device and again on the
 /// default output device. `AudioHardware.h` describes that property as "a UInt32 where 1 means that
-/// the AudioDevice is running in at least one process on the system" — device-wide, with no
+/// the AudioDevice is running in at least one process on the system" - device-wide, with no
 /// direction in it. On AirPods, on most USB and Bluetooth headsets, and on any aggregate device the
 /// default input and the default output are the *same* `AudioObjectID`, so the two reads returned
 /// the same number and "input and output are both open" collapsed into "this device is in use".
@@ -25,7 +25,7 @@ import Foundation
 ///
 /// **On permissions.** Everything here is a property read: no stream is opened, no sample buffer is
 /// requested, and no capture API is called, so there is nothing for `AVCaptureDevice`
-/// authorization — which gates *capture* — to be consulted about. What is **not** established is
+/// authorization - which gates *capture* - to be consulted about. What is **not** established is
 /// the recording-indicator half of it: I could not find an authoritative statement that these reads
 /// never light the orange dot, so treat that as unverified rather than as settled. If a future macOS
 /// does put per-process audio activity behind a permission, the capability probe below is what
@@ -35,7 +35,7 @@ final class CallDetector {
 
     /// Set by the owner whenever Utter itself is capturing. See `applyCallWatch`.
     ///
-    /// This is no longer how the app avoids detecting its own microphone tap — the pid filter does
+    /// This is no longer how the app avoids detecting its own microphone tap - the pid filter does
     /// that, for every stream Utter opens, without anything having to be wired up. It stays for the
     /// two jobs a pid cannot do:
     ///
@@ -43,7 +43,7 @@ final class CallDetector {
     ///     `ScreenCaptureKit`, which is not a HAL client of Utter's, so the pid filter says nothing
     ///     about it.
     ///   * It is what withdraws a live offer card the moment a capture starts by *any* route,
-    ///     including the Record button on the Notes screen — `update` reports the change, so the
+    ///     including the Record button on the Notes screen - `update` reports the change, so the
     ///     owner gets `onCallEnded` and takes the card down.
     var selfIsCapturing: () -> Bool = { false }
 
@@ -68,20 +68,20 @@ final class CallDetector {
     ///
     /// This is the only mechanism now, where it used to be a backstop behind property listeners on
     /// the two default devices. Those listeners went with the device-wide property they were
-    /// watching: there is no notification for "some process opened an input stream" — the nearest
+    /// watching: there is no notification for "some process opened an input stream" - the nearest
     /// thing, `kAudioHardwarePropertyProcessObjectList`, fires when a process object appears or
     /// disappears rather than when one starts or stops a direction. Nothing is lost by polling
     /// instead: the decision debounces for `CallPresence.confirmAfter` (5s) before it acts, so a 2s
     /// sample is already finer than the answer is.
     ///
     /// Removing them also removed a defect of their own. The old code registered per-device
-    /// listeners in a `for input in [true, false]` loop, which on shared-device hardware — the same
-    /// case that broke the signal — added two listeners for the same device and the same address,
+    /// listeners in a `for input in [true, false]` loop, which on shared-device hardware - the same
+    /// case that broke the signal - added two listeners for the same device and the same address,
     /// because each iteration built a fresh block. Both were removed symmetrically so nothing
     /// leaked, but every notification did the work twice.
     private var poll: Timer?
 
-    /// Whether the detector is running at all — the feature is opt-in.
+    /// Whether the detector is running at all - the feature is opt-in.
     private(set) var isWatching = false
 
     /// Set once if this system will not answer the per-process queries, so the log says it once.
@@ -94,8 +94,8 @@ final class CallDetector {
         // doing it. `Timer.invalidate()` has to be sent from the thread that scheduled the timer and
         // `deinit` runs wherever the last release happens; the capture is weak, so the runloop keeps
         // the timer alive after the detector is freed and this is the only place guaranteed to be on
-        // the right thread. Academic in this app — the detector is an app-lifetime property of
-        // `AppDelegate` — which is the reason to spend one line rather than a comment on it.
+        // the right thread. Academic in this app - the detector is an app-lifetime property of
+        // `AppDelegate` - which is the reason to spend one line rather than a comment on it.
         poll = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
             guard let self else {
                 timer.invalidate()
@@ -115,11 +115,11 @@ final class CallDetector {
         currentCall = nil
         // `isSampling` is deliberately **not** cleared here.
         //
-        // It was, on the reasoning that a restart should not be blocked by a walk still in flight —
+        // It was, on the reasoning that a restart should not be blocked by a walk still in flight  - 
         // but that defeated the guard it was meant to complement. The `isWatching` check inside the
         // hop is evaluated when the walk *lands*, and after a stop/start it is true again: so
         // clearing the flag let a pre-stop reading be fed to a freshly reset `CallPresence`, and let
-        // the next tick launch a second concurrent walk that could land out of order — exactly the
+        // the next tick launch a second concurrent walk that could land out of order - exactly the
         // "two walks landing out of order could confirm a call from the older of them" this exists to
         // prevent.
         //
@@ -128,7 +128,7 @@ final class CallDetector {
     }
 
     /// The user declined the offer. Forget the current call without ending the watch, so the next
-    /// call is still noticed — and, unlike a reset, the *same* call cannot ask again.
+    /// call is still noticed - and, unlike a reset, the *same* call cannot ask again.
     func dismissCurrentCall() {
         presence.decline()
         currentCall = nil
@@ -140,14 +140,14 @@ final class CallDetector {
     ///
     /// The walk is the expensive half and it does not belong on the main thread. Measured on an
     /// M4 with 29 CoreAudio process objects, `audioInUseByOtherProcesses` is **4.70ms** and 87 HAL
-    /// property reads — 56% of a 120Hz frame budget, every two seconds, which is a dropped frame
+    /// property reads - 56% of a 120Hz frame budget, every two seconds, which is a dropped frame
     /// on a schedule. It is `private static` and reads no instance state, so nothing about it
     /// needs the main actor; only the decision that follows does, because `selfIsCapturing` is a
     /// closure owned by the main-actor owner and the callbacks drive UI.
     ///
     /// The interval stays at two seconds. Widening it was the other available saving and it is the
     /// wrong one now: off the main thread the cost is no longer on the critical path, while a
-    /// coarser sample would add real latency to noticing a call — `CallPresence.confirmAfter`
+    /// coarser sample would add real latency to noticing a call - `CallPresence.confirmAfter`
     /// needs samples to *hold* for five seconds, so the sample period is the granularity of that
     /// answer.
     private func sample() {
@@ -182,8 +182,8 @@ final class CallDetector {
         }
         // `systemUptime` rather than a wall clock. `Date` moves when NTP or the user moves it, and
         // it accrues across sleep: `since` survives a sleep untouched (it is only reset when the
-        // sample changes), so on wake `held` was hours and the confirm window — the debounce whose
-        // whole purpose is to sit out a chime — was skipped outright. `systemUptime` is monotonic
+        // sample changes), so on wake `held` was hours and the confirm window - the debounce whose
+        // whole purpose is to sit out a chime - was skipped outright. `systemUptime` is monotonic
         // and does not advance while the machine is asleep, which is exactly the interval that
         // should not count towards "held open for five seconds".
         let changed = presence.update(inputByOthers: io.input,
@@ -193,7 +193,7 @@ final class CallDetector {
                                       at: ProcessInfo.processInfo.systemUptime)
         guard changed else { return }
         if presence.isInCall {
-            // Taken from the sample that confirmed the call, and then frozen — see `currentCall`.
+            // Taken from the sample that confirmed the call, and then frozen - see `currentCall`.
             currentCall = io.source
             // The app's name is logged; nothing about what is being said is, and no capture has
             // started at this point.
@@ -210,7 +210,7 @@ final class CallDetector {
     ///
     /// The honest behaviour, and the reason there is no fallback to the device-wide property: that
     /// property cannot tell input from output on the hardware most people are on, so falling back to
-    /// it would mean claiming a call from half the evidence — offering to record other people
+    /// it would mean claiming a call from half the evidence - offering to record other people
     /// because a podcast is playing. The feature is opt-in and off by default, so not offering costs
     /// a user who switched it on nothing they had before.
     ///
@@ -231,7 +231,7 @@ final class CallDetector {
 
     /// Whether any process other than Utter is running audio input, whether any is running output,
     /// and which process looks most like the one holding the call. `nil` means the HAL declined the
-    /// query, which is how this reports "not available here" — see `reportUnavailable`.
+    /// query, which is how this reports "not available here" - see `reportUnavailable`.
     ///
     /// The constants carry no `API_AVAILABLE` annotation (they are plain `CF_ENUM`), so they compile
     /// against any deployment target and the only way to know whether the HAL implements them is to
@@ -239,7 +239,7 @@ final class CallDetector {
     /// or an empty list is "unavailable", and so is a list where nothing answers either direction.
     ///
     /// `source` is strictly a *name* for a call the two booleans already established, and it is
-    /// allowed to be nil while they are both true — see `CallSource`. It costs one extra property
+    /// allowed to be nil while they are both true - see `CallSource`. It costs one extra property
     /// read per process on a list that is being walked anyway.
     private nonisolated static func audioInUseByOtherProcesses()
         -> (input: Bool, output: Bool, source: CallSource?)? {
@@ -252,7 +252,7 @@ final class CallDetector {
         // across helpers. `CallAudioEvidence` joins only helpers from the same supported app family.
         var activities: [CallProcessActivity] = []
         // Whether anything at all answered. A machine where the only process doing audio IO is
-        // Utter itself is entirely ordinary — nothing playing, a dictation running — so "no other
+        // Utter itself is entirely ordinary - nothing playing, a dictation running - so "no other
         // process reported anything" must not be read as "this API does not work". The probe is
         // therefore whether the *properties* answer, taken across every process including our own,
         // while only other processes contribute to the two flags.
@@ -266,7 +266,7 @@ final class CallDetector {
             //
             // Utter is excluded from the *output* side too, not only the input side. The app plays
             // its own start and stop chimes, and counting those would pair Utter's output with some
-            // other app's microphone — another dictation tool, a voice memo — and call it a meeting.
+            // other app's microphone - another dictation tool, a voice memo - and call it a meeting.
             // Nothing real is lost: on a call the remote side comes out of the meeting client.
             let pid = Self.pid(of: process)
             let somebodyElse = pid != nil && pid != own
@@ -353,7 +353,7 @@ final class CallDetector {
     ///
     /// `AudioHardware.h` describes `kAudioProcessPropertyBundleID` (`'pbid'`) as "A CFString that
     /// contains the bundle ID of the process. The caller is responsible for releasing the returned
-    /// CFObject." — so it comes back at +1 and something has to balance it.
+    /// CFObject." - so it comes back at +1 and something has to balance it.
     ///
     /// Nothing here calls `CFRelease`, and that is not an omission. The property is written straight
     /// into the storage of a Swift `CFString?` variable, which is an owning reference: ARC releases

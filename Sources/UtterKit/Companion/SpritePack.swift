@@ -26,7 +26,7 @@ struct CompanionAnimation: Equatable {
     /// Never returns an index `frames` does not have.
     ///
     /// The walk runs over `delays`, so a value built with more delays than frames
-    /// would return an index past the end — and the renderer subscripts `frames`
+    /// would return an index past the end - and the renderer subscripts `frames`
     /// with it, which is a crash rather than a glitch. The loader keeps the two
     /// arrays in step on every path, so this is unreachable today; it is clamped
     /// anyway because "unreachable" is a property of the current call sites, not of
@@ -50,14 +50,14 @@ struct CompanionAnimation: Equatable {
 
 /// A companion loaded from disk instead of drawn in code.
 ///
-/// This is how a user brings their own character. Utter ships no third-party art —
-/// anime characters are copyrighted, and bundling them would be infringement — but
+/// This is how a user brings their own character. Utter ships no third-party art  - 
+/// anime characters are copyrighted, and bundling them would be infringement - but
 /// a pack the user installs themselves is their own business, and this is the seam
 /// that makes it possible without the app ever fetching anything.
 ///
 /// Packs live in `~/Library/Application Support/Utter/Companions/<pack-id>/`.
 /// Three layouts are accepted, in the order they are looked for. The first two need
-/// no `pack.json` at all — the filenames say everything the loader needs:
+/// no `pack.json` at all - the filenames say everything the loader needs:
 ///
 /// **1. One animated PNG per state (recommended).** APNG keeps full 8-bit alpha and
 /// carries its own per-frame timing, and macOS decodes it natively:
@@ -89,8 +89,8 @@ struct CompanionAnimation: Equatable {
 /// Only `resting` is required; any missing state falls back to it, so a
 /// one-animation pack works.
 ///
-/// **Not GIF.** An animated GIF loads — refusing a file the OS can read would be
-/// unhelpful — but its transparency is a single bit, so every anti-aliased edge
+/// **Not GIF.** An animated GIF loads - refusing a file the OS can read would be
+/// unhelpful - but its transparency is a single bit, so every anti-aliased edge
 /// becomes a staircase and every soft shadow a block of hard pixels. Measured on a
 /// 56px character: 32 distinct alpha levels collapsed to 2, and all 212
 /// partially-transparent pixels went fully opaque or fully clear. Use APNG.
@@ -107,7 +107,7 @@ struct SpritePack: Identifiable, Equatable {
     ///
     ///   * **Interpolation.** The renderer smooths frames with `.interpolation(.high)`,
     ///     which is right for a 1792px illustration scaled down to 52pt and fatal for a
-    ///     32px sprite scaled *up* — bilinear filtering turns every hard pixel edge into
+    ///     32px sprite scaled *up* - bilinear filtering turns every hard pixel edge into
     ///     a gradient, and the art's entire character is those edges.
     ///   * **Integer scaling.** See `SpritePackView.renderedSize`.
     ///
@@ -121,7 +121,7 @@ struct SpritePack: Identifiable, Equatable {
     /// same canvas as its body frames, with everything but the eyes transparent.
     ///
     /// The eyes have to be a separate asset rather than baked per-direction frames because
-    /// the aim is continuous — the cursor can be anywhere — and authoring a frame per
+    /// the aim is continuous - the cursor can be anywhere - and authoring a frame per
     /// direction for every state would multiply the art by nine to express two pixels of
     /// movement.
     let eyeOverlay: NSImage?
@@ -142,8 +142,8 @@ struct SpritePack: Identifiable, Equatable {
     /// blocked the character from ever *leaning*: move the head for one state and the pupils
     /// stay behind, floating beside the face.
     ///
-    /// An anchor per state solves it without multiplying the art. The alternative — baking
-    /// the eyes into that state's frames — would lose cursor tracking in exactly the state
+    /// An anchor per state solves it without multiplying the art. The alternative - baking
+    /// the eyes into that state's frames - would lose cursor tracking in exactly the state
     /// where the pointer matters most, since the typing pose is the one you are looking at
     /// while your hands are on the keyboard.
     ///
@@ -170,7 +170,7 @@ struct SpritePack: Identifiable, Equatable {
 
     /// The walk-cycle animation, if the pack ships distinct `walk` frames.
     ///
-    /// Separate from `animation(for:)` because walking is an ambient *gait*, not a mood — the
+    /// Separate from `animation(for:)` because walking is an ambient *gait*, not a mood - the
     /// mood stays `resting` while the character crosses the desktop, so there is no mood to
     /// key it on (see `CompanionPose.gait`). A pack without a `walk` state returns nil and the
     /// renderer falls back to the resting loop, which is exactly how the photo packs behaved
@@ -211,17 +211,17 @@ struct SpritePack: Identifiable, Equatable {
     /// whole pixel grid. `SpritePackView.renderedSize` is the only caller.
     ///
     /// Two directions, and the second one is a bug fix. Where the canvas is *smaller* than
-    /// the box in device pixels, snap down to the largest whole multiple that fits — a 32px
+    /// the box in device pixels, snap down to the largest whole multiple that fits - a 32px
     /// cat in a 52pt box on a 2x display gets 1x rather than 1.625x, so no source pixel is
     /// drawn 3 device pixels wide while its neighbour gets 4.
     ///
     /// Where the canvas is **larger** than the box, there is no whole multiple that fits at
-    /// all, and the previous `max(1, …)` clamped to 1x — which returns a side *bigger than
+    /// all, and the previous `max(1, …)` clamped to 1x - which returns a side *bigger than
     /// the box it was asked for*. That silently broke the invariant every other piece of the
     /// companion's geometry is derived from: `CompanionGeometry` sizes the panel from the
     /// requested `characterSize`, and a borderless panel clips its content, so the character
     /// was sliced at the window edge mid-roam. It needed a 64px pack on a **1x** display to
-    /// show up — 64px in a 36pt box — which is why it shipped: every Retina display divides
+    /// show up - 64px in a 36pt box - which is why it shipped: every Retina display divides
     /// the other way. So snap to the largest whole *divisor* instead: 1/2, 1/3, …, which is
     /// just as exact under nearest-neighbour and always fits.
     ///
@@ -252,7 +252,7 @@ final class SpritePackStore: ObservableObject {
     @Published private(set) var failures: [(id: String, reason: String)] = []
 
     /// The pack a selection resolves to, or `nil` when none of the loaded packs can
-    /// serve it — which includes the case where none is loaded at all.
+    /// serve it - which includes the case where none is loaded at all.
     ///
     /// Both the renderer and the window's decision to appear go through this, so they
     /// cannot disagree: a panel shown with no pack behind it is an invisible companion
@@ -269,13 +269,13 @@ final class SpritePackStore: ObservableObject {
     /// Memoised, because this is called from a view body that re-runs 30 times a second.
     ///
     /// The companion's behaviour ticker publishes at 30 Hz, so `CompanionContainerView.character`
-    /// re-evaluates that often for as long as the character is on screen — and every evaluation
+    /// re-evaluates that often for as long as the character is on screen - and every evaluation
     /// used to build a fresh `[String]` of every pack's id (`packs.map(\.id)`) purely to hand it to
     /// the resolver, then scan the packs again to turn the answer back into a pack. Two allocations
     /// and two linear scans per frame, forever, to compute a value that changes only when the user
     /// picks a different character or a pack is installed.
     ///
-    /// Keyed on the selection so the argument still decides the answer — which is what lets a view
+    /// Keyed on the selection so the argument still decides the answer - which is what lets a view
     /// body observe the preference and redraw when it changes, exactly as the note above requires.
     /// Cleared whenever `packs` is reassigned, so an installed, removed or repaired pack is picked
     /// up without a relaunch.
@@ -295,7 +295,7 @@ final class SpritePackStore: ObservableObject {
     /// always has somewhere to open.
     ///
     /// `nonisolated` because it is a pure path computation that touches none of this
-    /// class's state — requiring the main actor to ask where a folder is would push
+    /// class's state - requiring the main actor to ask where a folder is would push
     /// the isolation outward onto every caller for no reason.
     nonisolated static var directory: URL {
         AppDirectory.subdirectory("Companions")
@@ -305,7 +305,7 @@ final class SpritePackStore: ObservableObject {
     ///
     /// These are defaults, not user content: they must be present on a fresh
     /// install with nothing in Application Support. Keeping them in the bundle also
-    /// means they cannot be half-deleted — a user who wants rid of one turns the
+    /// means they cannot be half-deleted - a user who wants rid of one turns the
     /// companion off or picks another, rather than leaving a broken folder behind.
     ///
     /// `nil` when running from a plain `swift build` binary rather than an .app,
@@ -323,7 +323,7 @@ final class SpritePackStore: ObservableObject {
     ///
     /// Part of the skip condition, not a separate check: the frame cap is derived from
     /// this (`maxFrameSide(for:)`), so a size change makes the loaded frames the wrong
-    /// resolution even though every folder is untouched — which is exactly the case the
+    /// resolution even though every folder is untouched - which is exactly the case the
     /// modification-date signature is blind to. Without it, raising the size upscaled a
     /// bitmap decoded for a smaller one and the character went soft.
     private var lastDecodedSize: CGFloat?
@@ -333,17 +333,17 @@ final class SpritePackStore: ObservableObject {
     /// Skips the work when the pack folders look exactly as they did last time.
     /// This is called from `CompanionSettingsView.onAppear`, so without the guard
     /// every visit to the Companion pane re-decoded every frame of every installed
-    /// pack — measured at 170-230 ms of main-thread work for the three shipped packs,
+    /// pack - measured at 170-230 ms of main-thread work for the three shipped packs,
     /// for a result identical to the one already in `packs`.
     ///
     /// The signature is folder modification dates, which catch a pack being added,
-    /// removed or renamed — the reasons this is called on appear. They do *not* catch
+    /// removed or renamed - the reasons this is called on appear. They do *not* catch
     /// a frame edited in place, because writing a file does not touch its parent
     /// directory's mtime. That case is what `force` is for, and it is what the Rescan
     /// button in Settings passes.
     ///
     /// The size the frames were decoded for is part of the condition too, because
-    /// nothing on disk changes when the user resizes the character — see
+    /// nothing on disk changes when the user resizes the character - see
     /// `lastDecodedSize`.
     func reload(force: Bool = false) {
         let fm = FileManager.default
@@ -413,8 +413,8 @@ final class SpritePackStore: ObservableObject {
     ///
     /// Not private so the comparison can be tested directly. Testing it through
     /// `reload()` is not an option: the store is a singleton reading the real
-    /// Application Support folder, so a test of it would depend on — and could
-    /// disturb — whatever the user has installed.
+    /// Application Support folder, so a test of it would depend on - and could
+    /// disturb - whatever the user has installed.
     nonisolated static func signature(of entries: [URL]) -> [String: Date] {
         var signature: [String: Date] = [:]
         for entry in entries {
@@ -441,8 +441,8 @@ final class SpritePackStore: ObservableObject {
     /// from `UserData` here for the same reason nothing else in this file reads it: a
     /// loader that consulted a preference from a nonisolated context would be both a
     /// hidden dependency and a test whose result depended on the developer's settings.
-    /// It defaults to the shipped size so a caller that genuinely does not care — every
-    /// loader test — gets a deterministic cap.
+    /// It defaults to the shipped size so a caller that genuinely does not care - every
+    /// loader test - gets a deterministic cap.
     nonisolated static func loadPack(
         from directory: URL,
         characterSize: CGFloat = UserData.defaultCompanionSize.points
@@ -492,7 +492,7 @@ final class SpritePackStore: ObservableObject {
                 let fps = Self.declaredFPS(in: json, state: state)
 
                 // A single animated file (APNG) named in `states` is read as its own
-                // frames rather than sliced — the frames are already separate, and
+                // frames rather than sliced - the frames are already separate, and
                 // slicing one would cut the first frame into pieces.
                 if let animated = Self.animatedAnimation(at: url, overrideFPS: fps,
                                                          maxFrameSide: maxFrameSide) {
@@ -505,11 +505,11 @@ final class SpritePackStore: ObservableObject {
                 // `frameWidth` with a huge PNG hangs the main thread on a multi-GB bitmap.
                 //
                 // The budget bounds two separate abuses:
-                //   * the declared sheet width (`declaredFrames * frameWidth`) — a tiny
+                //   * the declared sheet width (`declaredFrames * frameWidth`) - a tiny
                 //     declared frameWidth caps it to near-nothing whatever the file's real
                 //     size, which is exactly the attack above;
                 //   * an absolute ceiling of one full-size strip at the frame limit
-                //     (`maxFrameSide * maxFramesPerState`) — backstops a huge *declared*
+                //     (`maxFrameSide * maxFramesPerState`) - backstops a huge *declared*
                 //     frame count so that can't reopen the multi-GB decode either.
                 //
                 // A sheet within budget is read with `NSImage(contentsOf:)`, unchanged:
@@ -519,7 +519,7 @@ final class SpritePackStore: ObservableObject {
                 // would throw the frame count off). The pixel dimensions are read from the
                 // image source's metadata first, which does not decode the bitmap, so an
                 // oversized file is recognised *before* it is opened and routed to the
-                // capped thumbnail decode instead — bounded, at the cost of exact framing
+                // capped thumbnail decode instead - bounded, at the cost of exact framing
                 // on a sheet that already disagrees with its own manifest. `slice` then
                 // caps each kept frame again.
                 let declaredWidth = CGFloat(max(declaredFrames, 0)) * frameWidth
@@ -581,12 +581,12 @@ final class SpritePackStore: ObservableObject {
         )
     }
 
-    /// Read `"eyeAnchors": { "knead": [0, 3] }` — a per-state `[dx, dy]` in source pixels.
+    /// Read `"eyeAnchors": { "knead": [0, 3] }` - a per-state `[dx, dy]` in source pixels.
     ///
     /// Clamped to ±12px, which is a third of a 32px canvas: an anchor larger than that is a
     /// typo rather than an intention, and an unclamped one would park the pupils outside the
     /// frame where they simply vanish. Malformed entries are skipped rather than failing the
-    /// pack — this is hand-edited data, and a pack with one bad anchor should still load with
+    /// pack - this is hand-edited data, and a pack with one bad anchor should still load with
     /// the rest of its states working.
     nonisolated private static func parseEyeAnchors(_ raw: Any?) -> [String: CGVector] {
         guard let table = raw as? [String: [NSNumber]] else { return [:] }
@@ -614,7 +614,7 @@ final class SpritePackStore: ObservableObject {
         else { return nil }
         guard image.size == size else {
             print("⚠️ \(directory.lastPathComponent): eyes.png is \(image.size) but frames are "
-                  + "\(size) — ignoring the eye layer")
+                  + "\(size) - ignoring the eye layer")
             return nil
         }
         return image
@@ -626,23 +626,23 @@ final class SpritePackStore: ObservableObject {
     /// because a per-state rate is a deliberate choice and a whole-pack rate is a
     /// default:
     ///
-    ///   * `states.<state>.fps` — beside the strip that state is cut from
-    ///   * `animation.<state>.fps` — the block `scripts/animate_pack.py` writes when
+    ///   * `states.<state>.fps` - beside the strip that state is cut from
+    ///   * `animation.<state>.fps` - the block `scripts/animate_pack.py` writes when
     ///     it renders numbered frames
-    ///   * `fps` — one rate for the whole pack
+    ///   * `fps` - one rate for the whole pack
     ///
     /// **The per-state rates were being dropped.** Only the top-level `fps` was ever
-    /// read, and none of the three shipped packs sets it — every one of them declares
+    /// read, and none of the three shipped packs sets it - every one of them declares
     /// its rates per state under `animation`, and every state was therefore playing at
     /// the 8 fps fallback. Measured against the manifests: `sleepy` is authored at
     /// 5 fps and ran 60% too fast, `delighted` and `startled` at 12 fps and ran 33%
     /// too slow, `alert` at 10 fps. The generator's own comment records the gap
     /// ("for numbered frames it uses its own default, so this is documentation of
-    /// intent rather than something it consumes today") — this is that gap closed.
+    /// intent rather than something it consumes today") - this is that gap closed.
     ///
     /// Out-of-range values are clamped and non-finite ones ignored rather than
     /// rejected: `fps` is hand-edited data, and a pack with one silly number in it
-    /// should still play. A non-finite rate has to be dropped rather than clamped —
+    /// should still play. A non-finite rate has to be dropped rather than clamped  - 
     /// `min(max(nan, 1), 60)` is `nan`, which makes every delay `nan`, which makes
     /// `frameIndex` compare false forever and freezes the state on its last frame.
     nonisolated private static func declaredFPS(in json: [String: Any], state: String) -> Double? {
@@ -672,7 +672,7 @@ final class SpritePackStore: ObservableObject {
     /// leave it.
     ///
     /// A `pack.json` is user-editable data, so `"file": "../../../secrets.png"` has to
-    /// be rejected rather than resolved — the app never trusts a path it did not
+    /// be rejected rather than resolved - the app never trusts a path it did not
     /// construct itself.
     nonisolated private static func resolve(_ file: String, in directory: URL,
                                             state: String) throws -> URL {
@@ -680,7 +680,7 @@ final class SpritePackStore: ObservableObject {
         // `URL(fileURLWithPath:relativeTo:)` treats the base as a *file* and resolves
         // against its parent, so a perfectly ordinary `"file": "idle.png"` came out as
         // a SIBLING of the pack folder rather than a child. The containment check below
-        // then correctly rejected it — meaning every legitimate strip pack was refused
+        // then correctly rejected it - meaning every legitimate strip pack was refused
         // with a security error. Caught by the strip tests, not by inspection.
         let base = URL(fileURLWithPath: directory.path, isDirectory: true)
         let candidate = URL(fileURLWithPath: file, relativeTo: base).standardizedFileURL
@@ -704,14 +704,14 @@ final class SpritePackStore: ObservableObject {
     ///
     /// **APNG is the format to hand someone who wants "one animated file".** It is a
     /// PNG, so it keeps full 8-bit alpha and per-frame delays, and macOS's ImageIO
-    /// decodes it natively — `CGImageSourceGetCount` reports the frames and each
+    /// decodes it natively - `CGImageSourceGetCount` reports the frames and each
     /// frame's properties carry `APNGDelayTime`.
     ///
     /// GIF cannot do this: its transparency is one bit, so every anti-aliased edge
     /// becomes a staircase and every soft shadow a block of hard pixels. Measured on a
     /// 56px character, 32 distinct alpha levels collapsed to 2 and all 212
     /// partially-transparent pixels went fully opaque or fully clear. Animated GIFs
-    /// still load here — refusing a file the OS can read would be unhelpful — but they
+    /// still load here - refusing a file the OS can read would be unhelpful - but they
     /// will look wrong, and that is the format, not the loader.
     nonisolated static func animatedAnimation(at url: URL, overrideFPS: Double?,
                                               maxFrameSide: CGFloat) -> CompanionAnimation? {
@@ -760,7 +760,7 @@ final class SpritePackStore: ObservableObject {
     ///   medium (52pt, 133px) 9.88 MB     huge (84pt, 215px)   25.92 MB
     ///
     /// So the default costs what it always did, and the largest character costs 2.6x
-    /// that — paid only by someone who picked it, and still a third of the uncapped
+    /// that - paid only by someone who picked it, and still a third of the uncapped
     /// figure.
     ///
     /// `CGImageSourceCreateThumbnailAtIndex` rather than decoding and then scaling:
@@ -776,7 +776,7 @@ final class SpritePackStore: ObservableObject {
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
         // The thumbnail path only ever shrinks, so an already-small frame must go
-        // through the plain decode — asking for a 113px "thumbnail" of a 64px frame
+        // through the plain decode - asking for a 113px "thumbnail" of a 64px frame
         // would upscale it and throw away nothing but sharpness.
         let cgImage: CGImage?
         if let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
@@ -805,7 +805,7 @@ final class SpritePackStore: ObservableObject {
 
     /// Pixels of backing store per point to decode for.
     ///
-    /// 2 is the ceiling on macOS — there is no 3x mode, and a display running a scaled
+    /// 2 is the ceiling on macOS - there is no 3x mode, and a display running a scaled
     /// resolution still renders at 2x of its logical size. **This is the one knob**:
     /// raise it, not the art, if a capped frame ever looks soft on screen.
     nonisolated static let maxBackingScale: CGFloat = 2
@@ -828,12 +828,12 @@ final class SpritePackStore: ObservableObject {
     ///
     /// **A function of the size, not a constant, because the size is a preference.** The
     /// alternative was to cap once against the largest size the settings offer, which
-    /// would never need a re-decode — but it makes everyone pay the largest character's
+    /// would never need a re-decode - but it makes everyone pay the largest character's
     /// memory (see `decodeFrame` for the measured figures) including the majority who
     /// never change the setting. So the frames are decoded for the chosen size and
     /// `reload` re-decodes when it changes. That costs one pass over the packs: measured
     /// 180-225 ms on the main thread for the four shipped ones, once, in a settings pane
-    /// — against 16 MB of permanently resident bitmaps for a character nobody chose.
+    /// - against 16 MB of permanently resident bitmaps for a character nobody chose.
     nonisolated static func maxFrameSide(for characterSize: CGFloat) -> CGFloat {
         (characterSize * CompanionGeometry.maxPoseScale
             * CompanionGeometry.hoverScale * maxBackingScale).rounded(.up)
@@ -871,11 +871,11 @@ final class SpritePackStore: ObservableObject {
     ///
     /// Two conventions, both keyed on the state names Utter already uses:
     ///
-    ///   * `resting.png` — one animated PNG per state (the "one file like a GIF" case)
-    ///   * `resting/01.png, 02.png…` — a folder of numbered frames per state
+    ///   * `resting.png` - one animated PNG per state (the "one file like a GIF" case)
+    ///   * `resting/01.png, 02.png…` - a folder of numbered frames per state
     ///
     /// Numbered frames are sorted with `localizedStandardCompare`, so `2.png` sorts
-    /// before `10.png` — a plain string sort puts `10` second, which silently plays
+    /// before `10.png` - a plain string sort puts `10` second, which silently plays
     /// the animation out of order.
     nonisolated private static func discoverByConvention(
         in directory: URL, manifest json: [String: Any], maxFrameSide: CGFloat
@@ -933,7 +933,7 @@ final class SpritePackStore: ObservableObject {
     /// The state names the companion understands, and the order they are looked for.
     /// Every state name the loader looks for on disk.
     ///
-    /// This list is the loader's whole vocabulary — `discoverByConvention` iterates it, and it is
+    /// This list is the loader's whole vocabulary - `discoverByConvention` iterates it, and it is
     /// the *only* thing that populates `animations`, even for a pack that ships a `pack.json`
     /// (see the call at the manifest path). So a state missing from this list can never load, no
     /// matter what art the pack contains.
@@ -941,7 +941,7 @@ final class SpritePackStore: ObservableObject {
     /// It held only the original six, and the pet states plus the walk gait were added to
     /// `key(for:)` and `walkAnimation` without being added here. The result was silent because
     /// `animation(for:)` falls back to `resting` by design: the shipped pixel packs each carried
-    /// seven PNGs — `knead`, `walk`, `purr`, `hunt`, `drag`, `overheat`, `stretch` — that were
+    /// seven PNGs - `knead`, `walk`, `purr`, `hunt`, `drag`, `overheat`, `stretch` - that were
     /// never read, and the cat played its idle loop while "typing" or "walking". The typing
     /// animation could not appear even with the keystroke signal working and Accessibility
     /// granted, because there was no knead art loaded to play.
@@ -974,11 +974,11 @@ final class SpritePackStore: ObservableObject {
     /// be released.
     ///
     /// **Units.** `frameWidth`/`frameHeight` in the manifest describe the PNG's
-    /// *pixels* — that is what a pack author reads off the file in an image editor.
+    /// *pixels* - that is what a pack author reads off the file in an image editor.
     /// `NSImage.size` and the `from:` rect of `draw` are in *points*, which are the
     /// same thing only for a @1x image: a `@2x`-tagged sheet reports half its pixel
     /// dimensions. Counting frames in pixels while cropping in points therefore
-    /// slices the wrong regions and can yield twice as many frames as exist —
+    /// slices the wrong regions and can yield twice as many frames as exist  - 
     /// measured on a 512×128 pixel sheet declaring 64pt frames, which produced 8
     /// frames from a 4-frame strip, the back half duplicated.
     ///
@@ -1007,7 +1007,7 @@ final class SpritePackStore: ObservableObject {
                                 height: frameSize.height / scaleY)
 
         // The destination keeps the manifest's pixel dimensions, so no resolution is
-        // thrown away when a @2x sheet is sliced — up to the point where the renderer
+        // thrown away when a @2x sheet is sliced - up to the point where the renderer
         // would throw it away anyway. A strip declaring 512px frames costs 1 MB per
         // frame decoded and is drawn into a box a fraction of that, so it is cut down to
         // `maxFrameSide` here for the same reason `decodeFrame` does it: this is the
@@ -1062,12 +1062,12 @@ final class SpritePackStore: ObservableObject {
 /// Draws the current frame of a sprite pack.
 ///
 /// Sprite art carries its own expression, so this applies only the parts of a pose
-/// the *engine* owns — position, facing, squash and lean, which are how the behaviour
+/// the *engine* owns - position, facing, squash and lean, which are how the behaviour
 /// engine moves the character around. Eye shape, mouth and accessories are ignored on
 /// purpose: those belong to whoever drew the frames.
 ///
 /// **Deliberately NOT `Equatable`, and this was measured rather than assumed.** Memoising
-/// this view with `.equatable()` — the obvious next step after `SpriteBodyLayer` below — would
+/// this view with `.equatable()` - the obvious next step after `SpriteBodyLayer` below - would
 /// short-circuit exactly nothing, because `pose` and `elapsed` both change on every single
 /// tick. Counted over 24 000 release-build ticks in each of four scenarios (resting with a
 /// static cursor, cursor moving plus typing, recording against a live input level, and Reduce
@@ -1076,7 +1076,7 @@ final class SpritePackStore: ObservableObject {
 /// continuous sine even at rest (the resting breath) and `pose.eyeAim` is a spring that is
 /// still settling; `elapsed` is a monotonic clock. There is no plateau to memoise.
 ///
-/// The tempting version — an `==` that ignores `elapsed` — is a *correctness* bug, not an
+/// The tempting version - an `==` that ignores `elapsed` - is a *correctness* bug, not an
 /// optimisation. Under Reduce Motion with pet signals off, `(mood, pose)` alone matched the
 /// previous tick on 23 990 of 24 000 ticks, so such an `==` would report "unchanged" and
 /// freeze the sprite animation on one drawing: `elapsed` is the only thing that advances the
@@ -1096,7 +1096,7 @@ struct SpritePackView: View {
     let size: CGFloat
     /// Seconds the current mood has been showing, from the behaviour engine's clock.
     ///
-    /// A *time*, not a frame index, because APNG frames have individual durations —
+    /// A *time*, not a frame index, because APNG frames have individual durations  - 
     /// an index would need a fixed frame rate to advance against, which is exactly
     /// the timing information the format exists to preserve. One clock for everything
     /// still holds: this is the engine's clock, not a timer of the view's own.
@@ -1115,7 +1115,7 @@ struct SpritePackView: View {
     /// whole-number scale factor, and the requested sizes do not divide evenly:
     /// the size ladder is 36/52/68/84pt, which on a 2x display is 72/104/136/168 device
     /// pixels, and the greatest common divisor of those four is 8. So no sprite canvas
-    /// above 8px can scale integrally at all four sizes — a 32px cat at 52pt would run at
+    /// above 8px can scale integrally at all four sizes - a 32px cat at 52pt would run at
     /// 3.25x, and nearest-neighbour at 3.25x draws some source pixels 3 device pixels
     /// wide and others 4. The cat comes out visibly lumpy: uneven whisker widths, an ear
     /// one pixel taller on one side.
@@ -1125,7 +1125,7 @@ struct SpritePackView: View {
     /// padding from, and a companion clipped by its own window is a worse bug than one
     /// drawn slightly small. Measured cost at 32px: the four sizes render 32/48/64/80pt,
     /// which is 5-11% under nominal. At the 64px the pixel cats are drawn at, the same rule
-    /// gives 32/32/64/64pt — coarser, and the price of a canvas with room for articulated
+    /// gives 32/32/64/64pt - coarser, and the price of a canvas with room for articulated
     /// legs.
     ///
     /// The arithmetic is a `static` on `SpritePack` so it can be tested: it is the one part
@@ -1147,7 +1147,7 @@ struct SpritePackView: View {
     /// How far the eye layer moves for a full deflection, in points.
     ///
     /// `eyeTravel` is in source pixels, so it scales with however large the sprite is
-    /// actually being drawn — two pixels of travel on a 32px cat is 2pt at 32pt and 5pt at
+    /// actually being drawn - two pixels of travel on a 32px cat is 2pt at 32pt and 5pt at
     /// 80pt, which keeps the eyes in their sockets at every size.
     private var eyeTravelPoints: CGFloat {
         pack.eyeTravel * sourcePixelInPoints
@@ -1169,7 +1169,7 @@ struct SpritePackView: View {
 
     /// How much of the flustered red is mixed in, 0...1.
     ///
-    /// Capped at 0.9 rather than 1 so a trace of the coat survives at full heat — the
+    /// Capped at 0.9 rather than 1 so a trace of the coat survives at full heat - the
     /// character should look like *itself*, overheating, not like a red silhouette.
     private var heatMix: Double {
         Double(min(1, max(0, pose.heat))) * 0.9
@@ -1181,19 +1181,19 @@ struct SpritePackView: View {
     /// The first version used `.colorMultiply`, which cannot work on a dark character: the
     /// midnight coat's fill is #170000, and multiplying a near-black by any colour leaves it
     /// near-black. The only pixels that visibly changed were the ones that were already
-    /// light — the edge ring and the eye whites — so the cat appeared to get a red *outline*
+    /// light - the edge ring and the eye whites - so the cat appeared to get a red *outline*
     /// while its body stayed black, which is exactly the wrong reading.
     ///
     /// `.sourceAtop` composites this colour only where the sprite is already opaque, so the
     /// shape is untouched and the fill is genuinely re-coloured. It works the same on a
     /// black coat and a cream one, which multiply never could.
     ///
-    /// `fileprivate` rather than `private` so the memoised `SpriteBodyLayer` below — a
-    /// separate type in this file — can paint with the same red.
+    /// `fileprivate` rather than `private` so the memoised `SpriteBodyLayer` below - a
+    /// separate type in this file - can paint with the same red.
     fileprivate static let heatRed = Color(red: 0.86, green: 0.20, blue: 0.18)
 
     var body: some View {
-        // While walking, prefer the pack's walk cycle — but only if it has one; a pack
+        // While walking, prefer the pack's walk cycle - but only if it has one; a pack
         // without `walk` frames falls back to the mood's animation, so nothing is obliged to
         // draw a walk. Everything else shows the mood's own frames, gaze and heat unchanged.
         let animation = pose.gait == .walking
@@ -1213,15 +1213,15 @@ struct SpritePackView: View {
                 // only when the drawn frame or the heat does, so on the ~3 of every 4 ticks
                 // that land on the *same* APNG frame, SwiftUI skips rebuilding the image, its
                 // interpolation and the heat composite and reuses the last render. The engine
-                // still ticks at 30 Hz and this view is still re-evaluated 30 Hz — the squash
-                // breath and the gaze are live every frame — but that per-tick work is now the
+                // still ticks at 30 Hz and this view is still re-evaluated 30 Hz - the squash
+                // breath and the gaze are live every frame - but that per-tick work is now the
                 // cheap layer transforms and the gaze offset, not a fresh sprite composite.
                 //
                 // The eyes stay OUTSIDE the memoised layer, deliberately and unchanged: they
                 // track the cursor every frame, and they must sit on top of the heat tint and
                 // stay dark (a flustered cat with red pupils reads as a different, more
-                // alarming animal). Overlaying them here keeps that order — body+heat first,
-                // pupils on top — exactly as before.
+                // alarming animal). Overlaying them here keeps that order - body+heat first,
+                // pupils on top - exactly as before.
                 SpriteBodyLayer(
                     image: animation.frames[animation.frameIndex(at: elapsed)],
                     pixelArt: pack.pixelArt,
@@ -1232,19 +1232,19 @@ struct SpritePackView: View {
                     // No tracking eyes while walking, because the walk is drawn in profile.
                     //
                     // `eyes.png` is one shared overlay anchored to the front-on head: two eyes
-                    // at rows 8-12 of the canvas. The pixel cats' walk cycle is a side view — a
-                    // profile cat has *one* visible eye, further forward — so no anchor offset
+                    // at rows 8-12 of the canvas. The pixel cats' walk cycle is a side view - a
+                    // profile cat has *one* visible eye, further forward - so no anchor offset
                     // can place this correctly. The problem is the eye count, not the position,
                     // and `eyeAnchors` can only move the layer.
                     //
                     // So the walk frames bake their own eye and this layer stands down. The
                     // cost is cursor tracking for the length of a walk, which is the right
                     // thing to trade: an animal in motion looks where it is going. Every other
-                    // state keeps the overlay untouched — including `knead`, where the pointer
+                    // state keeps the overlay untouched - including `knead`, where the pointer
                     // matters most and the anchor exists for exactly that reason.
                     //
                     // Keyed on the same condition that chose the animation above, so a pack
-                    // *without* a walk cycle — which falls back to the mood's front-on frames —
+                    // *without* a walk cycle - which falls back to the mood's front-on frames  - 
                     // keeps its eyes. Only a pack that actually supplies `walk` gives them up.
                     let walking = pose.gait == .walking && pack.walkAnimation != nil
                     if let eyes = pack.eyeOverlay, !walking {
@@ -1253,12 +1253,12 @@ struct SpritePackView: View {
                             .interpolation(pack.pixelArt ? .none : .high)
                             .aspectRatio(contentMode: .fit)
                             // Two offsets, and they mean different things. The anchor moves
-                            // the eyes to wherever THIS pose put the head — a fixed, per-state
+                            // the eyes to wherever THIS pose put the head - a fixed, per-state
                             // correction. The aim is the live cursor tracking on top of it.
                             // Adding them lets a leaning pose keep tracking, which is the whole
                             // point of the anchor.
                             .offset(x: eyeAnchorPoints.dx + pose.eyeAim.dx * eyeTravelPoints,
-                                    // Screen y grows up, SwiftUI's grows down — so the aim is
+                                    // Screen y grows up, SwiftUI's grows down - so the aim is
                                     // negated and the anchor, authored in image space, is not.
                                     y: eyeAnchorPoints.dy - pose.eyeAim.dy * eyeTravelPoints)
                     }
@@ -1278,7 +1278,7 @@ struct SpritePackView: View {
         .frame(width: size, height: size)
         // Squash, lean and facing are layer transforms, so at rest (squash 1, lean 0,
         // facing 1) they are the identity and pixel art stays exactly on its grid. Only
-        // while a transform is actually running — a hop, a stretch — does the layer get
+        // while a transform is actually running - a hop, a stretch - does the layer get
         // resampled and soften for those few hundred milliseconds. Quantising the
         // transforms to whole pixels was considered and rejected: it makes a 0.5s hop
         // move in visible steps, which reads as dropped frames rather than as weight.
@@ -1293,8 +1293,8 @@ struct SpritePackView: View {
 /// actually change.
 ///
 /// This is the memoisation the companion's continuous redraw needs. The behaviour engine
-/// publishes a new pose on every one of its 30 ticks a second — the breath and the gaze
-/// are genuinely continuous — so the parent `SpritePackView` is re-evaluated 30 Hz for as
+/// publishes a new pose on every one of its 30 ticks a second - the breath and the gaze
+/// are genuinely continuous - so the parent `SpritePackView` is re-evaluated 30 Hz for as
 /// long as the companion is on screen. But the *sprite frame* only changes at the pack's
 /// own rate (5-12 fps), so on most ticks the image, its `.high` interpolation and the heat
 /// composite would be rebuilt to produce a byte-for-byte identical result. `Equatable` lets
@@ -1304,7 +1304,7 @@ struct SpritePackView: View {
 ///
 /// Compared by frame *identity* (`===`): frames are stable objects held by the pack, so a
 /// new frame index yields a different object and a mood change yields a different frames
-/// array — both correctly force a redraw. `heatMix` changes tick-to-tick only while the
+/// array - both correctly force a redraw. `heatMix` changes tick-to-tick only while the
 /// character is overheating, which is exactly when the tint should animate.
 private struct SpriteBodyLayer: View, Equatable {
     let image: NSImage
@@ -1329,7 +1329,7 @@ private struct SpriteBodyLayer: View, Equatable {
         // pass on every composited frame, for a tint that is fully transparent the vast
         // majority of the time. Gating both on `heatMix > 0` removes that pass in the
         // overwhelmingly common not-overheating case and reproduces the old rendering
-        // exactly when it is warm — the group is only ever needed to isolate the blend.
+        // exactly when it is warm - the group is only ever needed to isolate the blend.
         if heatMix > 0 {
             base
                 .overlay {
@@ -1340,7 +1340,7 @@ private struct SpriteBodyLayer: View, Equatable {
                         .blendMode(.sourceAtop)
                 }
                 // Scopes the blend to this image. Without it `.sourceAtop` composites against
-                // whatever is behind the whole view — the desktop — and paints a red square
+                // whatever is behind the whole view - the desktop - and paints a red square
                 // over the wallpaper.
                 .compositingGroup()
         } else {

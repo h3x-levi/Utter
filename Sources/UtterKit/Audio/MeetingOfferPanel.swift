@@ -6,14 +6,14 @@ import SwiftUI
 ///
 /// A pure type with tests, for the reason `PillMetrics`, `CompanionGeometry` and `Layout.size` are:
 /// the card's height is a fixed number the window is *created* with, and getting it wrong is not a
-/// cosmetic defect. `hosting.sizingOptions = []` forbids the window growing to fit — deliberately,
-/// see the collapse `showMainWindow` documents — and the content is top-aligned, so anything the
+/// cosmetic defect. `hosting.sizingOptions = []` forbids the window growing to fit - deliberately,
+/// see the collapse `showMainWindow` documents - and the content is top-aligned, so anything the
 /// number does not allow for is laid out below the window's bottom edge, where nothing composites
 /// and no mouse event lands.
 ///
 /// It shipped as a hardcoded 96pt against 133.5pt of content: padding 32, an 18pt title row, two
 /// 12pt gaps, a caption that wraps to two lines at 31.5pt, and a 28pt button row. The 37pt that did
-/// not fit was the entire button row, so the feature could not be used at all — the card appeared
+/// not fit was the entire button row, so the feature could not be used at all - the card appeared
 /// and neither button existed. Hence the arithmetic living here, derived from the same tokens the
 /// view lays out with, with a test that measures the real strings and the real control.
 enum MeetingOfferMetrics {
@@ -27,7 +27,7 @@ enum MeetingOfferMetrics {
     /// say which one it is, so the card can read "You're in a Zoom call". That is why `height` takes
     /// the title as a parameter and *measures* it rather than allowing it one line. A hardcoded
     /// single-line allowance was fine for a fixed 17-character string and is a bug the moment the
-    /// string can be "You're in a Microsoft Teams call", which wraps in this width — and the overflow
+    /// string can be "You're in a Microsoft Teams call", which wraps in this width - and the overflow
     /// of a wrapped title is the button row, laid out below the window's bottom edge, which is
     /// exactly the defect this whole type exists because of.
     static let defaultTitle = CallSource.offerTitle(appName: nil)
@@ -38,10 +38,10 @@ enum MeetingOfferMetrics {
     /// Wide enough for the caption to wrap to two lines rather than five.
     static let width: CGFloat = 268
 
-    /// Inset on all four sides — the view's `.padding(Space.x4)`.
+    /// Inset on all four sides - the view's `.padding(Space.x4)`.
     static let padding = Space.x4
 
-    /// Between the title row, the caption and the buttons — the `VStack`'s `spacing`.
+    /// Between the title row, the caption and the buttons - the `VStack`'s `spacing`.
     static let rowSpacing = Space.x3
 
     /// The text column: what the caption wraps against.
@@ -67,7 +67,7 @@ enum MeetingOfferMetrics {
     /// Height of the button row.
     ///
     /// `NSButton(bezelStyle: .rounded, controlSize: .large).fittingSize` measured (92, 28) on this
-    /// machine, which is where the number comes from — a large macOS control.
+    /// machine, which is where the number comes from - a large macOS control.
     ///
     /// The card uses large native macOS buttons, whose measured height is 28pt.
     static let buttonRowHeight: CGFloat = 28
@@ -79,7 +79,7 @@ enum MeetingOfferMetrics {
     ///
     /// It also used to cover `.glass` at `.controlSize(.large)` drawing taller than the AppKit
     /// fitting height above, which `buttonRowHeight` explains is no longer a risk. Kept at the same
-    /// value regardless — the two text rows are the larger share of the card's height and they are
+    /// value regardless - the two text rows are the larger share of the card's height and they are
     /// the part still measured against the system. `PillMetrics.noteBoxHeight` carries slack for the
     /// same reason.
     static let slack = Space.x2
@@ -129,7 +129,7 @@ enum MeetingOfferMetrics {
     /// How tall `text` is in the card's text column, in the caption face, wrapped.
     ///
     /// The caption is `.fixedSize(horizontal: false, vertical: true)` in the view, which makes its
-    /// wrapped height incompressible — the card cannot squeeze it, so this is what the window has to
+    /// wrapped height incompressible - the card cannot squeeze it, so this is what the window has to
     /// find room for.
     static func captionHeight(_ text: String) -> CGFloat {
         wrappedHeight(text, font: captionFont, width: contentWidth)
@@ -200,7 +200,7 @@ final class MeetingOfferPanel: NSPanel {
                    defer: false)
 
         // Matches the pill: floats above ordinary windows, follows the user across Spaces, and
-        // never becomes the key window — this must not steal focus from the call.
+        // never becomes the key window - this must not steal focus from the call.
         level = .statusBar
         isOpaque = false
         backgroundColor = .clear
@@ -214,7 +214,7 @@ final class MeetingOfferPanel: NSPanel {
         let hosting = NSHostingView(rootView: ThemedRoot {
             MeetingOfferView(title: title, model: model, onAccept: onAccept, onDecline: onDecline)
         })
-        // Never let the hosting view drive the window's size — the collapse documented in
+        // Never let the hosting view drive the window's size - the collapse documented in
         // `showMainWindow`. Which is exactly why `MeetingOfferMetrics` exists: with the window's
         // height fixed here, the content has to be known to fit it.
         if #available(macOS 13.0, *) { hosting.sizingOptions = [] }
@@ -325,8 +325,8 @@ final class MeetingOfferPanel: NSPanel {
     /// Give the card a shadow on the render paths where nothing else supplies one.
     ///
     /// Same branch and same reasoning as the pill's `PillElevation`: on macOS 26 the Liquid Glass
-    /// material draws its own content-aware shadow — it "increases the opacity of its shadow when it
-    /// is over text" and lowers it over a light background — so a second one doubles it. Below 26,
+    /// material draws its own content-aware shadow - it "increases the opacity of its shadow when it
+    /// is over text" and lowers it over a light background - so a second one doubles it. Below 26,
     /// and under Reduce Transparency at any version, there is no material to supply one: the card
     /// becomes an opaque `Surface.raised` rect with a 1pt border, floating over the desktop with
     /// nothing separating it from the wallpaper.
@@ -336,7 +336,7 @@ final class MeetingOfferPanel: NSPanel {
     /// blur into; this card's content is `.frame(maxWidth: .infinity, maxHeight: .infinity)` and
     /// fills its window exactly, so a layer shadow would be clipped at the window's edge and only
     /// the sliver under the rounded corners would show. `NSWindow.hasShadow` is drawn by the window
-    /// server *outside* the frame, which also means it costs the card no height — and the height is
+    /// server *outside* the frame, which also means it costs the card no height - and the height is
     /// the number `MeetingOfferMetrics` exists to protect.
     ///
     /// `invalidateShadow()` because the shape is derived from the content's alpha and cached: the
@@ -344,7 +344,7 @@ final class MeetingOfferPanel: NSPanel {
     ///
     /// Ceiling: the preference is read when the card appears, not observed. Toggling Reduce
     /// Transparency while a card is already on screen leaves the shadow as it was until the next
-    /// one, which is a card's lifetime — seconds to the length of a call. Worth an observer only if
+    /// one, which is a card's lifetime - seconds to the length of a call. Worth an observer only if
     /// that stops being true.
     private func refreshShadow() {
         hasShadow = !GlassSupport.active(
@@ -355,7 +355,7 @@ final class MeetingOfferPanel: NSPanel {
 
     /// Say why the capture did not start, on the card the user pressed.
     ///
-    /// The card keeps its buttons, so "Transcribe" is the try-again — the same shape as
+    /// The card keeps its buttons, so "Transcribe" is the try-again - the same shape as
     /// `NotesView.startMeeting`, which does not return in the `.notDetermined` branch and leaves a
     /// Try again button behind. Resized and repositioned because the message is a whole sentence and
     /// the window cannot grow by itself.
@@ -398,7 +398,7 @@ private struct MeetingOfferView: View {
                         .foregroundStyle(.secondary)
                 // Incompressible, like the caption below, so what it wraps to is what
                 // `MeetingOfferMetrics.titleHeight` measured. Left free to truncate, an app with a
-                // long name would draw one line where the window allowed two — harmless — but a
+                // long name would draw one line where the window allowed two - harmless - but a
                 // future width change would silently put the difference the other way round.
                     Text(title)
                         .font(.headline)
@@ -446,8 +446,8 @@ private struct MeetingOfferView: View {
         //
         // There was a `strokeBorder(Line.hairline)` here, and it was redundant on every path that
         // wanted a border and wrong on the one that does not. `ChromeGlass` already strokes the
-        // three fallbacks itself — `Line.strong` in its Reduce Transparency branch, `rimGradient` at
-        // 0.8pt in its pre-26 branch — so this card drew *two* borders on all three. On macOS 26 it
+        // three fallbacks itself - `Line.strong` in its Reduce Transparency branch, `rimGradient` at
+        // 0.8pt in its pre-26 branch - so this card drew *two* borders on all three. On macOS 26 it
         // drew the one thing the material asks not to have: glass "draws its own highlight layer,
         // whose lights move in space, causing light to travel around the material, defining its
         // silhouette", and `ChromeGlass.glass` records that a static stroke on top fights that.
@@ -456,10 +456,10 @@ private struct MeetingOfferView: View {
         // on the finding that its edge dissolved against busy wallpaper. That finding does not
         // transfer on its face: the pill is a ~28pt capsule whose *only* content is its edge, while
         // this is a 268pt sheet holding a title, a caption and two filled buttons, anchored 10pt
-        // above the pill — the content is the object cue here, not the outline. So there is no ring,
+        // above the pill - the content is the object cue here, not the outline. So there is no ring,
         // and that is a judgement, not a measurement: nobody has yet looked at this card over a busy
-        // light wallpaper on macOS 26. If its silhouette does dissolve there, the fix is the pill's —
-        // one `shape.strokeBorder(contrast, lineWidth: 1)` at this exact point — and not the hairline
+        // light wallpaper on macOS 26. If its silhouette does dissolve there, the fix is the pill's  - 
+        // one `shape.strokeBorder(contrast, lineWidth: 1)` at this exact point - and not the hairline
         // that was removed, which was tuned as a rim on an opaque surface.
     }
 }

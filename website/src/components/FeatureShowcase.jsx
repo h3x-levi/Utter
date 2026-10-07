@@ -8,7 +8,7 @@ const features = [
     title: 'Dictation',
     heading: 'Dictate into any app.',
     description:
-      'Hold a hotkey, speak naturally, release. Text appears at your cursor in Xcode, Cursor, Slack, Obsidian — without touching your clipboard. Sub-200ms latency on Apple Silicon.',
+      'Hold a hotkey, speak naturally, release. Text appears at your cursor in Xcode, Cursor, Slack, Obsidian - without touching your clipboard. Sub-200ms latency on Apple Silicon.',
     image: '/assets/screenshots/hero-main.png',
   },
   {
@@ -16,7 +16,7 @@ const features = [
     title: 'Notes & Meetings',
     heading: 'Record and transcribe meetings.',
     description:
-      'Capture microphone and system audio simultaneously. Generates clean markdown notes with timestamps, key decisions, and action items — completely offline.',
+      'Capture microphone and system audio simultaneously. Generates clean markdown notes with timestamps, key decisions, and action items - completely offline.',
     image: '/assets/screenshots/04_notes_studio.png',
   },
   {

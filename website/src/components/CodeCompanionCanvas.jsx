@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
  *  3. Pixel Dog (`dog`): Golden puppy coat, floppy brown ears, cream muzzle, happy pink tongue.
  *  4. Pixel Panda (`panda`): Round black ears, iconic black eye patches, white head, pink toe pads.
  *
- * Drawn 100% procedurally in code at 60 FPS — zero PNG frames loaded or bundled.
+ * Drawn 100% procedurally in code at 60 FPS - zero PNG frames loaded or bundled.
  */
 
 export default function CodeCompanionCanvas({

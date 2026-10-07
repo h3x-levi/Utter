@@ -7,7 +7,7 @@ import Combine
 ///
 /// Both exist because something was measured doing far more work than the thing it displayed
 /// needed, and both are the kind of defect that is invisible in the UI and only shows up as the
-/// app feeling slow — so a test is the only place they can be held.
+/// app feeling slow - so a test is the only place they can be held.
 @Suite("Pill telemetry throttling")
 struct PillTelemetryTests {
 
@@ -17,8 +17,8 @@ struct PillTelemetryTests {
     func elapsedCoalescesRepeats() {
         // The recording timer assigns `elapsed` ten times a second so the displayed second is
         // never late, but `@Published` sends `objectWillChange` on every assignment regardless of
-        // whether the value moved. That invalidated the whole pill — glass, both strokes, the
-        // shell shape, the level meter — 10x/s to redraw a number that changes 1x/s.
+        // whether the value moved. That invalidated the whole pill - glass, both strokes, the
+        // shell shape, the level meter - 10x/s to redraw a number that changes 1x/s.
         let model = PillStateModel()
         var sends = 0
         let subscription = model.objectWillChange.sink { _ in sends += 1 }
@@ -50,7 +50,7 @@ struct PillTelemetryTests {
     @Test("A microphone level does not republish the pill model")
     func levelDoesNotInvalidateTheWholePill() {
         // The level is the only quantity in the pill that moves at 30 Hz, and `LevelMeter` is the
-        // only view that draws it — but `@Published` invalidates every view observing the
+        // only view that draws it - but `@Published` invalidates every view observing the
         // *object*, not the property. While it was a stored `@Published` on this model, one second
         // of recording re-ran `PillContainerView.body`, `PillContent.body`, the shell's
         // `GeometryReader` (glass, both strokes, the shadow) and the accessibility strings 30 times
@@ -68,7 +68,7 @@ struct PillTelemetryTests {
         for i in 1...30 { model.level = Float(i) / 30 }
 
         #expect(modelSends == 0, "a mic publish must not invalidate the pill's glass and strokes")
-        #expect(signalSends == 30, "the meter must still see every publish — it is a real signal")
+        #expect(signalSends == 30, "the meter must still see every publish - it is a real signal")
     }
 
     @Test("The level still reads and writes through the model")
@@ -97,7 +97,7 @@ struct PillTelemetryTests {
 
     @Test("A long buffer keeps its NEWEST bytes, which is the whole point")
     func tailKeepsTheNewestAudio() {
-        // 0,1,2,...,199 — so the value of a byte identifies its position.
+        // 0,1,2,...,199 - so the value of a byte identifies its position.
         let data = Data((0..<200).map { UInt8($0 % 256) })
         let tail = AudioRecorder.tail(of: data, lastBytes: 50)
 
@@ -135,7 +135,7 @@ struct PillTelemetryTests {
     func previewWindowMatchesTheDocumentedSeconds() {
         // 16 kHz, mono, 16-bit = 32,000 bytes per second. The constant is derived rather than
         // written down twice, and `LocalWhisperProvider.previewTranscribe` documents the bound as
-        // living here — so this pins the relationship that comment relies on.
+        // living here - so this pins the relationship that comment relies on.
         #expect(AudioRecorder.previewSeconds == 10)
         #expect(AudioRecorder.previewWindowBytes == 10 * 16_000 * 2)
     }

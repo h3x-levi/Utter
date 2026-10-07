@@ -5,7 +5,7 @@ import SwiftUI
 /// Erase everything Utter has saved, behind a confirmation.
 ///
 /// Extracted from the unreachable `PrivacyView` so the action exists on screen again.
-/// The destructive path itself is unchanged — see `clearAllData()`, whose ordering is
+/// The destructive path itself is unchanged - see `clearAllData()`, whose ordering is
 /// load-bearing and documented there.
 @MainActor
 private final class DataResetModel: ObservableObject {
@@ -74,7 +74,7 @@ struct DataResetSection: View {
             Text("""
             This permanently deletes your transcription history, every note (the only \
             copy of what you dictated into Utter), any companion packs you installed, \
-            dictionary words, snippets, custom AI commands, and all preferences — \
+            dictionary words, snippets, custom AI commands, and all preferences - \
             including your theme and hotkey choice. This cannot be undone.
             """)
         }

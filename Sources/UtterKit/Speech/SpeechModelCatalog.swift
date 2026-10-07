@@ -16,6 +16,9 @@ struct SpeechModel: Identifiable, Equatable {
     let tier: Tier
     /// GGML filename on huggingface.co/ggerganov/whisper.cpp.
     let filename: String
+    /// SHA-256 of the immutable Hugging Face artifact. Digest values are from
+    /// the upstream file metadata at revision 0b364b566045a405be7225ee1e415a073e04da77.
+    let sha256: String
     let displayName: String
     /// Download size in megabytes.
     let sizeMB: Int
@@ -36,7 +39,7 @@ struct SpeechModel: Identifiable, Equatable {
     ///
     /// Only `small` is bundled: it runs well on any Mac and keeps the installer
     /// at ~180 MB. Larger tiers are downloads because quantized weights barely
-    /// compress — bundling every tier produced a 670 MB DMG for a dictation app.
+    /// compress - bundling every tier produced a 670 MB DMG for a dictation app.
     static let bundledTiers: Set<Tier> = [.small]
 
     /// The tier to fall back on when nothing else is available. `small` runs
@@ -49,6 +52,7 @@ struct SpeechModel: Identifiable, Equatable {
         SpeechModel(
             tier: .base,
             filename: "ggml-base.en-q5_1.bin",
+            sha256: "4baf70dd0d7c4247ba2b81fafd9c01005ac77c2f9ef064e00dcf195d0e2fdd2f",
             displayName: "Base",
             sizeMB: 57,
             peakRAMMB: 180,
@@ -60,6 +64,7 @@ struct SpeechModel: Identifiable, Equatable {
         SpeechModel(
             tier: .small,
             filename: "ggml-small.en-q5_1.bin",
+            sha256: "bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30",
             displayName: "Small",
             sizeMB: 181,
             peakRAMMB: 395,
@@ -71,6 +76,7 @@ struct SpeechModel: Identifiable, Equatable {
         SpeechModel(
             tier: .medium,
             filename: "ggml-medium.en-q5_0.bin",
+            sha256: "76733e26ad8fe1c7a5bf7531a9d41917b2adc0f20f2e4f5531688a8c6cd88eb0",
             displayName: "Medium",
             sizeMB: 514,
             peakRAMMB: 815,
@@ -82,6 +88,7 @@ struct SpeechModel: Identifiable, Equatable {
         SpeechModel(
             tier: .turbo,
             filename: "ggml-large-v3-turbo-q5_0.bin",
+            sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             displayName: "Large Turbo",
             sizeMB: 547,
             peakRAMMB: 718,
@@ -122,8 +129,11 @@ struct Device {
     let isAppleSilicon: Bool
     let freeDiskGB: Int
 
-    static func current() -> Device {
-        Device(
+    static func current() -> Device { cachedCurrent }
+
+    /// Hardware identity changes only across process launches. In particular,
+    /// disk-capacity discovery must not run every time a SwiftUI view recomputes.
+    private static let cachedCurrent = Device(
             chipName: sysctlString("machdep.cpu.brand_string") ?? "Unknown",
             ramGB: Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824),
             performanceCores: sysctlInt("hw.perflevel0.logicalcpu")
@@ -132,7 +142,6 @@ struct Device {
             isAppleSilicon: isARM(),
             freeDiskGB: freeDisk()
         )
-    }
 
     /// Rough multiplier against the M4 the benchmarks were taken on.
     ///
@@ -170,12 +179,12 @@ struct Device {
         }
         let rec = recommended
         if rec.tier == .medium {
-            return "\(chipName) with \(ramGB) GB can run Medium — the most accurate English model — and still "
+            return "\(chipName) with \(ramGB) GB can run Medium - the most accurate English model - and still "
                 + "transcribe far faster than you speak. Small is included and works now; "
                 + "download Medium when you want the extra accuracy."
         }
         if ramGB <= 8 {
-            return "\(ramGB) GB of memory suits the included Small model best — larger ones would compete "
+            return "\(ramGB) GB of memory suits the included Small model best - larger ones would compete "
                 + "with your other apps."
         }
         return "Small is included and is a good fit for \(chipName)."

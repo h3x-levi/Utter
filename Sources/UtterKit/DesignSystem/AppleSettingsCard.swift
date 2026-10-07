@@ -1,11 +1,11 @@
 import SwiftUI
 import AppKit
 
-/// Native Apple macOS System Settings-style grouped section container.
+/// A native-looking preference group on the standard window surface.
 ///
-/// Implements macOS Sonoma & Sequoia System Settings visual style:
-/// inset card container with continuous rounded corners, subtle hairline border,
-/// system control background, and optional header and footer captions.
+/// Group titles and explanatory footers establish hierarchy; the system controls
+/// and separators provide the interaction affordances. No custom card, shadow,
+/// or decorative outline is drawn around the controls.
 struct AppleSettingsSection<Content: View>: View {
     let title: String?
     let footer: String?
@@ -18,35 +18,25 @@ struct AppleSettingsSection<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Space.x2) {
             if let title {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Ink.secondary)
-                    .padding(.leading, 6)
             }
 
             VStack(spacing: 0) {
                 content()
             }
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Surface.raised)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Line.hairline, lineWidth: Line.width)
-            )
 
             if let footer {
                 Text(footer)
-                    .font(.system(size: 11, weight: .regular))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 6)
-                    .padding(.top, 2)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -83,11 +73,11 @@ struct AppleSettingsRow<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Ink.primary)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .regular))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(Ink.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -98,7 +88,7 @@ struct AppleSettingsRow<Trailing: View>: View {
             trailing()
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 }
 

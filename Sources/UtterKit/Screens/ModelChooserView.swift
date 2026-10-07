@@ -1,248 +1,216 @@
 import SwiftUI
 
-/// Lets the user pick a speech model, with the trade-offs stated in terms of
-/// their own Mac rather than abstract model sizes.
-///
-/// Shown during first-run onboarding and again in Settings. The recommendation
-/// comes from measured benchmarks scaled by this machine's chip and memory —
-/// see `SpeechModelCatalog.swift`.
-///
-/// # This is a real radio group now
-///
-/// The model list **is** a `Picker` with `.pickerStyle(.radioGroup)` — the AppKit
-/// radio group, hosted by SwiftUI, verified `@available(macOS 10.15, *)` in
-/// `SwiftUI.swiftinterface`, so no availability branch. It replaces a hand-drawn
-/// imitation: an `Image(systemName: "largecircle.fill.circle")` glyph, a `@State
-/// hovering` flag, an `.onHover` animation, a `.fill()` selection wash and a
-/// composed `accessibilityLabel`. Every one of those is now the system's:
-///
-///   * **Hover and pressed feedback** — the reason this was rewritten. The hand-drawn
-///     wash was `Surface.fillHover` over the tile, which measures ~1.14:1 against the
-///     unhovered row in light themes. Invisible. AppKit draws the real thing.
-///   * **Keyboard traversal** — arrow keys move between options and the focus ring is
-///     drawn for free. The tap-gesture version had neither.
-///   * **VoiceOver** — "radio button, selected" with the group's own semantics, rather
-///     than a hand-assembled string that had to be kept in sync with the row's content.
-///
-/// `List(selection:)` was the other candidate and is ruled out by where this view is
-/// embedded: `OnboardingView.modelStep` and `SettingsView.SpeechSettingsContent` both
-/// place it inside an enclosing `ScrollView`. A `List` scrolls itself, so it would put
-/// two competing scrollers over one gesture in two places — the defect
-/// `OnboardingView` documents at its own step container. A radio group does not scroll,
-/// so it survives both embeddings unchanged.
-///
-/// No glass here. This is content inside `SettingsCard`/the onboarding step, and the
-/// radio group's own control layer is the system's to draw.
+@MainActor
+private final class ModelChooserPresentation: ObservableObject {
+    static let shared = ModelChooserPresentation()
+    @Published var modelToRemove: SpeechModel?
+}
+
+/// Model selection presents one real decision at a time: quality, languages,
+/// storage, and whether the weights are already available on this Mac.
+/// Downloads stay explicit and removable models require confirmation.
 struct ModelChooserView: View {
     var compact: Bool = false
 
     @ObservedObject private var store = ModelStore.shared
+    @ObservedObject private var presentation = ModelChooserPresentation.shared
     private let device = Device.current()
 
-    private var downloads: [(model: SpeechModel, progress: Double)] {
-        SpeechModel.all.compactMap { model in
-            guard case .downloading(let progress) = store.state(for: model.tier) else { return nil }
-            return (model, progress)
-        }
-    }
-
-    private var removable: [SpeechModel] {
-        SpeechModel.all.filter { store.canRemove($0.tier) }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.stackGap) {
+        VStack(alignment: .leading, spacing: Space.x4) {
             if !compact {
-                VStack(alignment: .leading, spacing: Space.x2) {
-                    HStack {
-                        Text("Speech Models").typo(.heading)
-                        Spacer()
-                        GlassChip(text: "\(device.ramGB)GB Unified Memory", systemImage: "memorychip")
-                    }
-                    Text(device.recommendationReason)
-                        .typo(.lede)
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text("Choose a speech model")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Start with the included model. Larger models can improve recognition, but use more storage and memory.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Ink.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.bottom, Space.x1)
             }
 
-            // Bento Model Cards
-            VStack(spacing: Space.x3) {
-                ForEach(SpeechModel.all) { model in
-                    BentoModelCard(
-                        model: model,
-                        device: device,
-                        isActive: store.active == model.tier,
-                        isRecommended: model.tier == device.recommended.tier,
-                        state: store.state(for: model.tier),
-                        onSelect: {
-                            store.select(model.tier)
-                        },
-                        onDelete: store.canRemove(model.tier) ? {
-                            store.remove(model.tier)
-                        } : nil
-                    )
-                }
-            }
-
-            // In-Flight Downloads Bar
-            ForEach(downloads, id: \.model.tier) { download in
-                BentoTile(title: "Downloading \(download.model.displayName)", systemImage: "arrow.down.circle.fill", tint: Tint.accent) {
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        HStack {
-                            ProgressView(value: download.progress)
-                                .progressViewStyle(.linear)
-                            Text("\(Int(download.progress * 100))%")
-                                .typo(.caption)
-                                .monospacedDigit()
-                            GlassButton(title: "Cancel", size: .small) {
-                                store.cancelDownload(download.model.tier)
-                            }
-                        }
-                        Text("Transcribing will automatically switch to \(download.model.displayName) once finished.")
-                            .font(.caption2)
-                            .foregroundStyle(Ink.secondary)
+            VStack(spacing: 0) {
+                ForEach(Array(SpeechModel.all.enumerated()), id: \.element.id) { index, model in
+                    modelRow(model)
+                    if index < SpeechModel.all.count - 1 {
+                        Rectangle()
+                            .fill(Line.hairline)
+                            .frame(height: 1)
+                            .padding(.leading, 34)
                     }
                 }
             }
 
-            // Storage Management Note
-            HStack(spacing: Space.x2) {
-                Image(systemName: "internaldrive")
-                    .foregroundStyle(Tint.accent)
-                Text("All speech recognition runs 100% on-device. Downloading models is the only time Utter uses the network.")
-                    .typo(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, Space.x1)
-        }
-    }
-}
-
-// MARK: - Bento Model Card
-
-private struct BentoModelCard: View {
-    let model: SpeechModel
-    let device: Device
-    let isActive: Bool
-    let isRecommended: Bool
-    let state: ModelStore.State
-    let onSelect: () -> Void
-    let onDelete: (() -> Void)?
-
-    private var isAvailable: Bool {
-        state == .bundled || state == .installed
-    }
-
-    private var speedBadgeText: String {
-        let seconds = model.secondsPerMinuteOfSpeech(scale: device.speedScale)
-        if seconds < 1 { return "<1s per min (Ultra Fast)" }
-        if seconds < 60 { return String(format: "%.0fs per min", seconds) }
-        return String(format: "%.1f× real-time", seconds / 60)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.x2) {
-            HStack(alignment: .center) {
-                // Radio / Active Indicator
-                Button(action: onSelect) {
-                    HStack(spacing: Space.x3) {
-                        Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(isActive ? Tint.accent : Ink.secondary.opacity(0.6))
-
-                        HStack(spacing: Space.x2) {
-                            Text(model.displayName)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Ink.primary)
-
-                            if isActive {
-                                GlassChip(text: "Active & Ready", tint: Tint.accent)
-                            }
-
-                            if isRecommended {
-                                GlassChip(text: "Recommended", tint: Color.purple)
-                            }
-
-                            if model.isMultilingual {
-                                Text("90+ languages")
-                                    .font(.caption2)
-                                    .foregroundStyle(Ink.secondary)
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                // Actions (Delete if downloaded & not active)
-                if let deleteAction = onDelete, isAvailable && !isActive {
-                    Button(action: deleteAction) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Ink.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Delete to free \(model.sizeMB) MB")
-                }
-            }
-
-            Text(model.summary)
-                .font(.caption)
+            Label("Dictation audio stays on this Mac. Utter uses the network only when you choose to download model weights.", systemImage: "lock.shield")
+                .font(.system(size: 12))
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 28)
-
-            // Metric Badges Row
-            HStack(spacing: Space.x3) {
-                MetricChip(icon: "internaldrive", text: "\(model.sizeMB) MB")
-                MetricChip(icon: "speedometer", text: speedBadgeText)
-                MetricChip(icon: "memorychip", text: "\(model.peakRAMMB) MB RAM")
-
-                Spacer()
-
-                if !isAvailable && !isActive {
-                    Button(action: onSelect) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.down.circle")
-                            Text("Download")
-                        }
-                        .font(.caption.weight(.medium))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+        }
+        .confirmationDialog(
+            "Remove \(presentation.modelToRemove?.displayName ?? "model")?",
+            isPresented: Binding(
+                get: { presentation.modelToRemove != nil },
+                set: { if !$0 { presentation.modelToRemove = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let modelToRemove = presentation.modelToRemove {
+                Button("Remove \(modelToRemove.displayName)", role: .destructive) {
+                    store.remove(modelToRemove.tier)
+                    presentation.modelToRemove = nil
                 }
             }
+            Button("Cancel", role: .cancel) { presentation.modelToRemove = nil }
+        } message: {
+            if let modelToRemove = presentation.modelToRemove {
+                Text("This removes about \(modelToRemove.sizeMB) MB from this Mac. Your saved transcripts and notes are unchanged.")
+            }
         }
-        .padding(Space.x3)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isActive ? Tint.accent.opacity(0.08) : Color.primary.opacity(0.03))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isActive ? Tint.accent.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 1)
-        )
     }
-}
 
-private struct MetricChip: View {
-    let icon: String
-    let text: String
+    private func modelRow(_ model: SpeechModel) -> some View {
+        let state = store.state(for: model.tier)
+        let isActive = store.active == model.tier
+        let isPending = store.pendingSelection == model.tier
+        let isRecommended = model.tier == device.recommended.tier
 
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundStyle(Tint.accent)
-            Text(text)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(Ink.primary)
+        return VStack(alignment: .leading, spacing: Space.x2) {
+            Button {
+                store.select(model.tier)
+            } label: {
+                HStack(alignment: .center, spacing: Space.x2) {
+                    Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(isActive ? Color.accentColor : Ink.tertiary)
+                        .frame(width: 18, height: 20)
+                        .accessibilityHidden(true)
+
+                    Text(model.displayName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Ink.primary)
+                    if isRecommended {
+                        Text("Recommended")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(model.displayName), \(model.summary)")
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+
+            Text(model.summary)
+                .font(.system(size: 12))
+                .foregroundStyle(Ink.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 26)
+            Text(metadata(for: model))
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(Ink.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 26)
+
+            HStack {
+                Spacer(minLength: 0)
+                stateAction(model, state: state, isActive: isActive, isPending: isPending)
+            }
+
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .padding(.vertical, Space.x3)
+    }
+
+    @ViewBuilder
+    private func stateAction(
+        _ model: SpeechModel,
+        state: ModelStore.State,
+        isActive: Bool,
+        isPending: Bool
+    ) -> some View {
+        switch state {
+        case .downloading(let progress):
+            VStack(alignment: .trailing, spacing: Space.x1) {
+                ProgressView(value: progress)
+                    .frame(width: 88)
+                HStack(spacing: Space.x1) {
+                    Text("\(Int(progress * 100))%")
+                        .monospacedDigit()
+                    Button("Cancel") { store.cancelDownload(model.tier) }
+                        .buttonStyle(.borderless)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Ink.secondary)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Downloading \(model.displayName)")
+        case .failed(let message):
+            VStack(alignment: .trailing, spacing: Space.x1) {
+                Text("Download failed")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Tint.warningText)
+                Button("Retry") { store.download(model.tier) }
+                    .buttonStyle(.borderless)
+                Text(message)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Ink.tertiary)
+                    .lineLimit(2)
+                    .frame(maxWidth: 130, alignment: .trailing)
+            }
+        case .bundled:
+            HStack(spacing: Space.x2) {
+                statusLabel(isActive ? "In use" : "Included", symbol: isActive ? "checkmark.circle.fill" : "checkmark.circle")
+                if store.canRemove(model.tier) && !isActive {
+                    removeButton(for: model)
+                }
+            }
+        case .installed:
+            HStack(spacing: Space.x2) {
+                if isActive {
+                    statusLabel("In use", symbol: "checkmark.circle.fill")
+                } else {
+                    Button("Use") { store.select(model.tier) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                if store.canRemove(model.tier) && !isActive {
+                    removeButton(for: model)
+                }
+            }
+        case .notDownloaded:
+            Button(isPending ? "Queued" : "Download") { store.select(model.tier) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isPending)
+        }
+    }
+
+    private func statusLabel(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(title == "In use" ? Color.accentColor : Ink.secondary)
+            .fixedSize()
+    }
+
+    private func removeButton(for model: SpeechModel) -> some View {
+        Button {
+            presentation.modelToRemove = model
+        } label: {
+            Image(systemName: "trash")
+        }
+        .buttonStyle(.borderless)
+        .help("Remove model from this Mac")
+        .accessibilityLabel("Remove \(model.displayName)")
+    }
+
+    private func metadata(for model: SpeechModel) -> String {
+        let language = model.isMultilingual ? "Multilingual" : "English"
+        let memory = model.peakRAMMB >= 1024
+            ? String(format: "%.1f GB peak memory", Double(model.peakRAMMB) / 1024)
+            : "\(model.peakRAMMB) MB peak memory"
+        let bundled = SpeechModel.isBundled(model.tier) ? " · Included" : ""
+        return "\(language) · \(model.sizeMB) MB download · \(memory)\(bundled)"
     }
 }

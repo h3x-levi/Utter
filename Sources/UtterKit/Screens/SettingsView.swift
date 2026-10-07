@@ -49,48 +49,28 @@ struct GeneralSettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x5) {
-            // Account
-            AppleSettingsSection(title: "ACCOUNT") {
+            // Utter does not currently provide accounts or cloud sync.
+            AppleSettingsSection(title: "LOCAL DATA") {
                 HStack(spacing: Space.x4) {
                     ZStack {
                         Circle()
-                            .fill(userData.isAuthenticated ? Tint.accent.opacity(0.15) : Color.primary.opacity(0.08))
+                            .fill(Color.primary.opacity(0.08))
                             .frame(width: 38, height: 38)
-                        Image(systemName: userData.isAuthenticated ? "person.crop.circle.fill" : "person.crop.circle.badge.checkmark")
+                        Image(systemName: "lock.shield")
                             .font(.system(size: 20))
-                            .foregroundStyle(userData.isAuthenticated ? Tint.accent : Ink.secondary)
+                            .foregroundStyle(Ink.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(userData.isAuthenticated ? (userData.userDisplayName.isEmpty ? "Connected User" : userData.userDisplayName) : "Guest Mode (Offline)")
+                        Text("Stored on this Mac")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Ink.primary)
-                        Text(userData.isAuthenticated ? "\(userData.userEmail) · \(userData.authProvider)" : "All preferences and transcripts are stored locally on this Mac.")
+                        Text("Preferences, notes, and transcripts stay in your local Utter data folder.")
                             .font(.system(size: 11))
                             .foregroundStyle(Ink.secondary)
                     }
 
                     Spacer()
-
-                    if userData.isAuthenticated {
-                        Button("Sign Out") {
-                            userData.signOut()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    } else {
-                        Button {
-                            userData.signInWithGoogle()
-                        } label: {
-                            HStack(spacing: 6) {
-                                GoogleVectorLogo(size: 12)
-                                Text("Sign in with Google")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -252,7 +232,7 @@ struct GeneralSettingsContent: View {
 extension View {
     /// The one place a Settings pane's `Form` is configured, applied by all four panes.
     ///
-    /// `.formStyle(.grouped)` is the whole point of the pass: it is the macOS settings group —
+    /// `.formStyle(.grouped)` is the whole point of the pass: it is the macOS settings group  - 
     /// the system's inset rounded container, its own separators between rows, its own row
     /// insets, and one shared label/control alignment down the group. It is macOS 13.0
     /// (`GroupedFormStyle` in the SDK swiftinterface), so it needs no availability gate at this
@@ -264,7 +244,7 @@ extension View {
     /// scroll-edge pocket. A grouped `Form` brings its own scroll view, so without
     /// `.scrollDisabled(true)` there are two nested scrollers: the inner one wins the wheel and
     /// the outer one never moves, which strands the bottom of a long pane. `.fixedSize(vertical:)`
-    /// is the other half — a disabled scroll view still takes the height it is offered, so
+    /// is the other half - a disabled scroll view still takes the height it is offered, so
     /// without it the Form would clip its own content at the viewport instead of growing and
     /// letting the outer `ScrollView` scroll it.
     ///
@@ -273,7 +253,7 @@ extension View {
     /// content background would paint an opaque sheet over it and lose the theme.
     ///
     /// The grouped style's own margins do stack with the page column's `Space.pageInset`, so a
-    /// group sits further in than the heading above it — and **that is not a bug to fix here.**
+    /// group sits further in than the heading above it - and **that is not a bug to fix here.**
     /// Dropping the page inset is the wrong fix and would make three things worse: a grouped
     /// `Form` *outdents* its section headers relative to its own group background (System
     /// Settings does the same), so the element nearest the window's leading edge would become a
@@ -362,25 +342,25 @@ private struct SettingsRadioButton<Value: Hashable>: NSViewRepresentable {
 /// A horizontal rule between rows, in the app's own neutral ramp.
 ///
 /// Not `Divider()`. `Divider` draws `NSColor.separatorColor`, and `Line.hairline`
-/// exists precisely because that colour is wrong here — see `Line` in
+/// exists precisely because that colour is wrong here - see `Line` in
 /// DesignTokens.swift: "macOS's `separatorColor` is cool blue-gray. Mixing the two is
 /// the single fastest way to make a warm layout look wrong."
 ///
 /// This replaces 22 `Divider().opacity(0.5)` call sites. The `0.5` was the tell: an
 /// opacity tuned to mute the wrong hue rather than to set a weight, repeated as a
 /// magic number at every one of them. The shape is the one `SettingsWindowView`
-/// already uses for the rule between its two panes — a `Rectangle` filled with the
+/// already uses for the rule between its two panes - a `Rectangle` filled with the
 /// token, sized on `Line.width`.
 ///
 /// One exception was left alone deliberately: `HomeView`'s `.contextMenu` still calls
-/// `Divider()`, because inside a menu that is the API for a *menu separator* — AppKit
+/// `Divider()`, because inside a menu that is the API for a *menu separator* - AppKit
 /// draws it, it is not a line in this layout, and a `Rectangle` there would be a 1pt
 /// item in the menu rather than a divider between items.
 ///
 /// Lives in `Screens/` rather than `DesignSystem/` only because that folder is owned
 /// by another change in flight; it belongs beside `Line` in DesignTokens.swift.
 ///
-/// **No Settings pane calls this any more** — a grouped `Form` draws its own separators
+/// **No Settings pane calls this any more** - a grouped `Form` draws its own separators
 /// between rows, which deleted twelve calls from this file. It stays because `HomeView`,
 /// `DiagnosticsView` and `CompanionSettingsView` still use it, and it is still right
 /// there: a rule inside a hand-built stack has no system component to defer to.
@@ -389,26 +369,24 @@ struct HairlineDivider: View {
         Rectangle()
             .fill(Line.hairline)
             .frame(height: Line.width)
-            // A rule carries no information VoiceOver needs — the rows either side
+            // A rule carries no information VoiceOver needs - the rows either side
             // of it are already separate elements.
             .accessibilityHidden(true)
     }
 }
 
 /// Settings group, rendered as a bento tile so Settings matches the rest of
-/// the app. The uppercase header is gone — sentence case is the macOS convention.
+/// the app. The uppercase header is gone - sentence case is the macOS convention.
 ///
-/// The Settings panes in this file no longer use it: what it approximates — a titled group
-/// with rows inside it — is `Section` inside a `.grouped` `Form`, which additionally supplies
-/// the separators, the row insets, the shared label/control alignment and a header VoiceOver's
-/// rotor can navigate to. It is kept, with its signature unchanged, for the seven call sites in
-/// `DiagnosticsView` and `CompanionSettingsView`, which are not this change's to convert.
+/// Kept as a compatibility wrapper for feature panes while those panes migrate to
+/// native Lists and Forms. The wrapper now adds semantic grouping and spacing only;
+/// it deliberately does not draw a rounded dashboard card.
 struct SettingsCard<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        BentoTile(title: title) {
+        ContentSection(title: title) {
             VStack(alignment: .leading, spacing: Space.x3) {
                 content()
             }
@@ -418,8 +396,8 @@ struct SettingsCard<Content: View>: View {
 
 /// How a permission row should read, and the rule for picking one.
 ///
-/// Three states, not two. `PermRow` took a bare `ok: Bool` — granted, or a warning
-/// dot and a "Grant" button — which is correct for Accessibility and the microphone
+/// Three states, not two. `PermRow` took a bare `ok: Bool` - granted, or a warning
+/// dot and a "Grant" button - which is correct for Accessibility and the microphone
 /// and wrong for Screen Recording. Meeting capture is off by default
 /// (`UserData.offerToTranscribeCalls` starts `false`, and the Notes screen's Record
 /// button is a deliberate press), so the *default* state of a fresh install was a
@@ -427,14 +405,14 @@ struct SettingsCard<Content: View>: View {
 /// That reads as "something in this app is broken" when nothing is.
 ///
 /// A pure enum with the rule as a static function, following `PillHoverControl`: the
-/// view cannot be tested on this machine, the decision can — and this is a decision
+/// view cannot be tested on this machine, the decision can - and this is a decision
 /// that is wrong quietly in both directions. Nagged for when it is not needed is a
 /// support question; presented as optional at the moment it is actually required is a
 /// feature that silently half-works, which for meeting capture means a transcript
 /// with one side of the conversation in it.
 enum PermissionNeed: Equatable {
     case granted
-    /// Not granted, and something the user has switched on needs it now — the
+    /// Not granted, and something the user has switched on needs it now - the
     /// existing warning-plus-Grant treatment, which is right here.
     case required
     /// Not granted, and nothing needs it yet. Neutral and informational.
@@ -442,7 +420,7 @@ enum PermissionNeed: Equatable {
     case optional(reason: String)
 
     /// A permission the app cannot do its core job without. Missing means required
-    /// immediately — there is no "later" for dictation.
+    /// immediately - there is no "later" for dictation.
     static func core(granted: Bool) -> PermissionNeed {
         granted ? .granted : .required
     }
@@ -455,19 +433,19 @@ enum PermissionNeed: Equatable {
 
     /// Screen Recording: optional until meeting capture is actually in play.
     ///
-    /// Two signals, OR'd, and the reasoning for each — this is the judgement call:
+    /// Two signals, OR'd, and the reasoning for each - this is the judgement call:
     ///
     ///   * `offersToTranscribeCalls` is the user's own declaration that they want
     ///     meeting capture. With it on, `CallDetector` runs and will put an offer
     ///     card on screen during the next call, and accepting that card without this
     ///     permission records only the user. So from the moment the switch is on the
-    ///     permission is genuinely needed and the warning is honest — this is the
+    ///     permission is genuinely needed and the warning is honest - this is the
     ///     primary signal, because it is durable and it is the user's intent rather
     ///     than an inference about it.
     ///   * `meetingCaptureUnderway` covers the other route in, which the preference
     ///     does not: the Notes screen's Record button starts a capture with the
     ///     preference off. `MeetingSession.state` is non-`.idle` while a capture is
-    ///     recording, finishing, or has **failed and not been retried** — and the
+    ///     recording, finishing, or has **failed and not been retried** - and the
     ///     failed case is the one that earns this input. It persists until the next
     ///     `start()`, so a user whose capture just failed and who opens Settings to
     ///     find out why sees the warning treatment, which is exactly right.
@@ -479,8 +457,8 @@ enum PermissionNeed: Equatable {
     ///
     /// Not keyed off "has ever recorded a meeting". The only durable evidence for
     /// that is scanning `NoteStore` for a `.meeting` note, which is filesystem-shaped
-    /// work in a view body — the exact thing `ReadinessMonitor` exists to keep out of
-    /// the render path — and it would pin the row to required forever after a single
+    /// work in a view body - the exact thing `ReadinessMonitor` exists to keep out of
+    /// the render path - and it would pin the row to required forever after a single
     /// meeting, including for a user who tried it once and stopped.
     static func screenRecording(granted: Bool,
                                 offersToTranscribeCalls: Bool,
@@ -536,7 +514,7 @@ struct PermRow: View {
             if let reason = need.reason {
                 // `Ink.secondary`, never `Ink.tertiary`: tertiary is documented
                 // decorative-only and measured 2.68:1 on this fill. `.caption`
-                // already resolves to secondary — spelled out here because it is
+                // already resolves to secondary - spelled out here because it is
                 // load-bearing, not a default worth inheriting silently.
                 Text(reason).typo(.caption, ink: Ink.secondary)
                     // Indented past the dot so it hangs under the label.
@@ -547,7 +525,7 @@ struct PermRow: View {
             }
         }
         // The optional state adds a whole line under the row, so this animates the
-        // row's height — the travel Reduce Motion is asking to be spared.
+        // row's height - the travel Reduce Motion is asking to be spared.
         .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange, value: need)
     }
 
@@ -557,7 +535,7 @@ struct PermRow: View {
     ///
     /// `Tint.success`/`Tint.warning` rather than `.green`/`.orange`: the NSColor-backed
     /// tokens lighten correctly in dark mode. The *shape* carries the third state, not
-    /// the hue — a dot fading from amber to a neutral grey is the definition of
+    /// the hue - a dot fading from amber to a neutral grey is the definition of
     /// conveying state by colour alone. Decorative either way, hence hidden from
     /// VoiceOver: the label element says which state this is.
     @ViewBuilder
@@ -613,7 +591,7 @@ struct PermRow: View {
 // MARK: - Privacy (replaces the cloud-credentials tab this app used to have)
 
 /// Utter has no accounts, endpoints, or credentials to configure, so this pane
-/// states plainly what runs where instead of offering settings that don't exist —
+/// states plainly what runs where instead of offering settings that don't exist  - 
 /// and it is where Reset Utter lives.
 struct PrivacySettingsContent: View {
     @ObservedObject private var readiness = ReadinessMonitor.shared
@@ -655,24 +633,22 @@ struct PrivacySettingsContent: View {
                 }
             }
 
-            AppleSettingsSection(title: "NOTHING LEAVES THIS MAC") {
-                privacyItem("Speech recognition runs on a Whisper model bundled inside the app")
+            AppleSettingsSection(title: "LOCAL PROCESSING") {
+                privacyItem("Speech runs through a local Whisper model. Small is included; other model weights are downloaded only when you choose them.")
                 AppleSettingsDivider()
-                privacyItem("AI commands run on Apple’s on-device language model")
+                privacyItem("Writing transforms use Apple’s on-device language model when it is available.")
                 AppleSettingsDivider()
-                privacyItem("No account, no API keys, no telemetry, and it works 100% offline")
+                privacyItem("Utter has no account service or telemetry. Updates and model downloads require a network connection.")
                 AppleSettingsDivider()
-                privacyItem("Your voice and text never leave this Mac")
+                privacyItem("Utter does not upload dictation audio or transcript text to a service.")
             }
 
-            AppleSettingsSection(title: "AUDIO RECORDING") {
-                privacyItem("Audio is captured in memory only while holding the record key")
+            AppleSettingsSection(title: "AUDIO & RETENTION") {
+                privacyItem("Dictation audio is buffered in memory while recording and discarded after transcription.")
                 AppleSettingsDivider()
-                privacyItem("No audio files are ever written to disk")
+                privacyItem("Meeting capture uses rolling audio buffers and saves recognized words to the selected note.")
                 AppleSettingsDivider()
-                privacyItem("Audio is discarded from memory immediately after transcription")
-                AppleSettingsDivider()
-                privacyItem("The microphone is only active during recording — never in the background")
+                privacyItem("The microphone is active only during a user-started capture.")
             }
 
             AppleSettingsSection(title: "PERMISSIONS") {
@@ -680,7 +656,7 @@ struct PrivacySettingsContent: View {
                 AppleSettingsDivider()
                 privacyItem("Accessibility: required to type text into other applications")
                 AppleSettingsDivider()
-                privacyItem("Screen Recording: only if you record a meeting — captures audio only")
+                privacyItem("Screen Recording: only if you record a meeting - captures audio only")
             }
 
             AppleSettingsSection(
@@ -847,7 +823,7 @@ struct AboutContent: View {
 
 // `ValidatedField` was removed here rather than restyled.
 //
-// It had no callers anywhere in the target — it was the last of the credential form
+// It had no callers anywhere in the target - it was the last of the credential form
 // from the cloud version, and it carried three of the defects this pass exists to
 // remove: `.textFieldStyle(.roundedBorder)` (not the app's field), a bare
 // `Color.red.opacity(0.5)` invalid-state stroke, and `.foregroundStyle(.red)` error
@@ -859,8 +835,8 @@ struct AboutContent: View {
 ///
 /// `LabeledContent` is the system component for exactly this, and it deletes the parts that
 /// were only ever imitating it: a `.frame(width: 90)` hand-set label column and a trailing
-/// `Spacer()`. Inside the pane's grouped `Form` the label column is now the group's — shared
-/// with every other row in it, rather than a number that happened to fit two labels — and the
+/// `Spacer()`. Inside the pane's grouped `Form` the label column is now the group's - shared
+/// with every other row in it, rather than a number that happened to fit two labels - and the
 /// pairing is real to VoiceOver instead of implied by position.
 ///
 /// The value keeps `.typo(.mono)` rather than taking the row's own value styling, and that is

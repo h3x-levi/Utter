@@ -20,13 +20,6 @@ class UserData: ObservableObject {
     /// the detail view) doesn't silently discard the user's notes.
     @Published var scratchpad: String = ""
 
-    // MARK: - Authentication & Account State
-    @Published var isAuthenticated: Bool = false
-    @Published var isGuestMode: Bool = false
-    @Published var userEmail: String = ""
-    @Published var userDisplayName: String = ""
-    @Published var authProvider: String = "" // "Google", "Apple", or "Guest"
-
     // MARK: - App settings
 
     /// Show the floating pill at all times, or only while dictating.
@@ -54,7 +47,7 @@ class UserData: ObservableObject {
     /// only correcting near-misses afterwards. See `SpeechBias`.
     ///
     /// On by default, but only does anything once the user has added dictionary
-    /// words — with an empty dictionary the prompt is empty and inference is
+    /// words - with an empty dictionary the prompt is empty and inference is
     /// byte-identical to before.
     @Published var speechBiasEnabled: Bool = true
 
@@ -74,12 +67,12 @@ class UserData: ObservableObject {
     ///
     /// Off by default. It is a character that moves next to a text field, which is
     /// exactly the kind of thing that is delightful to the people who want it and an
-    /// unwelcome distraction to everyone else — so it is opt-in, like every other
+    /// unwelcome distraction to everyone else - so it is opt-in, like every other
     /// setting here that costs attention.
     @Published var companionEnabled: Bool = false
 
     /// The selected character: the folder name of a sprite pack, as it appears in
-    /// `Companions/` — either one bundled with the app or one the user installed.
+    /// `Companions/` - either one bundled with the app or one the user installed.
     ///
     /// A folder name rather than an enum because packs are discovered on disk, so the
     /// set of valid values is not known at compile time and a stored value can name a
@@ -90,8 +83,8 @@ class UserData: ObservableObject {
     /// How large the character is drawn. See `CompanionSize` for the ladder and why it
     /// is a ladder.
     ///
-    /// The whole companion rig is derived from this — the panel, the roam range, the hop,
-    /// and the size every sprite frame is decoded at — so it is read through
+    /// The whole companion rig is derived from this - the panel, the roam range, the hop,
+    /// and the size every sprite frame is decoded at - so it is read through
     /// `CompanionGeometry` rather than used raw.
     @Published var companionSize: CompanionSize = UserData.defaultCompanionSize
 
@@ -104,7 +97,7 @@ class UserData: ObservableObject {
     //
     // The reactions driven by the user's own hands rather than by dictation: kneading while
     // you type, watching the cursor, purring when stroked, and the timed nudges. All local
-    // — a cursor position, a keystroke count, a clock. Nothing here reaches the network.
+    // - a cursor position, a keystroke count, a clock. Nothing here reaches the network.
 
     /// Whether the character reacts to typing, the cursor and scrolling at all.
     ///
@@ -126,7 +119,7 @@ class UserData: ObservableObject {
     /// lands in the middle without interrupting a focus block twice.
     @Published var companionStretchMinutes: Int = 45
 
-    /// Minutes between water reminders, 0 for off. Off by default — two recurring nudges
+    /// Minutes between water reminders, 0 for off. Off by default - two recurring nudges
     /// out of the box is one more than anyone asked for.
     @Published var companionWaterMinutes: Int = 0
 
@@ -142,7 +135,7 @@ class UserData: ObservableObject {
     ///
     /// Its own switch rather than sharing `soundsEnabled`. The dictation cues fire when you
     /// asked the app to do something; the cat's fire when you touch it or when a timer goes
-    /// off, which is a different bargain — so silencing one should not silence the other.
+    /// off, which is a different bargain - so silencing one should not silence the other.
     @Published var companionSounds: Bool = true
     @Published var companionObject: CompanionObject = .none
     @Published var companionMemoryEnabled: Bool = true
@@ -182,7 +175,7 @@ class UserData: ObservableObject {
 
     /// Which pack a stored selection resolves to, given the packs actually present.
     ///
-    /// Pure, and the only definition of the rule — the renderer, the window's decision
+    /// Pure, and the only definition of the rule - the renderer, the window's decision
     /// to appear at all, and the correction on first scan all ask this, so none of them
     /// can disagree about which character is selected.
     ///
@@ -206,7 +199,7 @@ class UserData: ObservableObject {
     /// Correct `companionCharacter` to a pack that exists, and persist the correction.
     ///
     /// Called once the pack folders have been scanned, which is the earliest anything
-    /// knows what is installed — `load()` runs from `init()`, long before that. Writing
+    /// knows what is installed - `load()` runs from `init()`, long before that. Writing
     /// the corrected value back is what stops an upgraded install (one still naming a
     /// code-drawn character) resolving the same dead selection on every launch.
     ///
@@ -228,7 +221,7 @@ class UserData: ObservableObject {
     /// Show a rough live transcript in the pill while speaking.
     ///
     /// Off by default. It runs extra inference passes over partial audio, which
-    /// costs battery and CPU for a preview the user may not want — and on a busy
+    /// costs battery and CPU for a preview the user may not want - and on a busy
     /// machine the preview competes with the transcription that actually matters.
     /// Opt-in is the honest default for a feature that trades power for reassurance.
     @Published var livePreviewEnabled: Bool = false
@@ -237,22 +230,22 @@ class UserData: ObservableObject {
     ///
     /// Off by default, and that is not timidity. The offer needs Screen Recording to be useful, it
     /// concerns recording other people, and a panel that appears on its own is the most intrusive
-    /// thing this app does — so it is something the user turns on, not something they discover
+    /// thing this app does - so it is something the user turns on, not something they discover
     /// happening. Detection itself (`CallDetector`) only runs while this is true, so with it off the
     /// app is not watching the audio devices at all.
     @Published var offerToTranscribeCalls: Bool = false
 
     /// Keep a searchable on-disk log of everything dictated (`history.json`).
     ///
-    /// On by default so an existing install is not silently changed — history has
+    /// On by default so an existing install is not silently changed - history has
     /// always been recorded, and flipping the stored default to `false` would look
     /// like the app had lost the user's log. This is the one switch that turns the
     /// recording off: with it off, `deliverTranscript` and the AI-command path skip
     /// `TranscriptionHistory.add`, so nothing new is written. Entries already on
-    /// disk stay until the user clears them — this stops new writes, it is not a wipe.
+    /// disk stay until the user clears them - this stops new writes, it is not a wipe.
     @Published var keepHistory: Bool = true
 
-    /// The bundled model is `small.en` — English only. Offering other languages
+    /// The bundled model is `small.en` - English only. Offering other languages
     /// produced confidently wrong romanized text rather than an error, so the
     /// list reflects what the model actually supports. A multilingual build would
     /// need `ggml-small.bin` (~470 MB) instead of the 181 MB English model.
@@ -312,45 +305,12 @@ class UserData: ObservableObject {
         return nil
     }
 
-    // MARK: - Authentication Actions
-
-    func signInWithGoogle(name: String = "Alex Rivers", email: String = "alex.rivers@gmail.com") {
-        isAuthenticated = true
-        isGuestMode = false
-        userDisplayName = name
-        userEmail = email
-        authProvider = "Google"
-        save()
-    }
-
-    func signInAsGuest() {
-        isAuthenticated = false
-        isGuestMode = true
-        userDisplayName = "Guest"
-        userEmail = ""
-        authProvider = "Guest"
-        save()
-    }
-
-    func signOut() {
-        isAuthenticated = false
-        isGuestMode = false
-        userDisplayName = ""
-        userEmail = ""
-        authProvider = ""
-        save()
-    }
-
     func save() {
+        guard !SnapshotPreviewMode.isActive else { return }
         let snipData = snippets.map { ["trigger": $0.trigger, "expansion": $0.expansion] }
         let customCmdData = (try? JSONEncoder().encode(customAICommands))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
         let data: [String: Any] = [
-            "isAuthenticated": isAuthenticated,
-            "isGuestMode": isGuestMode,
-            "userEmail": userEmail,
-            "userDisplayName": userDisplayName,
-            "authProvider": authProvider,
             "words": dictionaryWords,
             "snippets": snipData,
             "language": selectedLanguage,
@@ -404,6 +364,7 @@ class UserData: ObservableObject {
     }
 
     private func load() {
+        guard !SnapshotPreviewMode.isActive else { return }
         let url = storageDir.appendingPathComponent("userdata.json")
         guard let data = try? Data(contentsOf: url) else { return }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -419,12 +380,6 @@ class UserData: ObservableObject {
             }
             return
         }
-
-        if let v = json["isAuthenticated"] as? Bool { isAuthenticated = v }
-        if let v = json["isGuestMode"] as? Bool { isGuestMode = v }
-        if let v = json["userEmail"] as? String { userEmail = v }
-        if let v = json["userDisplayName"] as? String { userDisplayName = v }
-        if let v = json["authProvider"] as? String { authProvider = v }
 
         if let words = json["words"] as? [String] { dictionaryWords = words }
         if let snips = json["snippets"] as? [[String: String]] {
@@ -462,7 +417,7 @@ class UserData: ObservableObject {
         if let v = json["companionEnabled"] as? Bool { companionEnabled = v }
         // Strip the legacy `pack:` prefix here so nothing downstream has to know the
         // old format existed. The name may still be a pack that is no longer installed
-        // — including one of the code-drawn characters — which cannot be checked yet:
+        // - including one of the code-drawn characters - which cannot be checked yet:
         // no pack folder has been scanned at this point. See
         // `resolveCompanionCharacter(against:)`.
         if let v = json["companionCharacter"] as? String, !v.isEmpty {
@@ -470,7 +425,7 @@ class UserData: ObservableObject {
         }
         // An unknown name falls back to the default rather than being coerced to the
         // nearest step: the value is a name, not a number, so a file written by a future
-        // version (or edited by hand) has no "nearest" — and a companion that silently
+        // version (or edited by hand) has no "nearest" - and a companion that silently
         // came back at 52pt is a better answer than one at an unbudgeted size, because
         // every clamp and the frame-decode cap are derived from it.
         if let v = json["companionSize"] as? String {
@@ -776,7 +731,7 @@ enum VoiceAction {
     ///
     /// The two are honoured in different circumstances: routing works everywhere,
     /// while the editing commands are keystrokes aimed at the frontmost app's text
-    /// field and are meaningless — actively harmful — when the dictation is being
+    /// field and are meaningless - actively harmful - when the dictation is being
     /// filed into a Utter note instead. See the voice-command branch in
     /// `stopRecording`.
     var isNoteRouting: Bool {

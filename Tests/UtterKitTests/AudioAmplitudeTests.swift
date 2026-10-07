@@ -4,7 +4,7 @@ import Testing
 /// The peak-amplitude scan the microphone tap runs on every buffer.
 ///
 /// One input crashed the app: a sample of exactly `Int16.min`. The scan used `abs`, and
-/// `abs(Int16.min)` has no representable result in `Int16`, so Swift trapped on overflow —
+/// `abs(Int16.min)` has no representable result in `Int16`, so Swift trapped on overflow  - 
 /// on the audio render thread, where a trap is an immediate SIGTRAP with no recovery. It was
 /// reported from a real session as a `SIGTRAP` in `checkVoiceActivity`.
 ///

@@ -29,14 +29,14 @@ struct CompanionGeometryTests {
 
     private static let sizes = CompanionSize.allCases
 
-    // MARK: The top edge — the menu bar
+    // MARK: The top edge - the menu bar
 
     @Test("A companion at the top of the screen keeps the character under the menu bar",
           arguments: sizes)
     func clampsBelowMenuBar(size: CompanionSize) {
         // The regression. The top bound counted the hop but not the pose scales
         // stacked on it, and measured the character's frame rather than what a pose
-        // draws — so at 44pt the character's head cleared `visibleFrame.maxY` by 7.0pt
+        // draws - so at 44pt the character's head cleared `visibleFrame.maxY` by 7.0pt
         // and this window sits above the menu bar's own level, so it draws over the menu
         // bar rather than being clipped by it.
         let geometry = CompanionGeometry(size)
@@ -157,7 +157,7 @@ struct CompanionGeometryTests {
     func characterFitsInsidePanel(size: CompanionSize) {
         // A borderless panel clips its content, so anything the character can reach has
         // to be inside the window or it is sliced mid-stride. Every bound is derived from
-        // `characterSize`, so this is what catches a size — or a new size on the ladder —
+        // `characterSize`, so this is what catches a size - or a new size on the ladder  - 
         // breaking the relationship between them.
         let geometry = CompanionGeometry(size)
         let side = geometry.panelSide
@@ -172,13 +172,13 @@ struct CompanionGeometryTests {
     func panelIsNoLargerThanTheReach(size: CompanionSize) {
         // The other half of `characterFitsInsidePanel`, and the half that was wrong:
         // `panelSide` read `characterSize + padding * 2` while `padding` is already
-        // measured from the centre, so the panel carried a whole extra character — 26pt of
+        // measured from the centre, so the panel carried a whole extra character - 26pt of
         // transparent margin on each side at the default size, sitting over the pill's
         // capsule and taking the mouse there, which left the pill's own hover dead.
         //
         // Bounding the slack is what makes re-inflating it fail: putting `characterSize`
         // back adds 18pt (`small`) to 42pt (`huge`) of margin outside the reach. The 1pt
-        // that is left is the `+1` in `stretchSlack`, and it is not spare — it absorbs the
+        // that is left is the `+1` in `stretchSlack`, and it is not spare - it absorbs the
         // pose lean the reach model does not carry.
         let geometry = CompanionGeometry(size)
         let slack = 2.0
@@ -211,7 +211,7 @@ struct CompanionGeometryTests {
           arguments: sizes)
     func dragDeltasAccumulate(size: CompanionSize) {
         // The container view delivers a drag as a stream of per-event deltas. Summed, they
-        // must land where one big translation would — a lossy step would creep the character
+        // must land where one big translation would - a lossy step would creep the character
         // away from the cursor over a fast drag.
         let geometry = CompanionGeometry(size)
         let start = CGPoint(x: Self.visible.midX - geometry.panelSide / 2,
@@ -262,9 +262,9 @@ struct CompanionGeometryTests {
 
     // MARK: The speech bubble
     //
-    // The two tests that were here pinned the *old* contract — "the bubble wraps to at least
+    // The two tests that were here pinned the *old* contract - "the bubble wraps to at least
     // two lines, bounded by the panel's far edge" and "the longest real error fits at the
-    // default size" — and both were satisfied only because the bubble was allowed to grow
+    // default size" - and both were satisfied only because the bubble was allowed to grow
     // downward over the character. That was the reported defect. The bubble is now bounded by
     // the strip above the character's resting frame, so the honest contract is the one below:
     // it never reaches the resting character, and the price is a line budget the panel dictates.
@@ -293,13 +293,13 @@ struct CompanionGeometryTests {
     func headroomIsAlmostEntirelyTheMotionBudget(size: CompanionSize) {
         let geometry = CompanionGeometry(size)
         let spare = geometry.bubbleHeadroom - geometry.characterMotionAboveRest
-        // Positive — the strip does contain the motion, which is what `clampedY` relies on.
+        // Positive - the strip does contain the motion, which is what `clampedY` relies on.
         #expect(spare > 0)
         // …and by barely more than a point at every rung, which is the finding: there is no
         // room in this panel for a bubble that also clears a hop. If a future change to the
         // panel opens this up, this test is what says so.
         #expect(spare < 1.5,
-                "\(size): \(spare)pt spare above the character's reach — if this has grown, the bubble could be placed clear of the hop as well as of the rest pose")
+                "\(size): \(spare)pt spare above the character's reach - if this has grown, the bubble could be placed clear of the hop as well as of the rest pose")
     }
 
     // MARK: The ladder itself
@@ -307,7 +307,7 @@ struct CompanionGeometryTests {
     @Test("The offered sizes are an ascending ladder around the size that shipped")
     func sizeLadderIsSane() {
         // 52pt is what the app drew before the size was a choice, so it has to still be
-        // on the ladder and it has to be the default — otherwise the setting's arrival
+        // on the ladder and it has to be the default - otherwise the setting's arrival
         // silently resizes every existing install.
         #expect(UserData.defaultCompanionSize.points == 52)
 
@@ -361,7 +361,7 @@ struct CompanionGeometryTests {
     func savedPositionIsSizeIndependent(size: CompanionSize) {
         // The reason the *centre* is what gets stored. `applyPreferredSize` grows the
         // panel about its centre, so the character does not move when the user resizes it
-        // — and a fraction recorded from the panel's origin would have disagreed on the
+        // - and a fraction recorded from the panel's origin would have disagreed on the
         // next launch by half the difference between the two sizes.
         let parked = NSPoint(x: Self.visible.midX, y: Self.visible.midY)
         let fraction = CompanionGeometry.fraction(ofCentre: parked, in: Self.visible)
@@ -377,7 +377,7 @@ struct CompanionGeometryTests {
         // The full round trip the previous test only half covers, and the guard that let
         // `panelSide` shrink safely: `savePosition` records the fraction from the *window's*
         // midpoint at one panel size and `restorePosition` turns it back into an origin at
-        // another. Every size pair, because the panel changed by 52pt at the default size —
+        // another. Every size pair, because the panel changed by 52pt at the default size  - 
         // an origin-based scheme, or a `panelSide` that disagreed between the two halves,
         // would move the companion by half of that on the first launch after a resize.
         let before = CompanionGeometry(saved)

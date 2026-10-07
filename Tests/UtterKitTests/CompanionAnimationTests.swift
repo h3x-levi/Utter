@@ -71,7 +71,7 @@ struct CompanionAnimationTests {
     @Test("More delays than frames cannot index past the end")
     func moreDelaysThanFrames() {
         // `frameIndex` walks `delays` and returns that walk's index, which the renderer
-        // then uses to subscript `frames` — so a mismatched pair is a crash, not a
+        // then uses to subscript `frames` - so a mismatched pair is a crash, not a
         // glitch. The loader keeps them in step on every path, but the type does not
         // enforce it, and the clamp costs one comparison.
         let animation = CompanionAnimation(
@@ -104,7 +104,7 @@ struct CompanionAnimationTests {
                 holds[animation.frameIndex(at: Double(tick) / 30.0)] += 1
             }
             let ideal = Double(ticks) / Double(frameCount)
-            // Every frame gets its share to within one tick — no frame is dropped, and
+            // Every frame gets its share to within one tick - no frame is dropped, and
             // none is held for twice its neighbour.
             for (index, hold) in holds.enumerated() {
                 #expect(abs(Double(hold) - ideal) <= 1,
@@ -119,7 +119,7 @@ struct CompanionAnimationTests {
         // The invariant the memoised `SpriteBodyLayer` relies on: at 30 Hz sampling an 8 fps
         // state the frame index is identical for several consecutive ticks and only changes
         // on a boundary. If it stopped holding, memoisation would merely be pointless (nothing
-        // to skip) rather than wrong — so this is the property worth pinning next to the view.
+        // to skip) rather than wrong - so this is the property worth pinning next to the view.
         let fps = 8.0
         let frameCount = 8
         let animation = CompanionAnimation(
@@ -129,11 +129,11 @@ struct CompanionAnimationTests {
         let ticks = Int((animation.duration * 30).rounded())
         let indices = (0..<ticks).map { animation.frameIndex(at: Double($0) / 30.0) }
 
-        // At least one run of identical consecutive indices — an in-between tick a memoised
+        // At least one run of identical consecutive indices - an in-between tick a memoised
         // view skips. (8 fps against 30 Hz holds each frame ~3.75 ticks.)
         #expect(zip(indices, indices.dropFirst()).contains { $0 == $1 })
 
-        // Every change steps forward by exactly one frame, or wraps to 0 — never a skip, so
+        // Every change steps forward by exactly one frame, or wraps to 0 - never a skip, so
         // the memoised layer never misses a frame the engine intended to show.
         for (previous, next) in zip(indices, indices.dropFirst()) where previous != next {
             #expect(next == previous + 1 || next == 0)

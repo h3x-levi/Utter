@@ -6,7 +6,7 @@ import AppKit
 ///
 /// Tested for the same reason `Layout.size` and `CompanionGeometry` are: the number is baked into a
 /// borderless panel at creation, `hosting.sizingOptions = []` forbids the window growing to fit, and
-/// the content is top-aligned — so a number that is too small does not squeeze the card, it lays part
+/// the content is top-aligned - so a number that is too small does not squeeze the card, it lays part
 /// of it out below the window's bottom edge, where nothing composites and no click lands.
 ///
 /// It shipped at a hardcoded 96pt against 133.5pt of content. The 37.5pt overflow was the button row,
@@ -67,7 +67,7 @@ struct MeetingOfferMetricsTests {
     @Test("A title carrying a long app name grows the card instead of overflowing it")
     func aLongAppNameGrowsTheCard() {
         // The defect this parameter exists for. "You're in a Microsoft Teams call" does not fit the
-        // title column beside the icon, so it wraps to two lines — and a card sized for one line puts
+        // title column beside the icon, so it wraps to two lines - and a card sized for one line puts
         // the extra line's worth of content below the window's bottom edge, taking the button row with
         // it. Which is exactly how this feature shipped unusable the first time.
         let long = CallSource.offerTitle(appName: "Microsoft Teams")
@@ -112,7 +112,7 @@ struct MeetingOfferMetricsTests {
     func theCaptionWrapsToMoreThanOneLine() {
         // The specific thing the 96pt guess got wrong. The caption is a whole sentence in a 236pt
         // column and it is `.fixedSize(vertical: true)` in the view, so its wrapped height is
-        // incompressible — the card cannot shrink it to fit.
+        // incompressible - the card cannot shrink it to fit.
         let single = NSAttributedString(
             string: MeetingOfferMetrics.caption,
             attributes: [.font: MeetingOfferMetrics.captionFont]
@@ -132,7 +132,7 @@ struct MeetingOfferMetricsTests {
         // It used to also cover SwiftUI's `.glass` button style at `.controlSize(.large)` drawing
         // taller than the AppKit fitting height below. The card's buttons are `OfferButtonStyle` now,
         // which pins its height to `buttonRowHeight`, so the button row is no longer the system's to
-        // change — see `theButtonRowHeightHoldsALargeControl`.
+        // change - see `theButtonRowHeightHoldsALargeControl`.
         #expect(MeetingOfferMetrics.slack > 0)
         #expect(MeetingOfferMetrics.height() > measuredContentHeight())
     }
@@ -143,8 +143,8 @@ struct MeetingOfferMetricsTests {
         // the card *imposes*: `OfferButtonStyle` frames its buttons to exactly this height, on every
         // render path, so that the row the window is sized for is the row that lays out.
         //
-        // Which moves the risk. It is no longer "the system draws taller than we allowed" — the
-        // metrics catch that — it is "we pinned the row shorter than its own label needs", and the
+        // Which moves the risk. It is no longer "the system draws taller than we allowed" - the
+        // metrics catch that - it is "we pinned the row shorter than its own label needs", and the
         // symptom is clipped or crushed button text rather than an overflowing window, so none of the
         // height assertions above would see it. A real large-bezel `NSButton` is the independent
         // floor: it is where the 28 came from, and it is what a macOS control of this class measures.
@@ -157,8 +157,8 @@ struct MeetingOfferMetricsTests {
 
     @Test("A failure message makes the card taller, by what the message measures")
     func aFailureMessageGrowsTheCard() {
-        // The card carries the reason a capture could not start — the Screen Recording sentence,
-        // which wraps to several lines — and the window has to grow with it or the message pushes
+        // The card carries the reason a capture could not start - the Screen Recording sentence,
+        // which wraps to several lines - and the window has to grow with it or the message pushes
         // the buttons out of the window all over again.
         let message = SystemAudioCapture.PermissionState.denied.message
         let grew = MeetingOfferMetrics.height(message: message) - MeetingOfferMetrics.height()

@@ -5,8 +5,8 @@ import Foundation
 /// Header parsing for the Diagnostics list rows.
 ///
 /// Worth pinning because `CrashReporter` writes two different formats from two
-/// different code paths — the async-signal-safe handler and the exception handler
-/// — and the subtitle has to read correctly for both. The signal path in
+/// different code paths - the async-signal-safe handler and the exception handler
+/// - and the subtitle has to read correctly for both. The signal path in
 /// particular is a fixed byte sequence assembled by `write(2)` calls that no test
 /// can exercise directly, so these fixtures mirror it exactly as
 /// `writeSignalNote` emits it.
@@ -59,7 +59,7 @@ struct CrashLogSummaryTests {
     @Test("An exception report reads its class name and version")
     func exceptionHeaders() {
         let parsed = summary(exceptionReport)
-        // `Name:`, not `Signal:` — the two formats label the cause differently and
+        // `Name:`, not `Signal:` - the two formats label the cause differently and
         // both have to land in the same field.
         #expect(parsed.cause == "NSInvalidArgumentException")
         #expect(parsed.version == "1.4.2")
@@ -98,7 +98,7 @@ struct CrashLogSummaryTests {
         #expect(parsed.subtitle == "")
     }
 
-    /// With no version the subtitle is just the cause — no dangling separator.
+    /// With no version the subtitle is just the cause - no dangling separator.
     @Test("A missing version leaves no orphaned separator")
     func causeOnly() {
         let parsed = summary("Utter crash (signal)\nSignal: SIGTRAP\n")

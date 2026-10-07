@@ -11,7 +11,7 @@ import Foundation
 ///
 ///   * *Summarise* and *extract action items* produce new text alongside the note.
 ///     If the model does something odd, the user sees an obviously wrong summary
-///     and deletes it — the original is untouched.
+///     and deletes it - the original is untouched.
 ///   * *Clean up* and *format* overwrite the note's body. Here a misbehaving model
 ///     destroys the user's writing, so those results are checked before being
 ///     applied, in the spirit of `SentencePolish.isPlausible`.
@@ -103,7 +103,7 @@ enum NoteAction: String, CaseIterable, Identifiable {
     /// original length.
     ///
     /// Cleaning up punctuation and paragraph breaks barely changes the length.
-    /// Formatting adds headings and list markers, so it may grow more — but not
+    /// Formatting adds headings and list markers, so it may grow more - but not
     /// double, which would mean the model wrote new prose.
     var maxGrowth: Double {
         switch self {
@@ -148,7 +148,7 @@ enum NoteAction: String, CaseIterable, Identifiable {
         case .actionItems:
             return preamble + "\n\n" + """
                 List the tasks the note says someone needs to do. Format each as \
-                "- [ ] task". Include only tasks explicitly stated in the note — \
+                "- [ ] task". Include only tasks explicitly stated in the note - \
                 do not infer, suggest, or invent work. If the note contains no \
                 tasks, reply with exactly: NONE
                 """
@@ -223,7 +223,7 @@ enum NoteActionRunner {
 
         let wordCount = body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
         guard wordCount >= action.minimumWords else {
-            return .nothingToDo("The note is too short for that — \(action.minimumWords) words or more.")
+            return .nothingToDo("The note is too short for that - \(action.minimumWords) words or more.")
         }
 
         let availability = LocalAIEngine.availability
@@ -286,7 +286,7 @@ enum NoteActionRunner {
             title = title.trimmingCharacters(in: CharacterSet(charactersIn: " \"'“”."))
             store.updateTitle(title, for: id)
         }
-        // This is the user's writing and it was just rewritten — persist now rather
+        // This is the user's writing and it was just rewritten - persist now rather
         // than on the debounce.
         store.writeToDisk()
     }
@@ -294,8 +294,8 @@ enum NoteActionRunner {
     /// Whether a body-replacing result is a transformation of the original rather
     /// than a replacement of it.
     ///
-    /// Same shape as `SentencePolish.isPlausible` — length bound plus in-order word
-    /// retention — with per-action thresholds, because reflowing text into headings
+    /// Same shape as `SentencePolish.isPlausible` - length bound plus in-order word
+    /// retention - with per-action thresholds, because reflowing text into headings
     /// and bullets moves far more than repunctuating a sentence does.
     static func isPlausibleReplacement(
         _ candidate: String,

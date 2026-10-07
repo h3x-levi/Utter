@@ -56,7 +56,7 @@ public final class ReportIssueViewModel: ObservableObject {
 
     public var diagnosticMarkdown: String {
         let osVer = ProcessInfo.processInfo.operatingSystemVersionString
-        let cores = ProcessInfo.processInfo.processorCount
+        let device = Device.current()
         let appVer = ConfigManager.shared.appVersion
         let model = ModelStore.shared.active.rawValue
         let hotkey = UserData.shared.hotkeyName
@@ -65,10 +65,11 @@ public final class ReportIssueViewModel: ObservableObject {
         ### System Diagnostics
         - **Utter Version**: \(appVer)
         - **macOS Version**: \(osVer)
-        - **Architecture**: \(cores) Cores (Apple Silicon / Metal Acceleration)
+        - **Hardware**: \(device.chipName), \(device.totalCores) active logical processors, \(device.ramGB) GB memory
         - **Active Speech Model**: \(model)
         - **Configured Hotkey**: \(hotkey)
-        - **Local-Only Guarantee**: 100% on-device (Zero cloud endpoints)
+        - **Processing**: Local Whisper inference; Utter does not upload audio or transcript text
+        - **Network**: Used for optional model downloads and app updates
         """
 
         if let crash = initialCrashLog, !crash.isEmpty {

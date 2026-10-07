@@ -31,7 +31,7 @@ const APP_FEATURES = [
     highlights: [
       'Sub-5ms global push-to-talk activation via Fn or ⌥',
       'Double-tap Fn (or ⌃⌥Space) for continuous hands-free dictation',
-      'Zero screen obstruction — adapts to active app windows',
+      'Zero screen obstruction - adapts to active app windows',
     ],
   },
   {
@@ -57,7 +57,7 @@ const APP_FEATURES = [
     description:
       'Optional vector companions (Charcoal Cat, Ginger Cat, Pixel Dog, Pixel Panda) drawn procedurally in code at 60 FPS. They watch your pointer with real-time gaze tracking, knead mechanical keypads while you dictate, and celebrate coding streaks with 0 bundled artwork.',
     highlights: [
-      '100% Procedural code rendering (CodePixelCat.swift) — 0 PNG assets',
+      '100% Procedural code rendering (CodePixelCat.swift) - 0 PNG assets',
       'Real-time smooth gaze tracking follows your cursor anywhere',
       'Whisper-reactive moods: Waving, Kneading, Walking, Loaf Sleep & Celebration',
     ],
@@ -188,7 +188,7 @@ export default function RealAppShowcase() {
                     <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
                     <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
                     <span className="text-xs font-mono font-semibold text-zinc-300 ml-2">
-                      Companion Settings — CodePixelCat.swift
+                      Companion Settings - CodePixelCat.swift
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">

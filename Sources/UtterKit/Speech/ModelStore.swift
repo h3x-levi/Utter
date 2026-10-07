@@ -1,10 +1,11 @@
 import Foundation
 import Combine
+import CryptoKit
 
 /// Downloads and tracks the optional speech models.
 ///
 /// The `small.en` model ships inside the app bundle, so Utter always works with
-/// no network at all. Anything else is an explicit, user-initiated download —
+/// no network at all. Anything else is an explicit, user-initiated download  - 
 /// this is the one place the app touches the network, and only when asked.
 @MainActor
 final class ModelStore: ObservableObject {
@@ -24,6 +25,7 @@ final class ModelStore: ObservableObject {
 
     private var tasks: [SpeechModel.Tier: URLSessionDownloadTask] = [:]
     private var observers: [SpeechModel.Tier: NSKeyValueObservation] = [:]
+    private var downloadIDs: [SpeechModel.Tier: UUID] = [:]
 
     private static let activeKey = "selectedSpeechModel"
     nonisolated private static let purgedKey = "purgedBundledModels"
@@ -35,7 +37,7 @@ final class ModelStore: ObservableObject {
 
     private init() {
         // On first run pick what suits this Mac. Both `small` and `medium` are
-        // bundled, so the recommendation is usually available immediately — fall
+        // bundled, so the recommendation is usually available immediately - fall
         // back only if it somehow isn't on disk.
         if let stored = UserDefaults.standard.string(forKey: Self.activeKey),
            let tier = SpeechModel.Tier(rawValue: stored),
@@ -51,7 +53,7 @@ final class ModelStore: ObservableObject {
 
     // MARK: - Locations
 
-    /// Downloaded models live in Application Support, not the bundle — the bundle
+    /// Downloaded models live in Application Support, not the bundle - the bundle
     /// is code-signed and read-only once installed.
     nonisolated static var downloadDirectory: URL {
         AppDirectory.subdirectory("Models")
@@ -119,18 +121,10 @@ final class ModelStore: ObservableObject {
     func download(_ tier: SpeechModel.Tier) {
         guard !SpeechModel.isBundled(tier), tasks[tier] == nil else { return }
         let model = SpeechModel.model(for: tier)
-        // SECURITY: `resolve/main` is a *mutable* ref — whatever `main` points at the
-        // moment of download — and the file is validated only by the size heuristic
-        // below before being handed to the in-process GGML parser. There is no
-        // integrity check on the bytes. The fix is to pin an immutable revision
-        // (`resolve/<commit-sha>/...`) and verify a per-model SHA-256 before
-        // `moveItem`, exactly as `Package.swift` pins the whisper xcframework by
-        // checksum. That is not done here because the expected hashes are not carried
-        // in the model catalog; adding them (measured once from a trusted download)
-        // is the outstanding work — do not invent them, and do not fetch them over
-        // the same untrusted channel.
+        // Pin the repository snapshot as well as the artifact digest. A changed
+        // upstream `main` can no longer silently change what this app installs.
         guard let remote = URL(
-            string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(model.filename)"
+            string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/0b364b566045a405be7225ee1e415a073e04da77/\(model.filename)"
         ) else {
             states[tier] = .failed("Bad download address")
             return
@@ -138,33 +132,68 @@ final class ModelStore: ObservableObject {
 
         states[tier] = .downloading(0)
         let destination = Self.downloadDirectory.appendingPathComponent(model.filename)
+        let filename = model.filename
+        let expectedBytes = model.sizeMB * 1_048_576
+        let expectedSHA256 = model.sha256
+        let downloadID = UUID()
+        downloadIDs[tier] = downloadID
 
         let task = URLSession.shared.downloadTask(with: remote) { [weak self] temp, response, error in
+            // Hashing 500+ MB on MainActor would freeze the menu-bar UI. URLSession
+            // invokes this completion off the main actor, so verify the temporary
+            // file here and hop to MainActor only for observable state changes.
+            var stagedFile: URL?
+            let validationFailure: String?
+            if let error {
+                validationFailure = error.localizedDescription
+            } else if (response as? HTTPURLResponse)?.statusCode != 200 {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                validationFailure = "Download failed (HTTP \(code))"
+            } else if let temp {
+                do {
+                    stagedFile = try Self.verifyAndStage(
+                        temp,
+                        expectedBytes: expectedBytes,
+                        expectedSHA256: expectedSHA256,
+                        filename: filename
+                    )
+                    validationFailure = nil
+                } catch {
+                    validationFailure = error.localizedDescription
+                }
+            } else {
+                validationFailure = "Download failed (no file received)"
+            }
+
             Task { @MainActor in
-                guard let self else { return }
+                guard let self else {
+                    if let stagedFile { try? FileManager.default.removeItem(at: stagedFile) }
+                    return
+                }
+                guard self.downloadIDs[tier] == downloadID,
+                      case .downloading = self.state(for: tier) else {
+                    if let stagedFile { try? FileManager.default.removeItem(at: stagedFile) }
+                    return
+                }
+                self.downloadIDs[tier] = nil
                 self.tasks[tier] = nil
                 self.observers[tier] = nil
 
-                if let error {
-                    self.states[tier] = .failed(error.localizedDescription)
+                if let validationFailure {
+                    self.states[tier] = .failed(validationFailure)
                     return
                 }
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200, let temp else {
-                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    self.states[tier] = .failed("Download failed (HTTP \(code))")
+                guard let stagedFile else {
+                    self.states[tier] = .failed("Download failed (no verified file received)")
                     return
                 }
                 do {
-                    // Sanity-check the size before trusting it: a captive-portal
-                    // HTML page would otherwise be saved as a "model".
-                    let size = (try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                    let expected = model.sizeMB * 1_048_576
-                    guard Double(size) > Double(expected) * 0.5 else {
-                        self.states[tier] = .failed("Download looks incomplete — try again")
-                        return
+                    defer { try? FileManager.default.removeItem(at: stagedFile) }
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        _ = try FileManager.default.replaceItemAt(destination, withItemAt: stagedFile)
+                    } else {
+                        try FileManager.default.moveItem(at: stagedFile, to: destination)
                     }
-                    try? FileManager.default.removeItem(at: destination)
-                    try FileManager.default.moveItem(at: temp, to: destination)
                     self.states[tier] = .installed
                     // The user chose this model before it existed; honour that now.
                     if self.pendingSelection == tier { self.select(tier) }
@@ -176,7 +205,9 @@ final class ModelStore: ObservableObject {
 
         observers[tier] = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
             Task { @MainActor in
-                guard let self, case .downloading = self.state(for: tier) else { return }
+                guard let self,
+                      self.downloadIDs[tier] == downloadID,
+                      case .downloading = self.state(for: tier) else { return }
                 self.states[tier] = .downloading(progress.fractionCompleted)
             }
         }
@@ -185,8 +216,41 @@ final class ModelStore: ObservableObject {
         task.resume()
     }
 
+    private nonisolated static func sha256(fileAt url: URL) throws -> String {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        var hasher = SHA256()
+        while let chunk = try file.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private nonisolated static func verifyAndStage(
+        _ temporaryFile: URL,
+        expectedBytes: Int,
+        expectedSHA256: String,
+        filename: String
+    ) throws -> URL {
+        let size = (try temporaryFile.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard size >= expectedBytes / 2 else { throw ModelDownloadError.incomplete }
+        guard try sha256(fileAt: temporaryFile) == expectedSHA256 else {
+            throw ModelDownloadError.checksumMismatch
+        }
+        try FileManager.default.createDirectory(
+            at: downloadDirectory,
+            withIntermediateDirectories: true
+        )
+        let staged = downloadDirectory.appendingPathComponent(
+            ".\(filename).\(UUID().uuidString).download"
+        )
+        try FileManager.default.moveItem(at: temporaryFile, to: staged)
+        return staged
+    }
+
     func cancelDownload(_ tier: SpeechModel.Tier) {
         if pendingSelection == tier { pendingSelection = nil }
+        downloadIDs[tier] = nil
         tasks[tier]?.cancel()
         tasks[tier] = nil
         observers[tier] = nil
@@ -195,8 +259,8 @@ final class ModelStore: ObservableObject {
 
     /// Whether a model can be removed right now.
     ///
-    /// Anything downloaded can go. The bundled model can go too — it's 181 MB of
-    /// dead weight once you've downloaded a better one — but only while another
+    /// Anything downloaded can go. The bundled model can go too - it's 181 MB of
+    /// dead weight once you've downloaded a better one - but only while another
     /// model is available, so the app is never left unable to transcribe.
     func canRemove(_ tier: SpeechModel.Tier) -> Bool {
         guard Self.url(for: tier) != nil else { return false }
@@ -213,7 +277,7 @@ final class ModelStore: ObservableObject {
     /// write to: deleting a file from `Contents/Resources/` breaks the code
     /// signature and can silently revoke the app's TCC grants (Accessibility, mic,
     /// Screen Recording). So "removing" a bundled model is recorded purely as a
-    /// preference (`purgedKey`) that hides it — the ~181 MB stays on disk but no
+    /// preference (`purgedKey`) that hides it - the ~181 MB stays on disk but no
     /// longer loads or lists. A reinstall or update clears the preference so the
     /// user isn't left with a model they can't see.
     func remove(_ tier: SpeechModel.Tier) {
@@ -244,4 +308,16 @@ final class ModelStore: ObservableObject {
 extension Notification.Name {
     /// Posted when the user switches speech models, so the engine reloads.
     static let speechModelChanged = Notification.Name("speechModelChanged")
+}
+
+private enum ModelDownloadError: LocalizedError {
+    case incomplete
+    case checksumMismatch
+
+    var errorDescription: String? {
+        switch self {
+        case .incomplete: "The downloaded model is incomplete. Try again."
+        case .checksumMismatch: "The downloaded model failed its integrity check."
+        }
+    }
 }

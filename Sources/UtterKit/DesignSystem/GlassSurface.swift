@@ -8,7 +8,7 @@ import AppKit
 // shapes this whole file (Human Interface Guidelines → Materials):
 //
 //   "Liquid Glass forms a distinct functional layer for controls and navigation
-//    elements — like tab bars and sidebars — that floats above the content
+//    elements - like tab bars and sidebars - that floats above the content
 //    layer… Don't use Liquid Glass in the content layer… including it in the
 //    content layer can result in unnecessary complexity and a confusing visual
 //    hierarchy. Instead, use Standard materials for elements in the content
@@ -16,15 +16,15 @@ import AppKit
 //
 // So the app is glass in two different senses, deliberately:
 //
-//   `.chrome`  — real `glassEffect`. A surface that floats in its own window,
+//   `.chrome`  - real `glassEffect`. A surface that floats in its own window,
 //                above whatever it acts on, carrying controls rather than prose.
-//   `.content` — a standard translucent material with the same rim and
+//   `.content` - a standard translucent material with the same rim and
 //                highlight treatment. In-window containers that hold text.
 //
 // Stated as a test rather than a list of screens, because the list has gone
 // stale twice: does the surface float above the content it acts on, *and* is what
-// sits on it a control rather than a paragraph? Both — `.chrome`. Either one
-// missing — `.content`. `grep -rn 'glassSurface(' Sources` for today's answer.
+// sits on it a control rather than a paragraph? Both - `.chrome`. Either one
+// missing - `.content`. `grep -rn 'glassSurface(' Sources` for today's answer.
 //
 // Both read as one glass family, but only the floating layer pays the
 // refraction cost, and no paragraph of text is ever asked to sit on a surface
@@ -32,7 +32,7 @@ import AppKit
 // "when background content might create legibility issues, or when components
 // have a significant amount of text."
 //
-// Everything degrades in two directions — down to macOS 13.3, and sideways when
+// Everything degrades in two directions - down to macOS 13.3, and sideways when
 // Reduce Transparency is on. The HIG only promises automatic accessibility
 // adaptation for *standard* components ("Ensure you test your app's custom
 // elements"), so custom surfaces branch explicitly rather than assuming.
@@ -41,7 +41,7 @@ enum GlassRole {
     /// A surface that floats above the content it acts on and carries controls
     /// rather than prose. Gets true Liquid Glass where the OS provides it.
     case chrome
-    /// Content-layer containers that hold text — bento tiles, cards. Standard
+    /// Content-layer containers that hold text - bento tiles, cards. Standard
     /// translucent material, never `glassEffect`.
     case content
     /// A single emphasised control. Tinted glass, used sparingly: the HIG says
@@ -65,7 +65,7 @@ enum GlassSupport {
     /// away: `glassEffect` and `GlassEffectContainer` do not exist below 26, so
     /// the compiler demands the `#available` *at the call site* before the symbol
     /// can be named at all. A runtime `Bool` cannot stand in for it. What this
-    /// function owns is the other clause — the policy — and it is deliberately
+    /// function owns is the other clause - the policy - and it is deliberately
     /// the only copy of it, because the policy is not settled: whether Increase
     /// Contrast should suppress glass as well is **unverified** (the SDK promises
     /// automatic adaptation only for *standard* components, and says nothing
@@ -80,8 +80,8 @@ enum GlassSupport {
 //
 // It bundled an id and a `Namespace.ID` for `glassEffectID(_:in:)`, on the theory that naming a glass
 // body would stop `glassEffect` cross-fading it while its shape animated. Apple documents that
-// identity as applying "during view hierarchy transitions" — it matches a shape that *appears or
-// disappears* — so it had nothing to say about a body being resized, which is what the pill was
+// identity as applying "during view hierarchy transitions" - it matches a shape that *appears or
+// disappears* - so it had nothing to say about a body being resized, which is what the pill was
 // asking of it. Its only caller stopped using it once the pill's size change was made instant, and an
 // unreachable branch inside `ChromeGlass` is worse than no branch: it reads as a working mechanism.
 // `glassEffectID` is still the right tool for the case it documents; that case is not here.
@@ -123,12 +123,12 @@ extension View {
 }
 
 // `flushChromeGlass` lived here: Liquid Glass for a chrome band running flush to a
-// window's own edges — `glassEffect(.regular, in: Rectangle())` behind the
+// window's own edges - `glassEffect(.regular, in: Rectangle())` behind the
 // `GlassSupport.active` gate, with a passthrough on the two non-glass paths.
 //
 // **Deleted because AppKit took the job.** Its two call sites were the main window's
 // sidebar and the Settings navigation column, and both are now
-// `NSSplitViewItem.sidebar` — AppKit supplies an `NSContainerConcentricGlassEffectView`
+// `NSSplitViewItem.sidebar` - AppKit supplies an `NSContainerConcentricGlassEffectView`
 // that is concentric with the window's corner radius, which a `Rectangle()` shape
 // argument structurally cannot be, and it supplies the `.sidebar` material below 26
 // where this modifier was a passthrough. Zero callers remained.
@@ -137,7 +137,7 @@ extension View {
 //   * It was deliberately **not** `glassSurface(.chrome, in:)` and deliberately not a
 //     new `GlassRole`. `ChromeGlass` builds a *floating panel*: its non-26 branches add
 //     a four-sided `strokeBorder` and a `Surface.raised` fill, both wrong on a band
-//     whose edges are the window's — the border traces a rectangle just inside the
+//     whose edges are the window's - the border traces a rectangle just inside the
 //     window frame and the fill replaces the shell that should show through. The role
 //     was identical; the fallback *geometry* differed.
 //   * **Untinted, and not `.interactive()`.** `ChromeGlass`'s theme tint (accent at
@@ -147,7 +147,7 @@ extension View {
 //     control; what sits on it is.
 //   * The shape was the *argument*, never a carrier view. The modifier has to be
 //     applied to something with an already-resolved frame, or a carrier publishes an
-//     intrinsic size up through `NSHostingView` — the ~133pt window collapse this
+//     intrinsic size up through `NSHostingView` - the ~133pt window collapse this
 //     file's other comments record.
 //
 // If a real control bar appears (`WhatsNewView` names a version filter or a floating
@@ -165,7 +165,7 @@ private struct ChromeGlass<S: InsettableShape>: ViewModifier {
 
     func body(content: Content) -> some View {
         if reduceTransparency {
-            // Opaque, themed, no translucency at all — the point of the setting.
+            // Opaque, themed, no translucency at all - the point of the setting.
             content
                 .background(shape.fill(Surface.raised))
                 .overlay(shape.strokeBorder(Line.strong, lineWidth: Line.width))
@@ -175,17 +175,17 @@ private struct ChromeGlass<S: InsettableShape>: ViewModifier {
             // This used to composite a themed fill at 0.55-0.78 opacity under the
             // effect, on the reasoning that glass "has no inherent colour" so a
             // theme needed something to tint it. That was backwards, and it is
-            // the specific mistake Apple calls out — "Reduce your use of custom
+            // the specific mistake Apple calls out - "Reduce your use of custom
             // backgrounds… custom backgrounds might overlay or interfere with
             // Liquid Glass", and on solid fills: "it is completely opaque and
             // breaks the visual character of Liquid Glass."
             //
-            // Liquid Glass defines itself by *lensing* — it "dynamically bends,
+            // Liquid Glass defines itself by *lensing* - it "dynamically bends,
             // shapes, and concentrates light", sampling an area larger than
             // itself. A fill underneath removes the backdrop there is to bend, so
             // all that survives is the blur. Hence "looks translucent, not like
             // glass". Colour now goes through `Glass.tint`, which tone-maps a hue
-            // against the brightness behind it — the documented way to keep an
+            // against the brightness behind it - the documented way to keep an
             // identity without going opaque.
             //
             // `.regular`, not `.clear`: these surfaces carry text and sit over
@@ -238,8 +238,8 @@ private struct ChromeGlass<S: InsettableShape>: ViewModifier {
 }
 
 /// The content layer: standard material, per the HIG's explicit instruction not
-/// to put Liquid Glass behind content. Visually part of the same family — same
-/// rim, same softness — without refracting the text sitting on it.
+/// to put Liquid Glass behind content. Visually part of the same family - same
+/// rim, same softness - without refracting the text sitting on it.
 private struct ContentGlass<S: InsettableShape>: ViewModifier {
     let shape: S
     let reduceTransparency: Bool
@@ -257,9 +257,9 @@ private struct ContentGlass<S: InsettableShape>: ViewModifier {
                 // A material tile re-samples the window's `.behindWindow` backdrop every frame.
                 // When a scrollbar-thumb drag exposes a large region of the history at once, the
                 // material cannot re-sample in time and paints SwiftUI Material's blank near-white
-                // state — the "page goes white on the side scroller" the user reported. The mouse
+                // state - the "page goes white on the side scroller" the user reported. The mouse
                 // wheel exposes a thin strip per tick, so the same cost degrades to *lag* rather
-                // than white — which is exactly the two-way split they described. The content plane
+                // than white - which is exactly the two-way split they described. The content plane
                 // behind these tiles is itself an `NSVisualEffectView`, and this file already quotes
                 // the HIG remedy (line ~180): do not put a material over a material.
                 //
@@ -275,7 +275,7 @@ private struct ContentGlass<S: InsettableShape>: ViewModifier {
                 //
                 // In dark mode a raised card separates by being *lighter* than the canvas, and a
                 // shadow under it adds nothing a darker surround can show. In light mode there is
-                // no headroom to be lighter with — `Surface.raised` for the Paper theme is already
+                // no headroom to be lighter with - `Surface.raised` for the Paper theme is already
                 // (1.0, 0.988, 0.965), so the card cannot out-brighten its own canvas, which is
                 // exactly why it measured 1.117:1 against it and read as flat. Depth in light mode
                 // therefore has to come from the two cues a physical raised object actually gives:
@@ -287,12 +287,12 @@ private struct ContentGlass<S: InsettableShape>: ViewModifier {
         }
     }
 
-    /// The card's edge, and the direction it runs is **per appearance** — not one gradient with
+    /// The card's edge, and the direction it runs is **per appearance** - not one gradient with
     /// two opacities.
     ///
     /// This was a white gradient in both appearances, and in light mode that is a white line on a
     /// near-white card: measured against `Surface.raised`, white at 60% comes out at **1.015:1** for
-    /// Paper and **1.022:1** for Linen. 1.015:1 is not a subtle edge, it is no edge — which is the
+    /// Paper and **1.022:1** for Linen. 1.015:1 is not a subtle edge, it is no edge - which is the
     /// "so much whitewashed, no depth" report. The same gradient measures ~1.55:1 in all four dark
     /// themes, so it was tuned in dark mode and never checked in light.
     ///
@@ -324,8 +324,8 @@ private struct ContentGlass<S: InsettableShape>: ViewModifier {
 /// `glassEffect` does nothing at all. It has no appearance of its own, so the
 /// render is byte-identical with and without it, and all it buys is a reader
 /// believing there is glass in there. Before wrapping something in this, check
-/// that what is inside actually reaches `glassEffect` — `GlassChip`,
-/// `GlassSelectableRow`, `BentoTile` and the theme/character swatches are all
+/// that what is inside actually reaches `glassEffect` - `GlassChip`,
+/// `GlassSelectableRow`, `ContentSection` and the theme/character swatches are all
 /// deliberately standard materials and fills, so a container around them is a
 /// no-op. The theme grid had one and it was deleted rather than kept.
 struct GlassCluster<Content: View>: View {
@@ -349,7 +349,7 @@ struct GlassCluster<Content: View>: View {
 
 /// An `NSVisualEffectView` for the window's content layer.
 ///
-/// This is *not* the glass API — `NSVisualEffectView` is what the HIG calls a
+/// This is *not* the glass API - `NSVisualEffectView` is what the HIG calls a
 /// standard material, used "to convey a sense of structure in the content
 /// beneath Liquid Glass." It gives the window a live translucent backing so the
 /// glass chrome above it has something real to refract, and `.behindWindow`
@@ -379,7 +379,7 @@ struct WindowBacking: NSViewRepresentable {
 // wrapper) lived here, for the pill's hands-free bead and nothing else. They are deleted rather
 // than kept unused, because the approach they implemented was replaced rather than supplemented.
 //
-// The container's proximity blend is real and it is Apple's — but its merged silhouette is not
+// The container's proximity blend is real and it is Apple's - but its merged silhouette is not
 // something you can obtain a `Path` for, so nothing can stroke it, and the pill's outer contrast
 // ring is load-bearing (see `PillContent`). That left one stroke per body, i.e. two fully outlined
 // objects sliding through each other. It is also a plain passthrough before macOS 26 *and* under
@@ -387,6 +387,6 @@ struct WindowBacking: NSViewRepresentable {
 // separate objects on the other three. `PillShellShape` makes the bead a lobe of the pill's own
 // silhouette instead: one `Path`, one glass body, one outline, on all four.
 //
-// `GlassCluster` above is a different thing and still used widely — it groups genuinely
+// `GlassCluster` above is a different thing and still used widely - it groups genuinely
 // independent glass siblings into one render pass, which is a performance measure the HIG asks for,
 // not a merge anybody depends on the shape of.

@@ -3,14 +3,14 @@ import SwiftUI
 /// The Notes screen: a searchable list of notes beside an editor.
 ///
 /// Replaces the old `ScratchpadView`, which was a single shared text buffer
-/// (`UserData.scratchpad`) presented as "Notes" — writing a second note
+/// (`UserData.scratchpad`) presented as "Notes" - writing a second note
 /// overwrote the first. State now lives in `NoteStore`, so the sidebar rebuilding
 /// this view on navigation no longer risks the text.
 ///
 /// The list is a real `List(selection:)` with real `Section` headers, replacing a
 /// `ScrollView` + `LazyVStack` + `GlassSelectableRow`. That one change is what
 /// supplies row hover, the selection fill in the correct appearance, the focus ring,
-/// arrow-key and type-select navigation, and the accessibility table role — the old
+/// arrow-key and type-select navigation, and the accessibility table role - the old
 /// list had none of them beyond a hand-drawn hover wash, and `GlassSelectableRow`'s
 /// own doc comment names this exact conversion ("`List(selection:)`/`.listStyle(.inset)`
 /// retires this whole type") as the reason it should not survive.
@@ -98,7 +98,7 @@ struct NotesView: View {
         // A real `.confirmationDialog` is the whole fix: the system supplies the sheet,
         // the destructive-role button styling, Escape-to-cancel, the default button, and
         // the VoiceOver announcement. This is not an undo system and does not pretend to
-        // be one — see `deleteWarning`, which says so.
+        // be one - see `deleteWarning`, which says so.
         .confirmationDialog(
             "Delete this note?",
             isPresented: Binding(
@@ -126,7 +126,7 @@ struct NotesView: View {
     // MARK: - List
 
     private var noteList: some View {
-        BentoTile(
+        ContentSection(
             title: "Notes",
             systemImage: "note.text",
             accessory: AnyView(
@@ -213,7 +213,7 @@ struct NotesView: View {
                     }
                 }
                 if !meeting.heardOthers {
-                    Text("No audio from other participants yet — check the meeting isn’t muted or on a headset Utter can’t hear.")
+                    Text("No audio from other participants yet - check the meeting isn’t muted or on a headset Utter can’t hear.")
                         .typo(.caption, ink: Tint.warningText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -277,7 +277,7 @@ struct NotesView: View {
     @ViewBuilder
     private var editor: some View {
         if let note = store.selectedNote {
-            BentoTile(
+            ContentSection(
                 title: nil,
                 accessory: AnyView(
                     HStack(spacing: Space.x2) {
@@ -318,7 +318,7 @@ struct NotesView: View {
                 actionBar(for: note)
             }
         } else {
-            BentoTile(title: nil) {
+            ContentSection(title: nil) {
                 EmptyStateView(
                     icon: "note.text",
                     title: "Nothing selected",
@@ -495,7 +495,7 @@ struct NotesView: View {
     }
 }
 
-/// One row in the notes list — content only.
+/// One row in the notes list - content only.
 ///
 /// Everything that used to be drawn here belongs to the enclosing
 /// `List(selection:)` now: the row background, the hover wash, the selection fill in
@@ -503,7 +503,7 @@ struct NotesView: View {
 /// the accessibility table role. So `GlassSelectableRow`, the `@State isHovering`,
 /// the `.onHover { withAnimation { … } }` and the `.opacity(isHovering ? 1 : 0)` that
 /// faded a trash button in and out are all gone, along with the two defects their doc
-/// comment recorded — an unanimated hover, and a conditionally-inserted trash that
+/// comment recorded - an unanimated hover, and a conditionally-inserted trash that
 /// took 28pt of the title's width with it when it appeared. A list row cannot have
 /// either defect if the list draws the row.
 ///
@@ -515,7 +515,7 @@ struct NotesView: View {
 /// row carried a live, focusable, VoiceOver-announced *delete* control with no visual
 /// presence. A click into apparently-empty row space could delete a note; Tab could
 /// land focus on nothing; VoiceOver announced a button that was not there. Reveal-on-
-/// hover is a fine Mac convention — doing it with opacity alone is the defect, and
+/// hover is a fine Mac convention - doing it with opacity alone is the defect, and
 /// pairing an invisible trigger with an irreversible act (see `NotesView.deleteWarning`)
 /// is the worst version of it.
 ///
@@ -525,13 +525,13 @@ struct NotesView: View {
 /// always-visible trash button. All three go through one confirmation.
 ///
 /// If a hover-revealed action is ever wanted back here for pointer discoverability,
-/// hide the behaviour along with the pixels —
+/// hide the behaviour along with the pixels  - 
 /// `.opacity(hovering ? 1 : 0).allowsHitTesting(hovering).accessibilityHidden(!hovering)`
-/// — rather than relying on opacity to do it.
+/// - rather than relying on opacity to do it.
 ///
 /// **The colours here are deliberately the system's, not the theme's.** `Ink.*` are
 /// absolute themed values, and an absolute value cannot invert when the system fills
-/// the row with the selection colour — the selected note's title would have stayed a
+/// the row with the selection colour - the selected note's title would have stayed a
 /// dark themed grey on an accent fill. The type scale (`Typo.*.font`) is the part of
 /// the token that still applies; the foreground is left to the list for the title and
 /// set to the semantic `.secondary` for the preview, both of which AppKit remaps for a
@@ -580,7 +580,7 @@ private struct NoteRow: View {
 
 /// The system search field.
 ///
-/// This replaces a hand-drawn search control — a `Surface.sunken` well, a
+/// This replaces a hand-drawn search control - a `Surface.sunken` well, a
 /// magnifying-glass `Image`, an `IconButton` clear button, and an accent focus ring
 /// drawn off a `@FocusState` that existed for no other purpose. All four are
 /// `NSSearchField`'s own job, and it does them in the current appearance, at the
@@ -593,7 +593,7 @@ private struct NoteRow: View {
 /// here. This screen is hosted in an `NSHostingController` inside an
 /// `NSSplitViewController` (`App.swift`), with no `NavigationStack` or
 /// `NavigationSplitView` above it, and the window's `NSToolbar` is built by AppKit
-/// with no delegate and no items — `App.swift` says so in as many words. `.searchable`
+/// with no delegate and no items - `App.swift` says so in as many words. `.searchable`
 /// needs one of those to place a field into, and with neither present the likely
 /// outcome is no field rendered at all, which would silently remove search from the
 /// screen holding the user's only copy of their own writing. The shell change that

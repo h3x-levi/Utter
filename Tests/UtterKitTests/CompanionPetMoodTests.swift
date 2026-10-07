@@ -3,7 +3,7 @@ import Testing
 
 @testable import UtterKit
 
-/// How the pet moods — the ones driven by the user's hands rather than by Utter's work —
+/// How the pet moods - the ones driven by the user's hands rather than by Utter's work  - 
 /// take hold, take precedence over each other, and let go.
 ///
 /// This is the part of the companion most likely to break in a way that is annoying rather
@@ -56,7 +56,7 @@ struct CompanionPetMoodTests {
         type(6, on: engine, over: 0.5)
         #expect(engine.mood == .kneading)
 
-        // Hands off. No further keystrokes are recorded — the mood has to end on its own,
+        // Hands off. No further keystrokes are recorded - the mood has to end on its own,
         // which is the case a purely event-driven design gets wrong.
         engine.step(2.0)
         #expect(engine.mood == .resting)
@@ -119,7 +119,7 @@ struct CompanionPetMoodTests {
         let engine = makeEngine()
         type(24, on: engine, over: 2.0)
         #expect(engine.mood == .overheating)
-        // Not `.kneading`, even though `isTyping` is also true — otherwise the two
+        // Not `.kneading`, even though `isTyping` is also true - otherwise the two
         // alternate every tick.
     }
 
@@ -140,7 +140,7 @@ struct CompanionPetMoodTests {
     @Test("A timed reaction is allowed to finish before a pet mood takes over")
     func transientMoodNotInterrupted() {
         let engine = makeEngine()
-        // A failure holds `startled` for 2.4s. Typing through it must not cut it short —
+        // A failure holds `startled` for 2.4s. Typing through it must not cut it short  - 
         // the character reporting an error then immediately kneading reads as the error
         // never having happened.
         engine.apply(pillState: .error("nope"))
@@ -197,7 +197,7 @@ struct CompanionPetMoodTests {
         engine.step(0.1)
         let earlyRight = engine.pose.eyeAim.dx
         #expect(earlyRight > 0, "should have started rolling right")
-        #expect(earlyRight < 1, "should not have arrived instantly — that is the lag")
+        #expect(earlyRight < 1, "should not have arrived instantly - that is the lag")
 
         // Given time, it does arrive.
         engine.step(0.5)

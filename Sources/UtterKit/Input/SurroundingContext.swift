@@ -6,7 +6,7 @@ import ApplicationServices
 /// Dictation is the one input method with no idea what it is interrupting. Typing
 /// a name a second time is easy; saying it again gets the same mis-hearing. If the
 /// document already contains "Kubernetes" three lines up, that word is the single
-/// best hint available about what the next sentence contains — and it costs nothing
+/// best hint available about what the next sentence contains - and it costs nothing
 /// to read.
 ///
 /// The text is used two ways: as extra vocabulary for `SpeechBias` (proper nouns
@@ -20,7 +20,7 @@ import ApplicationServices
 /// hand over, so it is constrained accordingly:
 ///
 ///   * **Off by default.** `UserData.useSurroundingContext` gates every call.
-///   * **Never leaves the machine.** Both consumers are on-device — whisper.cpp and
+///   * **Never leaves the machine.** Both consumers are on-device - whisper.cpp and
 ///     Apple's local model. There is no network path.
 ///   * **Never persisted or logged.** Only the character count is ever printed.
 ///   * **Bounded.** At most `maxCharacters` before the cursor, one field, no
@@ -28,7 +28,7 @@ import ApplicationServices
 ///   * **Password fields are refused**, checked by role and by subrole.
 ///
 /// It also requires Accessibility permission, which Utter already holds for
-/// keystroke injection — so this adds no new prompt, but it does mean a failure
+/// keystroke injection - so this adds no new prompt, but it does mean a failure
 /// here is silent and must never block dictation.
 enum SurroundingContext {
 
@@ -170,7 +170,7 @@ enum SurroundingContext {
     /// `NSSecureTextField` reports it as the *subrole* (the only form the SDK
     /// defines a constant for, `kAXSecureTextFieldSubrole`), while some web and
     /// Electron inputs report it as the role instead. The string is spelled out
-    /// because there is no `kAXSecureTextFieldRole` in the headers — only the
+    /// because there is no `kAXSecureTextFieldRole` in the headers - only the
     /// subrole constant exists.
     ///
     /// A field reporting neither is read. Refusing everything unlabelled would
@@ -202,7 +202,7 @@ enum SurroundingContext {
 
         var cfRange = CFRange()
         guard AXValueGetValue((value as! AXValue), .cfRange, &cfRange) else { return nil }
-        // With a selection active, the location is still the start — which is the
+        // With a selection active, the location is still the start - which is the
         // boundary the preceding text ends at, so this is correct either way.
         return cfRange.location
     }

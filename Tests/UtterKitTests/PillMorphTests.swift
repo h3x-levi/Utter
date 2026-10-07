@@ -8,7 +8,7 @@ import AppKit
 /// exactly the things that break silently:
 ///
 ///   * the **window** has to be tall enough for every shell it will ever draw, or SwiftUI
-///     lays the box out inside a panel that clips it — and its height must leave the capsule
+///     lays the box out inside a panel that clips it - and its height must leave the capsule
 ///     on the spot the user parked it on,
 ///   * the **destination** the box names has to be the one the transcript is filed to,
 ///   * the **transcript tail** has to keep the newest words, which is the whole point of
@@ -19,7 +19,7 @@ struct PillMorphTests {
     /// A 16:10 display with a menu bar and a Dock, in the coordinates AppKit reports.
     private static let visible = NSRect(x: 0, y: 70, width: 1512, height: 887)
 
-    /// The capsule's bottom edge on screen — the quantity that must not move when the
+    /// The capsule's bottom edge on screen - the quantity that must not move when the
     /// window changes height. The content is bottom-anchored inside the window, so it is
     /// the window origin plus the transparent inset below the pill.
     private func capsuleBottom(_ frame: NSRect) -> CGFloat {
@@ -41,7 +41,7 @@ struct PillMorphTests {
         let capsuleStates: [PillState] = [
             .preparing, .idle, .recording, .handsFree,
             .processing(.transcribing), .processing(.rewriting), .processing(.typing),
-            .notice("New note — keep talking"), .error("No speech detected"),
+            .notice("New note - keep talking"), .error("No speech detected"),
         ]
         for state in capsuleStates {
             #expect(PillMetrics.shellHeight(for: state) == PillMetrics.capsuleHeight,
@@ -61,7 +61,7 @@ struct PillMorphTests {
     private static let everyState: [PillState] = [
         .preparing, .idle, .recording, .handsFree, .capturingNote, .capturingMemory,
         .processing(.transcribing), .processing(.rewriting), .processing(.typing),
-        .notice("New note — keep talking"), .error("No speech detected"),
+        .notice("New note - keep talking"), .error("No speech detected"),
     ]
 
     // MARK: Both axes are one mechanism
@@ -69,7 +69,7 @@ struct PillMorphTests {
     @Test("Both axes of the shell are sizes, for every state")
     func bothAxesAreSizedForEveryState() {
         // The defect this pins is the one the pill was rejected five times for, and it is not
-        // a number being wrong — it is an axis not being a *number* at all. The height was
+        // a number being wrong - it is an axis not being a *number* at all. The height was
         // `.frame(height: shellHeight(for:))`, an animatable value interpolating 28 -> 124. The
         // width was intrinsic: resolved from the content's ideal size by `.fixedSize()` above
         // every animation in the chain, so it stepped 56 -> 292 in the layout pass the state
@@ -101,15 +101,15 @@ struct PillMorphTests {
         // in. So the states the morph runs between must have widths
         // `PillMetrics.shellWidth(for:)` can answer without measuring anything.
         //
-        // The list is not decorative — it is read off `AppDelegate`, and it is the thing a
+        // The list is not decorative - it is read off `AppDelegate`, and it is the thing a
         // future `setState` can quietly invalidate:
         //
         //   * into the card, from `.idle` (⌃⌥N at rest, via `startRecording`), `.recording`
         //     (upgrading a push-to-talk hold) and `.handsFree` (redirecting a latched session);
         //   * out of the card, to `.processing(.transcribing)` (`stopRecording`) or `.idle`.
         //
-        // Entering may start from a measured width — the pill already *has* it, settled, from
-        // the previous pass — so only the destinations have to be known. Both are.
+        // Entering may start from a measured width - the pill already *has* it, settled, from
+        // the previous pass - so only the destinations have to be known. Both are.
         #expect(PillMetrics.shellWidth(for: .capturingNote) != nil,
                 "the card has no width to grow to; the shell would snap wide and then grow tall")
         #expect(PillMetrics.shellWidth(for: .idle) != nil,
@@ -117,7 +117,7 @@ struct PillMorphTests {
         #expect(PillMetrics.shellWidth(for: .processing(.transcribing)) != nil,
                 "leaving the card for transcribing would hold 292pt and then snap")
         // And both destinations are *constants*, which is the property the morph needs. All three
-        // processing phases share one width, so moving between them costs no width change — the pen
+        // processing phases share one width, so moving between them costs no width change - the pen
         // is the same size whatever it is working on.
         #expect(PillMetrics.shellWidth(for: .idle) == PillMetrics.minimumCapsuleWidth)
         #expect(PillMetrics.shellWidth(for: .processing(.typing))
@@ -131,16 +131,16 @@ struct PillMorphTests {
     func contentDrivenStatesFallBackToTheMeasuredWidth() {
         // The other half of the contract: a width may only be a constant when the state's
         // content is a fixed set of glyphs. These four carry text of a length nothing here can
-        // know — a level meter and a live transcript, a message, a localised string — so
+        // know - a level meter and a live transcript, a message, a localised string - so
         // claiming a number for them would either clip the text or leave dead glass.
         for state in [PillState.preparing, .recording, .handsFree,
-                      .notice("New note — keep talking"), .error("No speech detected")] {
+                      .notice("New note - keep talking"), .error("No speech detected")] {
             #expect(PillMetrics.shellWidth(for: state) == nil,
                     "\(state) cannot have a constant width: its content decides it")
             // The measurement is used as-is once it is big enough...
             #expect(PillMetrics.shellWidth(for: state, measured: 280) == 280)
             // ...but never below that state's own floor. The floor is what stops the pill drawing at
-            // the resting width for one frame — while the probe is still a pass behind — and then
+            // the resting width for one frame - while the probe is still a pass behind - and then
             // jumping, which read as the pill stretching open when a dictation started. `.recording`
             // and `.handsFree` reserve room for the dot, the meter and the timer; the others have no
             // fixed row to reserve for and floor at the resting width.
@@ -150,7 +150,7 @@ struct PillMorphTests {
                     >= PillMetrics.minimumCapsuleWidth,
                     "\(state) could draw narrower than a pill")
         }
-        // A constant ignores the measurement outright — that is the whole point of it.
+        // A constant ignores the measurement outright - that is the whole point of it.
         #expect(PillMetrics.shellWidth(for: .capturingNote, measured: 9_999) == 292)
     }
 
@@ -175,7 +175,7 @@ struct PillMorphTests {
             midpoint += toward
             var frame = ShellSize(width: 0, height: 0)
             frame.animatableData = midpoint
-            // Both axes moved, and by the same fraction of their travel — which is what
+            // Both axes moved, and by the same fraction of their travel - which is what
             // "one shape expanding" means arithmetically. A mechanism that animated only one
             // of them would leave the other pinned at an endpoint for the whole morph.
             let widthProgress = (frame.width - PillMetrics.minimumCapsuleWidth)
@@ -201,7 +201,7 @@ struct PillMorphTests {
             #expect(PillMetrics.windowHeight >= needed,
                     "\(state) needs \(needed)pt but the window is \(PillMetrics.windowHeight)pt")
         }
-        // And no slack beyond what the tallest state needs — the panel is transparent, but a
+        // And no slack beyond what the tallest state needs - the panel is transparent, but a
         // taller one would push the capsule's saved position further from the window origin.
         #expect(PillMetrics.windowHeight
                 == PillMetrics.noteBoxHeight + PillMetrics.verticalInset * 2)
@@ -236,7 +236,7 @@ struct PillMorphTests {
     @Test("The window fits on the smallest supported display")
     func windowFitsASmallDisplay() {
         // 1280x800 is the smallest built-in display Utter runs on; 90pt covers a menu bar
-        // and a Dock. A window taller than the screen could not be positioned at all — and
+        // and a Dock. A window taller than the screen could not be positioned at all - and
         // it is now this size permanently, not only during note capture.
         #expect(PillMetrics.windowHeight <= 800 - 90)
         #expect(PillMetrics.windowWidth <= 1280)
@@ -246,7 +246,7 @@ struct PillMorphTests {
 
     /// The shell size for a state, resolved exactly as `PillContent` resolves it before handing
     /// it to `ShellSize`: `shellWidth(for:measured:)` by `shellHeight(for:)`. `measured` is the
-    /// live `capsuleWidth` the content publishes — passed in so a test can vary it and prove
+    /// live `capsuleWidth` the content publishes - passed in so a test can vary it and prove
     /// which states ignore it.
     private func resolvedShell(_ state: PillState, measured: CGFloat) -> CGSize {
         CGSize(width: PillMetrics.shellWidth(for: state, measured: measured),
@@ -255,7 +255,7 @@ struct PillMorphTests {
 
     /// The pill's window frame, computed the way `PillWindow.positionAtBottomCenter` fixes it:
     /// a constant size, placed once against the screen, with **no term that reads the pill's
-    /// state**. Reproduced here — as `PillHitRegionTests` reproduces `drawnShellRect` — so the
+    /// state**. Reproduced here - as `PillHitRegionTests` reproduces `drawnShellRect` - so the
     /// arithmetic can be checked without standing up a live NSPanel in a headless test.
     private func windowFrame(on visible: NSRect) -> NSRect {
         let size = NSSize(width: PillMetrics.windowWidth, height: PillMetrics.windowHeight)
@@ -269,7 +269,7 @@ struct PillMorphTests {
     @Test("A note-capture cycle resolves to byte-identical numbers on every pass, whatever the pill measured")
     func noteCaptureResolutionIsDeterministic() {
         // This is the test for the bug the user reports as "sometimes smaller, sometimes bigger…
-        // sometimes it goes down… then comes up" — non-determinism, plus vertical window
+        // sometimes it goes down… then comes up" - non-determinism, plus vertical window
         // movement. Neither can live in the size resolution if the resolution is a pure function
         // of the state and nothing else, so this drives the note-capture cycle 50 times, feeds a
         // DIFFERENT measured capsule width every pass, and asserts the resolved shell sizes and
@@ -280,7 +280,7 @@ struct PillMorphTests {
         // read it, these passes would drift and this test would catch the drift. The states in a
         // note cycle are all morph *endpoints* (`AppDelegate`: ⌃⌥N opens `.capturingNote`, then
         // `.processing(.transcribing)` on finish or `.idle` on cancel), and an endpoint's width
-        // must be a known constant — so every one of these ignores `measured` by construction.
+        // must be a known constant - so every one of these ignores `measured` by construction.
         let endpointCycle: [PillState] = [.idle, .capturingNote,
                                           .processing(.transcribing), .idle]
         for state in endpointCycle {
@@ -291,7 +291,7 @@ struct PillMorphTests {
         var referenceShells: [CGSize]?
         let referenceWindow = windowFrame(on: Self.visible)
         for pass in 0..<50 {
-            // Wildly varying, never below the resting width — a plausible live measurement, not a
+            // Wildly varying, never below the resting width - a plausible live measurement, not a
             // degenerate one. 137 is coprime with the modulus so the sequence does not repeat.
             let measured = CGFloat(Int(PillMetrics.minimumCapsuleWidth) + (pass * 137) % 600)
             let shells = endpointCycle.map { resolvedShell($0, measured: measured) }
@@ -319,7 +319,7 @@ struct PillMorphTests {
                                     CGSize(width: 292, height: PillMetrics.noteBoxHeight),
                                     capsule,
                                     capsule])
-        // The far endpoint ignores even an absurd measurement — the whole point of it being a
+        // The far endpoint ignores even an absurd measurement - the whole point of it being a
         // constant, and the close direction (292 -> 56) is its exact inverse for the same reason.
         #expect(resolvedShell(.capturingNote, measured: 9_999)
                 == CGSize(width: 292, height: PillMetrics.noteBoxHeight))
@@ -330,7 +330,7 @@ struct PillMorphTests {
         // The vertical movement, stated as the invariant that forbids it. The window is a fixed
         // `windowHeight` for every state; it is emphatically NOT `shellHeight(for: state) +
         // verticalInset * 2`, which is what an NSHostingView left on its default `.standardBounds`
-        // sizingOptions would have driven it to — 60pt at rest, 156pt as a card. The content is
+        // sizingOptions would have driven it to - 60pt at rest, 156pt as a card. The content is
         // bottom-anchored, so had the window tracked the shell, the capsule's on-screen bottom
         // edge would have jumped by (noteBoxHeight - capsuleHeight) = 96pt as the card opened.
         for state in Self.everyState where state != .capturingNote {
@@ -340,7 +340,7 @@ struct PillMorphTests {
                     "\(state): the window height equals the shell-tracking height, so the pill would resize and slide on the morph")
         }
         // The capsule's bottom edge is `frame.minY + verticalInset` in every state, because the
-        // window height is a state-free constant — so it does not move when the card opens.
+        // window height is a state-free constant - so it does not move when the card opens.
         let frame = windowFrame(on: Self.visible)
         #expect(frame.minY + PillMetrics.verticalInset
                 == Self.visible.minY + 10, "the capsule's bottom edge is not the resting Dock gap")
@@ -352,7 +352,7 @@ struct PillMorphTests {
     func handsFreeButtonFitsThePanel() {
         // The regression: `restX` was `capsuleWidth / 2 + gap + side / 2` with nothing
         // bounding it. In `.handsFree` with a live preview the capsule reaches ~277pt, which
-        // put the button's right edge ~10pt outside the 320pt panel — the stop control, cut
+        // put the button's right edge ~10pt outside the 320pt panel - the stop control, cut
         // in half, in the one state where it is the only way to end the recording.
         for capsuleWidth in stride(from: 56.0, through: 400.0, by: 3.0) {
             let centre = PillMetrics.windowWidth / 2
@@ -366,14 +366,14 @@ struct PillMorphTests {
     @Test("Tucked, the bead is inscribed in the capsule's rounded end")
     func tuckedBeadIsInscribedInTheCapsule() {
         // The whole liquid effect rests on this. The bead's glass is drawn at full strength at
-        // all times — that is what makes its journey out read as the pill *extruding* rather
-        // than a button fading in beside it — so when tucked it must contribute nothing to the
+        // all times - that is what makes its journey out read as the pill *extruding* rather
+        // than a button fading in beside it - so when tucked it must contribute nothing to the
         // silhouette, or a permanent lump sits on the resting pill.
         //
         // Both are circles at the capsule's mid-height: the capsule's end is a semicircle of
         // radius `capsuleHeight / 2` centred that far in from the trailing edge, and the bead
         // is a circle of radius `handsFreeButtonSide / 2` centred `handsFreeButtonSide / 2` in.
-        // Internal tangency — fully inside, touching — is `centreGap + beadRadius == endRadius`.
+        // Internal tangency - fully inside, touching - is `centreGap + beadRadius == endRadius`.
         let endRadius = PillMetrics.capsuleHeight / 2
         let beadRadius = PillMetrics.handsFreeButtonSide / 2
         // Offsets are measured from the capsule's centre, so both reduce to a distance from
@@ -391,7 +391,7 @@ struct PillMorphTests {
         // `Motion.morph` is a single spring, so a travel distance that changed with the
         // capsule's width would make the extrusion visibly faster in some states than others.
         // Both endpoints are measured from the capsule's centre and both scale with it, so the
-        // difference is a constant — worth pinning, because it is only true while neither
+        // difference is a constant - worth pinning, because it is only true while neither
         // endpoint is clamped.
         let expected = PillMetrics.handsFreeButtonGap + PillMetrics.handsFreeButtonSide
         for capsuleWidth in stride(from: 56.0, through: 240.0, by: 4.0) {
@@ -403,8 +403,8 @@ struct PillMorphTests {
     }
 
     // The bead's neck used to be `GlassEffectContainer(spacing: PillMetrics.glassBlendSpacing)`,
-    // and this suite asserted the pinch against that constant. The neck is now geometry —
-    // `PillShellShape`'s concave fillet — so the same requirement is asserted against
+    // and this suite asserted the pinch against that constant. The neck is now geometry  - 
+    // `PillShellShape`'s concave fillet - so the same requirement is asserted against
     // `PillMetrics.neckPinchDistance` in `PillShellShapeTests.beadDetachesBeforeRest`, which can
     // additionally check the drawn silhouette rather than only the number that was meant to
     // produce it.
@@ -538,13 +538,13 @@ struct PillMorphTests {
     }
 }
 
-/// The pill's hit region — the rect that decides where clicks land.
+/// The pill's hit region - the rect that decides where clicks land.
 ///
 /// A pure test on the geometry alone. The regression this pins: the pill's window is a
-/// fixed 320x156, but the drawn capsule is ~56x28 — the rest is transparent. Without a
+/// fixed 320x156, but the drawn capsule is ~56x28 - the rest is transparent. Without a
 /// hit-test rule the whole panel accepted the mouse, so a click beside the pill vanished
 /// into the dead zone instead of reaching the desktop behind. `ShapedHostingView` asks the
-/// window for `drawnShellRect` on every hit-test, so the rule has to hold — and it matters
+/// window for `drawnShellRect` on every hit-test, so the rule has to hold - and it matters
 /// more now that the panel is permanently note-tall, because 96pt of it is empty in every
 /// resting state.
 @Suite("Pill hit region")
@@ -556,17 +556,17 @@ struct PillHitRegionTests {
                                              width: PillMetrics.windowWidth,
                                              height: PillMetrics.windowHeight)
 
-    /// What `PillWindow.drawnShellRect` computes, minus the AppKit `contentView` lookup —
+    /// What `PillWindow.drawnShellRect` computes, minus the AppKit `contentView` lookup  - 
     /// so the arithmetic is checked without asking SwiftUI to lay out a real window.
     private func shellRect(for state: PillState, capsuleWidth: CGFloat,
                            bounds: NSRect = windowBounds) -> NSRect {
         let height = PillMetrics.shellHeight(for: state)
-        // `shellWidth(for:measured:)`, the same expression `PillContent` hands to `ShellSize` —
+        // `shellWidth(for:measured:)`, the same expression `PillContent` hands to `ShellSize`  - 
         // so the region that takes the mouse is the box that was drawn. It was
         // `max(capsuleWidth, minimumCapsuleWidth)`, which was the drawn width only while the
         // published value *was* it; it is now the content's ideal.
         let width = min(PillMetrics.shellWidth(for: state, measured: capsuleWidth), bounds.width)
-        // Bottom-anchored in the hosting view's flipped space — mirrors
+        // Bottom-anchored in the hosting view's flipped space - mirrors
         // `PillWindow.drawnShellRect`. Measured from the bottom, not the top, so it stays
         // correct in every resting state, where the panel is 96pt taller than the shell.
         return NSRect(x: (bounds.width - width) / 2,
@@ -582,7 +582,7 @@ struct PillHitRegionTests {
         #expect(rect.height == PillMetrics.capsuleHeight)
         // Centred horizontally: (320 - 56) / 2 = 132.
         #expect(rect.origin.x == (Self.windowBounds.width - PillMetrics.minimumCapsuleWidth) / 2)
-        // Bottom-anchored with `verticalInset` of clearance, in flipped space — so its
+        // Bottom-anchored with `verticalInset` of clearance, in flipped space - so its
         // origin is `windowHeight - verticalInset - capsuleHeight` from the top, not
         // `verticalInset`.
         #expect(rect.maxY == Self.windowBounds.height - PillMetrics.verticalInset)
@@ -592,7 +592,7 @@ struct PillHitRegionTests {
     func hitRegionTracksTheShellWhileTheWindowIsTallerThanTheState() {
         // This is now every resting state, not an 0.45s transient: the panel is permanently
         // note-tall while the shell is a 28pt capsule. The capsule is bottom-anchored, so its
-        // hit region must sit against the bottom — not `verticalInset` down from the top,
+        // hit region must sit against the bottom - not `verticalInset` down from the top,
         // which is 96pt of empty space and left the visible pill unclickable. The rect is in
         // the flipped (top-left, y-down) hosting space, so "against the bottom" is a large y.
         let tall = NSRect(x: 0, y: 0, width: PillMetrics.windowWidth,
@@ -620,9 +620,9 @@ struct PillHitRegionTests {
         ]
         for p in points {
             #expect(!rect.contains(p),
-                    "point \(p) is inside the shell \(rect) — the margin is not transparent")
+                    "point \(p) is inside the shell \(rect) - the margin is not transparent")
         }
-        // But the middle of the capsule is inside — the mouse has to still reach the pill
+        // But the middle of the capsule is inside - the mouse has to still reach the pill
         // it is meant to.
         #expect(rect.contains(NSPoint(x: rect.midX, y: rect.midY)))
     }
@@ -630,7 +630,7 @@ struct PillHitRegionTests {
     @Test("The note card takes the mouse everywhere on itself")
     func noteCardOwnsItsRectangle() {
         // The panel is always tall enough for the card; the hit rect grows into it. Otherwise
-        // the top half of the note card would be a dead zone — precisely where the header
+        // the top half of the note card would be a dead zone - precisely where the header
         // and the transcript sit.
         let windowSize = NSSize(width: PillMetrics.windowWidth, height: PillMetrics.windowHeight)
         let bounds = NSRect(origin: .zero, size: windowSize)
@@ -644,8 +644,8 @@ struct PillHitRegionTests {
 
     @Test("A capsule wider than the window is capped short of the window's edges")
     func hitRectStaysInsideTheWindow() {
-        // A content-driven width can exceed 320 — `.error` and `.notice` carry arbitrary message
-        // text — and it used to be handled by letting the shell overflow and then clamping the *hit
+        // A content-driven width can exceed 320 - `.error` and `.notice` carry arbitrary message
+        // text - and it used to be handled by letting the shell overflow and then clamping the *hit
         // rect* to the panel. That produced a 320x28 strip across the bottom of the screen eating
         // desktop clicks, and a shell drawn wider than its panel loses its rounded caps to the clip.
         //
@@ -653,7 +653,7 @@ struct PillHitRegionTests {
         // panel's own margin on both sides and stays a pill. This asserts the cap, not the old clamp.
         //
         // Asked of `.handsFree` rather than `.idle`, and the swap is the point rather than a
-        // detail: `.idle` no longer *has* a measured width — `PillMetrics.shellWidth(for:)`
+        // detail: `.idle` no longer *has* a measured width - `PillMetrics.shellWidth(for:)`
         // answers it with `minimumCapsuleWidth` outright, so it can no longer overflow anything.
         // The states that can are exactly the ones whose width is content-driven.
         let rect = shellRect(for: .handsFree, capsuleWidth: 9999)

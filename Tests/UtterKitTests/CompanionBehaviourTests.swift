@@ -78,7 +78,7 @@ struct CompanionBehaviourTests {
 
     @Test("Going idle from a cold start does not celebrate")
     func doesNotCelebrateForNothing() {
-        // Merely showing the companion must not make it cheer — only finishing real
+        // Merely showing the companion must not make it cheer - only finishing real
         // work does.
         let engine = makeEngine()
         engine.apply(pillState: .idle)
@@ -103,7 +103,7 @@ struct CompanionBehaviourTests {
         engine.step(0.3)
         let quiet = engine.pose.squash
 
-        // Real signal in, real deformation out — not a timer.
+        // Real signal in, real deformation out - not a timer.
         #expect(loud > quiet)
     }
 
@@ -149,7 +149,7 @@ struct CompanionBehaviourTests {
     @Test("A finished stroll still returns home when work starts")
     func returnsHomeFromIdleAct() {
         // The regression this pins: the return trip was only scheduled when the current
-        // act was not `.idle`, but `.idle` is the most common act — so a character that
+        // act was not `.idle`, but `.idle` is the most common act - so a character that
         // finished strolling and settled was already `.idle` when recording began, no
         // return was scheduled, and it stayed ~10pt off post for the whole turn.
         let engine = makeEngine()
@@ -210,7 +210,7 @@ struct CompanionBehaviourTests {
         var moved = false
         var farthestRight = 0.0
         var farthestLeft = 0.0
-        for _ in 0..<9_000 {          // ~5 minutes of simulated time — many ambient acts
+        for _ in 0..<9_000 {          // ~5 minutes of simulated time - many ambient acts
             engine.step(1.0 / 30.0)
             if x != 0 { moved = true }
             farthestRight = max(farthestRight, x)
@@ -268,7 +268,7 @@ struct CompanionBehaviourTests {
 
     @Test("Mood elapsed time restarts with each mood")
     func moodElapsedResets() {
-        // A sprite pack animates against this, so it must restart when the mood does —
+        // A sprite pack animates against this, so it must restart when the mood does  - 
         // otherwise `delighted` would begin part-way through its strip.
         let engine = makeEngine()
         engine.apply(pillState: .processing(.transcribing))
@@ -291,7 +291,7 @@ struct CompanionBehaviourTests {
         // The grid was not free, though. 24 does not divide by 5 or 10, and packs
         // declare those rates, so frame boundaries landed unevenly: an 8-frame state
         // at 10 fps held its frames for [4,3,3,3,2,4,3,2] ticks instead of an even 3.
-        // Sampling the raw clock gives [3,3,4,2,3,3,3,3] — half the deviation.
+        // Sampling the raw clock gives [3,3,4,2,3,3,3,3] - half the deviation.
         let engine = makeEngine()
         let tick = 1.0 / 30.0
         for step in 1...12 {
@@ -303,8 +303,8 @@ struct CompanionBehaviourTests {
 
     @Test("Something published changes on every single tick")
     func everyTickPublishesSomething() {
-        // The measurement the line above rests on. `pose` alone plateaus — a hop holds
-        // one squash value for several ticks — but `offsetY` is moving through exactly
+        // The measurement the line above rests on. `pose` alone plateaus - a hop holds
+        // one squash value for several ticks - but `offsetY` is moving through exactly
         // those ticks, so the observing view is invalidated either way.
         let engine = makeEngine()
         var unchanged = 0
@@ -343,7 +343,7 @@ struct CompanionBehaviourTests {
     // MARK: Publish rate
     //
     // The companion's ticker is the app's idle-CPU floor, and it is not the engine's
-    // arithmetic that costs — a release-build `tick()` measures ~2.7 us, which at 30 Hz is
+    // arithmetic that costs - a release-build `tick()` measures ~2.7 us, which at 30 Hz is
     // 0.008% of one core. What costs is what each `objectWillChange` send does downstream in
     // SwiftUI's dependency graph, so the number of sends per tick is the thing worth pinning.
 
@@ -351,7 +351,7 @@ struct CompanionBehaviourTests {
     func oneSendPerTick() {
         // `pose`, `offsetX`, `offsetY` and `moodElapsed` were four separate `@Published`
         // properties, so one tick entered the dependency graph two to four times to describe
-        // one frame — measured 2.115 sends/tick at rest and a full 4.000 under Reduce Motion,
+        // one frame - measured 2.115 sends/tick at rest and a full 4.000 under Reduce Motion,
         // whose branch re-assigns `offsetX = 0; offsetY = 0` every tick to say nothing moved.
         // They now share `CompanionFrame`, published once at the top of `tick()`.
         //
@@ -369,8 +369,8 @@ struct CompanionBehaviourTests {
             let ticks = 300
             for _ in 0..<ticks { engine.step(1.0 / 30.0) }
 
-            // Exactly one per tick. Ambient acts run throughout — strolls, hops and the
-            // return home all write offsets — so this covers the branches that used to
+            // Exactly one per tick. Ambient acts run throughout - strolls, hops and the
+            // return home all write offsets - so this covers the branches that used to
             // publish two and three times as well as the plain resting one.
             #expect(sends == ticks,
                     "reduceMotion=\(reduceMotion): \(sends) sends for \(ticks) ticks")
@@ -380,7 +380,7 @@ struct CompanionBehaviourTests {
     @Test("The frame keeps changing on every tick, so one send is never a wasted send")
     func theSingleSendIsNeverSpurious() {
         // The other half of the argument. Publishing unconditionally at the top of the tick is
-        // only correct because there is no tick whose frame is unchanged — `moodElapsed`
+        // only correct because there is no tick whose frame is unchanged - `moodElapsed`
         // advances every time, and the resting breath moves `pose.squash` every time. If that
         // ever stopped being true, an equality guard would start paying and this fails first.
         let engine = makeEngine()
@@ -406,7 +406,7 @@ struct CompanionBehaviourTests {
 
         let carried = engine.takeAmbientOffsetForDrag()
         // The window folds `carried` into its own origin in the same runloop turn, so the view
-        // has to stop applying the offset in that same turn — one send, not zero.
+        // has to stop applying the offset in that same turn - one send, not zero.
         if carried != .zero {
             #expect(sends == 1, "carrying \(carried) published \(sends) times")
         }
@@ -424,8 +424,8 @@ struct CompanionBehaviourTests {
 
     @Test("A long rest drops the ticker to the slow rate, and work restores it")
     func sleepSlowsTheTickerAndWakingRestoresIt() {
-        // The reason the 30 Hz ticker is not the whole idle story: the common idle case — no
-        // typing, no cursor movement, no pomodoro — genuinely reaches the slow path. Measured
+        // The reason the 30 Hz ticker is not the whole idle story: the common idle case - no
+        // typing, no cursor movement, no pomodoro - genuinely reaches the slow path. Measured
         // onset is tick 2701, i.e. 90.0 s, exactly `sleepAfter`; asserted as a window rather
         // than the exact tick so a change to the tick rate does not fail this for the wrong
         // reason.
@@ -439,7 +439,7 @@ struct CompanionBehaviourTests {
         #expect(engine.tickingSlowly, "asleep but still ticking at the awake rate")
 
         // And back up on real work, or the character would blink, walk and track the cursor at
-        // 10 Hz for the rest of the session — which reads as the app lagging.
+        // 10 Hz for the rest of the session - which reads as the app lagging.
         engine.apply(pillState: .recording)
         engine.step(0.2)
         #expect(engine.mood == .alert)
@@ -498,7 +498,7 @@ struct CompanionBehaviourTests {
 /// A deterministic `RandomNumberGenerator`, so tests of the companion's ambient behaviour
 /// are reproducible rather than passing most of the time.
 ///
-/// SplitMix64 — the algorithm Swift's own test suites use for this. Not cryptographic and not
+/// SplitMix64 - the algorithm Swift's own test suites use for this. Not cryptographic and not
 /// meant to be; it only has to be uniform enough and identical on every run.
 struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64

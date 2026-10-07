@@ -6,7 +6,7 @@ import Testing
 
 /// The pupil's physics.
 ///
-/// The whole point of `GooglyEyes` is that it does NOT arrive smoothly — it overshoots and
+/// The whole point of `GooglyEyes` is that it does NOT arrive smoothly - it overshoots and
 /// wobbles, which is what separates a googly eye from a security camera. So the tests assert
 /// the overshoot exists, rather than only that it settles: a well-meaning change to the
 /// damping that made the motion "smoother" would silently remove the effect and break nothing
@@ -47,7 +47,7 @@ struct GooglyEyeTests {
         #expect(eyes.offset.dx < 0.5, "it should not have arrived in one tick")
     }
 
-    @Test("It overshoots the target — this is the googly part")
+    @Test("It overshoots the target - this is the googly part")
     func overshoots() {
         let path = run(toward: CGVector(dx: 1, dy: 0), seconds: 1.0)
         let peak = path.map(\.dx).max() ?? 0
@@ -55,7 +55,7 @@ struct GooglyEyeTests {
         // the observable overshoot is that it REACHES the rim and stays pinned for a moment
         // rather than easing in.
         #expect(peak >= 0.999, "the pupil never reached the rim: \(peak)")
-        // And it is still there — or near it — at the end, rather than having drifted off.
+        // And it is still there - or near it - at the end, rather than having drifted off.
         #expect((path.last?.dx ?? 0) > 0.9)
     }
 
@@ -96,7 +96,7 @@ struct GooglyEyeTests {
         // outward velocity is cancelled at the clamp, so it must leave immediately rather
         // than sitting there while accumulated speed bleeds off.
         //
-        // Asserted as "how far, how fast", not as "kept decreasing on every tick" — the
+        // Asserted as "how far, how fast", not as "kept decreasing on every tick" - the
         // first version of this test counted ticks where `dx` fell and demanded 15 of 20.
         // That failed at 6, and the 6 was correct: this spring crosses to the opposite rim
         // in about a fifth of a second and is then clamped there, so it stops decreasing
@@ -116,7 +116,7 @@ struct GooglyEyeTests {
     @Test("A stalled run loop cannot fling the pupil across the face")
     func hugeTickIsClamped() {
         var eyes = GooglyEyes()
-        // Two seconds in one tick — what a wedged run loop delivers. An unclamped spring
+        // Two seconds in one tick - what a wedged run loop delivers. An unclamped spring
         // integrates that into an enormous velocity.
         eyes.settle(toward: CGVector(dx: 1, dy: 0), tick: 2.0)
         #expect(hypot(eyes.offset.dx, eyes.offset.dy) <= 1.0001)
@@ -129,7 +129,7 @@ struct GooglyEyeTests {
         for _ in 0..<10 { eyes.settle(toward: CGVector(dx: 1, dy: 0), tick: tick) }
         eyes.reset()
         #expect(eyes.offset.dx == 0)
-        // With velocity cleared, one tick toward centre must leave it at centre — if the
+        // With velocity cleared, one tick toward centre must leave it at centre - if the
         // velocity had survived, it would keep coasting.
         eyes.settle(toward: CGVector(dx: 0, dy: 0), tick: tick)
         #expect(abs(eyes.offset.dx) < 0.0001)

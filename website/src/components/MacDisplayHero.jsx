@@ -115,7 +115,7 @@ export default function MacDisplayHero() {
         </h1>
 
         <p className="text-base sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10 font-normal">
-          Hold a key, speak your mind, let go—your words appear instantly in Cursor, Xcode, Slack, or Obsidian at 180 WPM with air-gapped privacy.
+          Hold a key, speak your mind, let go - your words appear instantly in Cursor, Xcode, Slack, or Obsidian at 180 WPM with air-gapped privacy.
         </p>
 
         {/* Action Buttons */}

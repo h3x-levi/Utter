@@ -81,7 +81,7 @@ export default function TerminalInstall() {
               <span className="w-3 h-3 rounded-full bg-[#27c93f]"></span>
             </div>
             <span className="flex items-center gap-1.5">
-              <Terminal className="w-3.5 h-3.5 text-zinc-400" /> zsh — macOS Terminal
+              <Terminal className="w-3.5 h-3.5 text-zinc-400" /> zsh - macOS Terminal
             </span>
             <div className="w-12"></div>
           </div>

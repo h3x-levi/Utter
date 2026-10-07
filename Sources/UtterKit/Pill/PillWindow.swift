@@ -3,7 +3,7 @@ import Cocoa
 
 enum PillState: Equatable {
     /// The speech model is still loading. Distinct from `idle` because holding
-    /// the hotkey now would queue behind the load rather than record — telling
+    /// the hotkey now would queue behind the load rather than record - telling
     /// the user "Hold Fn to dictate" here would be a lie.
     case preparing
     case idle
@@ -11,7 +11,7 @@ enum PillState: Equatable {
     case handsFree
     /// Hands-free, but the transcript is going into a Utter note rather than
     /// being typed into the frontmost app. A separate state because the
-    /// *destination* is the one thing the user cannot otherwise see — the
+    /// *destination* is the one thing the user cannot otherwise see - the
     /// recording itself looks identical either way.
     case capturingNote
     /// Hands-free speech whose destination is the private companion memory store.
@@ -20,7 +20,7 @@ enum PillState: Equatable {
     /// feedback, where the old wiggling pencil carried no information.
     case processing(Phase)
     case error(String)
-    /// A neutral, transient confirmation — "New note, keep talking". Distinct from
+    /// A neutral, transient confirmation - "New note, keep talking". Distinct from
     /// `.error` because that one carries a warning glyph and a danger tint, which
     /// would tell the user something had gone wrong when nothing had.
     case notice(String)
@@ -48,7 +48,7 @@ enum PillState: Equatable {
 /// **Split off `PillStateModel` because it is the only quantity in the pill that moves at 30 Hz,
 /// and the level meter is the only thing that draws it.** `@Published` invalidates every view
 /// observing the *object*, not the property, so while `level` lived on the model a mic publish
-/// re-ran the whole pill — and the pill is what is on screen for the entire length of every
+/// re-ran the whole pill - and the pill is what is on screen for the entire length of every
 /// dictation.
 ///
 /// Measured offscreen (an `NSHostingView` in a panel that was never ordered front, driven with
@@ -68,8 +68,8 @@ enum PillState: Equatable {
 /// this changes who is woken by it, not where it comes from.
 ///
 /// `PillStateModel.level` stays as the read/write API, so nothing outside the pill had to know:
-/// `AppDelegate`'s `$inputLevel` sink, its reset to 0, the companion's `levelSource` pull and
-/// `PillDemoView`'s scripted gallery all still assign and read `stateModel.level`.
+/// `AppDelegate`'s `$inputLevel` sink, its reset to 0, and the companion's `levelSource` pull all
+/// still assign and read `stateModel.level`.
 final class PillLevelSignal: ObservableObject {
     @Published var value: Float = 0
 }
@@ -78,7 +78,7 @@ final class PillLevelSignal: ObservableObject {
 final class PillStateModel: ObservableObject {
     @Published var state: PillState = .preparing
 
-    /// Real microphone level, 0...1, forwarded from AudioRecorder — held on its own publisher.
+    /// Real microphone level, 0...1, forwarded from AudioRecorder - held on its own publisher.
     ///
     /// A pass-through rather than a stored `@Published`, so the 30 Hz write reaches only
     /// `LevelMeter` and not the glass, the strokes, the shell shape and the accessibility
@@ -86,7 +86,7 @@ final class PillStateModel: ObservableObject {
     ///
     /// **The cost of that, stated so it is not discovered the hard way: reading `level` inside a
     /// SwiftUI `body` no longer subscribes to it.** A view that observes this model and draws
-    /// `model.level` will render the value it happened to see and never update — it has to observe
+    /// `model.level` will render the value it happened to see and never update - it has to observe
     /// `model.levels` instead, as `LevelMeter` does. Reads from outside a body (the companion's
     /// `levelSource`) are unaffected, because they are pulls.
     let levels = PillLevelSignal()
@@ -100,8 +100,8 @@ final class PillStateModel: ObservableObject {
     /// Backed by a private `@Published` with an equality guard in front of it, because
     /// `@Published` has no equality check of its own: it sends `objectWillChange` on *every*
     /// assignment, and the recording timer assigns this **ten times a second** so the displayed
-    /// second is never late. That invalidated `PillContent` — glass, both strokes, the shell shape
-    /// and the level meter — 10x/s to redraw a number that changes 1x/s, and it did it during
+    /// second is never late. That invalidated `PillContent` - glass, both strokes, the shell shape
+    /// and the level meter - 10x/s to redraw a number that changes 1x/s, and it did it during
     /// recording, which is exactly when the pill is also animating.
     ///
     /// The guard sits here rather than at the timer because four places assign this (the timer, the
@@ -119,7 +119,7 @@ final class PillStateModel: ObservableObject {
 
     /// Rough live transcript of what has been said so far, or empty.
     ///
-    /// Preview only — never typed anywhere. It comes from a fast, unbiased,
+    /// Preview only - never typed anywhere. It comes from a fast, unbiased,
     /// unpolished pass over partial audio, so it lags and will disagree with the
     /// final text. Its job is to prove the app is hearing you.
     @Published var previewText: String = ""
@@ -127,7 +127,7 @@ final class PillStateModel: ObservableObject {
     /// The width the capsule's *content* asks for, in points.
     ///
     /// The pill's *window* is a fixed 320pt wide and the capsule is centred inside
-    /// it — 56pt at rest, wider once a level meter, timer or live transcript
+    /// it - 56pt at rest, wider once a level meter, timer or live transcript
     /// appears, and wider still while note capture has it expanded into a box. So
     /// the window frame says nothing about where the visible pill ends, in exactly
     /// the way `PillMetrics.verticalInset` documents for the vertical axis.
@@ -150,12 +150,12 @@ final class PillStateModel: ObservableObject {
     /// Whether the hands-free button is on screen beside the capsule.
     ///
     /// Published because the button is drawn *outside* the pill, so the window's hit region
-    /// has to grow to cover it — and `ShapedHostingView` nils every click outside that
+    /// has to grow to cover it - and `ShapedHostingView` nils every click outside that
     /// region, which would make a visible button unclickable. View state, reported upward,
     /// exactly like `capsuleWidth`.
     /// Whether the pointer is over the pill or over the control beside it.
     ///
-    /// The raw input, deliberately — not "is the button showing". `PillHoverControl` turns
+    /// The raw input, deliberately - not "is the button showing". `PillHoverControl` turns
     /// this into the reveal decision, and `PillWindow.drawnShellRect` and `PillContainerView`
     /// both ask it rather than each keeping an answer. Two answers is what made the stop
     /// button unclickable; see `drawnShellRect`.
@@ -164,7 +164,7 @@ final class PillStateModel: ObservableObject {
     /// The companion's live behaviour engine, or `nil` while the companion is switched off.
     ///
     /// The note card draws the character itself while it is open, and the desktop panel
-    /// steps aside for the duration (`CompanionWindow.applyCardHandover`) — so there is
+    /// steps aside for the duration (`CompanionWindow.applyCardHandover`) - so there is
     /// only ever one character on screen and a collision between the two is impossible
     /// rather than avoided. This is the seam that makes that a *handover* rather than a
     /// teleport: it is the very instance the panel renders from, so mood, pose and frame
@@ -181,14 +181,14 @@ final class PillStateModel: ObservableObject {
     /// Whether the note card's companion column is in the view tree.
     ///
     /// Deliberately *not* the same question as `companionBehaviour != nil`. The card's character
-    /// is the one expensive thing in it — a first `Image(nsImage:)` draw of an APNG frame plus a
-    /// subscription to the companion's **30 Hz** behaviour ticker — and building it on the
+    /// is the one expensive thing in it - a first `Image(nsImage:)` draw of an APNG frame plus a
+    /// subscription to the companion's **30 Hz** behaviour ticker - and building it on the
     /// morph's first frame is what made opening look hurried while closing looked right.
     ///
     /// The asymmetry is structural, not a matter of taste in curves. Opening constructs
     /// `NoteCaptureBox`: three new `@ObservedObject` subscriptions, that first image decode, and
     /// then ~5 more `body` re-runs inside the animating window as the 30 Hz ticker fires. Closing
-    /// constructs nothing — the removal snapshot re-lays-out behind the clip, where it cannot be
+    /// constructs nothing - the removal snapshot re-lays-out behind the clip, where it cannot be
     /// seen. A time-based spring skips the frames it loses rather than stretching them, so the
     /// direction that costs frames was the direction whose curve could not absorb them
     /// (`Motion.morphExpand` has the measurements).
@@ -202,8 +202,8 @@ final class PillStateModel: ObservableObject {
 
     /// `elapsed` as m:ss.
     ///
-    /// On the model rather than inside a view because two of them draw it now — the
-    /// capsule's timer and the note box's header — and a second copy of the format
+    /// On the model rather than inside a view because two of them draw it now - the
+    /// capsule's timer and the note box's header - and a second copy of the format
     /// would be free to disagree about, say, whether the first minute reads "0:07".
     var elapsedText: String {
         let minutes = elapsed / 60
@@ -217,7 +217,7 @@ final class PillStateModel: ObservableObject {
 class PillWindow: NSPanel {
     let stateModel = PillStateModel()
     private var onLongPress: (() -> Void)?
-    /// The pointer route into hands-free dictation — see `PillHoverControl`.
+    /// The pointer route into hands-free dictation - see `PillHoverControl`.
     ///
     /// Deliberately the *same* callback the ⌃⌥Space chord fires (`AppDelegate
     /// .toggleHandsFree`) rather than a second path into the recorder: a pointer route with
@@ -259,7 +259,7 @@ class PillWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         // Fixed in place, twice asked for: "the pill overall should not be moveable
         // anymore". This flag was the whole reason a drag on the capsule moved the window,
-        // and removing the 40pt edge-snapping earlier only stopped it *jumping* — it stayed
+        // and removing the 40pt edge-snapping earlier only stopped it *jumping* - it stayed
         // draggable, which read as the pill wandering whenever it was touched. First-launch
         // placement (`positionAtBottomCenter`) and the right-click "Reset Position" item
         // still put it somewhere sensible; nothing else moves it now.
@@ -278,17 +278,17 @@ class PillWindow: NSPanel {
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
         // Never let the SwiftUI content size this window. This is the whole of the
-        // "note pop-up is broken — sometimes smaller, sometimes bigger, sometimes it
+        // "note pop-up is broken - sometimes smaller, sometimes bigger, sometimes it
         // goes down and comes back up" report, and it is the same collapse `showMainWindow`
         // and `showOnboarding` (App.swift) already guard against.
         //
         // `NSHostingView.sizingOptions` defaults to `.standardBounds`, which includes
-        // `.intrinsicContentSize` — so the hosting view publishes Auto Layout constraints for
+        // `.intrinsicContentSize` - so the hosting view publishes Auto Layout constraints for
         // its SwiftUI content's *ideal* size, and as this window's `contentView` those
         // constraints drive the window's dimensions instead of the reverse (Apple's docs, and
         // the two working windows above, both say so). The pill's ideal size is the shell size:
-        // ~56×28 at rest, 292×124 as a note card, and — since the prior change made both axes
-        // an animatable `ShellSize` — every value in between, republished at 60-120 Hz through
+        // ~56×28 at rest, 292×124 as a note card, and - since the prior change made both axes
+        // an animatable `ShellSize` - every value in between, republished at 60-120 Hz through
         // the whole morph, and again on every 30 Hz companion tick and every live-transcript
         // word while the card is open. The window followed all of it, which is exactly the
         // non-deterministic grow/shrink and vertical slide the user sees. It is intermittent
@@ -302,7 +302,7 @@ class PillWindow: NSPanel {
         // is the constant that makes that safe; this is the line that makes it true.
         if #available(macOS 13.0, *) { hostingView.sizingOptions = [] }
         hostingView.autoresizingMask = [.width, .height]
-        // Only the capsule — or the note card, when it has grown into one — takes the
+        // Only the capsule - or the note card, when it has grown into one - takes the
         // mouse. The rest of the panel is transparent to it, so a click beside the
         // pill reaches the desktop instead of vanishing into a dead zone.
         hostingView.interactiveRect = { [weak self] in self?.drawnShellRect ?? .zero }
@@ -314,7 +314,7 @@ class PillWindow: NSPanel {
     /// Where the pill is actually drawn inside its panel, in content-view coordinates.
     ///
     /// The shell is bottom-anchored with `verticalInset` of clearance and centred
-    /// horizontally, which is what `PillContainerView` lays out — so this has to be read
+    /// horizontally, which is what `PillContainerView` lays out - so this has to be read
     /// from the same two facts: the live capsule width the content publishes, and the
     /// shell height for the current state.
     var drawnShellRect: NSRect {
@@ -328,7 +328,7 @@ class PillWindow: NSPanel {
         let width = min(PillMetrics.shellWidth(for: stateModel.state,
                                                measured: stateModel.capsuleWidth),
                         content.bounds.width)
-        // Bottom-anchored, in the hosting view's flipped (top-left, y-down) space —
+        // Bottom-anchored, in the hosting view's flipped (top-left, y-down) space  - 
         // measured: `NSHostingView.isFlipped` is true, and `ShapedHostingView.hitTest`
         // converts the click into it. The shell is drawn against the *bottom* edge with
         // `verticalInset` of clearance (see `PillContainerView`), so the hit rect has to
@@ -344,7 +344,7 @@ class PillWindow: NSPanel {
         // Reach over the hands-free bead when it is showing.
         //
         // It is drawn outside the capsule, and `ShapedHostingView.hitTest` nils everything
-        // outside this rect — so without the extension the bead would be plainly visible
+        // outside this rect - so without the extension the bead would be plainly visible
         // and completely unclickable. Only extended while it is actually on screen, so the
         // resting pill keeps the tight hit region that stopped the dead zone swallowing
         // clicks meant for the desktop.
@@ -352,7 +352,7 @@ class PillWindow: NSPanel {
         // Asks `PillHoverControl` the same question the view asks, rather than reading a
         // flag the view mirrored into the model. A mirror was what broke it: the flag was
         // written from the pointer alone (`pointer && isOffered`), while the button is drawn
-        // from `isRevealed` — which is true in `.handsFree` *without* any pointer, because
+        // from `isRevealed` - which is true in `.handsFree` *without* any pointer, because
         // stopping a latched session is a persistent control. Latching hands-free from the
         // chord with the pointer elsewhere therefore drew a stop button the window refused
         // every click for: the one control that ends the recording, visible and inert, with
@@ -361,7 +361,7 @@ class PillWindow: NSPanel {
                                        pointerInsidePill: stateModel.pointerInsidePill) {
             // `shellWidth`, not `+ handsFreeButtonReach`: the bead's resting position is clamped
             // to the panel's edge, so past a ~256pt capsule the naive sum claims up to 10.5pt of
-            // region that nothing is drawn in — points the window would take clicks for and the
+            // region that nothing is drawn in - points the window would take clicks for and the
             // desktop would not.
             //
             // The `+ 1` is the half-open rect. `NSRect.contains` excludes `maxX`, and the two
@@ -387,11 +387,11 @@ class PillWindow: NSPanel {
     /// `setState` is called from 20-odd places and more than one of them fires twice in a
     /// single runloop turn. Two of those double-fires were real bugs:
     ///
-    ///   * `⌃⌥N` from idle set `.capturingNote` twice — once inside `startRecording` (which
+    ///   * `⌃⌥N` from idle set `.capturingNote` twice - once inside `startRecording` (which
     ///     reads the same `captureToNote` flag) and once after it. The first call resized the
     ///     window and deferred its animation; the second, drained from the same libdispatch
     ///     drain, saw a window that was already tall and animated *immediately*, inside the
-    ///     resize's own display cycle — defeating the deferral that existed to prevent that,
+    ///     resize's own display cycle - defeating the deferral that existed to prevent that,
     ///     and then getting a second transaction on the same state a turn later. The
     ///     redundant call is gone and the window no longer resizes, but the shape of the
     ///     mistake is a property of the call sites, not of that one caller.
@@ -414,7 +414,7 @@ class PillWindow: NSPanel {
         // second one, so even a call already on the main thread waited two turns before anything
         // reached the screen. That is invisible on an idle app and not on a busy one: the main
         // thread here also carries the companion's ticker and every SwiftUI update, so two turns is
-        // two chances to queue behind other work — and this is the path from a keypress to the pill
+        // two chances to queue behind other work - and this is the path from a keypress to the pill
         // reacting.
         //
         // The hop is still needed when the caller is off the main thread, and the *scheduled* apply
@@ -433,7 +433,7 @@ class PillWindow: NSPanel {
     private func enqueue(_ state: PillState) {
         requestedState = state
         // One apply per turn, carrying whatever the newest request turned out to be.
-        // A second `setState` in the same turn updates `requestedState` and returns —
+        // A second `setState` in the same turn updates `requestedState` and returns  - 
         // it does not get an apply of its own to race the first one with.
         guard !applyScheduled else { return }
         applyScheduled = true
@@ -452,12 +452,12 @@ class PillWindow: NSPanel {
 
     /// The one transaction that drives the morph.
     ///
-    /// Everything the shell does — width, height, glass, both strokes, the clip and the bead's
-    /// lobe — rides this single `withAnimation`, and reaches the screen through the single
+    /// Everything the shell does - width, height, glass, both strokes, the clip and the bead's
+    /// lobe - rides this single `withAnimation`, and reaches the screen through the single
     /// `AnimatablePair` in `ShellSize`. Those are two separate requirements and it took both.
     ///
     /// It used to ride two transactions: this one, plus an `.animation(morphAnimation, value:
-    /// stateKey)` attached inside `PillContent`. Deleting that left one transaction — and the
+    /// stateKey)` attached inside `PillContent`. Deleting that left one transaction - and the
     /// morph still read as a snap followed by a growth, because one transaction cannot animate a
     /// quantity that is not a value. The height was `.frame(height:)`, an animatable number. The
     /// width was intrinsic, resolved from the content's ideal size by `.fixedSize()` in
@@ -470,7 +470,7 @@ class PillWindow: NSPanel {
     /// start inside: `PillMetrics.windowHeight` is a constant (its doc explains why), and the only
     /// frame calls anywhere in the pill are the two `setFrameOrigin`s in the position methods,
     /// neither on a state path. The two `DispatchQueue.main.async` hops above are kept exactly as
-    /// they were — they are no longer buying crash avoidance, they are buying the coalescing that
+    /// they were - they are no longer buying crash avoidance, they are buying the coalescing that
     /// `requestedState` documents.
     private func apply(_ target: PillState) {
         // **The shell's size change is instant, and that is now an evidence-based decision rather
@@ -478,22 +478,22 @@ class PillWindow: NSPanel {
         //
         // Nine attempts at an animated morph have failed, and they failed for one reason that took
         // all nine to name: `glassEffect` fills its view's *bounds*, so the bounds must match the
-        // silhouette, and a bounds change re-anchors the glass body — at which point the system
+        // silhouette, and a bounds change re-anchors the glass body - at which point the system
         // cross-fades the outgoing body against the incoming one. Every intermediate frame of an
         // animated resize is a doubled pill. There is no intermediate frame if there is no
         // animation.
         //
         // The dead ends, so nobody spends another release on them:
         //
-        //   * Animating the frame, with or without `ShellSize` as a single `AnimatablePair` — the
+        //   * Animating the frame, with or without `ShellSize` as a single `AnimatablePair` - the
         //     original ghost, seen repeatedly.
-        //   * A constant `glassEffectID` inside a `GlassEffectContainer` — Apple documents that
+        //   * A constant `glassEffectID` inside a `GlassEffectContainer` - Apple documents that
         //     identity as acting "during view hierarchy transitions", i.e. when a shape appears or
         //     disappears. It has nothing to say about a resize, so it silently does nothing.
         //   * Constant oversized bounds with only the `Shape`'s path animating inside them. This
         //     looked correct on paper and was worse in practice: the material filled the whole
         //     fixed rectangle instead of being clipped to the path, so a pale full-panel slab sat
-        //     behind the pill for as long as it was on screen — several seconds during
+        //     behind the pill for as long as it was on screen - several seconds during
         //     transcription.
         //   * Masking a full-size body down, and `scaleEffect`. The first strips the specular rim
         //     (a mask removes pixels and cannot synthesise a new lit edge, so it reads as a die-cut
@@ -504,7 +504,7 @@ class PillWindow: NSPanel {
         // extrusion, the hover reveal and the state tint all keep their own transactions, none of
         // which resizes a glass body. If an animated expansion is wanted later, the route left is
         // AppKit's `NSGlassEffectView` driven by Core Animation, which is a different rendering
-        // path — not another SwiftUI transaction.
+        // path - not another SwiftUI transaction.
         stateModel.state = target
 
         // Staged by one runloop turn during expansion: allows the shell frame to render
@@ -520,13 +520,13 @@ class PillWindow: NSPanel {
         }
     }
 
-    /// The state the pill is going to be in — the newest request, applied or not.
+    /// The state the pill is going to be in - the newest request, applied or not.
     ///
     /// Reads the *requested* state rather than the applied one, because `setState` defers its apply
     /// by a runloop turn and callers use this to decide whether to overwrite it. `showPillError`'s
     /// 2.5-second timer asks "is an error still showing?" before returning the pill to `.idle`: if a
     /// recording started in the same turn as that timer fired, the applied state was still `.error`,
-    /// the guard passed, and `.idle` overwrote the pending `.recording` — hiding the pill while a
+    /// the guard passed, and `.idle` overwrote the pending `.recording` - hiding the pill while a
     /// recording ran invisibly, which is the exact outcome the guard exists to prevent.
     /// `applyPillVisibility` reads `isRecordingLike` off this for the same reason.
     var currentState: PillState { requestedState ?? stateModel.state }
@@ -535,8 +535,8 @@ class PillWindow: NSPanel {
 
     // `savePosition` used to live here, writing the dropped origin as a fraction of the
     // visible frame. It went with the drag: nothing can move the pill any more, so there is
-    // no new position to record. `restorePosition` still reads the key — an existing install
-    // keeps the spot it was last left at — and "Reset Position" clears it, so the fallback to
+    // no new position to record. `restorePosition` still reads the key - an existing install
+    // keeps the spot it was last left at - and "Reset Position" clears it, so the fallback to
     // `positionAtBottomCenter` is permanent rather than undone by the next launch.
 
     private func restorePosition() {
@@ -600,7 +600,7 @@ class PillWindow: NSPanel {
     /// Whether an event landed on the pill itself rather than the transparent panel round it.
     ///
     /// `ShapedHostingView.hitTest` returning nil only declines to hand the event to a
-    /// *subview* — the event still belongs to the window, and AppKit walks on to the window's
+    /// *subview* - the event still belongs to the window, and AppKit walks on to the window's
     /// own responder methods. So these two overrides bypassed the hit region entirely and
     /// popped the context menu from anywhere in the panel, including the 96pt of empty space
     /// above the capsule now that the panel is permanently note-tall.
@@ -760,11 +760,11 @@ struct PillContainerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The pill lives in its own NSPanel, so it needs the theme applied
-        // directly — it doesn't inherit from the main window.
+        // directly - it doesn't inherit from the main window.
         //
         // Deliberately NO `.id(theme.id)` here. Keying the view on the theme
         // rebuilt the whole subtree from scratch every time `ThemeManager`
-        // republished, and each rebuild restarted the glass material's fade-in —
+        // republished, and each rebuild restarted the glass material's fade-in  - 
         // which read as the pill quietly pulsing forever. Measured: brightness
         // swinging ~8% on a ~2s cycle while nothing on screen was changing,
         // where an identical static glass capsule held to within 0.03%.
@@ -791,14 +791,14 @@ struct PillContent: View {
     /// The state the *colours* are drawn from, which deliberately lags `model.state`.
     ///
     /// The container assigns it inside a `withAnimation`, so the tint and the border interpolate to
-    /// the new state's hue while everything geometric — the shell's size, the clip, the content swap
-    /// — reads `model.state` and changes instantly. That split is what allows a real transition here
+    /// the new state's hue while everything geometric - the shell's size, the clip, the content swap
+    /// - reads `model.state` and changes instantly. That split is what allows a real transition here
     /// at all: resizing the glass body is the one thing that ghosts, but its *colour* is free to
-    /// animate. Defaults to `.idle` for `PillDemoView`, which drives colours from the state directly.
+    /// animate. The production pill starts at `.idle` until its first state transition.
     var colorState: PillState = .idle
-    /// How far the shell's body has extended into the hands-free bead — see
+    /// How far the shell's body has extended into the hands-free bead - see
     /// `PillShellShape.extrusion`. Owned by `PillContainerView`, which also positions the glyph
-    /// from it. 0 in `PillDemoView`, which plays a scripted gallery with no pointer in it.
+    /// from it. It starts at 0 while the pill is collapsed.
     var extrusion: CGFloat = 0
     @ObservedObject private var motion = MotionPreference.shared
     @ObservedObject private var userData = UserData.shared
@@ -810,7 +810,7 @@ struct PillContent: View {
     // It existed to pair with a constant `glassEffectID`, on the theory that naming the body would
     // stop `glassEffect` cross-fading it while its shape changed every frame. That theory was
     // wrong: Apple documents `glassEffectID(_:in:)` as applying "during view hierarchy
-    // transitions" — it identifies a shape that *appears or disappears* — and it has no bearing on
+    // transitions" - it identifies a shape that *appears or disappears* - and it has no bearing on
     // interpolating one body's size. The ghost is gone because the body's bounds no longer change
     // at all, because the shell's size change is instant (see `apply`), which needs no identity.
 
@@ -820,7 +820,7 @@ struct PillContent: View {
         HStack(spacing: Space.x2) {
             content
             // Placed once, outside the state switch, because it is revealed in more than
-            // one state now — a record ring on the resting pill, a stop square while a
+            // one state now - a record ring on the resting pill, a stop square while a
             // session is latched. Keeping it in the `.idle` branch is what made the
             // pointer route one-way: you could start hands-free by clicking and then had
             // no way to stop it by clicking. `PillHoverControl` owns which states offer
@@ -830,13 +830,13 @@ struct PillContent: View {
         // A minimum width, so the resting pill stays a *pill*.
         //
         // With only the microphone glyph inside, intrinsic width came out at 33pt
-        // against a 28pt height — a 1.18 ratio, which is a circle, not a capsule.
+        // against a 28pt height - a 1.18 ratio, which is a circle, not a capsule.
         // 56pt holds a 2:1 capsule at rest and is still narrower than the old
         // keycap version. Wider states (level meter, timer, error text) grow past
         // it on their own, so this only ever affects the idle shape.
         .frame(minWidth: PillMetrics.minimumCapsuleWidth)
         // Lock the content at its own ideal width, so the animating box below cannot squeeze
-        // it — and, more importantly, so what gets *measured* here is independent of what gets
+        // it - and, more importantly, so what gets *measured* here is independent of what gets
         // *forced* there. `.fixedSize` discards the incoming width proposal, which is exactly
         // what breaks the measure -> set -> measure cycle: see `idealWidthProbe`.
         //
@@ -846,14 +846,14 @@ struct PillContent: View {
         // *use* that width.
         .fixedSize(horizontal: true, vertical: false)
         .background { idealWidthProbe }
-        // The one animating quantity in the morph — **both axes, one value.**
+        // The one animating quantity in the morph - **both axes, one value.**
         //
         // This replaced `.frame(height: PillMetrics.shellHeight(for: model.state))` with the
         // width left intrinsic, and that pairing was the last cause of "it just bounces to the
         // note pop-up". The height was an animatable number interpolating 28 -> 124 under the
         // ambient transaction; the width was resolved from the content's ideal size by
         // `.fixedSize()` in `PillContainerView`, *above* every animation in this chain. So it
-        // was not interpolated at all — `NoteCaptureBox` pins its content to
+        // was not interpolated at all - `NoteCaptureBox` pins its content to
         // `PillMetrics.noteContentWidth`, and the ideal width stepped 56 -> 292 in the single
         // layout pass the state changed in. The shell snapped wide and then grew tall: two
         // events where the claim being made is one shape expanding.
@@ -865,20 +865,20 @@ struct PillContent: View {
         ))
         // Clip the interior to the pill's silhouette at whatever size the morph has reached,
         // so the growing capsule *reveals* the card instead of the card being drawn over it.
-        // A mask, deliberately — not a transform: it was reverted once as a suspect in the
+        // A mask, deliberately - not a transform: it was reverted once as a suspect in the
         // 2.0.84 crash, which turned out to be the ambient transaction colliding with the
         // window resize (see `setState`), and a clip cannot invalidate constraints.
-        // Clip the *interior* to the capsule, not to the shell. Content never enters the lobe —
+        // Clip the *interior* to the capsule, not to the shell. Content never enters the lobe  - 
         // the bead carries a glyph drawn by `PillContainerView`, not a column of this row.
         .clipShape(PillShape())
-        // Everything that draws the shell — glass, both strokes, the shadow — moved into this
+        // Everything that draws the shell - glass, both strokes, the shadow - moved into this
         // background, and this is the change that makes the bead part of the pill.
         //
         // Applied to the content directly, all four are sized to the *capsule*, which leaves the
         // lobe nowhere to be drawn. A background does not participate in its parent's layout, so
         // a deliberately wider one grows the drawn shell rightward without moving the capsule:
         // giving the button a slot in the row instead is what shifted the microphone off centre
-        // (`PillMetrics.handsFreeButtonSide` records it), and the panel has the room — the idle
+        // (`PillMetrics.handsFreeButtonSide` records it), and the panel has the room - the idle
         // bead's right edge lands 100pt inside the 320pt panel.
         //
         // The size comes from a `GeometryReader` *inside* the background rather than from the
@@ -886,7 +886,7 @@ struct PillContent: View {
         // the animation's *target*; a reader here sees the size `ShellSize` has already resolved
         // for this frame, so glass, both strokes, the shadow and the clip above are all drawn at
         // one interpolated size. Reading the target instead would put the shell at its final
-        // width on frame one — the snap, moved rather than fixed. At this morph's measured peak
+        // width on frame one - the snap, moved rather than fixed. At this morph's measured peak
         // of 1186 pt/s a single frame of disagreement is up to 9.9pt at 120Hz, which is the
         // shimmer the shape consolidation exists to delete.
         //
@@ -896,7 +896,7 @@ struct PillContent: View {
         // **And it must never publish `model.capsuleWidth`.** It used to, when the box it
         // measures and the pill's ideal width were the same rect. They are not any more: this
         // rect is `ShellSize`'s output, and `ShellSize`'s input is `model.capsuleWidth`. Writing
-        // it from here would close that loop — `width = max(width, 56)` has a fixpoint at every
+        // it from here would close that loop - `width = max(width, 56)` has a fixpoint at every
         // value, so the pill would not oscillate, it would *stick*, frozen at whatever width it
         // first measured and never widening for a level meter or a transcript again. The
         // measurement now comes from `idealWidthProbe`, one layer in, where nothing forces it.
@@ -904,12 +904,12 @@ struct PillContent: View {
         // Wrapped in `GlassCluster` (a gated `GlassEffectContainer`) so the shell's
         // glass carries a constant `glassEffectID` across the morph: the reader
         // hands `glassEffect` a shape it reads as new every frame, which without an
-        // identity is cross-faded — the old body fading behind the new one *is* the
+        // identity is cross-faded - the old body fading behind the new one *is* the
         // ghost capsule. The container makes it one persistent body that morphs. It
         // is inside a `.background`, so it publishes no size upward and cannot become
         // the hosting root the window-collapse note forbids; on the fallbacks
         // `GlassCluster` is a passthrough and this is exactly what it was before.
-        // The shell — glass, both strokes and the shadow — sized to the silhouette it draws.
+        // The shell - glass, both strokes and the shadow - sized to the silhouette it draws.
         //
         // **The bounds must hug the shape, and that is now a measured fact rather than a
         // preference.** A previous version of this pinned the glass to a constant
@@ -918,19 +918,19 @@ struct PillContent: View {
         // *fixed* bounds could not be re-anchored mid-animation. The reading of the sentence was
         // right and the conclusion drawn from it was wrong: the material fills those bounds, it is
         // not clipped to the shape drawn in them. On screen that produced a pale full-panel slab
-        // sitting behind the pill — visible for as long as the pill was up, which during
+        // sitting behind the pill - visible for as long as the pill was up, which during
         // transcription is several seconds, and reported as "the full note pop-up stays for a few
         // seconds white".
         //
         // So the glass is sized to the shell again. The consequence is accepted rather than worked
         // around: a size change re-anchors the body, the system cross-fades the old against the new,
         // and that cross-fade is the ghost. Therefore **the shell's size change is instant** (see
-        // `PillWindow.apply`) — an instant change has no intermediate frames to cross-fade. What
+        // `PillWindow.apply`) - an instant change has no intermediate frames to cross-fade. What
         // animates instead is everything that is not the glass body.
         //
         // No `GlassCluster` and no `GlassMorphIdentity`. There is exactly one glass body here and
         // nothing appears or disappears beside it, so the container had nothing to merge and the
-        // identity had nothing to match — Apple documents that identity as acting "during view
+        // identity had nothing to match - Apple documents that identity as acting "during view
         // hierarchy transitions", which is a shape appearing or disappearing, not a resize. Apple
         // also notes a real cost for containers that do no work. The mechanism is kept in
         // `GlassSurface.swift` because it is right for the case it documents; this is not that case.
@@ -941,7 +941,7 @@ struct PillContent: View {
         }
         // Hit-test the whole capsule, not whatever SwiftUI infers from the glass and the
         // glyph row inside it. Without this the reveal only fired near the trailing end of
-        // the pill — the pointer had to reach the part of the row the control appears in —
+        // the pill - the pointer had to reach the part of the row the control appears in  - 
         // where the ask is that it appears the moment the pointer is anywhere on the pill.
         //
         // The capsule, not the shell: the bead reports its own hover, and a contentShape covering
@@ -955,7 +955,7 @@ struct PillContent: View {
         .accessibilityAddTraits(model.state.isRecordingLike ? .updatesFrequently : [])
         // The control is revealed by hovering, which VoiceOver has no way to do, and the pill
         // is one accessibility element so the button inside it is unreachable. Offered as
-        // an action on the element instead — and only in the state where it is offered to a
+        // an action on the element instead - and only in the state where it is offered to a
         // pointer, so VoiceOver never announces an action that would be swallowed.
         .modifier(HandsFreeAccessibilityAction(
             start: PillHoverControl.isOffered(in: model.state) ? onStartHandsFree : nil,
@@ -970,7 +970,7 @@ struct PillContent: View {
     ///
     /// **Why the loop does not close, stated as arithmetic rather than hoped for.** This sits
     /// inside `.fixedSize(horizontal: true, vertical: false)`, which discards the width
-    /// proposal — so the rect measured here is a function of the content alone and is
+    /// proposal - so the rect measured here is a function of the content alone and is
     /// *constant* with respect to `ShellSize`'s width. The dependency graph is therefore
     /// one-way:
     ///
@@ -980,7 +980,7 @@ struct PillContent: View {
     /// The gain around the cycle is zero, so it settles in exactly one extra layout pass and
     /// cannot oscillate: pass one lays the content out at its ideal and reports W, the write
     /// invalidates, pass two forces W and measures the same W again. Wire the probe to the
-    /// *outer* box instead and the gain becomes one — see the note on that background for what
+    /// *outer* box instead and the gain becomes one - see the note on that background for what
     /// that costs.
     ///
     /// The one-pass lag is why `PillMetrics.shellWidth(for:)` returns a constant for every
@@ -1008,22 +1008,22 @@ struct PillContent: View {
     ///
     /// `PillShellShape` is handed to `glassSurface`, to both `strokeBorder`s and (through the
     /// rendered result) to `PillElevation`, so all four describe the same silhouette at every
-    /// frame of the extrusion — capsule, neck and lobe as one continuous contour. There is no
+    /// frame of the extrusion - capsule, neck and lobe as one continuous contour. There is no
     /// field function to approximate and nothing that can drift, which is exactly what a stroke
     /// drawn over `GlassEffectContainer`'s blended body could not promise.
     ///
     /// It degrades without losing the extrusion, which is the other half of why it is a shape:
     ///
-    ///   * **Reduce Transparency** — `ChromeGlass` fills the shape with `Surface.raised` and
+    ///   * **Reduce Transparency** - `ChromeGlass` fills the shape with `Surface.raised` and
     ///     strokes it with `Line.strong`. The opaque fill *is* the union, so the pill still grows
     ///     a bead and still has one outline. There is no glass and so no merge, and nothing here
     ///     ever depended on one.
-    ///   * **Pre-macOS-26** — `.regularMaterial` in the same shape. No lensing, so no light bends
+    ///   * **Pre-macOS-26** - `.regularMaterial` in the same shape. No lensing, so no light bends
     ///     across the neck, but the neck is there and thins from 25.8pt to 1.9pt before it lets go.
     /// The one glass body, the one outline, and the shadow under both.
     ///
     /// Sized by the `GeometryReader` that calls it, so the glass, both strokes and the shadow are
-    /// all drawn at exactly the size the shell currently is — the material fills its view's bounds,
+    /// all drawn at exactly the size the shell currently is - the material fills its view's bounds,
     /// so bounds larger than the silhouette render as a visible slab behind it.
     private func shell(capsuleWidth: CGFloat, height: CGFloat) -> some View {
         let shape = PillShellShape(extrusion: extrusion, capsuleWidth: capsuleWidth)
@@ -1058,7 +1058,7 @@ struct PillContent: View {
                 ZStack {
                     shape.strokeBorder(borderColor, lineWidth: 1)
                     // `.inset(by:)`, not `.padding(0.6)`. Padding shrinks the *rect*, and this shape
-                    // derives its body from the stored `capsuleWidth` rather than from the rect — so
+                    // derives its body from the stored `capsuleWidth` rather than from the rect - so
                     // padding would slide the highlight 0.6pt to the right at the same width as the
                     // ring outside it, and it would cross that ring on the trailing edge.
                     // `inset(by:)` is the shape's own concentric offset and is what `strokeBorder`
@@ -1079,11 +1079,11 @@ struct PillContent: View {
                         )
                 }
             }
-            // Glass carries a content-aware shadow of its own — Apple: it "increases the opacity of
+            // Glass carries a content-aware shadow of its own - Apple: it "increases the opacity of
             // its shadow when it is over text" and lowers it over a light background. Adding a
             // second fixed shadow doubles it.
             //
-            // Applied last, so it composites over the rendered union and follows the neck for free —
+            // Applied last, so it composites over the rendered union and follows the neck for free  - 
             // a second silhouette cue exactly where the outline is thinnest.
             .modifier(PillElevation(dark: isDark,
                                     reduceTransparency: motion.reduceTransparency))
@@ -1097,7 +1097,7 @@ struct PillContent: View {
     /// `.transition(.identity)` belongs out here, on the switch, and putting it on only one branch
     /// was a real bug rather than an oversight. A `switch` in a `ViewBuilder` inserts one branch and
     /// removes another, and each gets its own transition: the note card carried `.identity`, so it
-    /// no longer faded *in* — but the outgoing recording row still had SwiftUI's default `.opacity`,
+    /// no longer faded *in* - but the outgoing recording row still had SwiftUI's default `.opacity`,
     /// so it kept fading *out* on top of the card for the length of the transaction. That is the
     /// "ghosts from the pill" seen when the note pop-up opens: two states' glyphs drawn over each
     /// other, one of them dissolving. Applied here it covers insertion and removal of every branch,
@@ -1158,7 +1158,7 @@ struct PillContent: View {
     }
 
     /// Live-indicator dot colour. Note capture gets the accent rather than the
-    /// hands-free hue, so the pill shows *where the text is going* — the one thing
+    /// hands-free hue, so the pill shows *where the text is going* - the one thing
     /// the recording itself cannot convey.
     private var dotTint: Color {
         switch model.state {
@@ -1170,7 +1170,7 @@ struct PillContent: View {
 
     // No countdown line. The pill used to draw an amber bar along its foot as the
     // hands-free silence timer drained, and along the note card's foot too. It was real
-    // data — `AudioRecorder`'s VAD progress, never a timer pretending — but the user asked
+    // data - `AudioRecorder`'s VAD progress, never a timer pretending - but the user asked
     // for it gone twice, and a line that creeps across the pill every time you pause for
     // breath is more alarming than the auto-stop it was announcing. What is lost is stated
     // plainly rather than replaced by a different line: you can no longer *see* the
@@ -1179,8 +1179,8 @@ struct PillContent: View {
 
     // MARK: Styling
 
-    // No `stateTint`. It was a seven-case ramp of wash colours that nothing painted with any more —
-    // `stateGlassTint` below replaced it when the pill became real glass — computed only so that
+    // No `stateTint`. It was a seven-case ramp of wash colours that nothing painted with any more  - 
+    // `stateGlassTint` below replaced it when the pill became real glass - computed only so that
     // `shell` could ask `stateTint == .clear` to choose a role. `shell` now asks `stateGlassTint`,
     // which is the value it actually passes as `tint:`, so the question is answered by the table it
     // is about. Two tables answering the same question is one of them drifting later.
@@ -1190,14 +1190,14 @@ struct PillContent: View {
     /// Stronger than `stateTint` on purpose: that value was designed as a flat
     /// wash painted over an opaque capsule, whereas a tint is mixed into a
     /// material that is already sampling the wallpaper. At wash opacities the
-    /// colour disappears entirely. Idle stays untinted — plain glass is the
+    /// colour disappears entirely. Idle stays untinted - plain glass is the
     /// resting state, and the HIG asks that colour be reserved for emphasis.
     private var stateGlassTint: Color? { Self.glassTint(for: colorState) }
 
     /// The state colour as a *glass tint*, for an explicitly named state.
     ///
     /// Takes the state rather than reading `model.state`, because the container hands down a value
-    /// that *lags* inside an animated transaction — that lag is what lets the hue cross-fade while
+    /// that *lags* inside an animated transaction - that lag is what lets the hue cross-fade while
     /// the shell's geometry changes instantly. See `PillContainerView.colorState`.
     static func glassTint(for state: PillState) -> Color? {
         switch state {
@@ -1222,7 +1222,7 @@ struct PillContent: View {
     /// The pill's outer contrast ring.
     ///
     /// **Appearance-independent, and that is the fix for the pill disappearing.** This used to answer
-    /// `isDark ? .white.opacity(0.22) : .black.opacity(0.18)` — i.e. it chose its tone from the *app's*
+    /// `isDark ? .white.opacity(0.22) : .black.opacity(0.18)` - i.e. it chose its tone from the *app's*
     /// colour scheme. But the app's appearance and what is actually *behind* the pill are independent:
     /// the pill floats over the desktop, so a dark appearance can sit over a white window and a light
     /// appearance over a black one. In dark appearance both of the pill's strokes came out white (this
@@ -1232,7 +1232,7 @@ struct PillContent: View {
     ///
     /// The silhouette is now carried by a **two-tone edge** instead: this dark hairline on the outside
     /// and the light top-lit highlight just inside it. One of the two always registers, whatever is
-    /// behind — which is how native controls survive being drawn over arbitrary content. Neither
+    /// behind - which is how native controls survive being drawn over arbitrary content. Neither
     /// depends on the appearance, so neither can pick the one tone that vanishes.
     static func border(for state: PillState) -> Color {
         switch state {
@@ -1255,23 +1255,23 @@ struct PillContent: View {
 
     // No `stateRim`. It was the hairline the pill's outline used before `borderColor` above replaced
     // it, and it outlived the modifier that read it: seven colours nothing asked for. Worse than
-    // dead, because `PillState` is exhaustively switched here — adding a state would have made the
+    // dead, because `PillState` is exhaustively switched here - adding a state would have made the
     // compiler demand a rim colour for an outline that no longer exists.
 
     // No `.animation(_:value:)` on the shell, and no `stateKey` to drive one.
     //
     // There used to be `.animation(morphAnimation, value: stateKey)` here, and it was the second
     // of two drivers for one silhouette. `PillWindow.apply(_:)` is the only production writer of
-    // `state` and already wraps the mutation in `withAnimation`; `PillDemoView.advance` wraps its
-    // own in `withAnimation(Motion.layout)`. Deleting it left one *transaction*.
+    // `state` and already wraps the mutation in `withAnimation`; no view-local state driver remains.
+    // Deleting the second driver left one *transaction*.
     //
     // One transaction was necessary and not sufficient, and that is the whole of why this bug
     // survived four fixes. Both axes rode the same transaction afterwards and the morph still
     // read as a snap-then-grow, because they rode it by two different *mechanisms*: the height
     // was an animatable number in a `.frame(height:)`, and the width was a layout
     // recomputation from the content's ideal size, which no transaction can interpolate.
-    // `ShellSize` is what made them one mechanism — one `AnimatablePair`, both axes read from
-    // it — and that is now the only thing that sizes the shell, the clip, the glass, both
+    // `ShellSize` is what made them one mechanism - one `AnimatablePair`, both axes read from
+    // it - and that is now the only thing that sizes the shell, the clip, the glass, both
     // strokes, the shadow and the lobe.
 
     // MARK: Accessibility
@@ -1290,7 +1290,7 @@ struct PillContent: View {
         }
     }
 
-    /// Elapsed seconds only — never the meter value. A 30 Hz numeric update
+    /// Elapsed seconds only - never the meter value. A 30 Hz numeric update
     /// would make VoiceOver unusable.
     private var accessibilityValue: String {
         switch model.state {
@@ -1310,7 +1310,7 @@ struct PillContent: View {
             // deliberately stays out: it is a preview that rewrites itself every second,
             // and announcing that would bury the two facts that matter.
             //
-            // The chord is spelled rather than drawn — `KeyChord.symbols` is glyphs, and
+            // The chord is spelled rather than drawn - `KeyChord.symbols` is glyphs, and
             // VoiceOver reads those as nothing useful.
             let destination = NoteStore.shared
                 .captureDestination(appendsToOpenNote: userData.captureAppendsToOpenNote)
@@ -1346,16 +1346,16 @@ struct AdaptivePillGlyph: View {
 
 // MARK: - The shell's size
 
-/// The shell's size — **both axes, one value.**
+/// The shell's size - **both axes, one value.**
 ///
 /// A type rather than a bare `.frame(width:height:)`, and the reasoning is worth keeping even now
 /// that the size change is instant, because it is what stops the next person reintroducing the
 /// original defect:
 ///
 ///   * **One `AnimatablePair`, so the axes cannot desynchronise.** Not two animatable properties
-///     sharing a transaction — one value, from which both axes are read.
+///     sharing a transaction - one value, from which both axes are read.
 ///   * **Neither axis can go missing.** `.frame(width:height:)` takes `CGFloat?`, and `nil` is not
-///     one end of an interpolation — it is a layout recomputation. That was the bug the pill was
+///     one end of an interpolation - it is a layout recomputation. That was the bug the pill was
 ///     rejected five times for: the height was an animatable number stepping 28 -> 124 while the
 ///     width was resolved from the content's ideal size *above* every animation in the chain, so it
 ///     jumped 56 -> 292 in a single layout pass. The shell snapped wide and then grew tall. Storing
@@ -1430,7 +1430,7 @@ final class BreathingDotModel: ObservableObject {
     @Published var big = false
 }
 
-/// A slow pulse for the preparing state. One element, one animation — enough to
+/// A slow pulse for the preparing state. One element, one animation - enough to
 /// say "working" without the busy-spinner look.
 struct BreathingDot: View {
     let reduceMotion: Bool

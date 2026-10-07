@@ -7,9 +7,9 @@ import Foundation
 /// This is the preferred way `SystemAudioCapture` hears the other participants on a call, with
 /// ScreenCaptureKit as the fallback. Two things make it better rather than merely different:
 ///
-///   * **It asks for the right permission.** A tap is gated by `kTCCServiceAudioCapture` — "'Utter'
+///   * **It asks for the right permission.** A tap is gated by `kTCCServiceAudioCapture` - "'Utter'
 ///     would like access to record your system audio", read verbatim out of this machine's
-///     `TCC.framework` string table — and it needs the `NSAudioCaptureUsageDescription` key, which
+///     `TCC.framework` string table - and it needs the `NSAudioCaptureUsageDescription` key, which
 ///     Apple documents as "A message that tells people why your app is requesting access to capture
 ///     system audio on macOS" (macOS 14.2+). ScreenCaptureKit is gated by `kTCCServiceScreenCapture`,
 ///     whose own prompt is "would like to capture the contents of the system display". Those are two
@@ -26,7 +26,7 @@ import Foundation
 /// Apple's own guidance is to put the tap in a HAL aggregate device and read it "as an input in a HAL
 /// aggregate device, just like a microphone", which is what `start` does. The aggregate is created
 /// with `kAudioAggregateDeviceIsPrivateKey`, whose documented behaviour is that it "is private to the
-/// process that created it" and "is not persistent across launches of the process that created it" —
+/// process that created it" and "is not persistent across launches of the process that created it"  - 
 /// so it never appears in anyone's output-device menu and a crash cannot leave a phantom audio device
 /// behind on the user's machine.
 ///
@@ -94,7 +94,7 @@ final class ProcessTapCapture {
     ///
     /// `AudioDeviceCreateIOProcIDWithBlock` documents `inDispatchQueue` as "the dispatch queue on
     /// which the IOBlock will be dispatched … If this value is NULL, then the IOBlock will be
-    /// directly invoked" — directly meaning on CoreAudio's real-time IO thread, where allocating a
+    /// directly invoked" - directly meaning on CoreAudio's real-time IO thread, where allocating a
     /// `Data` and taking a lock are both the wrong thing to do. Handing it a serial queue moves the
     /// conversion off that thread, which is what makes the straightforward implementation correct
     /// instead of a ring buffer.
@@ -116,7 +116,7 @@ final class ProcessTapCapture {
     }
 
     deinit {
-        // Not a substitute for `stop()` — this object is owned by `SystemAudioCapture`, which stops
+        // Not a substitute for `stop()` - this object is owned by `SystemAudioCapture`, which stops
         // it explicitly. It is here because a tap and an aggregate device are *system* objects: if
         // this is ever released without a stop, the HAL keeps both alive with an IOProc pointing at a
         // freed block.
@@ -127,7 +127,7 @@ final class ProcessTapCapture {
 
     /// Build the tap, wrap it in a private aggregate device, and start reading.
     ///
-    /// `processes` are HAL process objects — `CallSource.processObject`, which the detector has
+    /// `processes` are HAL process objects - `CallSource.processObject`, which the detector has
     /// already read. Empty means "everything except Utter", which is what the ScreenCaptureKit path
     /// has always captured and is the right behaviour for a meeting recorded from the Notes screen
     /// with no call detected.
@@ -178,7 +178,7 @@ final class ProcessTapCapture {
 
         // "An AudioStreamBasicDescription that describes the current data format for the tap. This is
         // the format of that data that will be accessible in any aggregate device that contains the
-        // tap." — AudioHardware.h. Read once: a device change mid-meeting could in principle change
+        // tap." - AudioHardware.h. Read once: a device change mid-meeting could in principle change
         // it, and the cost of not noticing is a window of wrong-rate audio rather than a crash, which
         // is not worth a property listener for a feature that runs for the length of one meeting.
         var asbd = AudioStreamBasicDescription()
@@ -198,7 +198,7 @@ final class ProcessTapCapture {
 
         // A tap-only aggregate: no sub-device list, so the device has input streams and no output
         // streams at all. Including the default output device as a sub-device is the other documented
-        // shape, and it is the worse one here — it would give the aggregate output streams that this
+        // shape, and it is the worse one here - it would give the aggregate output streams that this
         // IOProc is then responsible for filling every cycle, and an unfilled output buffer is noise
         // out of the user's speakers during their meeting. `kAudioAggregateDeviceTapAutoStartKey`
         // exists precisely for tap-driven aggregates, which is what says this composition is a
@@ -209,7 +209,7 @@ final class ProcessTapCapture {
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
             // 1, not `true`. The header specifies "a CFNumber where a value of 0 means that the
             // AudioAggregateDevice is to be published to the entire system and a value of 1 means
-            // that [it] is private to the process that created it" — a Swift `Bool` bridges to a
+            // that [it] is private to the process that created it" - a Swift `Bool` bridges to a
             // CFBoolean, which is a different type, and "if this key is not present, it implies that
             // the AudioAggregateDevice is published to the entire system". So getting the type wrong
             // fails in the direction of a permanent, system-visible audio device appearing in the
@@ -246,8 +246,8 @@ final class ProcessTapCapture {
     /// Whether the tap has actually produced audio yet, given `timeout` to do it in.
     ///
     /// The real capability check, and the reason this file can be wrong without hurting anyone. Every
-    /// HAL call above can return `noErr` and still leave a stream that never fires — a composition
-    /// the HAL accepts but cannot clock, a permission answered somewhere this code cannot see — and a
+    /// HAL call above can return `noErr` and still leave a stream that never fires - a composition
+    /// the HAL accepts but cannot clock, a permission answered somewhere this code cannot see - and a
     /// tap that starts and stays silent is indistinguishable from a quiet meeting until the meeting is
     /// over and the note has half a conversation in it. `SystemAudioCapture` waits on this before it
     /// commits to the tap and falls back to ScreenCaptureKit if it comes back false.
@@ -299,7 +299,7 @@ final class ProcessTapCapture {
 
     // MARK: - The callback
 
-    /// One IO cycle. On `queue`, not on the real-time thread — see `queue`.
+    /// One IO cycle. On `queue`, not on the real-time thread - see `queue`.
     private func receive(input: UnsafePointer<AudioBufferList>,
                          output: UnsafeMutablePointer<AudioBufferList>) {
         // The aggregate is built with no output sub-device so there should be no output buffers to
@@ -347,7 +347,7 @@ final class ProcessTapCapture {
     /// Plural because there is no promise the HAL gives a process exactly one object, and an empty
     /// array is a survivable answer: it would mean a global tap that also hears Utter's own chimes,
     /// which is worse than the alternative but not worth failing a meeting over. The tap of a *known*
-    /// process — the normal case when a call was detected — never comes through here.
+    /// process - the normal case when a call was detected - never comes through here.
     private static func ownProcessObjects() -> [AudioObjectID] {
         var pid = ProcessInfo.processInfo.processIdentifier
         var address = AudioObjectPropertyAddress(
@@ -364,7 +364,7 @@ final class ProcessTapCapture {
                                                 &size,
                                                 &object)
         // "Note that an error is not returned if the PID doesn't refer to any Process. Rather, this
-        // property will return kAudioObjectUnknown" — AudioHardware.h. So the object has to be
+        // property will return kAudioObjectUnknown" - AudioHardware.h. So the object has to be
         // checked as well as the status.
         guard status == noErr, object != AudioObjectID(kAudioObjectUnknown) else { return [] }
         return [object]

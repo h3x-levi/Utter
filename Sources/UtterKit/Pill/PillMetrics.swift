@@ -3,19 +3,19 @@ import AppKit
 
 /// The pill's geometry, in one place, because the window and the content have to agree.
 ///
-/// Every state has two sizes: the **shell** — the glass object the user sees — and the
+/// Every state has two sizes: the **shell** - the glass object the user sees - and the
 /// **window** hosting it, which is larger and transparent. That was harmless while the
 /// shell was always 28pt tall inside a fixed 60pt panel, and it stopped being harmless
 /// the moment note capture grew a 124pt box: SwiftUI lays the box out *inside* the
 /// panel, so a panel left at the resting size clips it. Both sizes are derived from the
 /// same numbers here rather than kept in step by hand.
 enum PillMetrics {
-    /// The capsule's height — every state except note capture.
+    /// The capsule's height - every state except note capture.
     static let capsuleHeight: CGFloat = 28
 
     /// The hands-free control's diameter, and the gap between it and the capsule.
     ///
-    /// It is drawn *outside* the pill — a separate circular button that appears beside the
+    /// It is drawn *outside* the pill - a separate circular button that appears beside the
     /// capsule on hover rather than inside it. That is what keeps the resting pill a plain
     /// centred microphone: putting the button in the row shifted the mic off centre and
     /// changed the capsule's width, which read as the pill moving under the pointer.
@@ -35,7 +35,7 @@ enum PillMetrics {
     /// The pill's content is anchored to the *bottom* of its window (see
     /// `PillContainerView`), so this is the gap `PillWindow` has to subtract when it
     /// positions the pill by window origin. 16pt, which is exactly what `(60 - 28) / 2`
-    /// came to while the window was a fixed 60pt with the capsule centred in it — so
+    /// came to while the window was a fixed 60pt with the capsule centred in it - so
     /// the resting pill sits where it always has, to the point.
     static let verticalInset: CGFloat = 16
 
@@ -50,14 +50,14 @@ enum PillMetrics {
     /// The glyph, both paddings and the panel's own margin come out of the 320pt, leaving this.
     static let messageWidth: CGFloat = 240
 
-    /// The window's width. Fixed, and the note box has to fit inside it — see
+    /// The window's width. Fixed, and the note box has to fit inside it - see
     /// `noteContentWidth`, and the test that holds the two together.
     static let windowWidth: CGFloat = 320
 
     /// The note box's height.
     ///
     /// Enough for a destination line, three lines of live transcript, and a footer
-    /// carrying the level meter — measured against the 12pt caption face those use, with
+    /// carrying the level meter - measured against the 12pt caption face those use, with
     /// a few points of slack because system font metrics are not ours to promise. It is
     /// a fixed height rather than one that follows the transcript: text arrives every
     /// second or so while dictating, and a box that regrew on each pass would be a
@@ -73,7 +73,7 @@ enum PillMetrics {
     /// side: at the capsule's 28pt height that is 14, which draws a true capsule, and at
     /// the note box's 124pt the full 16 comes through as a card. So the silhouette
     /// follows the height animation instead of being animated separately on a curve of
-    /// its own — one moving quantity, not two that can disagree mid-morph.
+    /// its own - one moving quantity, not two that can disagree mid-morph.
     static let cornerRadius: CGFloat = Radius.panel
 
     /// The shell's height for a state. The only state that is not a capsule is note
@@ -86,7 +86,7 @@ enum PillMetrics {
     ///
     /// The counterpart of `shellHeight(for:)`, and the reason the morph is now one event
     /// rather than two. Both are read by `ShellSize`, which interpolates them as a single
-    /// `AnimatablePair` — so a state whose width is a number here grows on exactly the
+    /// `AnimatablePair` - so a state whose width is a number here grows on exactly the
     /// mechanism its height grows on. A state whose width is `nil` falls back to the last
     /// measured content width, which lands a layout pass later and therefore *cannot*
     /// interpolate inside the transaction that changed the state.
@@ -94,13 +94,13 @@ enum PillMetrics {
     /// **That is why the split is by content and not by taste.** A width can be a constant
     /// only when the state's content is a fixed set of glyphs:
     ///
-    ///   * `.capturingNote` — `NoteCaptureBox` pins itself to `noteContentWidth`, so the
+    ///   * `.capturingNote` - `NoteCaptureBox` pins itself to `noteContentWidth`, so the
     ///     shell is that plus the padding every state gets. This is the one that matters:
     ///     it is the far endpoint of the morph, and it was the value stepping 56 -> 292 in
     ///     one layout pass that made the pill snap wide before it grew tall.
-    ///   * `.idle` — a `mic` glyph, intrinsically ~33pt, so `minimumCapsuleWidth` decides it
+    ///   * `.idle` - a `mic` glyph, intrinsically ~33pt, so `minimumCapsuleWidth` decides it
     ///     outright and no font metric can move it.
-    ///   * `.processing` — `WritingPen` is an explicit square frame (23pt: a 10pt glyph box plus
+    ///   * `.processing` - `WritingPen` is an explicit square frame (23pt: a 10pt glyph box plus
     ///     its scribble envelope), so `minimumCapsuleWidth` decides that one too. It was 28x14
     ///     while the pen was paired with a drawn line; the line is gone and the frame shrank.
     ///
@@ -113,7 +113,7 @@ enum PillMetrics {
     /// what makes the fallback's one-pass lag harmless in practice rather than in theory:
     /// `.capturingNote` is entered from `.idle`, `.recording` and `.handsFree`, and left only
     /// for `.processing(.transcribing)` (`AppDelegate.stopRecording`) or `.idle`. Entering is
-    /// safe from a measured state — the pill already *has* that width, settled, from the
+    /// safe from a measured state - the pill already *has* that width, settled, from the
     /// previous pass. Leaving is the direction that needs the destination's width up front,
     /// and both destinations have one. `PillMorphTests` pins that list, because a future
     /// `setState` from the card into a text-carrying state would hold the card's 292pt through
@@ -149,7 +149,7 @@ enum PillMetrics {
     /// the bottom of the screen eating desktop clicks for as long as the message showed.
     ///
     /// Capped here rather than at each `Text`, because this is the one expression the drawn shell,
-    /// the bead's glyph and the hit region all read — a cap at one call site would be a cap the other
+    /// the bead's glyph and the hit region all read - a cap at one call site would be a cap the other
     /// two disagree with.
     static func shellWidth(for state: PillState, measured: CGFloat) -> CGFloat {
         let floor = max(measured, widthFloor(for: state))
@@ -169,8 +169,8 @@ enum PillMetrics {
     ///     construction, which is why only one direction looked wrong.
     ///   * `setFrame(display: true)` forces a synchronous layout and display of the whole
     ///     hosting view. Deferring the animation by a `DispatchQueue.main.async` did not buy
-    ///     the resize its own presented frame — measured with a CFRunLoopObserver, the
-    ///     deferred block ran ~0.5ms later with *no* CA commit in between — so the spring's
+    ///     the resize its own presented frame - measured with a CFRunLoopObserver, the
+    ///     deferred block ran ~0.5ms later with *no* CA commit in between - so the spring's
     ///     first frames were still being computed across a relayout and were dropped. A
     ///     time-based spring that loses its first frames then presents already part-way
     ///     through, which is exactly "very fast".
@@ -179,7 +179,7 @@ enum PillMetrics {
     ///
     /// A fixed height deletes all three at once: there is no resize to sequence against, to
     /// drop frames for, or to crash inside. It costs 96pt of extra transparent panel above
-    /// the capsule, which is free — nothing is drawn there, and `ShapedHostingView.hitTest`
+    /// the capsule, which is free - nothing is drawn there, and `ShapedHostingView.hitTest`
     /// already nils every point outside `PillWindow.drawnShellRect`, so it takes no clicks.
     ///
     /// The capsule does not move as a result. The content is bottom-anchored, so at both the
@@ -187,12 +187,12 @@ enum PillMetrics {
     /// = 30pt above the window's bottom edge.
     static let windowHeight: CGFloat = noteBoxHeight + verticalInset * 2
 
-    /// The shell's bottom edge, as a `UnitPoint.y` within the panel — the anchor the settle scales
+    /// The shell's bottom edge, as a `UnitPoint.y` within the panel - the anchor the settle scales
     /// about.
     ///
     /// Not `1.0`. The panel carries `verticalInset` of transparent padding below the shell, so
     /// scaling about the panel's own bottom would scale that padding too and drop the pill by
-    /// `verticalInset * (1 - scale)` — 1.6pt at a 0.90 settle, which reads as the pill dipping into
+    /// `verticalInset * (1 - scale)` - 1.6pt at a 0.90 settle, which reads as the pill dipping into
     /// the Dock and climbing back out. This puts the fixed point on the shell's own bottom edge,
     /// which is the one edge that must not move.
     static var shellBottomAnchorY: CGFloat { (windowHeight - verticalInset) / windowHeight }
@@ -211,7 +211,7 @@ enum PillMetrics {
     /// be judged by looking at it, so everything else about the neck is derived from it rather
     /// than tuned beside it.
     ///
-    /// This replaced `glassBlendSpacing`, which was `GlassEffectContainer(spacing:)` — the
+    /// This replaced `glassBlendSpacing`, which was `GlassEffectContainer(spacing:)` - the
     /// proximity blend between two sibling glass bodies. That approach produced the liquid
     /// read on exactly one of the four render configurations (macOS 26 with transparency on)
     /// and two separate outlined objects on the other three, and its merged silhouette has no
@@ -225,7 +225,7 @@ enum PillMetrics {
     ///   * tucked, the bead is *inscribed* in the capsule's rounded end. Its centre sits
     ///     `handsFreeButtonSide / 2` = 13pt in from the capsule's trailing edge, and the
     ///     capsule's end is a semicircle of radius `capsuleHeight / 2` = 14 whose centre is
-    ///     14pt in — so the centres are 1pt apart and 1 + 13 == 14 exactly. The bead is
+    ///     14pt in - so the centres are 1pt apart and 1 + 13 == 14 exactly. The bead is
     ///     inside the capsule's silhouette, touching it, contributing nothing to it.
     ///   * travel is `handsFreeButtonGap + handsFreeButtonSide` = 32pt, and at rest the two
     ///     edges are `handsFreeButtonGap` = 6pt apart.
@@ -239,7 +239,7 @@ enum PillMetrics {
     ///
     /// **Raising it to 3 was tried and reverted, and the arithmetic is worth keeping.** The case for
     /// 3 was that 2 breaks the bridge with only 3.74pt of the final 6pt gap open (62.3%), so the
-    /// thread appears to vanish with a third of the journey still to run. True — but it optimises the
+    /// thread appears to vanish with a third of the journey still to run. True - but it optimises the
     /// wrong quantity, because it ignores how *thick* the bridge is at the moment it goes:
     ///
     ///     fillet 2 -> breaks at extrusion 0.929 with a **1.86pt** thread, gone in ~3ms of a 300ms reveal
@@ -247,7 +247,7 @@ enum PillMetrics {
     ///
     /// A 6.74pt bridge disappearing is a far more visible pop than a 1.86pt one, so 3 trades a small
     /// early release for a large late one. The invariant that actually matters is the one
-    /// `PillShellShapeTests` already pins — the neck must be *nearly gone* before it lets go — and 2
+    /// `PillShellShapeTests` already pins - the neck must be *nearly gone* before it lets go - and 2
     /// satisfies it. Raise this only with eyes on the result.
     static let neckFillet: CGFloat = 2
 
@@ -266,7 +266,7 @@ enum PillMetrics {
     /// `handsFreeButtonCentreX` clamps the resting position to the panel's edge, so the bead's
     /// journey is 32pt only while it is unclamped. Working it out: the centres are 1pt apart when
     /// tucked, so the resting separation is `1 + travel` = `161 - capsuleWidth / 2` once clamped,
-    /// and the neck lets go at `neckPinchDistance` = 30.74pt — which needs
+    /// and the neck lets go at `neckPinchDistance` = 30.74pt - which needs
     /// `capsuleWidth <= 260.5`. Above that the bead settles while still joined and reads as a
     /// permanent lobe rather than a separate object. That is the same trade the clamp already
     /// makes today (an overlapping button that stays whole and clickable beats a clipped one), it
@@ -276,7 +276,7 @@ enum PillMetrics {
         // Inscribed in the capsule's rounded end: the bead's centre is its own radius in from
         // the trailing edge, which is exactly internal tangency (see `neckFillet`).
         let tucked = -handsFreeButtonSide / 2
-        // At rest, wherever the panel allows the button to sit — the same clamp the glyph uses.
+        // At rest, wherever the panel allows the button to sit - the same clamp the glyph uses.
         let rest = handsFreeButtonCentreX(capsuleWidth: capsuleWidth) - capsuleWidth / 2
         return tucked + (rest - tucked) * min(max(extrusion, 0), 1)
     }
@@ -291,8 +291,8 @@ enum PillMetrics {
     /// be shadow and hit region hanging off the panel's edge.
     ///
     /// Named for the bead rather than left as `shellWidth(capsuleWidth:)` now that
-    /// `shellWidth(for:measured:)` exists: the two answer different questions — this one adds
-    /// the bead, that one *produces* the capsule width this consumes — and one label away from
+    /// `shellWidth(for:measured:)` exists: the two answer different questions - this one adds
+    /// the bead, that one *produces* the capsule width this consumes - and one label away from
     /// each other in the same enum is a mistake waiting to be made. The composition reads
     /// `shellWidthWithBead(capsuleWidth: shellWidth(for: state, measured:))`.
     static func shellWidthWithBead(capsuleWidth: CGFloat) -> CGFloat {
@@ -300,8 +300,8 @@ enum PillMetrics {
             + handsFreeButtonSide / 2
     }
 
-    /// The offset of the neck's fillet centre from the capsule's end-arc centre — `x` along
-    /// the line joining the two circles, `y` perpendicular to it — or `nil` once the neck has
+    /// The offset of the neck's fillet centre from the capsule's end-arc centre - `x` along
+    /// the line joining the two circles, `y` perpendicular to it - or `nil` once the neck has
     /// pinched off.
     ///
     /// A circle of radius `rF` tangent to both circles from outside has its centre at distance
@@ -323,11 +323,11 @@ enum PillMetrics {
     ///
     /// Substituting the pinch condition `h == fillet` into the intersection above gives
     /// `x = sqrt(rA * (rA + 2 * fillet))` and `d - x = sqrt(rB * (rB + 2 * fillet))`, so the
-    /// distance is their sum. With the pill's numbers — `rA` 14, `rB` 13, `fillet` 2 —
+    /// distance is their sum. With the pill's numbers - `rA` 14, `rB` 13, `fillet` 2  - 
     /// sqrt(14 * 18) + sqrt(13 * 17) = 15.874 + 14.866 = **30.740pt**, against a 33pt resting
     /// separation: an edge gap of 3.74pt, so the bead detaches 3.74pt before it settles.
     ///
-    /// Published so the pinch can be asserted rather than eyeballed — the value that decides
+    /// Published so the pinch can be asserted rather than eyeballed - the value that decides
     /// whether the bead detaches at all is worth a test, and `neckArcOffset` returning `nil`
     /// is otherwise only observable by rendering.
     static func neckPinchDistance(rA: CGFloat, rB: CGFloat, fillet: CGFloat) -> CGFloat {
@@ -341,7 +341,7 @@ enum PillMetrics {
     /// content-driven and the panel's is fixed: in `.handsFree` with a live preview the row
     /// reaches roughly 277pt (padding 10 + dot 8 + 8 + meter 25 + 8 + preview up to 190 + 8 +
     /// glyph 10 + padding 10), which puts the button's right edge at 277/2 + 6 + 26 = 170.5
-    /// from centre — 10.5pt past the 160pt half-panel. The one control that ends a latched
+    /// from centre - 10.5pt past the 160pt half-panel. The one control that ends a latched
     /// recording was being clipped in half exactly when the pill was busiest.
     ///
     /// So it slides inward instead of off the edge. Overlapping the capsule slightly is the
@@ -352,7 +352,7 @@ enum PillMetrics {
         return min(clear, edge)
     }
 
-    /// Whether a state draws something other than a capsule — today, only note capture.
+    /// Whether a state draws something other than a capsule - today, only note capture.
     ///
     /// The predicate rather than `state == .capturingNote` at the call sites, so a future
     /// state that grows the shell inherits everything keyed off this (the window resize
@@ -369,7 +369,7 @@ enum PillMetrics {
 /// taller than it is round.
 ///
 /// One shape for both states is what makes this a morph rather than a cross-fade
-/// between a capsule and a card — the glass, the border and the frame stay a single
+/// between a capsule and a card - the glass, the border and the frame stay a single
 /// view whose size animates. `Path(roundedRect:cornerRadius:)` draws circular corner
 /// arcs, so at a radius of half the height the two ends meet as semicircles and the
 /// result is the same silhouette `Capsule` drew here before.
@@ -400,30 +400,30 @@ struct PillShape: InsettableShape {
 ///
 /// **Why a shape and not `GlassEffectContainer`.** The container is the platform's proximity
 /// blend and it genuinely does the metaball merge, but its blended silhouette is not something
-/// you can obtain a `Path` for — so it cannot be stroked. The pill's outer contrast ring is
+/// you can obtain a `Path` for - so it cannot be stroked. The pill's outer contrast ring is
 /// load-bearing (`PillContent` records that without it the pill "dissolves against busy or
 /// mid-toned backdrops and reads as a translucent smudge"), which leaves only two options with
 /// the container: one stroke per body, which is two fully outlined objects sliding through each
-/// other, or no stroke at all. `Path.union` is no escape either — it is macOS 14.0 and the
+/// other, or no stroke at all. `Path.union` is no escape either - it is macOS 14.0 and the
 /// package floor is 13.3. And the container is a plain passthrough before macOS 26 *and* under
 /// Reduce Transparency, so it produced the liquid read on one of four render configurations and
 /// two separate objects on the other three.
 ///
 /// Putting the bead in the pill's own silhouette answers all of that at once: one `Path` feeds
 /// `glassEffect(in:)`, both `strokeBorder`s, the clip and the shadow, on every configuration.
-/// What is given up is the outward *bulge* Apple's field produces mid-merge — this necks by
+/// What is given up is the outward *bulge* Apple's field produces mid-merge - this necks by
 /// geometry, not surface tension. `PillMetrics.neckFillet` is the knob for that.
 ///
 /// **The path is one closed contour while the bead is joined, and two while it is detached.**
 /// That distinction is the whole point and it is not cosmetic: `strokeBorder` is
-/// `inset(by:).stroke(...)`, and `stroke` strokes *every* subpath — so a shape assembled as
+/// `inset(by:).stroke(...)`, and `stroke` strokes *every* subpath - so a shape assembled as
 /// rounded-rect + circle + neck-patch would ink the capsule's buried trailing arc, the lobe's
 /// buried arc and both neck chords as well, five or six outlines where the fill shows one.
 /// Verified rather than assumed: stroking this shape and probing its centre line inks exactly
 /// two spans at every extrusion up to the pinch, and four after it (two objects, one outline
 /// each, which is what "it disconnect and then merge back" asks for). See `PillShellShapeTests`.
 ///
-/// The lobe is only drawn when the shell's trailing end is a true semicircle — the whole neck
+/// The lobe is only drawn when the shell's trailing end is a true semicircle - the whole neck
 /// derivation models it as a circle of radius `height / 2`, which `Path(roundedRect:)` only
 /// draws while the corner radius reaches that far. So the 124pt note card gets the plain shell
 /// automatically, rather than a bulge at its mid-height right edge for the ~300ms an extrusion
@@ -435,7 +435,7 @@ struct PillShellShape: InsettableShape {
     /// The capsule's own width.
     ///
     /// Passed rather than read from `rect`, because the rect this is drawn in is deliberately
-    /// wider — `PillMetrics.shellWidthWithBead(capsuleWidth:)` — so the lobe has room to grow into the
+    /// wider - `PillMetrics.shellWidthWithBead(capsuleWidth:)` - so the lobe has room to grow into the
     /// transparent panel without moving the capsule. That regression is on the record: giving
     /// the button a slot inside the capsule shifted the microphone off centre.
     var capsuleWidth: CGFloat
@@ -474,7 +474,7 @@ struct PillShellShape: InsettableShape {
     /// centre held still.
     ///
     /// That sign rule is the whole of why the two strokes stay concentric through the neck, and
-    /// getting it backwards would cross them — the most visible possible defect on a bridge
+    /// getting it backwards would cross them - the most visible possible defect on a bridge
     /// 12pt wide. Verified: `inset(by: 0.5)` on the extruded shape puts every sampled point of
     /// the inner contour inside the outer fill, with a uniform 0.5pt gap on all four sides.
     func inset(by amount: CGFloat) -> PillShellShape {
@@ -483,7 +483,7 @@ struct PillShellShape: InsettableShape {
         return copy
     }
 
-    /// The shell without its bead — `PillShape`'s path, in the capsule's part of `rect`.
+    /// The shell without its bead - `PillShape`'s path, in the capsule's part of `rect`.
     private func shellOnly(in rect: CGRect) -> Path {
         let bounds = CGRect(x: rect.minX + insetAmount,
                             y: rect.minY + insetAmount,
@@ -518,7 +518,7 @@ struct PillShellShape: InsettableShape {
                            y: midY)
         let separation = bead.x - trailing.x
         // Internal containment: the bead is inside the capsule's end and adds nothing. Exactly
-        // true at `extrusion == 0` — 1 + 13 == 14 — and it survives the inset, since both radii
+        // true at `extrusion == 0` - 1 + 13 == 14 - and it survives the inset, since both radii
         // shrink by the same amount.
         guard separation + beadRadius > endRadius else { return shellOnly(in: rect) }
 
@@ -526,7 +526,7 @@ struct PillShellShape: InsettableShape {
                                                     rA: endRadius,
                                                     rB: beadRadius,
                                                     fillet: filletRadius) else {
-            // Pinched off. Two objects, each with its own outline — which is the ask, not the
+            // Pinched off. Two objects, each with its own outline - which is the ask, not the
             // failure: the failure was two outlines *during* the merge.
             var path = shellOnly(in: rect)
             path.addEllipse(in: CGRect(x: bead.x - beadRadius, y: midY - beadRadius,

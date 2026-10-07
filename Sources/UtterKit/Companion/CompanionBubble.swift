@@ -3,8 +3,8 @@ import AppKit
 
 // MARK: - What the bubble is showing
 //
-// The bubble used to be one `Text` fed by a `String`, so the three things it carries — a
-// dictation failure, a live pomodoro countdown, a note the user pinned — arrived
+// The bubble used to be one `Text` fed by a `String`, so the three things it carries - a
+// dictation failure, a live pomodoro countdown, a note the user pinned - arrived
 // indistinguishable from each other. A countdown is a number, a failure is a failure and a
 // reminder is a nudge; a reader should not have to parse the words to work out which.
 //
@@ -19,7 +19,7 @@ enum CompanionNoticeKind: Equatable {
     case failure
     /// The pomodoro countdown, `mm:ss`, updated once a second.
     case timer
-    /// A reminder that just fired — stretch, water, a block boundary, a timed message.
+    /// A reminder that just fired - stretch, water, a block boundary, a timed message.
     case reminder
     /// The note the user pinned above the character's head.
     case pinned
@@ -56,10 +56,10 @@ enum CompanionNoticeKind: Equatable {
     /// rejected as a design decision rather than on contrast: it clears 3:1 in every
     /// configuration the app can actually draw (worst 5.90:1, Violet over a white desktop).
     /// It is also derived from the **active** theme rather than from the surface it sits on, so
-    /// it cannot be measured per theme without mutating the shared `ThemeManager` — which is
+    /// it cannot be measured per theme without mutating the shared `ThemeManager` - which is
     /// its own reason not to spend it on a glyph that floats over the desktop.
     ///
-    /// So colour is spent on the one kind where it carries weight, and never as the only cue —
+    /// So colour is spent on the one kind where it carries weight, and never as the only cue  - 
     /// the symbol differs for all four (WCAG 1.4.1), and `spokenKind` says it in words.
     var glyphTint: Color {
         switch self {
@@ -99,7 +99,7 @@ struct CompanionNotice: Equatable {
     /// The headline. Wraps; never a fragment of a truncated line if there is room.
     let line: String
     /// A second, quieter line, or nil. Only populated when there is genuinely a second
-    /// thing to say — today that is a pinned note surviving underneath a countdown or a
+    /// thing to say - today that is a pinned note surviving underneath a countdown or a
     /// reminder, which the single-line bubble dropped for the whole of a focus block.
     let detail: String?
 
@@ -123,11 +123,11 @@ enum CompanionBubble {
     /// How far the bubble's top edge stays inside the panel's own top edge.
     ///
     /// The panel is borderless and *clips*, and the bubble's rim is drawn by `strokeBorder`
-    /// — i.e. inside the shape's own bounds — so in principle 0 would not clip anything.
+    /// - i.e. inside the shape's own bounds - so in principle 0 would not clip anything.
     /// 1pt (two device pixels on a retina display) is here for the same reason
     /// `CompanionGeometry.clearanceFromCapsule` is 2: `clampedY` permits the panel's top
-    /// edge to sit up to `panelSide / 2 - maxReachAboveCentre` — measured 1.07pt at 36 and
-    /// 1.17pt at 84 — *above* the screen's visible top, so the outermost row of the panel is
+    /// edge to sit up to `panelSide / 2 - maxReachAboveCentre` - measured 1.07pt at 36 and
+    /// 1.17pt at 84 - *above* the screen's visible top, so the outermost row of the panel is
     /// not reliably on screen when the companion is dragged to the top of the display.
     static let panelInset: CGFloat = 1
 
@@ -135,7 +135,7 @@ enum CompanionBubble {
     ///
     /// Vertical is 2.5 and it is *solved for*, not chosen: it is the largest value at which
     /// a `large` (68pt) companion still fits two 12pt lines above its own head. At 3pt it
-    /// fits 1 — the margin is 0.24pt. That single number is the clearest statement of how
+    /// fits 1 - the margin is 0.24pt. That single number is the clearest statement of how
     /// full this panel is, and it is why the vertical padding is not a `Space` token.
     static let horizontalPadding = Space.x2
     static let verticalPadding: CGFloat = 2.5
@@ -143,7 +143,7 @@ enum CompanionBubble {
     static let glyphGap = Space.x1
 
     /// Corner radius. Clamped by SwiftUI to half the height, so the one-line bubble (18-20pt
-    /// tall) renders as a capsule and the two-line one as a rounded card — which is the right
+    /// tall) renders as a capsule and the two-line one as a rounded card - which is the right
     /// read for each without a second shape.
     static let cornerRadius = Radius.field
 
@@ -155,10 +155,10 @@ enum CompanionBubble {
     ///
     /// **`Veil.nestedSurface`'s *light* value, deliberately used in both appearances.** Every
     /// other surface in the app sits inside a window, which is why the dark ramp is allowed to
-    /// be thinner — `Veil`'s own note: "there is far less luminance behind the window to show
+    /// be thinner - `Veil`'s own note: "there is far less luminance behind the window to show
     /// through". This bubble has no window behind it. It floats in a transparent panel over an
     /// *arbitrary wallpaper*, so the dark assumption does not hold, and at 0.62 it fails.
-    /// Modelling the material as fully transparent (the conservative bound — see the test),
+    /// Modelling the material as fully transparent (the conservative bound - see the test),
     /// `Ink.primary` over a white desktop measured
     ///
     ///     at 0.62   Graphite 3.47   Pine 3.97   Violet 4.12   Ember 4.28    all under 4.5
@@ -177,7 +177,7 @@ enum CompanionBubble {
     /// `base` to `surfaceAlpha` is `(surfaceAlpha - base) / (1 - base)`. In light appearance
     /// the base already *is* `surfaceAlpha`, so this is 0 and the layer is a no-op; in dark it
     /// is 0.632. Under Reduce Transparency `ContentGlass` fills opaquely underneath, so the
-    /// lift lands on an opaque surface and changes nothing — which is why this needs no branch
+    /// lift lands on an opaque surface and changes nothing - which is why this needs no branch
     /// of its own.
     static func veilLift(isDark: Bool) -> Double {
         let base = Veil.nestedSurface(isDark: isDark)
@@ -200,7 +200,7 @@ enum CompanionBubble {
         var lineGap: CGFloat { typo.lineSpacing }
     }
 
-    /// The smallest rung, and the fallback when even it does not fit — named separately so
+    /// The smallest rung, and the fallback when even it does not fit - named separately so
     /// `room(in:)` needs no force-unwrap of the ladder's last element.
     ///
     /// It exists for one measured case: at `small` (36pt) the room above the character's head is
@@ -220,7 +220,7 @@ enum CompanionBubble {
         let step: TypeStep
         /// Total lines the bubble may use, headline plus detail.
         let lines: Int
-        /// The widest the bubble may be — the panel, less its inset on each side.
+        /// The widest the bubble may be - the panel, less its inset on each side.
         let maxWidth: CGFloat
         /// The tallest it may be without reaching the character's resting art.
         let maxHeight: CGFloat
@@ -229,7 +229,7 @@ enum CompanionBubble {
         ///
         /// The detail is **dropped** rather than allowed to take the headline's only line: a
         /// pinned note underneath a countdown is a bonus, and a headline truncated to nothing
-        /// is a failure. So at `small` and `medium` — 1 line — the detail never appears.
+        /// is a failure. So at `small` and `medium` - 1 line - the detail never appears.
         ///
         /// Here rather than in the view so the rule has one copy and a test can hold it.
         func split(hasDetail: Bool) -> (headline: Int, showsDetail: Bool) {
@@ -272,13 +272,13 @@ enum CompanionBubble {
 /// bubble that never overlaps the *moving* character therefore cannot exist inside this panel
 /// at any size. What can exist is a bubble that never overlaps the character at *rest*, and
 /// that is what these bound. The top strip is chosen over the side strips because the vertical
-/// motion budget is the smaller one — `hopHeight` (0.32 x size) against `roamRange` (0.41 x
-/// size) — so the top is where the character intrudes least.
+/// motion budget is the smaller one - `hopHeight` (0.32 x size) against `roamRange` (0.41 x
+/// size) - so the top is where the character intrudes least.
 extension CompanionGeometry {
 
     /// Free height between the panel's top edge and the top of the character's resting frame.
     ///
-    /// Equal to `max(roamRange, hopHeight) + stretchSlack` — i.e. the panel's entire vertical
+    /// Equal to `max(roamRange, hopHeight) + stretchSlack` - i.e. the panel's entire vertical
     /// motion budget. Measured: **20.73pt at 36, 29.50 at 52, 38.26 at 68, 47.03 at 84.**
     var bubbleHeadroom: CGFloat { panelSide / 2 - characterSize / 2 }
 
@@ -290,11 +290,11 @@ extension CompanionGeometry {
     var bubbleMaxWidth: CGFloat { panelSide - CompanionBubble.panelInset * 2 }
 
     /// How far the character's art rises **into** the bubble's strip at the peak of a hop with
-    /// a stretch on top — the overlap this panel cannot avoid.
+    /// a stretch on top - the overlap this panel cannot avoid.
     ///
     /// Derived from `characterTop(panelOriginY:)` rather than restating the pose arithmetic, so
     /// this figure and the clamp that keeps the character on screen cannot drift apart.
-    /// Measured: **19.66pt at 36, 28.39 at 52, 37.13 at 68, 45.86 at 84** — against
+    /// Measured: **19.66pt at 36, 28.39 at 52, 37.13 at 68, 45.86 at 84** - against
     /// `bubbleHeadroom` of 20.73 / 29.50 / 38.26 / 47.03, i.e. a margin of 1.07 / 1.11 / 1.13 /
     /// 1.17pt. `CompanionGeometryTests.headroomIsAlmostEntirelyTheMotionBudget` pins it.
     var characterMotionAboveRest: CGFloat {
@@ -309,7 +309,7 @@ extension CompanionGeometry {
 ///
 /// **Display only.** The panel cannot become key (`CompanionWindow.canBecomeKey` is false) and
 /// the bubble is `allowsHitTesting(false)` at its call site, so there is nothing interactive
-/// here and no tooltip either — a tooltip needs a hover the view cannot receive.
+/// here and no tooltip either - a tooltip needs a hover the view cannot receive.
 struct CompanionBubbleView: View {
     let notice: CompanionNotice
     let geometry: CompanionGeometry
@@ -352,14 +352,14 @@ struct CompanionBubbleView: View {
     ///
     /// `ink: Ink.primary` on **both** lines, and that is a measurement rather than a
     /// preference. `Typo.captionEmphasis` and `.keycap` both default to `Ink.secondary`, which
-    /// on this surface fails in 3 of the 12 theme/wallpaper pairs — worst **3.66:1** (Graphite
+    /// on this surface fails in 3 of the 12 theme/wallpaper pairs - worst **3.66:1** (Graphite
     /// over a white desktop), then 4.29 (Linen over black) and 4.35 (Paper over black), against
     /// a 4.5:1 floor. It passes on the other nine, which is exactly why it cannot be used: the
     /// three it fails on are wallpaper-dependent, so a user would find the detail line
     /// unreadable by changing their desktop picture.
     ///
     /// So there is no second ink level here. The two lines are separated by **order and
-    /// truncation** instead — the detail sits below, gets exactly one line, and is the first
+    /// truncation** instead - the detail sits below, gets exactly one line, and is the first
     /// thing dropped when the budget is one line.
     private func text(_ string: String, room: CompanionBubble.Room,
                       limit: Int, monospaced: Bool) -> some View {
@@ -371,7 +371,7 @@ struct CompanionBubbleView: View {
             .multilineTextAlignment(.leading)
             .lineLimit(limit)
             .truncationMode(.tail)
-            // Shrinks a single over-wide word rather than truncating it — at `small` the text
+            // Shrinks a single over-wide word rather than truncating it - at `small` the text
             // column is 45pt, which one long word can exceed on its own.
             .minimumScaleFactor(0.8)
             .fixedSize(horizontal: false, vertical: true)

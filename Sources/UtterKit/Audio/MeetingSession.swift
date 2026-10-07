@@ -2,8 +2,8 @@ import Foundation
 
 /// Records a meeting and turns it into a note as it goes.
 ///
-/// Two audio sources are captured at once — the microphone (the user) and system
-/// output (everyone else) — and transcribed in rolling windows rather than in one
+/// Two audio sources are captured at once - the microphone (the user) and system
+/// output (everyone else) - and transcribed in rolling windows rather than in one
 /// pass at the end. Windowing matters for three reasons:
 ///
 ///   * A one-hour meeting transcribed in a single call would hold an hour of
@@ -14,7 +14,7 @@ import Foundation
 ///     one window rather than the whole meeting.
 ///
 /// Each source is transcribed separately and labelled, which gives "You" vs
-/// "Others" for free — they are literally different audio streams. That is a
+/// "Others" for free - they are literally different audio streams. That is a
 /// *source* distinction, not speaker diarisation: this cannot tell two remote
 /// participants apart, and does not pretend to.
 ///
@@ -25,8 +25,8 @@ import Foundation
 ///     into turns at gaps whisper actually measured (`TurnSegmenter`), so several
 ///     contributions inside one 30-second window stop being glued into a single
 ///     paragraph. Every turn from a source still carries the *same* label. A pause is
-///     not evidence that the voice changed — people breathe, and two people can swap
-///     without one — so numbering turns "Speaker 1/2/3" off pause timings would be
+///     not evidence that the voice changed - people breathe, and two people can swap
+///     without one - so numbering turns "Speaker 1/2/3" off pause timings would be
 ///     inventing an attribution. There is no on-device Apple API that could do it
 ///     properly either: the macOS 26.5 `SpeechAnalyzer` exposes exactly
 ///     `DictationTranscriber`, `SpeechTranscriber` and `SpeechDetector`, and nothing
@@ -38,7 +38,7 @@ import Foundation
 ///     content enumeration before the mic tap even opens), a dropped
 ///     `ScreenCaptureKit` packet shifts one clock against the other permanently, and
 ///     each stream advances its own retry cursor so one can be a whole window ahead of
-///     the other. Interleaving on that would fabricate a turn order — asserting who
+///     the other. Interleaving on that would fabricate a turn order - asserting who
 ///     replied to whom. Source-major ordering is visibly coarse, which is the honest
 ///     failure.
 ///
@@ -84,14 +84,14 @@ final class MeetingSession: ObservableObject {
     ///
     /// `tick()` fires every second but a 30s window takes several seconds of
     /// inference, so without this the next tick snapshots the same audio and
-    /// transcribes it again — appending the segment to the note twice, then calling
+    /// transcribes it again - appending the segment to the note twice, then calling
     /// `consume()` a second time and discarding 30s that was never transcribed.
     private var isDraining = false
 
     /// The in-flight drain, so `stop()` can await it instead of polling `isDraining`.
     ///
     /// `while isDraining { await Task.yield() }` was correct but spun the main actor
-    /// flat out for the whole of the last window's inference — several seconds of one
+    /// flat out for the whole of the last window's inference - several seconds of one
     /// core burnt at the exact moment the user has just pressed Stop and is watching
     /// "Finishing the transcript…". Awaiting the task suspends instead.
     private var drainTask: Task<Void, Never>?
@@ -99,14 +99,14 @@ final class MeetingSession: ObservableObject {
     /// Consecutive failed windows, counted **per stream**.
     ///
     /// A failed window is left in the buffer to be retried, which is right for a
-    /// transient fault — but if the transcriber stays broken the same window would
+    /// transient fault - but if the transcriber stays broken the same window would
     /// be retried forever while audio piles up behind it, and the bounded-memory
     /// guarantee would be gone. After `maxWindowRetries` the window is given up on
     /// and consumed, so the meeting keeps moving.
     ///
     /// One counter per stream, not one shared: the mic and system drains run back to
     /// back over the same budget, so a single counter had them eating each other's
-    /// retries — with a broken transcriber the mic gave up after two attempts and
+    /// retries - with a broken transcriber the mic gave up after two attempts and
     /// system audio after four, neither of them the three the constant promises.
     private var micFailures = 0
     private var systemFailures = 0
@@ -116,7 +116,7 @@ final class MeetingSession: ObservableObject {
     /// Whether meeting capture can run at all, and why not if it can't.
     ///
     /// This is the *Screen Recording* answer specifically, which is what the Permissions card and the
-    /// onboarding checklist report. It is no longer the whole story — see `prepare`, which is what a
+    /// onboarding checklist report. It is no longer the whole story - see `prepare`, which is what a
     /// caller about to start a capture should ask.
     static var permission: SystemAudioCapture.PermissionState {
         SystemAudioCapture.permissionState()
@@ -130,13 +130,13 @@ final class MeetingSession: ObservableObject {
     /// Clear the way for a capture, asking for whatever is still needed. Returns nil to go ahead, or
     /// the sentence to put in front of the user.
     ///
-    /// One function rather than a `switch` at each call site, because there were two of them — the
-    /// offer card and the Notes screen — and they had already drifted: the offer card bailed when the
+    /// One function rather than a `switch` at each call site, because there were two of them - the
+    /// offer card and the Notes screen - and they had already drifted: the offer card bailed when the
     /// Screen Recording request came back false and the Notes screen carried on regardless, so the
     /// same denial produced an explanation in one place and a half-recorded meeting in the other.
     static func prepare() -> String? {
-        // The per-process tap route needs no Screen Recording grant at all — a different and much
-        // narrower permission, asked for by starting — so when it is available there is nothing to
+        // The per-process tap route needs no Screen Recording grant at all - a different and much
+        // narrower permission, asked for by starting - so when it is available there is nothing to
         // preflight and nothing to explain. See `SystemAudioCapture.processTapAvailable`.
         if SystemAudioCapture.processTapAvailable { return nil }
 
@@ -145,7 +145,7 @@ final class MeetingSession: ObservableObject {
             return nil
         case .notDetermined:
             // Ask, and *read the answer*. `permissionState()` is `CGPreflightScreenCaptureAccess`,
-            // which returns a Bool, so it can only ever say granted or not-yet-asked — a user who
+            // which returns a Bool, so it can only ever say granted or not-yet-asked - a user who
             // denied Screen Recording arrives here, not in `.denied`. `requestPermission` returns
             // false both when the user says no and when macOS has already asked once and will not
             // ask again, and in both cases the route left is System Settings *and a relaunch*. So
@@ -163,7 +163,7 @@ final class MeetingSession: ObservableObject {
 
     /// Begin recording into a new note.
     ///
-    /// Returns the note's id so the caller can select it — the note is created up
+    /// Returns the note's id so the caller can select it - the note is created up
     /// front rather than at the end, so partial transcripts have somewhere to land
     /// from the first window.
     /// `store` is optional rather than defaulted to `.shared`: a default argument is
@@ -171,7 +171,7 @@ final class MeetingSession: ObservableObject {
     /// singleton there is a warning today and an error in the Swift 6 language mode.
     /// Resolving it inside the body says the same thing where it is actually true.
     /// `source` is the app the call was detected in, when there was one and it could be named. It
-    /// does two things and neither of them is required: it titles the note ("Zoom meeting — …"), and
+    /// does two things and neither of them is required: it titles the note ("Zoom meeting - …"), and
     /// it is what lets the capture tap *only that process* instead of the whole system mix. A capture
     /// started from the Notes screen passes nil and gets the old behaviour of both.
     func start(
@@ -184,7 +184,7 @@ final class MeetingSession: ObservableObject {
         // Retry from a failure, not just from rest.
         //
         // `.failed` was terminal: nothing assigned `.idle` again, and the UI only
-        // draws the Record button in the `.idle` branch — so one failed start
+        // draws the Record button in the `.idle` branch - so one failed start
         // (Screen Recording not yet granted, which is the *normal* first-run path)
         // killed meeting capture until the app was relaunched.
         switch state {
@@ -338,7 +338,7 @@ final class MeetingSession: ObservableObject {
         var additions: [String] = []
 
         // Takes the stream's retry count and returns it alongside the byte count,
-        // rather than mutating actor state through `inout` — passing isolated state as
+        // rather than mutating actor state through `inout` - passing isolated state as
         // `inout` across an `await` is exactly the race Swift's actor checking
         // rejects, since another hop could observe the half-updated value.
         //
@@ -373,11 +373,11 @@ final class MeetingSession: ObservableObject {
                     cursor += take
                     // One paragraph per turn, each carrying the same label. The blank
                     // line between them is the *only* thing separating two people who
-                    // spoke in the same window — it says "there was a real pause here"
+                    // spoke in the same window - it says "there was a real pause here"
                     // and stops short of saying who filled it.
                     additions.append(contentsOf: turns.map { MeetingTranscript.line(label, $0.text) })
                 case .silence:
-                    // Nothing was said. Consume it — there is nothing to keep, and
+                    // Nothing was said. Consume it - there is nothing to keep, and
                     // holding silent audio would stall the buffer forever.
                     cursor += take
                 case .failed:
@@ -422,12 +422,12 @@ final class MeetingSession: ObservableObject {
     /// The outcome of transcribing one window.
     ///
     /// "Nothing was said" and "the transcriber broke" used to collapse into `nil`,
-    /// and the caller advanced its cursor for both — so a transient whisper failure
+    /// and the caller advanced its cursor for both - so a transient whisper failure
     /// (the Metal context is invalidated whenever the user switches speech model)
     /// silently destroyed 30 seconds of real speech that then no longer existed in
     /// the buffer. Silence is discardable; a failure is not.
     private enum WindowOutcome {
-        /// One or more turns of speech. Never empty — an empty result is `.silence`.
+        /// One or more turns of speech. Never empty - an empty result is `.silence`.
         case turns([SpeechTurn])
         case silence
         case failed

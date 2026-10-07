@@ -11,10 +11,10 @@ import ScreenCaptureKit
 /// coming out of the speakers. There are two ways to read that, and this picks
 /// the better one at runtime:
 ///
-///   * **A CoreAudio process tap** (`ProcessTapCapture`, macOS 14.2+) — captures
+///   * **A CoreAudio process tap** (`ProcessTapCapture`, macOS 14.2+) - captures
 ///     one process, and asks for permission to "record your system audio" rather
 ///     than to capture the display. Preferred whenever it works.
-///   * **`ScreenCaptureKit`** — the whole output mix minus our own process, gated
+///   * **`ScreenCaptureKit`** - the whole output mix minus our own process, gated
 ///     by Screen Recording. The fallback, and what shipped first: on macOS 13, or
 ///     if any step of the tap route fails, this is what runs.
 ///
@@ -25,7 +25,7 @@ import ScreenCaptureKit
 ///
 /// The route is chosen by *trying* it, not by testing a version. Every HAL call in
 /// the tap path is status-checked and the started tap has to deliver a buffer
-/// before the route is committed to — see `ProcessTapCapture.awaitFirstAudio` —
+/// before the route is committed to - see `ProcessTapCapture.awaitFirstAudio`  - 
 /// because a tap that starts and stays silent looks exactly like a quiet meeting
 /// until the meeting is over. Anything short of real audio falls back.
 ///
@@ -34,13 +34,13 @@ import ScreenCaptureKit
 ///   * **Audio only.** The stream is configured with a 2×2 pixel video feed
 ///     because `SCStream` requires *some* video configuration; the frames are
 ///     discarded and never inspected. Nothing about the screen is read.
-///   * **Utter's own output is excluded** — `excludesCurrentProcessAudio` on the
+///   * **Utter's own output is excluded** - `excludesCurrentProcessAudio` on the
 ///     ScreenCaptureKit path, and our own process object excluded from the tap on
-///     the other — so the app cannot record its own UI sounds and feed them back
+///     the other - so the app cannot record its own UI sounds and feed them back
 ///     into a transcript.
 ///   * **Samples stay in memory.** Converted straight to the same Int16/16 kHz/mono
 ///     format `AudioRecorder` produces and appended to a buffer, never written to
-///     disk — the same invariant the microphone path already holds.
+///     disk - the same invariant the microphone path already holds.
 ///
 /// `permissionState` answers for Screen Recording only, which is what the
 /// Permissions card and the onboarding checklist report and still exactly true. It
@@ -65,8 +65,8 @@ final class SystemAudioCapture {
                 return "Utter needs Screen Recording permission to hear other participants. Turn it on in System Settings › Privacy & Security › Screen Recording, then restart Utter."
             case .notDetermined:
                 // Deliberately does not name Screen Recording. Which permission is asked for depends
-                // on the route taken at the moment of recording — system audio recording on the tap
-                // path, Screen Recording on the fallback — and this string is written before that is
+                // on the route taken at the moment of recording - system audio recording on the tap
+                // path, Screen Recording on the fallback - and this string is written before that is
                 // known.
                 return "macOS will ask permission the first time you record a meeting."
             case .unsupported(let why):
@@ -112,7 +112,7 @@ final class SystemAudioCapture {
     ///
     /// Two checks, and both are needed for different reasons.
     ///
-    /// `#available(macOS 14.2, *)` is not a version guess standing in for a capability test — it is
+    /// `#available(macOS 14.2, *)` is not a version guess standing in for a capability test - it is
     /// the compiler's requirement: `AudioHardwareCreateProcessTap` is annotated
     /// `API_AVAILABLE(macos(14.2))`, so the symbol cannot be called at all without it. This is the
     /// difference from `CallDetector`, whose property selectors are plain `CF_ENUM` constants with no
@@ -122,7 +122,7 @@ final class SystemAudioCapture {
     /// the HAL on this machine whether it implements tap objects at all, costs one property query, has
     /// no side effects and triggers no prompt. It answered true on macOS 26.6 with an empty tap list.
     ///
-    /// Neither of them establishes that a tap will *work* — a permission this cannot preflight, a
+    /// Neither of them establishes that a tap will *work* - a permission this cannot preflight, a
     /// composition this HAL will not clock. That is `start`'s job, by trying and falling back.
     ///
     /// Computed once. The answer cannot change within a launch, and `ReadinessMonitor` polls the
@@ -150,7 +150,7 @@ final class SystemAudioCapture {
     private let bufferQueue = DispatchQueue(label: "utter.dictation.systemaudio")
     private var _samples = Data()
 
-    /// Int16 / 16 kHz / mono PCM captured so far — the same format
+    /// Int16 / 16 kHz / mono PCM captured so far - the same format
     /// `AudioRecorder` yields, so both sides can be mixed without conversion.
     var samples: Data {
         bufferQueue.sync { _samples }
@@ -196,7 +196,7 @@ final class SystemAudioCapture {
     /// The tap route's capture, while one is running.
     ///
     /// No `@available` on it, and `ProcessTapCapture` carries none on the type either, because a
-    /// stored property cannot be potentially unavailable — the alternative was an `AnyObject?` and a
+    /// stored property cannot be potentially unavailable - the alternative was an `AnyObject?` and a
     /// cast at every use. Only `start(processes:)` needs 14.2, and only `startProcessTap` calls it.
     private var processTap: ProcessTapCapture?
 
@@ -217,7 +217,7 @@ final class SystemAudioCapture {
     /// Begin capturing.
     ///
     /// `processes` are the HAL process objects to capture, when the caller knows which ones hold the
-    /// call — `CallSource.processObject`. Empty means everything except Utter, which is the only thing
+    /// call - `CallSource.processObject`. Empty means everything except Utter, which is the only thing
     /// the ScreenCaptureKit route can do and the right behaviour when no call was identified.
     func start(tapping processes: [AudioObjectID] = []) async throws {
         guard !isCapturing else { return }
@@ -229,7 +229,7 @@ final class SystemAudioCapture {
                 return
             } catch {
                 // Fall through, and say why. This is the only place the two routes meet, so it is the
-                // only place that can explain a machine where the tap does not work — and a user's
+                // only place that can explain a machine where the tap does not work - and a user's
                 // report of "no audio from the others" is otherwise unanswerable.
                 print("⚠️ Process tap unavailable, falling back to ScreenCaptureKit: "
                       + "\(error.localizedDescription)")
@@ -249,7 +249,7 @@ final class SystemAudioCapture {
         }
     }
 
-    /// The preferred route. Throws for the fallback to catch — see `ProcessTapCapture.Failure`.
+    /// The preferred route. Throws for the fallback to catch - see `ProcessTapCapture.Failure`.
     @available(macOS 14.2, *)
     private func startProcessTap(processes: [AudioObjectID]) async throws {
         let tap = ProcessTapCapture { [weak self] data, peak in
@@ -262,7 +262,7 @@ final class SystemAudioCapture {
         try tap.start(processes: processes)
 
         // Do not commit to this route until it has actually produced a buffer. 1.5s is many hundreds
-        // of IO cycles at any device rate, and it is paid once at the start of a meeting — against the
+        // of IO cycles at any device rate, and it is paid once at the start of a meeting - against the
         // alternative of discovering at the end that nothing was recorded.
         guard await tap.awaitFirstAudio(timeout: 1.5) else {
             tap.stop()
@@ -357,8 +357,8 @@ final class SystemAudioCapture {
 /// Turning a buffer of system audio into Utter's Int16 / 16 kHz / mono contract.
 ///
 /// Shared by both capture routes rather than written twice. They arrive at the same problem from
-/// different APIs — a `CMSampleBuffer` from ScreenCaptureKit, an `AudioBufferList` from a HAL IOProc
-/// — but both hand over float PCM in a layout described by an `AudioStreamBasicDescription`, and the
+/// different APIs - a `CMSampleBuffer` from ScreenCaptureKit, an `AudioBufferList` from a HAL IOProc
+/// - but both hand over float PCM in a layout described by an `AudioStreamBasicDescription`, and the
 /// downmix and the resample are the part that is easy to get subtly wrong. Two copies of it would be
 /// two places for a clipping bug or an off-by-one resample to live, and only one of them would ever
 /// get tested.
@@ -370,7 +370,7 @@ enum SystemAudioPCM {
     /// Interleaved or non-interleaved float frames → mono Int16, and the peak of the buffer.
     ///
     /// Interleaved input is averaged across channels; a non-interleaved stream gives channel 0 only,
-    /// which is correct for speech — the other buffers of a deinterleaved list are the other channels,
+    /// which is correct for speech - the other buffers of a deinterleaved list are the other channels,
     /// and mixing them would need all of them, where taking the first needs none.
     static func monoInt16(floats: UnsafePointer<Float32>,
                           count: Int,
@@ -406,7 +406,7 @@ enum SystemAudioPCM {
     /// Nearest-neighbour resample of Int16 mono PCM to 16 kHz.
     ///
     /// Nearest-neighbour is adequate: this feeds a speech recogniser, not playback. Both routes need
-    /// it — ScreenCaptureKit delivers float PCM at its own rate regardless of the requested
+    /// it - ScreenCaptureKit delivers float PCM at its own rate regardless of the requested
     /// `sampleRate`, and a tap's format follows the output device, which is usually 48 kHz.
     static func resampleToSixteenK(_ data: Data, from rate: Float64) -> Data {
         let sourceCount = data.count / 2
@@ -455,11 +455,11 @@ private final class AudioStreamOutput: NSObject, SCStreamOutput {
 
         // Room for two buffers, not one.
         //
-        // `MemoryLayout<AudioBufferList>.size` is 24 bytes on arm64 — exactly one
+        // `MemoryLayout<AudioBufferList>.size` is 24 bytes on arm64 - exactly one
         // `AudioBuffer` slot. Non-interleaved (deinterleaved) audio is CoreAudio's
         // native layout and uses one buffer *per channel*, so if ScreenCaptureKit
         // ever ignores our `channelCount = 1` request the call cannot describe the
-        // list, returns a buffer-too-small error, and every packet is dropped —
+        // list, returns a buffer-too-small error, and every packet is dropped  - 
         // silently, leaving "no audio from other participants" for a whole meeting
         // with nothing to diagnose. The code already defends against SCK ignoring
         // `sampleRate`; this closes the matching gap for `channelCount`.
@@ -497,7 +497,7 @@ private final class AudioStreamOutput: NSObject, SCStreamOutput {
         let floats = raw.bindMemory(to: Float32.self, capacity: floatCount)
 
         // Downmix, convert and resample if ScreenCaptureKit ignored the requested
-        // rate. Shared with the process-tap route — see `SystemAudioPCM`.
+        // rate. Shared with the process-tap route - see `SystemAudioPCM`.
         let interleaved = asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0
         var (pcm, peak) = SystemAudioPCM.monoInt16(floats: floats,
                                                    count: floatCount,

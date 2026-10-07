@@ -4,10 +4,10 @@
 
 # Utter
 
-**Private, zero-latency on-device voice dictation for every Mac app.**
+**Private, on-device voice dictation for macOS.**
 
 [![macOS 13.3+](https://img.shields.io/badge/macOS-13.3%2B-black?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
-[![Swift 5.9](https://img.shields.io/badge/Swift-5.9%2B-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
+[![Swift 6](https://img.shields.io/badge/Swift-6%2B-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
 [![Engine: whisper.cpp](https://img.shields.io/badge/Engine-whisper.cpp%20Metal-blue?style=for-the-badge)](https://github.com/ggerganov/whisper.cpp)
 [![Apple Intelligence](https://img.shields.io/badge/AI-Apple%20Intelligence%20Local-purple?style=for-the-badge)](https://apple.com)
 [![Privacy: 100% On-Device](https://img.shields.io/badge/Privacy-100%25%20On--Device-success?style=for-the-badge)](PRIVACY.md)
@@ -26,23 +26,25 @@
 
 <img src="Assets/screenshots/hero-main.png" alt="Utter Native macOS App Workspace" width="100%" />
 
+<sub>Static product previews generated from SwiftUI views; they illustrate the information architecture and are not captures of a running AppKit window.</sub>
+
 </div>
 
 ---
 
 ## 🌟 Overview
 
-**Utter** is a native macOS application that turns your spoken voice into text wherever your cursor is focused. Hold a keycap, speak naturally, let go — and your words are instantly typed into Mail, Slack, Notes, Xcode, VS Code, Cursor, Obsidian, a terminal, or any active macOS application.
+**Utter** is a native macOS application that turns your spoken voice into text wherever your cursor is focused. Hold a keycap, speak naturally, let go - and your words are instantly typed into Mail, Slack, Notes, Xcode, VS Code, Cursor, Obsidian, a terminal, or any active macOS application.
 
 ### Why Utter?
 
 Most dictation and voice AI tools stream your audio recordings to remote third-party cloud servers. Utter is engineered with an uncompromising commitment to privacy, speed, and native macOS design:
 
-- 🔒 **100% Local Inference**: Runs `whisper.cpp` in-process with Metal & Core ML hardware acceleration.
-- ⚡ **Zero Network Latency**: Zero servers, zero telemetry, zero accounts, zero subscriptions, and zero rate limits.
+- 🔒 **On-Device Inference**: Runs `whisper.cpp` in-process with local acceleration where supported. Speech audio is not uploaded.
+- ⚡ **Local-First**: No account or telemetry service. Network access is used only when you explicitly download an optional speech model or update the app.
 - 🎯 **Context-Aware Precision**: Automatically adapts capitalization, spacing, and punctuation to code, chat, or long-form prose.
-- 🎨 **Liquid Glass Design System**: Built with authentic macOS 13.3–15+ design tokens, vibrant translucency, Bento grids, and 7 bespoke themes.
-- 🐾 **Procedural Vector Companions**: Built-in Charcoal Cat, Ginger Cat, Pixel Dog, and Pixel Panda drawn 100% in code (0 PNG assets) with real-time cursor pupil tracking.
+- 🖥️ **Native macOS Workspace**: Uses AppKit window chrome, system sidebar navigation, native controls, and adaptive appearance. Capture, Library, Tools, and Companion each have a focused place in the app.
+- 🐾 **Desktop Companions**: Optional animated sprite-pack companions, including cat and dog characters, with cursor-aware behavior.
 
 ---
 
@@ -80,7 +82,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
   - *"Fix punctuation and tone"*
   - *"Translate into Japanese"*
   - *"Extract bulleted action items"*
-- **On-Device Foundation Models**: Powered locally via macOS `FoundationModels` framework with fallback to offline heuristics or local Ollama instances.
+- **On-Device Foundation Models**: Uses macOS `FoundationModels` when the OS makes it available, with local heuristic fallbacks. No Ollama service is required.
 - **Custom AI Commands**: Craft bespoke reusable prompt templates tailored to your personal coding or writing workflow.
 
 <div align="center">
@@ -91,7 +93,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 
 ### 📚 Custom Vocabulary Boosting & Dynamic Snippets
 
-- **Speech Biasing & Custom Dictionary**: Boost uncommon proper nouns, engineering jargon, medical terms, and project acronyms so Whisper never misses them.
+- **Speech Biasing & Custom Dictionary**: Improve recognition of uncommon proper nouns, engineering jargon, medical terms, and project acronyms.
 - **Voice Snippets**: Speak trigger keywords to expand complex boilerplate templates with dynamic placeholders (`{date}`, `{time}`, `{clipboard}`).
 
 <div align="center">
@@ -103,7 +105,7 @@ Most dictation and voice AI tools stream your audio recordings to remote third-p
 
 ### 🐾 Procedural Vector Desktop Companions
 
-Utter features optional procedural companions drawn 100% in code at runtime ([`CodePixelCat.swift`](Sources/UtterKit/Companion/CodePixelCat.swift)) — zero PNG images are loaded or bundled:
+Utter's four built-in companions are drawn in code at runtime ([`CodePixelCat.swift`](Sources/UtterKit/Companion/CodePixelCat.swift)). Optional user-authored sprite packs can add image-based companions:
 
 - 🐱 **Charcoal Cat** (`pixel-cat-gray`): Sleek slate-charcoal coat, white chest bib & snout, bright cyan eyes with glossy specular catchlights, and friendly waving paw.
 - 🐱 **Ginger Cat** (`pixel-cat-orange`): Warm ginger tabby with orange tiger stripes, white chest bib, sparkling emerald green eyes, and waving paw.
@@ -123,13 +125,13 @@ Utter features optional procedural companions drawn 100% in code at runtime ([`C
 - 🎉 **Delighted Celebration**: Both paws raised in celebration during fast speech flow and coding streaks.
 - 👁️ **Real-Time Cursor Pupil Gaze**: Pupils smoothly track your cursor across any active display in real time.
 - 🪂 **Dangle Physics**: Limbs and tail dangle with natural gravity when dragged across displays.
-- ⚡ **Sub-Millisecond Draw Calls**: Rendered asynchronously on background CoreGraphics queues at 60 FPS with 0% main-thread CPU overhead.
+- **Animated companions**: SwiftUI-driven motion responds to app state, typing, and pointer activity. CPU and frame-time costs vary with the selected companion, display refresh rate, and Mac hardware; the project does not currently publish a measured performance guarantee.
 
 ---
 
 ### 🎛️ Speech Model Chooser & Benchmark Selection
 
-Utter bundles the high-accuracy `ggml-small.en-q5_1.bin` model (181MB) for instant out-of-the-box operation and supports downloading specialized multilingual and quantized Whisper models directly within the app (Tiny, Base, Small, Distil-Whisper, Large-v3-Turbo).
+Utter bundles the `ggml-small.en-q5_1.bin` model (about 181 MB) so local transcription is available without a model download. It can download additional Whisper models on request. Model load and transcription speed depend on the selected model, backend, available memory, and Mac hardware.
 
 <div align="center">
   <img src="Assets/screenshots/feature-speech-models.png" alt="Speech Model Chooser" width="94%" />
@@ -159,9 +161,9 @@ Crafted with pixel-perfect macOS typography, high-contrast borders, and adaptive
 | Metric / Feature | Utter | Cloud AI Dictation Apps | System Siri Dictation |
 | :--- | :---: | :---: | :---: |
 | **Audio Processing Location** | **100% Local (In-Process)** | Cloud Servers | Cloud / Partial Local |
-| **Network Traffic** | **0 Bytes Sent** | Continuous Audio Upload | Telemetry & Logs |
+| **Network Traffic** | **No audio upload; model downloads are user initiated** | Continuous Audio Upload | Telemetry & Logs |
 | **Offline Operation** | **Full (Airplane Mode)** | Requires Active Internet | Limited |
-| **Hardware Acceleration** | **Apple Silicon Metal & Core ML** | Remote GPU Fleet | Apple Neural Engine |
+| **Hardware Acceleration** | **whisper.cpp acceleration where supported by the bundled backend and Mac** | Remote GPU Fleet | Apple Neural Engine |
 | **Subscription / Pricing** | **Free & Open Source** | $10–$20 / month | Free |
 | **Meeting Dual-Stream Capture** | **Included** | Paid Add-on Bot | Unsupported |
 
@@ -212,8 +214,7 @@ Upon first launch, Utter will guide you through granting two standard macOS perm
 
 ### Prerequisites
 - macOS 13.3 Ventura or later
-- Xcode 15+ or Command Line Tools (`xcode-select --install`)
-- Swift 5.9 or later
+- Xcode 16+ or Command Line Tools (`xcode-select --install`) with Swift 6 or later
 
 ### Clone & Build
 ```bash
@@ -225,7 +226,7 @@ cd Utter
 swift build -c release
 
 # 3. Create styled DMG installer and application bundle
-./scripts/build-app.sh --keep-permissions
+./scripts/build-app.sh
 ```
 The compiled application and installer will be located in:
 - `build/Utter.app`
@@ -243,14 +244,14 @@ graph TD
     Mic --> Pill[Pill HUD Floating Window]
     Tap --> Meeting[Meeting Session Coordinator]
     
-    Mic --> Whisper[whisper.cpp Metal / Core ML Engine]
+    Mic --> Whisper[Local whisper.cpp inference; Metal where available]
     Tap --> Whisper
     
     Whisper --> Bias[Speech Bias & Dictionary Engine]
     Bias --> Polish[Sentence Polish & Punctuation]
     
     Polish --> Injector[Accessibility Text Injector]
-    Polish --> NoteStore[Local Notes Store SQLite/JSON]
+    Polish --> NoteStore[Local Notes Store JSON]
     
     Polish --> AI[Apple Intelligence Local LLM Engine]
     AI --> Injector

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The polish pass: the numbers behind how the pill's states read.
 ///
-/// Each of these pins a defect that was invisible in code review and obvious on screen — a meter
+/// Each of these pins a defect that was invisible in code review and obvious on screen - a meter
 /// whose history was too short to see, a "breathing" dot at 35 cycles a minute, a neck that let go
 /// early, a state that never drew the thing its own comment said it drew.
 @Suite("Pill polish")
@@ -15,7 +15,7 @@ struct PillPolishTests {
     @Test("The meter shows enough history for the eye to read it as scrolling")
     func meterHistoryIsLegible() {
         // Five bars shifted at the recorder's 30Hz publish rate held 5/30s = 167ms, which is below
-        // the eye's integration time for a scrolling display — so it flickered rather than scrolled,
+        // the eye's integration time for a scrolling display - so it flickered rather than scrolled,
         // the opposite of what it was for. The window is bars / shift-rate.
         let publishRate = 30.0
         let shiftRate = publishRate / 2      // shift every other publish
@@ -58,7 +58,7 @@ struct PillPolishTests {
 
         // And it must still break before rest, or the bead never becomes its own object.
         #expect(pinch < 1 + travel,
-                "the neck survives to rest — the bead would be a permanent lobe")
+                "the neck survives to rest - the bead would be a permanent lobe")
     }
 
     @Test("Emerge and retract are different lengths, matching the asymmetric physics")
@@ -83,7 +83,7 @@ struct PillPolishTests {
     @Test("The resting pill's edge is two-tone, so it cannot dissolve into its backdrop")
     func restingEdgeIsTwoTone() {
         // The defect: both of the pill's strokes chose their tone from the *app's* colour scheme, and
-        // in dark appearance both came out white — the ring at 0.22 and the inner highlight at 0.32.
+        // in dark appearance both came out white - the ring at 0.22 and the inner highlight at 0.32.
         // The app's appearance and what is behind the pill are independent, because the pill floats
         // over the desktop, so a dark appearance over a pale window left the pill with no dark edge
         // anywhere and it vanished. Reported as "behind a white background it becomes white".
@@ -107,7 +107,7 @@ struct PillPolishTests {
 
     @Test("A tinted state's ring is a hue, so it does not depend on appearance either")
     func tintedRingsAreHues() {
-        // These were already appearance-independent and must stay that way — they are the states
+        // These were already appearance-independent and must stay that way - they are the states
         // where the ring is also the state's identity.
         for state in [PillState.recording, .handsFree, .capturingNote, .capturingMemory,
                       .error("x"), .notice("y"), .preparing, .processing(.typing)] {
@@ -145,7 +145,7 @@ struct PillPolishTests {
     func widthFloorRemovesTheTwoStepWiden() {
         // The defect: `.recording`'s width comes from a measurement published one layout pass *after*
         // the state changes, so on the frame the hotkey is pressed the shell was still 56pt wide with
-        // a dot, a meter and a timer inside it — it drew narrow and jumped a pass later, which reads
+        // a dot, a meter and a timer inside it - it drew narrow and jumped a pass later, which reads
         // as the pill stretching open.
         //
         // Simulated by asking for the width with a *stale* measurement, which is exactly what the
@@ -172,7 +172,7 @@ struct PillPolishTests {
     @Test("An arbitrarily long message cannot draw the shell past its window")
     func messagesAreBounded() {
         // `.error` and `.notice` carry text from arbitrary failures. Unbounded, a long reason drew
-        // the shell wider than the 320pt panel — clipped at both ends, losing its rounded caps, and
+        // the shell wider than the 320pt panel - clipped at both ends, losing its rounded caps, and
         // leaving a full-width strip taking clicks.
         for state in [PillState.error(String(repeating: "x", count: 400)),
                       .notice(String(repeating: "y", count: 400))] {
@@ -189,7 +189,7 @@ struct PillPolishTests {
     @Test("The card's rows arrive in order, and all land inside the settle")
     func cardRowsStaggerAndFinishInTime() {
         // Three rows: header, transcript, footer. Each must start after the one above it, and the
-        // last must finish before the shell stops moving — otherwise the interior is still arriving
+        // last must finish before the shell stops moving - otherwise the interior is still arriving
         // after the shape has settled, which reads as lag rather than as filling.
         //
         // Delays are `0.04 + 0.05 * index`, so the last of three starts at 0.14 and runs 0.18.

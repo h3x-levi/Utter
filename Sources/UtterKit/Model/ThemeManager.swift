@@ -3,7 +3,7 @@ import AppKit
 
 /// An appearance choice: a light/dark preference plus an accent tint.
 ///
-/// Earlier versions carried per-theme pill and sidebar colours. Those are gone —
+/// Earlier versions carried per-theme pill and sidebar colours. Those are gone  - 
 /// the UI now uses semantic system colours so light/dark and Increase Contrast
 /// are handled by macOS. What a theme still meaningfully controls is the
 /// appearance and the accent, and both are actually applied (see `Tint.accent`).
@@ -31,7 +31,7 @@ struct AppTheme: Identifiable, Equatable {
     /// The theme list.
     ///
     /// Each theme is a genuinely different room, not a different shade of grey.
-    /// The previous set was too timid to notice — Paper and Linen differed by
+    /// The previous set was too timid to notice - Paper and Linen differed by
     /// **2-4 units out of 255** in their canvas, which is invisible, and every
     /// dark theme was a near-neutral charcoal. A theme people can choose has to be
     /// a choice they can see, so each now commits to a hue: the canvas carries
@@ -42,7 +42,7 @@ struct AppTheme: Identifiable, Equatable {
                  colorScheme: nil, accent: nil,
                  canvas: nil, raised: nil, sunken: nil),
 
-        // Warm cream and amber — the default light look.
+        // Warm cream and amber - the default light look.
         AppTheme(id: "paper", name: "Paper", icon: "sun.max",
                  colorScheme: .light,
                  accent: Color(red: 0.839, green: 0.502, blue: 0.106),
@@ -59,7 +59,7 @@ struct AppTheme: Identifiable, Equatable {
                  raised: Color(red: 0.976, green: 0.984, blue: 0.996),
                  sunken: Color(red: 0.937, green: 0.953, blue: 0.973)),
 
-        // True neutral charcoal — deliberately the only *unhued* dark theme, so it
+        // True neutral charcoal - deliberately the only *unhued* dark theme, so it
         // reads as "no colour" beside Violet, Pine and Ember. Measured at the
         // previous warm value it sat only dE 7.9 from Pine, which is subtle rather
         // than a distinct choice; a lighter, flatter grey separates it clearly.
@@ -110,7 +110,7 @@ final class ThemeManager: ObservableObject {
 
     private init() {}
 
-    /// Views observe `current` directly, so publishing is enough — there is no
+    /// Views observe `current` directly, so publishing is enough - there is no
     /// separate notification to post.
     func setTheme(_ id: String) {
         current = AppTheme.find(id)
@@ -123,7 +123,7 @@ final class ThemeManager: ObservableObject {
     ///
     /// This is required, not belt-and-braces. `preferredColorScheme` restyles
     /// SwiftUI's own views but does **not** change the `NSAppearance` that dynamic
-    /// `NSColor`s resolve against — so every token built with
+    /// `NSColor`s resolve against - so every token built with
     /// `NSColor(name:dynamicProvider:)` kept returning its light-mode value inside
     /// a dark window. That is what made the selected sidebar label resolve to warm
     /// near-black on a dark pill (measured 2.15:1, unreadable) while its

@@ -4,14 +4,14 @@ import Foundation
 
 /// Encoding and decoding `notes.json`.
 ///
-/// Notes are the only copy of the user's own writing — `NoteStore` deliberately has no
-/// entry cap for that reason — so the encoder and decoder are the narrowest point at
+/// Notes are the only copy of the user's own writing - `NoteStore` deliberately has no
+/// entry cap for that reason - so the encoder and decoder are the narrowest point at
 /// which everything can be silently lost. Two failures matter: a field that does not
 /// survive a round trip (data loss on the next launch), and a file the decoder chokes
 /// on in a way that takes the app down rather than being reported.
 ///
 /// These exercise `JSONEncoder`/`JSONDecoder` configured the way `NoteStore`
-/// configures them — ISO 8601 *with fractional seconds*, `.prettyPrinted` — rather than
+/// configures them - ISO 8601 *with fractional seconds*, `.prettyPrinted` - rather than
 /// going through the singleton, which is bound to the real Application Support
 /// directory and whose `load()`/`writeToDisk()` would read and overwrite the user's
 /// actual notes.
@@ -19,7 +19,7 @@ import Foundation
 /// The coders below mirror the *shape* of `writeToDisk()`/`load()` but use the store's
 /// own `NoteDateFormat` formatters rather than copies of them. That matters: the two
 /// formatters are the wire format, and a local copy would keep passing after the store
-/// changed its own — testing a contract nothing upholds. `wireFormatMatchesTheStoresOwnOutput`
+/// changed its own - testing a contract nothing upholds. `wireFormatMatchesTheStoresOwnOutput`
 /// pins the encoded text on top of that, so a change to `NoteDateFormat` itself is
 /// caught rather than silently agreed with.
 @Suite("Note persistence")
@@ -57,7 +57,7 @@ struct NotePersistenceTests {
     /// This is the assumption `load()`'s two-line fallback rests on. If
     /// `NoteDateFormat.fractional` ever started accepting whole seconds the fallback
     /// would be dead code, and if `whole` started accepting fractions the order of the
-    /// two lines would stop mattering — either way the next person would be reading a
+    /// two lines would stop mattering - either way the next person would be reading a
     /// comment that no longer describes anything.
     @Test("The two formatters are genuinely different shapes, which is why load() tries both")
     func formattersAreNotInterchangeable() {
@@ -104,7 +104,7 @@ struct NotePersistenceTests {
 
         // Field by field as well as by `==`: `Note`'s `Equatable` is synthesised, so if
         // a property is ever added without being coded, `==` still compares it and this
-        // stays honest — but naming them documents which ones matter.
+        // stays honest - but naming them documents which ones matter.
         #expect(decoded.id == original.id)
         #expect(decoded.title == original.title)
         #expect(decoded.body == original.body)
@@ -159,7 +159,7 @@ struct NotePersistenceTests {
         // `NoteStore.load()` sorts by `modified` descending, and `grouped()` sorts each
         // group the same way. If sub-second precision were dropped, two notes edited
         // within one second would compare equal on reload and the list order would be
-        // arbitrary across launches — the note the user just touched could sort below
+        // arbitrary across launches - the note the user just touched could sort below
         // an older one.
         let earlier = Date(timeIntervalSince1970: 1_700_000_000.100)
         let later = Date(timeIntervalSince1970: 1_700_000_000.900)
@@ -232,7 +232,7 @@ struct NotePersistenceTests {
     @Test("A malformed notes file is reported as an error, never a crash")
     func malformedFilesThrowRatherThanCrash() throws {
         // `NoteStore.load()` swallows these with `try?` and keeps the file untouched.
-        // What matters here is that decoding *throws* — if any of these trapped
+        // What matters here is that decoding *throws* - if any of these trapped
         // instead, the app would crash on launch with the user's notes on disk and
         // no way to get past it.
         let good = try encoder().encode([fixture()])
@@ -250,7 +250,7 @@ struct NotePersistenceTests {
             ("array of strings", Data("[\"a\",\"b\"]".utf8)),
             // Right shape, missing a required key.
             ("record missing id", Data("[{\"title\":\"t\",\"body\":\"b\"}]".utf8)),
-            // A `source` this build has never heard of — what a downgrade after a
+            // A `source` this build has never heard of - what a downgrade after a
             // future release adds a case would look like.
             ("unknown source value",
              Data(goodText.replacingOccurrences(of: "\"meeting\"", with: "\"telepathy\"").utf8)),

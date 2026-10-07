@@ -3,13 +3,13 @@ import Foundation
 /// Which of the two captured audio sources a meeting turn came from.
 ///
 /// Not a speaker. Utter captures the microphone and system output as two separate
-/// streams, so it knows which *stream* every word arrived on and nothing else — see
+/// streams, so it knows which *stream* every word arrived on and nothing else - see
 /// `MeetingSession`. Naming the cases after the sources rather than after people is
 /// deliberate: `others` is one mixed stream that may contain any number of voices.
-enum SpeakerRole: String, Codable, CaseIterable {
+enum SpeakerRole: String, Codable, CaseIterable, Sendable {
     /// The microphone.
     case you
-    /// System output — everyone else on the call, already mixed together by the
+    /// System output - everyone else on the call, already mixed together by the
     /// conferencing app before Utter ever sees it.
     case others
 }
@@ -25,8 +25,8 @@ enum SpeakerRole: String, Codable, CaseIterable {
 /// has exactly two audio sources, and a map would imply a third could turn up.
 /// It also keeps `notes.json` readable by hand, which `NoteStore.writeToDisk` treats
 /// as a recovery requirement.
-struct MeetingSpeakers: Codable, Equatable {
-    /// The microphone — one person, always, because it is the user's own mic.
+struct MeetingSpeakers: Codable, Equatable, Sendable {
+    /// The microphone - one person, always, because it is the user's own mic.
     var you: String
 
     /// System output. Legitimately several people under one name, which is why
@@ -73,16 +73,16 @@ enum MeetingTranscript {
     /// Rewrite every turn heading for `old` to `new`, leaving everything else alone.
     ///
     /// Anchored to the start of a line, not a global find-and-replace, because
-    /// `**Others:**` can legitimately occur *inside* what somebody said — in a
+    /// `**Others:**` can legitimately occur *inside* what somebody said - in a
     /// transcript of a meeting about this very feature, for instance. Rewriting that
     /// would be editing the user's words rather than relabelling their transcript.
     ///
     /// Uses ICU's multiline `^` rather than splitting on `"\n"`. Splitting would miss
     /// CRLF entirely (Swift treats it as a single grapheme cluster, so `"\n"` never
-    /// matches it — the same trap documented on `Note.derivedTitle`), and rejoining
+    /// matches it - the same trap documented on `Note.derivedTitle`), and rejoining
     /// on `"\n"` afterwards would silently normalise line endings the user had pasted
     /// in. `escapedPattern` and `escapedTemplate` keep a name containing regex or
-    /// template metacharacters — `C++ (Ana)`, say, or a stray `$1` — from being
+    /// template metacharacters - `C++ (Ana)`, say, or a stray `$1` - from being
     /// interpreted.
     static func relabel(_ body: String, from old: String, to new: String) -> String {
         let oldHeading = heading(old)

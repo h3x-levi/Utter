@@ -5,7 +5,7 @@ import SwiftUI
 // The companion has two layers of behaviour, and keeping them apart is what stops
 // it feeling like a looping GIF:
 //
-//   * `CompanionMood` is *reactive* — derived from what dictation is actually
+//   * `CompanionMood` is *reactive* - derived from what dictation is actually
 //     doing, so the character is never emoting about nothing.
 //   * `CompanionPose` is the frame currently on screen. Ambient fidgets (stretches,
 //     hops) only ever change the pose, never the mood.
@@ -19,7 +19,7 @@ enum CompanionMood: Equatable {
     case alert
     /// Transcribing, rewriting or typing.
     case thinking
-    /// A turn just finished successfully. Deliberately short-lived — a character
+    /// A turn just finished successfully. Deliberately short-lived - a character
     /// that celebrates forever is celebrating nothing.
     case delighted
     /// Something failed.
@@ -31,14 +31,14 @@ enum CompanionMood: Equatable {
     // MARK: Pet moods
     //
     // The six above are *dictation* moods: they say what Utter is doing. The five below
-    // are what the character does with the user's hands when Utter is idle — driven only
+    // are what the character does with the user's hands when Utter is idle - driven only
     // by local input (cursor position, keystroke timing, scroll deltas, drag velocity),
     // never by anything off the machine.
     //
     // They are moods rather than overlays because each one is a different drawing: a cat
     // kneading is not a cat sitting with a symbol next to it. The pack loader falls back
     // to `resting` for any state a pack does not provide, so adding these does not oblige
-    // the existing four character packs to grow new art — they simply keep sitting.
+    // the existing four character packs to grow new art - they simply keep sitting.
 
     /// The user is typing, so the character works its paws.
     case kneading
@@ -59,8 +59,8 @@ enum CompanionMood: Equatable {
 
     /// Whether ambient wandering is allowed.
     ///
-    /// Only at rest, for the original reason — a character that strolls off mid-recording
-    /// stops reading as attentive — and now also not while it is reacting to the user's
+    /// Only at rest, for the original reason - a character that strolls off mid-recording
+    /// stops reading as attentive - and now also not while it is reacting to the user's
     /// hands. A cat that wanders away while being stroked is a cat that is not being
     /// stroked.
     var allowsWandering: Bool { self == .resting }
@@ -104,7 +104,7 @@ struct CompanionPose: Equatable {
     /// Where the eyes are looking, each axis -1...1, +x right and +y up.
     ///
     /// A *direction*, not a pixel offset, because only the art knows how far an iris can
-    /// travel before it leaves the socket — a 32px sprite has about two pixels of room.
+    /// travel before it leaves the socket - a 32px sprite has about two pixels of room.
     /// The renderer multiplies this by the pack's own limit, which keeps that knowledge
     /// with the pack instead of hard-coding one sprite's anatomy into the engine.
     ///
@@ -116,15 +116,15 @@ struct CompanionPose: Equatable {
     /// How flustered the character is, 0...1. Drives a warm tint over the sprite.
     ///
     /// Continuous rather than a flag so the colour arrives with the effort instead of
-    /// snapping on at a threshold — the character going gradually pink as you type faster
+    /// snapping on at a threshold - the character going gradually pink as you type faster
     /// is the joke, and a boolean cannot tell it.
     var heat: CGFloat = 0
 
     /// Which body animation the renderer should prefer, independent of mood.
     ///
     /// Mood says what the character is *reacting* to; gait says how it is *moving* right
-    /// now. They are separate on purpose: a walking cat is still `resting`-mood — nothing
-    /// is happening, the walk is an ambient act — so there is no mood to key the walk cycle
+    /// now. They are separate on purpose: a walking cat is still `resting`-mood - nothing
+    /// is happening, the walk is an ambient act - so there is no mood to key the walk cycle
     /// on. Only the renderer needs to know to show the walk frames instead of the idle loop,
     /// and a pack with no `walk` art falls back to its resting frames, so this obliges no
     /// one to draw a walk (the four photo packs keep sitting, exactly as the stroll left
@@ -133,9 +133,9 @@ struct CompanionPose: Equatable {
 
     /// How the character is travelling this frame.
     enum Gait: Equatable {
-        /// Standing, sitting, fidgeting in place — the resting/idle art.
+        /// Standing, sitting, fidgeting in place - the resting/idle art.
         case idle
-        /// Crossing the desktop under its own steam — the `walk` art if the pack has it.
+        /// Crossing the desktop under its own steam - the `walk` art if the pack has it.
         case walking
     }
 
@@ -147,7 +147,7 @@ struct CompanionPose: Equatable {
     /// Two acts translate the character and they do it through different mechanisms: `.walk` moves
     /// the whole window via `walkStep`, while `.stroll` moves `offsetX`, an offset *inside* a panel
     /// 2.1x the character's own size. Keying the walk cycle off `act == .walk` meant a stroll slid
-    /// a seated cat sideways — a decal on a conveyor. Keying it off `act == .walk || act ==
+    /// a seated cat sideways - a decal on a conveyor. Keying it off `act == .walk || act ==
     /// .stroll` fixed that and broke the other way: a stroll then played a full stride while the
     /// character shuffled a few tens of points inside its own panel and came back, which reads as
     /// running on the spot. Both were reported by the user, in that order.

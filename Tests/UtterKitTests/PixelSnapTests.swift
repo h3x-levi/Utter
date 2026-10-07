@@ -3,7 +3,7 @@ import CoreGraphics
 @testable import UtterKit
 
 /// The pixel-art size snapping, which is the one piece of `SpritePackView` that is pure
-/// arithmetic — and the piece that had a live bug nobody could see on a Retina display.
+/// arithmetic - and the piece that had a live bug nobody could see on a Retina display.
 ///
 /// It is tested through `SpritePack.snappedSide` rather than through the view because
 /// `renderedSize` reads `@Environment(\.displayScale)`, and the display scale is exactly the
@@ -16,7 +16,7 @@ struct PixelSnapTests {
     /// **The invariant the whole companion geometry rests on.**
     ///
     /// `CompanionGeometry` derives the panel, the roam range and the hop height from the
-    /// *requested* character size, and a borderless panel clips its content — so a sprite
+    /// *requested* character size, and a borderless panel clips its content - so a sprite
     /// drawn larger than the size it was asked for is sliced at the window edge as soon as
     /// it moves. The old code clamped the scale up to 1x when no whole multiple fit, which
     /// returned 64pt for a 36pt box.
@@ -70,7 +70,7 @@ struct PixelSnapTests {
         #expect(rendered == [32, 32, 64, 64])
 
         // On a non-Retina display it is flat 32/32/64/64 too, by the divisor branch for the
-        // first two and 1x for the last two — which is the only reason the small sizes fit.
+        // first two and 1x for the last two - which is the only reason the small sizes fit.
         let nonRetina = ladder.map {
             SpritePack.snappedSide(box: $0, canvas: 64, displayScale: 1)
         }

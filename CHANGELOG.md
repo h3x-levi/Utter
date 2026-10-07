@@ -4,6 +4,14 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [1.1.58] - October 2026
+
+- **First-Principles Utter 2.0 Architecture**: Rebuilt the entire user experience around a unified 3-tier attention hierarchy (Dynamic Capsule HUD, Unified Voice Canvas, and System Preferences).
+- **Studio Workspace**: Live speech readiness monitor, active meeting detection and dual-stream recording banner, distraction-free voice scratchpad canvas with on-device AI polish, and desktop companion stage.
+- **Memory Timeline**: Chronological intelligence stream fusing dictations and meeting notes into a single searchable timeline with instant AI actions and multi-format export (Markdown, CSV, Text).
+- **Voice Engine**: Unified personal language center combining Custom Vocabulary and jargon, Spoken Snippets with variable expansions, and AI Writing Personas with interactive sandbox playground.
+- **Preview Data Isolation**: Implemented SnapshotPreviewMode in-memory isolation to guarantee zero reading or writing of private user data during snapshot previews.
+
 ## [1.1.57] — September 2026
 
 - **Authentic Apple HIG Redesign**: Redesigned System Settings and Main App windows adhering to native macOS 14/15 Sonoma and Sequoia guidelines.

@@ -9,8 +9,8 @@ import Foundation
 /// that on silence whisper actually measured. Three things in that sentence can break
 /// quietly, and all three are pinned here:
 ///
-///   * **The unit of whisper's timestamps.** `whisper.h` does not document it — the
-///     header says only "Get the start and end time of the specified segment" — so
+///   * **The unit of whisper's timestamps.** `whisper.h` does not document it - the
+///     header says only "Get the start and end time of the specified segment" - so
 ///     `LocalWhisperProvider.secondsPerTick` encodes an upstream convention. Nothing
 ///     would crash if a future whisper release changed it; transcripts would just
 ///     silently stop splitting, or split on every segment.
@@ -53,7 +53,7 @@ struct MeetingTurnTests {
     @Test("Misreading the unit as milliseconds degrades to one turn, rather than to nonsense")
     func wrongUnitFailsSafe() {
         // The claim documented on `secondsPerTick`: too small a conversion factor makes
-        // every gap look tiny, so the segmenter emits one turn per window — which is
+        // every gap look tiny, so the segmenter emits one turn per window - which is
         // exactly the single-blob behaviour turns replaced. A silent regression to the
         // old output beats fabricated turn boundaries, and this pins which direction the
         // failure goes.
@@ -138,7 +138,7 @@ struct MeetingTurnTests {
         // This test found a real bug in the first version of `TurnSegmenter`, which
         // timed gaps between consecutive segment *boundaries*. whisper sometimes covers
         // a silence with a text-free segment of its own, and then consecutive segments
-        // abut perfectly — there is no gap between them, because the silence is inside
+        // abut perfectly - there is no gap between them, because the silence is inside
         // one. Eight seconds of nothing merged into a single turn. Timing from the last
         // *word* instead is what makes both shapes work.
         let turns = TurnSegmenter.turns(from: [
@@ -187,7 +187,7 @@ struct MeetingTurnTests {
         // whisper puts the space at the *start* of each segment. Joining on " " would
         // double them; joining trimmed segments would run words together. This is the
         // behaviour the dictation path had before turns existed, and it must not change
-        // — `transcribe` is now a join over the timed path.
+        // - `transcribe` is now a join over the timed path.
         let segments = [segment(0, 1, " Ship"), segment(1, 2, " it"), segment(2, 3, " today.")]
         #expect(LocalWhisperProvider.joined(segments) == "Ship it today.")
         #expect(LocalWhisperProvider.joined([]) == "")
@@ -223,7 +223,7 @@ struct MeetingTurnTests {
         // occur inside what somebody said. Rewriting that would be editing the user's
         // transcript rather than relabelling it.
         let body = """
-        # Meeting — Aug 17, 2:15 PM
+        # Meeting - Aug 17, 2:15 PM
 
         **Others:** Morning, shall we start?
 
@@ -243,8 +243,8 @@ struct MeetingTurnTests {
         // The trap documented on `Note.derivedTitle`: Swift treats CRLF as one grapheme
         // cluster, so `split(separator: "\n")` never matches it. A body with pasted
         // Windows line endings would have had every heading but the first missed. ICU's
-        // multiline `^` matches all three conventions, and — unlike splitting and
-        // rejoining — it leaves the user's own line endings as they were.
+        // multiline `^` matches all three conventions, and - unlike splitting and
+        // rejoining - it leaves the user's own line endings as they were.
         let body = "**You:** first\r\n\r\n**You:** second\r\n"
         let renamed = MeetingTranscript.relabel(body, from: "You", to: "Sam")
 
@@ -327,14 +327,14 @@ struct MeetingTurnTests {
     @Test("A note written before speaker labels existed still decodes")
     func legacyNotesWithoutSpeakersStillLoad() throws {
         // The hazard that made `Note.speakers` optional. A non-optional property with a
-        // default initialiser value still fails to decode when the key is *missing* —
+        // default initialiser value still fails to decode when the key is *missing*  - 
         // and `NoteStore.load` treats one undecodable record as an undecodable file, so
         // it would have moved every note the user owns aside on first launch after
         // upgrading. Verified against a record with no `speakers` key at all.
         let legacy = Data("""
         [{
           "id": "1B7C6A1E-0000-4000-8000-000000000001",
-          "title": "Meeting — Aug 11, 2:15 PM",
+          "title": "Meeting - Aug 11, 2:15 PM",
           "body": "**You:** we shipped it",
           "created": "2026-08-11T14:15:00.000Z",
           "modified": "2026-08-11T14:15:00.000Z",

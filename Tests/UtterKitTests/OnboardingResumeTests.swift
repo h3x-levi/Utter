@@ -3,22 +3,20 @@ import Testing
 
 /// The rule that decides which onboarding step an interrupted first run reopens on.
 ///
-/// Worth testing because the interruption is not hypothetical: granting Screen
-/// Recording obliges macOS to relaunch the app part-way through the flow, so this rule
-/// runs on the main path of every first run. Only the pure form is exercised — the
+/// Worth testing because the interruption is not hypothetical: granting Accessibility
+/// access sends the user to System Settings part-way through the flow. Only the pure form is exercised - the
 /// `resumeStep(stepCount:)` overload reads `UserDefaults.standard`, and a test that
 /// wrote there would be editing the developer's own onboarding state.
 @Suite("Onboarding resume")
 struct OnboardingResumeTests {
 
     /// The flow's real step count, so the boundary cases below are the ones that ship.
-    private static let steps = 7
+    private static let steps = 4
 
     @Test("An interrupted run reopens on the step it left")
     func resumesTheRecordedStep() {
-        // 4 is the Screen Recording step — the one that forces the relaunch.
-        #expect(OnboardingState.resumeStep(stored: 4, completed: false,
-                                           stepCount: Self.steps) == 4)
+        #expect(OnboardingState.resumeStep(stored: 1, completed: false,
+                                           stepCount: Self.steps) == 1)
     }
 
     @Test("The last step is resumable, not clamped away")
@@ -50,7 +48,7 @@ struct OnboardingResumeTests {
 
     @Test("Nothing recorded starts at the welcome step")
     func absentStepStartsAtZero() {
-        // A missing key reads as 0, which is the welcome step — no special case needed.
+        // A missing key reads as 0, which is the welcome step - no special case needed.
         #expect(OnboardingState.resumeStep(stored: 0, completed: false,
                                            stepCount: Self.steps) == 0)
     }
@@ -60,7 +58,7 @@ struct OnboardingResumeTests {
         // `markCompleted` clears the stored step, so this is the second guard: someone
         // who deliberately replays onboarding gets the whole flow, not the tail of the
         // one they finished.
-        #expect(OnboardingState.resumeStep(stored: 5, completed: true,
+        #expect(OnboardingState.resumeStep(stored: 3, completed: true,
                                            stepCount: Self.steps) == 0)
     }
 
@@ -88,16 +86,16 @@ struct OnboardingResumeTests {
             accessibilityGranted: true, modelReady: true
         ))
         #expect(!OnboardingState.canAdvance(
-            step: 2, microphoneGranted: true,
+            step: 1, microphoneGranted: true,
             accessibilityGranted: false, modelReady: true
         ))
         #expect(!OnboardingState.canAdvance(
-            step: 3, microphoneGranted: true,
+            step: 2, microphoneGranted: true,
             accessibilityGranted: true, modelReady: false
         ))
         #expect(OnboardingState.canAdvance(
-            step: 4, microphoneGranted: false,
-            accessibilityGranted: false, modelReady: false
+            step: 3, microphoneGranted: true,
+            accessibilityGranted: true, modelReady: true
         ))
     }
 }

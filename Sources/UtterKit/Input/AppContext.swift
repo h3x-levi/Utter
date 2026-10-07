@@ -64,7 +64,7 @@ struct AppContext {
     /// How text should read in this context, as an instruction fragment for the
     /// on-device model. `nil` where no tone guidance is warranted.
     ///
-    /// This only ever adjusts *register* — contractions, sentence length, greetings.
+    /// This only ever adjusts *register* - contractions, sentence length, greetings.
     /// It must never license rewording, because the same objection applies as in
     /// `SentencePolish`: a dictation tool that quietly rephrases you is worse than
     /// one that punctuates badly. The plausibility check there is what enforces it.
@@ -83,7 +83,7 @@ struct AppContext {
             // paths, and command lines.
             return nil
         case .browser, .general:
-            // Could be anything — guessing would be worse than staying neutral.
+            // Could be anything - guessing would be worse than staying neutral.
             return nil
         }
     }
@@ -100,7 +100,7 @@ struct AppContext {
             }
             // Don't capitalize first letter for code contexts
             // (user might be dictating a variable name)
-            print("📝 Context: code — minimal formatting")
+            print("📝 Context: code - minimal formatting")
 
         case .chat:
             // Casual: no trailing period for short messages
@@ -108,28 +108,28 @@ struct AppContext {
             if wordCount < 10 && result.last == "." {
                 result = String(result.dropLast())
             }
-            print("📝 Context: chat — casual formatting")
+            print("📝 Context: chat - casual formatting")
 
         case .email:
             // Professional: ensure proper ending punctuation
             if let last = result.last, ![".", "!", "?"].contains(last) {
                 result += "."
             }
-            print("📝 Context: email — professional formatting")
+            print("📝 Context: email - professional formatting")
 
         case .document:
             // Full formatting, ensure proper punctuation
             if let last = result.last, ![".", "!", "?", ":", ";"].contains(last) {
                 result += "."
             }
-            print("📝 Context: document — full formatting")
+            print("📝 Context: document - full formatting")
 
         case .browser:
-            // Could be anything — use default formatting
-            print("📝 Context: browser — default formatting")
+            // Could be anything - use default formatting
+            print("📝 Context: browser - default formatting")
 
         case .general:
-            print("📝 Context: general — default formatting")
+            print("📝 Context: general - default formatting")
         }
 
         return result

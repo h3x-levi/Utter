@@ -3,8 +3,8 @@ import Testing
 
 /// The one gate every glass surface in the app passes through.
 ///
-/// `GlassSupport.active` is two clauses — the OS can draw Liquid Glass, *and* the
-/// user has not asked for reduced transparency — and the second one is an
+/// `GlassSupport.active` is two clauses - the OS can draw Liquid Glass, *and* the
+/// user has not asked for reduced transparency - and the second one is an
 /// accessibility guarantee that no rendering test can catch. Nothing draws a pixel
 /// in CI, so a future edit that inverted the condition, or dropped the
 /// `reduceTransparency` clause while keeping the `#available` at each call site,
@@ -18,7 +18,7 @@ import Testing
 /// neither glass nor a separator.
 ///
 /// The set shrank rather than grew: `flushChromeGlass` used to route both navigation
-/// columns through this gate and is now deleted — AppKit's `NSSplitViewItem.sidebar`
+/// columns through this gate and is now deleted - AppKit's `NSSplitViewItem.sidebar`
 /// supplies the material on every path, so the gate no longer decides whether the
 /// column has a surface, only whether it needs a drawn edge.
 ///
@@ -29,7 +29,7 @@ struct GlassSupportTests {
     @Test("Reduce Transparency never draws glass, on any OS")
     func reduceTransparencySuppressesGlass() {
         // The clause that cannot be observed from a screenshot in CI. True on
-        // macOS 13 and on macOS 26 alike — the setting wins over capability.
+        // macOS 13 and on macOS 26 alike - the setting wins over capability.
         #expect(GlassSupport.active(reduceTransparency: true) == false)
     }
 
@@ -45,8 +45,8 @@ struct GlassSupportTests {
     func dividerAndGlassAreMutuallyExclusive() {
         // `SettingsWindowView.paneDivider` draws when `!GlassSupport.active(...)`.
         // Restated here as the invariant rather than the expression: on every
-        // configuration the two panes are separated by *something* — a live glass
-        // edge or a hairline — and never by both, which would read as a seam
+        // configuration the two panes are separated by *something* - a live glass
+        // edge or a hairline - and never by both, which would read as a seam
         // through the glass.
         for reduceTransparency in [true, false] {
             let glass = GlassSupport.active(reduceTransparency: reduceTransparency)

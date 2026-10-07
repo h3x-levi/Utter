@@ -212,7 +212,7 @@ export default function Hero3D() {
             <span className="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block shadow-inner" />
             <span className="w-3 h-3 rounded-full bg-[#27c93f] inline-block shadow-inner" />
             <span className="text-xs font-mono text-zinc-300 ml-3 hidden sm:inline">
-              Utter.app — Native macOS Voice Workspace
+              Utter.app - Native macOS Voice Workspace
             </span>
           </div>
 

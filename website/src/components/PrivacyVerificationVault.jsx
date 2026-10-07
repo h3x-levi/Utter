@@ -117,7 +117,7 @@ export default function PrivacyVerificationVault() {
         <div className="bg-zinc-950 rounded-2xl p-6 sm:p-8 font-mono text-xs sm:text-sm text-zinc-300 border border-white/5 shadow-inner overflow-x-auto min-h-[160px]">
           <div className="flex items-center gap-2 text-zinc-500 pb-3 mb-4 border-b border-white/5 text-xs">
             <Terminal size={14} className="text-orange-400" />
-            <span>zsh — darwin-arm64 — 80x24</span>
+            <span>zsh - darwin-arm64 - 80x24</span>
           </div>
           <AnimatePresence mode="wait">
             <motion.div

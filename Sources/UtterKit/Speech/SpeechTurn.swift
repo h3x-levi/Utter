@@ -3,7 +3,7 @@ import Foundation
 /// One timed piece of transcript, exactly as whisper produced it.
 ///
 /// `start` and `end` are seconds from the beginning of the audio buffer that was
-/// handed to whisper — **not** from the beginning of the meeting. Meeting capture
+/// handed to whisper - **not** from the beginning of the meeting. Meeting capture
 /// transcribes in rolling 30-second windows, so each window's timings begin again
 /// at zero. Nothing here stitches them onto a meeting-wide clock; `MeetingSession`
 /// explains why that would be a claim the app cannot back.
@@ -24,7 +24,7 @@ struct TimedSegment: Equatable {
 /// A turn is a *timing* fact and nothing more: whisper reported speech, then a gap
 /// long enough to be a real pause, then speech again. It says nothing about who was
 /// talking. Two turns in a row on the same source may be one person drawing breath
-/// or two people taking it in turns, and there is no way to tell from the timings —
+/// or two people taking it in turns, and there is no way to tell from the timings  - 
 /// which is why `MeetingSession` labels every turn from a source identically rather
 /// than numbering them.
 struct SpeechTurn: Equatable {
@@ -36,11 +36,11 @@ struct SpeechTurn: Equatable {
 
 /// Groups whisper's segments into turns at real silences.
 ///
-/// whisper segments a 30-second window on its own terms — usually one segment per
+/// whisper segments a 30-second window on its own terms - usually one segment per
 /// sentence-ish run, cut wherever its decoder emitted a timestamp token. Those cuts
 /// are not pauses: consecutive segments normally abut, because whisper is splitting
 /// continuous speech. A *gap* between one segment's end and the next one's start is
-/// different — it is measured silence, and that is the only thing here that a turn
+/// different - it is measured silence, and that is the only thing here that a turn
 /// boundary is drawn from.
 enum TurnSegmenter {
 
@@ -57,7 +57,7 @@ enum TurnSegmenter {
     /// without a word being said.
     ///
     /// Measured from the end of the last segment that **carried text** to the start of
-    /// the next one that does — not from the end of the previous segment. The
+    /// the next one that does - not from the end of the previous segment. The
     /// difference is not academic, and a test caught it: whisper sometimes covers a
     /// silence with a text-free segment of its own, and then there is no gap *between*
     /// segments at all because the silence is inside one. Timing the gap between

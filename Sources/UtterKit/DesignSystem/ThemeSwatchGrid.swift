@@ -3,7 +3,7 @@ import SwiftUI
 /// The theme picker, as a grid of live previews.
 ///
 /// This replaces a pop-up menu of theme *names*. A theme is a visual choice, so a
-/// list of words is the one representation that shows nothing about it — you had
+/// list of words is the one representation that shows nothing about it - you had
 /// to select a theme to find out what it looked like, then select another to
 /// compare. Each swatch here renders its own canvas, raised surface and accent,
 /// so the control previews its own effect.
@@ -13,7 +13,7 @@ struct ThemeSwatchGrid: View {
 
     // No `GlassCluster` around this grid.
     //
-    // There was one, citing Apple's batching guidance — but batching applies to
+    // There was one, citing Apple's batching guidance - but batching applies to
     // glass, and `ThemeSwatch` below draws no `glassEffect` at all: it is fills and
     // strokes, deliberately, because each swatch is a *picture of* a theme's
     // surfaces and glass would sample the real window instead of showing the theme.
@@ -93,7 +93,7 @@ private struct ThemeSwatch: View {
         .frame(height: 46)
         .overlay(
             // `hairlineHover`, not `Line.strong`: strong is `Color.primary` at 14% against a
-            // 13% warm hairline, so the old hover was a 0.01 alpha step measuring 1.070:1 —
+            // 13% warm hairline, so the old hover was a 0.01 alpha step measuring 1.070:1  - 
             // invisible, leaving the 0.02 scale below as the only cue. Same ramp at 0.26
             // steps 1.32:1 in light, 1.55:1 in dark. No fill wash here on purpose: this tile
             // previews the theme's own canvas, so tinting it would misreport the choice.
@@ -105,12 +105,12 @@ private struct ThemeSwatch: View {
         // The selected swatch lifts slightly. Small, and it reads as "this one"
         // without needing a checkmark on top of the artwork.
         //
-        // Scale and the 2pt accent rim only — no shadow. There was one here, on
+        // Scale and the 2pt accent rim only - no shadow. There was one here, on
         // every swatch, and it was the only shadow drawn inside any window in the
         // app: `Elevation.flat` is documented "In-window cards, rows, sidebar. **No
         // shadow, ever**", and hierarchy in this design comes from the rim. Nothing
         // replaces it, because nothing needs to: selection is already carried three
-        // ways over unselected — a 2pt accent border against a hairline, 1.0 scale
+        // ways over unselected - a 2pt accent border against a hairline, 1.0 scale
         // against 0.97, and the label stepping from secondary to primary ink. A
         // drop shadow was the fourth signal for one state, and the price was every
         // swatch reading as a floating card in a flat window.
@@ -118,7 +118,7 @@ private struct ThemeSwatch: View {
     }
 
     // A theme that defers to the system has `nil` surfaces, so the swatch has to
-    // resolve what the system would actually draw — otherwise System, Light and
+    // resolve what the system would actually draw - otherwise System, Light and
     // Dark would all preview as empty.
     private var effectiveDark: Bool {
         theme.colorScheme.map { $0 == .dark } ?? (systemScheme == .dark)

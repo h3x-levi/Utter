@@ -83,7 +83,7 @@ struct KeyChordTests {
 /// Hold the dictation hotkey, tap a key: the second spelling of a shortcut.
 ///
 /// The rule is worth pinning because two of its cases are silent, user-visible bugs if
-/// they regress — the tap consumes the key it acts on, so a wrong `pass`/`swallow`
+/// they regress - the tap consumes the key it acts on, so a wrong `pass`/`swallow`
 /// either types a stray character into whatever has focus or eats a keystroke the user
 /// meant for their app.
 @Suite("Hold-then-tap")
@@ -107,7 +107,7 @@ struct HoldTapTests {
     @Test("Note capture has no hold-then-tap spelling")
     func noteCaptureIsChordOnly() {
         // Not an oversight: macOS owns Fn+N (symbolic hotkey 212, key code 45 + fn,
-        // Show Notification Center — read from the live WindowServer table). A binding
+        // Show Notification Center - read from the live WindowServer table). A binding
         // here would fight the system, so ⌃⌥N stays the only route to a note.
         #expect(HoldTap.binding(for: .noteCapture) == nil)
         #expect(HoldTap.binding(forKeyCode: UInt16(kVK_ANSI_N)) == nil)
@@ -134,8 +134,8 @@ struct HoldTapTests {
 
     @Test("Auto-repeat is swallowed without firing again")
     func repeatSwallowedNotFired() {
-        // Holding the key down would otherwise toggle hands-free on every repeat — the
-        // same burst-of-chimes bug the chords guard against with `event.isARepeat` — and
+        // Holding the key down would otherwise toggle hands-free on every repeat - the
+        // same burst-of-chimes bug the chords guard against with `event.isARepeat` - and
         // returning `.pass` instead would leak the repeats into the frontmost app.
         #expect(HoldTap.outcome(keyCode: UInt16(kVK_Space),
                                 isHotkeyHeld: true, isRepeat: true) == .swallow)

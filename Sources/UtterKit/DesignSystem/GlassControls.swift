@@ -9,7 +9,7 @@ import SwiftUI
 //      (Materials → "Don't use Liquid Glass in the content layer.")
 //   2. `.interactive()` rather than hand-rolled press states. Apple: it applies
 //      "the same responsive and fluid reactions that `.glass` provides to
-//      standard buttons" — reimplementing that by hand is how a control stops
+//      standard buttons" - reimplementing that by hand is how a control stops
 //      feeling native.
 //   3. Batch into a `GlassEffectContainer`. Each glass view outside a container
 //      is its own render pass; AppKit's own docs say a container "reduc[es] the
@@ -18,7 +18,7 @@ import SwiftUI
 // Two things Apple does NOT publish, so they are not invented here: there is no
 // documented spring/duration for glass transitions (Apple's own samples use a
 // bare `withAnimation { }`, so that is what these use), and there is no glass
-// `ToggleStyle` in the SDK at all — the entire glass surface in SwiftUI is
+// `ToggleStyle` in the SDK at all - the entire glass surface in SwiftUI is
 // `glassEffect`, `.buttonStyle(.glass)`, and `.glassProminent`. A toggle's knob
 // becomes glass transiently, but only the system can do that, so `GlassToggle`
 // below wraps the real `Toggle` rather than faking a switch.
@@ -26,7 +26,7 @@ import SwiftUI
 // **Everything here is a real system control.** That is the fourth rule, and it
 // was the one being broken: a `Button`+`Capsule` segmented control, a `Circle`
 // behind an icon, a `RoundedRectangle` well behind a `TextField`. Each of those
-// reimplemented the pixels and silently dropped what only the OS supplies — the
+// reimplemented the pixels and silently dropped what only the OS supplies - the
 // pointer-over highlight, the pressed state, the keyboard focus ring, and the
 // accessibility role. The measurement that made this urgent: the hand-drawn
 // light-mode hover wash came out at **1.142:1** against a light theme's card,
@@ -41,8 +41,8 @@ import SwiftUI
 /// This replaces two pop-up menus (`Picker` with the default menu style). The
 /// HIG's own test for a pop-up is whether the set is large: "If you need to
 /// present more than about five options, consider using a component like a
-/// pop-up button." Both of the choices this replaces — the settings pane and the
-/// record hotkey — have three and four options, so hiding them behind a click
+/// pop-up button." Both of the choices this replaces - the settings pane and the
+/// record hotkey - have three and four options, so hiding them behind a click
 /// was costing a click and all of the affordance for nothing.
 ///
 /// A real `Picker` with `.segmented`, which is `NSSegmentedControl`. What that
@@ -50,7 +50,7 @@ import SwiftUI
 /// highlighting, the pressed state, a keyboard focus ring, arrow-key traversal
 /// between segments, and VoiceOver announcing each segment with its position and
 /// selected state. The sliding `matchedGeometryEffect` indicator, the recessed
-/// track, and the `withAnimation` on selection are all gone with it — the system
+/// track, and the `withAnimation` on selection are all gone with it - the system
 /// animates its own selection, and honours Reduce Motion while doing it.
 struct GlassSegmentedControl<T: Hashable>: View {
     let options: [T]
@@ -65,8 +65,8 @@ struct GlassSegmentedControl<T: Hashable>: View {
     var body: some View {
         // The title is empty and hidden because this control has no title
         // parameter to pass one through: all three call sites put a `Text` above
-        // the control instead. That leaves the *group* unnamed to VoiceOver — the
-        // segments themselves are named — which is exactly as it was before, and
+        // the control instead. That leaves the *group* unnamed to VoiceOver - the
+        // segments themselves are named - which is exactly as it was before, and
         // is fixed by giving the callers a label to pass, not by inventing one.
         Picker("", selection: $selection) {
             ForEach(options, id: \.self) { option in
@@ -130,7 +130,7 @@ private struct GlassButtonLook: ViewModifier {
 ///
 /// `tint` still colours the *glyph* rather than being handed to `.tint()`. On a
 /// bordered button `.tint` fills the bezel, so a destructive row action would
-/// become a red-filled button rather than a red glyph — louder than the six call
+/// become a red-filled button rather than a red glyph - louder than the six call
 /// sites intend, and the same collision `GlassChip` measured below.
 struct GlassIconButton: View {
     let systemName: String
@@ -152,7 +152,7 @@ struct GlassIconButton: View {
                 // artwork. Kept from the previous revision; whether a
                 // `PrimitiveButtonStyle` that wraps the label in its own bezel
                 // still reads an enlarged content shape from inside it is
-                // **unverified** — it needs a pointer on a device, not a build.
+                // **unverified** - it needs a pointer on a device, not a build.
                 .contentShape(Rectangle().size(width: 44, height: 44))
         }
         .help(label)
@@ -166,7 +166,7 @@ struct GlassIconButton: View {
 ///
 /// Deliberately a real `Toggle`: macOS 26 turns the *knob* into Liquid Glass
 /// while the user is dragging it, and that transient treatment is internal to
-/// the system — there is no `.glass` ToggleStyle to ask for, and hand-drawing a
+/// the system - there is no `.glass` ToggleStyle to ask for, and hand-drawing a
 /// switch would lose the behaviour rather than gain it. What this adds is the
 /// surrounding row: a title and a description on the leading side.
 ///
@@ -181,7 +181,7 @@ struct GlassIconButton: View {
 ///
 /// Not `LabeledContent`, which is the system component this row's shape otherwise
 /// matches: it restyles its label with `secondaryLabelColor`, and that colour
-/// measured **4.01:1** on this app's translucent tiles — under the 4.5:1 floor —
+/// measured **4.01:1** on this app's translucent tiles - under the 4.5:1 floor  - 
 /// which is the whole reason `Ink.secondary` exists (see `DesignTokens`). Keeping
 /// the row means keeping the measured ink.
 struct GlassToggle: View {
@@ -200,7 +200,7 @@ struct GlassToggle: View {
             }
             Spacer(minLength: Space.x4)
             // The real title, not "". `labelsHidden()` suppresses only the *visual* label,
-            // so VoiceOver keeps it as the control's accessible name — an empty string left
+            // so VoiceOver keeps it as the control's accessible name - an empty string left
             // every switch in the app announced as an unnamed "off, switch", with the
             // visible text a separate element the user had to correlate by position. Same
             // pixels, 16 call sites fixed at once.
@@ -228,7 +228,7 @@ struct GlassToggle: View {
 /// filter or a selection: "dictated", "dynamic", "replaces"/"appends", "English",
 /// "Latest" are all read-only badges. The one call site that is clickable
 /// (`FeatureViews`, the placeholder tokens) supplies its own `Button` *around* the
-/// chip, so the interactivity — and the missing hover with it — lives in that
+/// chip, so the interactivity - and the missing hover with it - lives in that
 /// file, not this one.
 ///
 /// SwiftUI's badge component is `.badge(_:)`, which only renders inside a `List`
@@ -238,7 +238,7 @@ struct GlassToggle: View {
 struct GlassChip: View {
     let text: String
     var systemImage: String? = nil
-    /// Accent for the *rim and glyph*, never the label — see below.
+    /// Accent for the *rim and glyph*, never the label - see below.
     var tint: Color? = nil
     var mono: Bool = false
 
@@ -252,7 +252,7 @@ struct GlassChip: View {
             // The label is always label-coloured, never the tint.
             //
             // Tinted text on a tinted-glass chip measured 1.18:1 against a 4.5:1
-            // floor — the accent set the text *and* the surface it sat on, so the
+            // floor - the accent set the text *and* the surface it sat on, so the
             // two converged and the chip became unreadable. The tint now shows in
             // the rim and the glyph, where it can't collide with the label.
             Text(text)
@@ -274,7 +274,7 @@ struct GlassChip: View {
     /// A standard material, deliberately *not* `glassEffect`.
     ///
     /// A chip is a label in a capsule barely taller than its own text, so glass
-    /// here sits directly behind 11pt type — and text composited onto Liquid
+    /// here sits directly behind 11pt type - and text composited onto Liquid
     /// Glass loses subpixel antialiasing, which measured roughly 3x softer glyph
     /// edges. On the monospaced placeholder tokens ([date], [clipboard]) the
     /// stems are thin enough that the loss reads plainly as blur.
@@ -291,11 +291,11 @@ struct GlassChip: View {
 
 /// A text field.
 ///
-/// `.textFieldStyle(.roundedBorder)` — `NSTextField` in its rounded bezel. The
+/// `.textFieldStyle(.roundedBorder)` - `NSTextField` in its rounded bezel. The
 /// well, the 30pt frame, the `@FocusState` and the hand-drawn focus ring
 /// (`Tint.accent.opacity(0.7)` at 1.5pt, animated on `Motion.hoverIn`) are all
 /// gone: the system bezel *is* the well, and it draws the real
-/// `keyboardFocusIndicatorColor` ring — which, unlike the accent imitation,
+/// `keyboardFocusIndicatorColor` ring - which, unlike the accent imitation,
 /// follows the user's Increase Contrast and Full Keyboard Access settings and is
 /// the ring every other field on the machine draws. It also gets the text
 /// insertion cursor, the secondary-click services menu and the standard
@@ -339,7 +339,7 @@ struct GlassTextField: View {
 /// `SwiftUI.swiftinterface`), so a `TextEditor` on this app's 13.3 floor draws no
 /// bezel and no focus ring of its own. Deleting the well would leave a transparent
 /// scroll view with no edge, and deleting the ring would leave the only multi-line
-/// input in the app with **no visible keyboard focus at all** — which is an
+/// input in the app with **no visible keyboard focus at all** - which is an
 /// accessibility regression, not a simplification.
 ///
 /// The well is a *content-layer* surface, so it is a plain fill and not glass:
@@ -372,14 +372,14 @@ struct GlassTextEditor: View {
 
 // MARK: - Selectable row
 
-/// A row that can be picked, used where a list *is* the picker — speech models,
+/// A row that can be picked, used where a list *is* the picker - speech models,
 /// theme swatches. Selection is an accent wash plus a rim, not tinted glass:
 /// tinted glass behind a label measured 1.17:1 contrast (4.5:1 is the floor),
 /// because the material applies its own vibrancy to whatever it composites.
 ///
 /// The hand-rolled `isHovering` below looks like the mistake `GlassIconButton`
 /// above had, and is not. `Glass.interactive(_:)` is a property *of the glass
-/// material* — it can only supply a pointer response to a view that has a
+/// material* - it can only supply a pointer response to a view that has a
 /// `glassEffect` for it to modulate. This row deliberately has none (see the
 /// contrast measurement), so there is no system response to defer to and a fill
 /// that changes on hover is the whole mechanism, not a reimplementation of one.
@@ -387,7 +387,7 @@ struct GlassTextEditor: View {
 /// **This type should not survive.** The system component for "a row you can pick"
 /// is `List` with a selection binding: it draws the hover wash, the selection fill
 /// in the correct appearance, the focus ring, arrow-key and type-select navigation,
-/// and the accessibility table role — none of which the code below has. It cannot
+/// and the accessibility table role - none of which the code below has. It cannot
 /// be reached from here, though, because macOS has no row-selection style outside a
 /// `List` and both call sites are `VStack` + `ForEach`: `DiagnosticsView` (crash
 /// logs) and `NotesView.NoteRow`. Converting those two to
@@ -444,7 +444,7 @@ struct GlassSelectableRow<Content: View>: View {
 // MARK: - Flow layout
 
 /// Lays children out left to right, wrapping to a new line when they run out of
-/// width — what CSS calls flex-wrap.
+/// width - what CSS calls flex-wrap.
 ///
 /// SwiftUI has no built-in wrapping stack. The chip rows this replaces were plain
 /// `HStack`s, which don't wrap: they either clipped or forced the whole pane
@@ -501,7 +501,7 @@ struct FlowLayout: SwiftUI.Layout {
 // MARK: - Underline tabs
 //
 // `UnderlineTabs` lived here with zero call sites, above a doc comment claiming
-// "the reference design uses these everywhere a screen has sub-views" — which
+// "the reference design uses these everywhere a screen has sub-views" - which
 // described the reference, not this app. Every screen here navigates through the
 // sidebar or a `GlassSegmentedControl`, and no screen has ever had sub-tabs. A
 // component that nothing calls cannot be wrong on screen, so what it actually
@@ -512,17 +512,17 @@ struct FlowLayout: SwiftUI.Layout {
 
 /// A single key, rendered as its own chip.
 ///
-/// The reference splits a shortcut into one chip per key — `⌥ Opt` in one and `1`
-/// in the next — rather than running them together in a single box. Two chips read
+/// The reference splits a shortcut into one chip per key - `⌥ Opt` in one and `1`
+/// in the next - rather than running them together in a single box. Two chips read
 /// as two keys, which is what the user has to press.
 ///
-/// A standard material, not `glassEffect` — the same call `GlassChip` makes above,
+/// A standard material, not `glassEffect` - the same call `GlassChip` makes above,
 /// for the same measured reason, and this is the view that needed it most. An 18pt
 /// chip drawing `Typo.keycap` (11pt medium) is glass sitting *directly* behind
 /// small type, and text composited onto Liquid Glass loses subpixel antialiasing:
 /// roughly 3× softer glyph edges. It also draws the string the app repeats more
-/// than any other — the user's own hotkey name, in the ready panel and in three
-/// shortcut hints in Settings — so a soft-edged keycap is soft in the one place
+/// than any other - the user's own hotkey name, in the ready panel and in three
+/// shortcut hints in Settings - so a soft-edged keycap is soft in the one place
 /// the user has to read a key and go press it.
 ///
 /// This is what the HIG asks for as well: glass belongs to the chrome layer, and
@@ -551,7 +551,7 @@ struct ShortcutHint: View {
     let keys: [String]
     var caption: String? = nil
     /// What VoiceOver says in place of the keycaps. The modifier glyphs are symbol
-    /// characters — "⌃⌥N" is announced as their Unicode names or skipped — so a
+    /// characters - "⌃⌥N" is announced as their Unicode names or skipped - so a
     /// chord passes `KeyChord.spelled` here and the shortcut is actually spoken.
     var spokenKeys: String? = nil
 

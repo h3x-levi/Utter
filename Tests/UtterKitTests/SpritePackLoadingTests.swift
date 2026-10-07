@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 ///
 /// These write real files and read them back through the real loader. A pack is
 /// user-authored data arriving from the filesystem, so the cases that matter are the
-/// malformed and hostile ones — a mocked loader would prove nothing about either.
+/// malformed and hostile ones - a mocked loader would prove nothing about either.
 ///
 /// Every test gets its own temporary directory, so they can run in any order and none
 /// can see another's files.
@@ -39,7 +39,7 @@ struct SpritePackLoadingTests {
         NSGraphicsContext.saveGraphicsState()
         let context = NSGraphicsContext(bitmapImageRep: rep)!
         NSGraphicsContext.current = context
-        // A fresh bitmap's buffer is not guaranteed zeroed, so clear it explicitly —
+        // A fresh bitmap's buffer is not guaranteed zeroed, so clear it explicitly  - 
         // leftover bytes would render as an opaque background and hide the alpha.
         context.cgContext.clear(CGRect(x: 0, y: 0, width: side, height: side))
         context.shouldAntialias = true
@@ -109,7 +109,7 @@ struct SpritePackLoadingTests {
         return directory
     }
 
-    // MARK: APNG — the recommended layout
+    // MARK: APNG - the recommended layout
 
     @Test("An APNG per state loads with no manifest, keeping its own timing")
     func apngByConvention() throws {
@@ -197,7 +197,7 @@ struct SpritePackLoadingTests {
         // a PNG round-trip is not byte-stable (the same pixels came back 12 bytes
         // different), so comparing encoded data tests the encoder, not the sort.
         //
-        // "1.png" was written with marker 1, "2.png" with 2, "10.png" with 0 — so a
+        // "1.png" was written with marker 1, "2.png" with 2, "10.png" with 0 - so a
         // natural sort must yield markers 1, 2, 0 in that order. A plain string sort
         // would put "10.png" second and give 1, 0, 2.
         let markers = frames.map { Self.markerColumn(of: $0) }
@@ -264,7 +264,7 @@ struct SpritePackLoadingTests {
     @Test("A strip holding more frames than the ceiling is clamped, not rejected")
     func stripClampedToFrameCeiling() throws {
         // The strip path used to bypass the per-state cap the convention paths apply, so
-        // a manifest could ask for — and get — an unbounded number of frames. Here the
+        // a manifest could ask for - and get - an unbounded number of frames. Here the
         // file genuinely holds more than the ceiling and the manifest declares them all:
         // the loader must keep exactly `maxFramesPerState`, and must still load the pack
         // (small frames, so the size cap on the sheet decode does not shrink it away).
@@ -298,8 +298,8 @@ struct SpritePackLoadingTests {
 
     @Test("A per-state fps under \u{201C}animation\u{201D} is honoured")
     func perStateFPSFromAnimationBlock() throws {
-        // The regression this pins. All three shipped packs declare their rates here —
-        // `scripts/animate_pack.py` writes the block — and set no top-level `fps`. Only
+        // The regression this pins. All three shipped packs declare their rates here  - 
+        // `scripts/animate_pack.py` writes the block - and set no top-level `fps`. Only
         // the top-level key was read, so every state of every pack played at the 8 fps
         // fallback: `sleepy` 60% too fast, `delighted` and `startled` 33% too slow.
         let pack = makePack("rated")
@@ -358,7 +358,7 @@ struct SpritePackLoadingTests {
     @Test("A nonsense fps cannot freeze a state")
     func nonsenseFPSIsIgnored() throws {
         // `min(max(nan, 1), 60)` is `nan`, which makes every delay `nan`, which makes
-        // `frameIndex`'s comparisons all false — the state would stick on its last frame
+        // `frameIndex`'s comparisons all false - the state would stick on its last frame
         // forever. Out-of-range values clamp; non-finite ones are dropped.
         let pack = makePack("silly-fps")
         let directory = pack.appendingPathComponent("resting")
@@ -385,7 +385,7 @@ struct SpritePackLoadingTests {
     func oversizedFramesAreCapped() throws {
         // A decoded frame is held for as long as the pack is loaded, and the cost is
         // pixels. Measured on the three shipped packs before this cap: 144 frames
-        // rasterised to 77.5 MB, 51.4 MB of it the one pack authored at 516px — all of
+        // rasterised to 77.5 MB, 51.4 MB of it the one pack authored at 516px - all of
         // it to draw a 44pt character. Every pixel past `maxFrameSide` is discarded by
         // the renderer anyway, so it is discarded once here instead.
         let pack = makePack("huge")
@@ -404,7 +404,7 @@ struct SpritePackLoadingTests {
             let image = try #require(frame.cgImage(forProposedRect: nil, context: nil, hints: nil))
             #expect(max(image.width, image.height) <= cap,
                     "frame kept at \(image.width)x\(image.height), cap \(cap)")
-            // Not shrunk to nothing either — it is capped, not thumbnailed away.
+            // Not shrunk to nothing either - it is capped, not thumbnailed away.
             #expect(max(image.width, image.height) >= cap - 1)
         }
     }
@@ -422,7 +422,7 @@ struct SpritePackLoadingTests {
             let image = try #require(frame.cgImage(forProposedRect: nil, context: nil, hints: nil))
             #expect(max(image.width, image.height) <= Int(Self.cap))
         }
-        // Capping is a size change, not a retime — the hold-then-snap shape survives.
+        // Capping is a size change, not a retime - the hold-then-snap shape survives.
         #expect(abs(resting.delays[0] - 0.4) < 0.01)
         #expect(resting.delays[0] > resting.delays[1] * 3)
     }
@@ -444,7 +444,7 @@ struct SpritePackLoadingTests {
     @Test("Scaling a frame down keeps its 8-bit alpha")
     func capPreservesAlpha() throws {
         // The alpha test above uses 64px art, which is under the cap and therefore
-        // takes the plain decode path — so it says nothing about the scaled one. This
+        // takes the plain decode path - so it says nothing about the scaled one. This
         // is the case that matters for the shipped packs, every frame of which is
         // scaled: if `CGImageSourceCreateThumbnailAtIndex` flattened alpha, the
         // character would render as a rectangle of background and the whole reason for
@@ -475,7 +475,7 @@ struct SpritePackLoadingTests {
         // and 0 partial pixels.
         #expect(levels.count > 16)
         #expect(partial > 50)
-        // And the corners are still fully transparent — a flattened image would have
+        // And the corners are still fully transparent - a flattened image would have
         // filled them, which is the failure that would actually be visible on screen.
         #expect(clear > 0)
     }
@@ -550,7 +550,7 @@ struct SpritePackLoadingTests {
         try? fm.removeItem(at: root)
     }
 
-    // MARK: Rejection — untrusted input
+    // MARK: Rejection - untrusted input
 
     @Test("A relative path escaping the pack folder is rejected")
     func rejectsRelativeTraversal() throws {

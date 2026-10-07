@@ -137,7 +137,7 @@ export default function ArchitectureScrollStory() {
               No Cloud Servers. No DNS Queries. No Telemetry.
             </h3>
             <p className="text-zinc-400 text-sm leading-relaxed mb-6">
-              When using cloud dictation tools, your spoken words are compressed, uploaded over WiFi, transcribed in a remote datacenter, and streamed back — leaking personal conversations and adding 1,200ms+ of delay. Utter keeps everything in local unified memory on your Mac.
+              When using cloud dictation tools, your spoken words are compressed, uploaded over WiFi, transcribed in a remote datacenter, and streamed back - leaking personal conversations and adding 1,200ms+ of delay. Utter keeps everything in local unified memory on your Mac.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

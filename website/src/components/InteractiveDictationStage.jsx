@@ -247,7 +247,7 @@ export default function InteractiveDictationStage({ soundEnabled }) {
               </div>
               <div className="text-xs font-medium text-zinc-400 flex items-center gap-2">
                 <span>{selectedApp.appName}</span>
-                <span className="text-zinc-600">—</span>
+                <span className="text-zinc-600"> - </span>
                 <span className="text-zinc-500 text-[11px] font-mono">{selectedApp.category}</span>
               </div>
               <button

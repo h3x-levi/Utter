@@ -25,20 +25,20 @@ enum Surface {
     // read as a light wash in dark mode and a dark wash in light mode.
     static let fillSubtle = Color.primary.opacity(0.04)
     static let fillMuted = Color.primary.opacity(0.07)
-    /// A hover wash — safe **only** where the rest state is already a `Color.primary` wash.
+    /// A hover wash - safe **only** where the rest state is already a `Color.primary` wash.
     ///
     /// `Color.primary` inverts per appearance, so this darkens in a light theme and lightens in a
     /// dark one. That is correct when it deepens a wash that already runs the same direction, and
     /// it is a bug anywhere the *selected* state is a white lift: the pointer then darkens the row
     /// on hover and the click jumps it light, so one control moves in two directions. That shipped
-    /// twice — the main window's sidebar and Settings' group rows — and **both are now real
+    /// twice - the main window's sidebar and Settings' group rows - and **both are now real
     /// `List(selection:)`s**, so AppKit owns hover and selection there and neither draws a wash at
     /// all. (They briefly used a `SidebarLift` enum of white lifts instead; it is deleted. Its lifts
     /// were provably *ordered* and still invisible in light mode, which is the lesson recorded at
     /// `FlowMainView`'s deletion note: ordering is not contrast.) Remaining uses are correct because
     /// rest is a `Color.primary` wash at 4% and hover is the same wash at 10%.
     ///
-    /// **0.10, not 0.06.** At 6% over a light theme's card this measured **1.142:1** — a hover state
+    /// **0.10, not 0.06.** At 6% over a light theme's card this measured **1.142:1** - a hover state
     /// you cannot see is not feedback, and "hovering shows no indication, nothing in light themes"
     /// was the report. 10% measures **1.253:1** against the same card, which is roughly the step
     /// AppKit's own list-row hover makes. The 4% rest / 10% hover pair still runs in one direction
@@ -53,7 +53,7 @@ enum Surface {
 /// Every translucent surface in the app is the same two-layer build: an
 /// `NSVisualEffectView` sampling what is behind the window, and a themed colour
 /// over it so a theme still reads as itself on any wallpaper. This is the opacity
-/// of that second layer — which makes it the number that decides how much desktop
+/// of that second layer - which makes it the number that decides how much desktop
 /// shows through, i.e. the entire perceived translucency of the app.
 ///
 /// It was hand-written at seven call sites with seven different values, which is
@@ -62,8 +62,8 @@ enum Surface {
 /// read thinner and cooler than its parent. Nobody could have named the intended
 /// difference, because there wasn't one.
 ///
-/// Three roles, and in light mode they are a ramp — **0.42 shell → 0.72 content →
-/// 0.86 nested** — so a surface is always more opaque than the surface it sits on.
+/// Three roles, and in light mode they are a ramp - **0.42 shell → 0.72 content →
+/// 0.86 nested** - so a surface is always more opaque than the surface it sits on.
 /// That ordering is the whole point, and it is not decorative: the tiles were once
 /// a neutral `.regularMaterial` that landed one unit from the sidebar, and the
 /// nesting read backwards (see `ContentGlass`). `VeilRampTests` pins the ordering
@@ -78,13 +78,13 @@ enum Veil {
     /// the desktop.
     static func windowShell(isDark: Bool) -> Double { isDark ? 0.55 : 0.42 }
 
-    /// The plane that carries every screen's text. Substantially more opaque than the shell — it
+    /// The plane that carries every screen's text. Substantially more opaque than the shell - it
     /// is read, not looked through.
     ///
     /// Named for an inset content card that no longer exists: the main window is now one
     /// continuous plane with a glass sidebar floating on it, so this *is* the window's surface
     /// there rather than a card sitting on one. The value did not change when the card went,
-    /// which is the point — every content pixel kept its tone and only the sidebar strip changed
+    /// which is the point - every content pixel kept its tone and only the sidebar strip changed
     /// material.
     static func contentSurface(isDark: Bool) -> Double { isDark ? 0.45 : 0.72 }
 
@@ -115,7 +115,7 @@ enum Veil {
 enum Ink {
     /// Warm near-black / warm near-white, never pure.
     ///
-    /// `#26241F` in light and a warm off-white in dark — the reference palette
+    /// `#26241F` in light and a warm off-white in dark - the reference palette
     /// has no pure black or pure gray anywhere, and pure `labelColor` alongside
     /// warm surfaces looks like a different design system bolted on.
     static let primary = Color(nsColor: NSColor(name: nil) { appearance in
@@ -127,7 +127,7 @@ enum Ink {
     /// Supporting text: captions, descriptions, secondary values.
     ///
     /// `NSColor.secondaryLabelColor` alone measured **4.01:1** on the app's
-    /// translucent tiles — under the 4.5:1 floor for body text. The system colour
+    /// translucent tiles - under the 4.5:1 floor for body text. The system colour
     /// is calibrated against an *opaque* control background; a glass or material
     /// surface sits lighter than that, which closes the gap.
     ///
@@ -140,7 +140,7 @@ enum Ink {
     /// but is not: `blended` *resolves* both dynamic colours immediately, against
     /// whichever appearance happened to be current when this constant
     /// initialised. That baked in one appearance's value and made the text
-    /// darker than its own background in the other — measured 0.012 luminance on
+    /// darker than its own background in the other - measured 0.012 luminance on
     /// a 0.066 surface, i.e. invisible. A dynamic provider re-resolves per
     /// appearance, so light, dark, and Increase Contrast all stay correct.
     static let secondary = Color(nsColor: NSColor(name: nil) { appearance in
@@ -148,18 +148,18 @@ enum Ink {
             ? NSColor(srgbRed: 0.72, green: 0.70, blue: 0.67, alpha: 1)
             : NSColor(srgbRed: 0.400, green: 0.380, blue: 0.353, alpha: 1)
     })
-    /// Non-essential content only — this fails 4.5:1 contrast. Decorative
+    /// Non-essential content only - this fails 4.5:1 contrast. Decorative
     /// glyphs, dividers, and separators; never text the user must read.
     /// Quiet supporting text: micro labels, captions, metadata.
     ///
     /// The three ink levels are deliberately spaced far enough apart to read as a
     /// hierarchy. An earlier pass darkened tertiary for light-mode contrast but
     /// *raised* it in dark mode to 0.70, which put it within 0.08 of secondary at
-    /// 0.78 — so primary, secondary and tertiary all converged and every label in
+    /// 0.78 - so primary, secondary and tertiary all converged and every label in
     /// the window looked uniformly greyed out. Dark now runs 0.97 / 0.72 / 0.56.
     ///
     /// Measured at the old value, the uppercase tracked stat labels came out at
-    /// **2.68:1** — the least readable text in the window, and below even the
+    /// **2.68:1** - the least readable text in the window, and below even the
     /// 3:1 large-text floor. Small letter-spaced capitals need *more* contrast
     /// than body text, not less, because each glyph has very little stroke area.
     /// Darkened to clear 4.5:1 on the tile fill.
@@ -172,7 +172,7 @@ enum Ink {
     /// Placeholder text.
     ///
     /// `NSColor.placeholderTextColor` is a pure neutral grey, which measured
-    /// (156,156,156) in the search field — perfectly neutral in an otherwise warm
+    /// (156,156,156) in the search field - perfectly neutral in an otherwise warm
     /// UI, so it read as dirty rather than quiet. Warmed to match the ramp.
     static let placeholder = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDark
@@ -187,7 +187,7 @@ enum Tint {
     /// The active accent: the selected theme's tint, or the user's System
     /// Settings accent when the theme defers to it.
     ///
-    /// Computed rather than stored — a `static let` captured the system colour
+    /// Computed rather than stored - a `static let` captured the system colour
     /// once at load, which is why choosing a theme appeared to do nothing.
     static var accent: Color {
         ThemeManager.shared.current.accent ?? Color(nsColor: .controlAccentColor)
@@ -216,7 +216,7 @@ enum Tint {
                 )
             }
             // Light mode needs the opposite. A warm amber accent that reads well
-            // as a fill measured **2.03:1** as the "Grant" link text on cream —
+            // as a fill measured **2.03:1** as the "Grant" link text on cream  - 
             // and that is an interactive control, so it is the worst place to
             // fail. Deepen it instead, keeping the hue.
             return NSColor(
@@ -230,11 +230,11 @@ enum Tint {
     static var accentSoft: Color { accent.opacity(0.12) }
     static var accentRim: Color { accent.opacity(0.28) }
 
-    /// The ink that sits *on* a solid accent fill — a selected list row.
+    /// The ink that sits *on* a solid accent fill - a selected list row.
     ///
     /// Not white, and that is the whole point of the token. `NSTableView` inverts a
     /// selected row's label to white unconditionally, which is right for the system
-    /// accents — `selectedContentBackgroundColor` carries white at **5.37:1** — and
+    /// accents - `selectedContentBackgroundColor` carries white at **5.37:1** - and
     /// wrong for these themes. Measured on a solid accent fill, white clears the
     /// 4.5:1 body-text floor on **one** of the seven accents:
     ///
@@ -249,7 +249,7 @@ enum Tint {
     ///
     /// So the ink is *measured* rather than assumed: whichever of the two has the
     /// larger WCAG ratio against the accent actually in force. Every theme clears
-    /// 4.5:1 that way, and Linen — the only accent dark enough to carry white —
+    /// 4.5:1 that way, and Linen - the only accent dark enough to carry white  - 
     /// gets white without being special-cased.
     ///
     /// Keyed on the accent's own luminance, **not** on the appearance. Four of the
@@ -307,13 +307,13 @@ enum Tint {
     //   success   2.17    2.14      5.87     7.99     4.5
     //   danger    3.48    3.44      3.46     4.71     4.5
     //
-    // Amber at **1.48:1** is invisible on cream, and every one of these is a warning or an error —
+    // Amber at **1.48:1** is invisible on cream, and every one of these is a warning or an error  - 
     // the strings a user most needs to read. `danger` fails on Graphite too, so it fails in a dark
     // theme as well; this is not a light-mode-only problem.
     //
     // Same fix, and same reasoning, as `accentText` above: keep the hue, move brightness. The
     // amounts are per-colour because the failures differ by an order of magnitude, and each was
-    // solved for rather than picked — the minimum that cleared 4.5:1 against the *lightest* light
+    // solved for rather than picked - the minimum that cleared 4.5:1 against the *lightest* light
     // surface (Linen) was -0.45 / -0.26 / -0.10, and these carry a little headroom past that so a
     // future surface tweak does not silently drop one under the floor.
     //
@@ -321,7 +321,7 @@ enum Tint {
     // them would change a shipped appearance to fix nothing. Red is desaturated rather than
     // brightened, because a brighter pure red on a dark ground reads as alarm rather than as text.
     //
-    // Verified after the change — worst case across all six themes **5.07:1 light, 5.04:1 dark**.
+    // Verified after the change - worst case across all six themes **5.07:1 light, 5.04:1 dark**.
     // `TintContrastTests` pins it.
 
     /// `warning` as text. rgb(128,102,0) light / unchanged dark.
@@ -355,7 +355,7 @@ enum Tint {
 
     // `soft(_:)` (0.12) and `rim(_:)` (0.34) were here, for tinting a fill and its border from
     // one colour. Their last callers were the pill's `stateTint`/`stateRim` tables, deleted as
-    // dead code — `stateRim` had no reader at all and `stateTint` existed only to be compared
+    // dead code - `stateRim` had no reader at all and `stateTint` existed only to be compared
     // against `.clear`. The named constants that survive (`accentSoft`, `accentRim`) carry the
     // two ratios that are actually used, so a generic helper reachable from nowhere was one more
     // thing to keep in step with no way to notice when it drifted.
@@ -373,7 +373,7 @@ enum Line {
     /// The warm neutral the hairline is *made of*, at full strength.
     ///
     /// Split out from `hairline` so a caller that needs the same edge at a different weight does not
-    /// have to restate the recipe and risk drifting off the ramp — which is what happened to the
+    /// have to restate the recipe and risk drifting off the ramp - which is what happened to the
     /// content card's rim, where a locally hand-written white gradient measured 1.015:1 in light mode
     /// (see `ContentGlass.rim`). One ink, many weights.
     static let hairlineInk = Color(nsColor: NSColor(name: nil) { appearance in
@@ -388,14 +388,14 @@ enum Line {
     /// This exists because `hairline` -> `strong` was not a hover. `strong` is
     /// `Color.primary` at 14% and `hairline` is `hairlineInk` at 13%, so the step was a
     /// 0.01 alpha change *and* a hue change on a 1pt border. Measured over this app's
-    /// light canvases that is **1.070:1** — below the perceptual threshold, which is why
+    /// light canvases that is **1.070:1** - below the perceptual threshold, which is why
     /// the theme swatches and companion tiles did not respond to the pointer at all.
     /// The same ramp at 0.26 measures a **1.32:1** step in light and **1.55:1** in dark,
-    /// and lands at 1.71:1 against the canvas — the same edge strength as
+    /// and lands at 1.71:1 against the canvas - the same edge strength as
     /// `ContentGlass.rim`, so the two agree instead of drifting.
     ///
     /// Reach for a system control first; it brings its own hover. This is only for a tile
-    /// whose fill is content that must not be washed over — a theme swatch previews the
+    /// whose fill is content that must not be washed over - a theme swatch previews the
     /// theme's own canvas colour, so tinting it on hover would misreport the thing being
     /// chosen.
     static let hairlineHover = hairlineInk.opacity(0.26)
@@ -419,12 +419,12 @@ enum Space {
     static let x10: CGFloat = 40
     static let x12: CGFloat = 48
 
-    // Semantic aliases — prefer these at call sites; they document intent.
+    // Semantic aliases - prefer these at call sites; they document intent.
     static let rowPaddingV = x3
     static let rowPaddingH = x4
     static let cardPadding = x5
 
-    /// The page rail — the only horizontal inset a *page column* sets.
+    /// The page rail - the only horizontal inset a *page column* sets.
     ///
     /// A container inside a page must not add a second one. If it draws a visible surface it
     /// may inset its own contents from its own visible edge (that is what `rowPaddingH` is
@@ -444,7 +444,7 @@ enum Space {
 // MARK: - Corner radius
 //
 // Fixed values, and they stay fixed. macOS 26 adds `ConcentricRectangle` and the
-// `containerShape(_:)` overload that publishes a container's curve — the documented way
+// `containerShape(_:)` overload that publishes a container's curve - the documented way
 // to make a nested surface follow the surface it sits in. It is deliberately **not**
 // adopted, because measured against this app's own spacing it would square every corner
 // in the window. The measurements are here rather than in a report because the next
@@ -459,12 +459,12 @@ enum Space {
 //     r40/inset 8 → r32.
 //   * The **larger of the two axis insets governs**, not each corner independently:
 //     h8/v30 inside r24 rendered fully square, not r16.
-//   * A **negative** inset does not extrapolate outward — a child 6pt larger than its
+//   * A **negative** inset does not extrapolate outward - a child 6pt larger than its
 //     container rendered square, not r18.
 //   * With no `containerShape` published at all it resolves to **0**: a sharp rectangle,
 //     pixel-identical to `Rectangle()`.
 //   * `ConcentricRectangle.path(in:)` on its own returns a sharp rectangle for *every*
-//     style, `.fixed(12)` included — the corner is resolved in the render pass, not by
+//     style, `.fixed(12)` included - the corner is resolved in the render pass, not by
 //     the shape's own path. So it cannot be wrapped behind a custom shape's `path(in:)`.
 //
 // Every container/child pair in this app sits at or beyond its container's corner, so
@@ -477,17 +477,17 @@ enum Space {
 //
 // There is nothing for concentricity to act on: the container's arc has already fully
 // turned before the child begins, which makes the child's radius a free choice rather
-// than a derived one. `.concentric(minimum:)` would hold today's values — minimum 10
-// inside panel 16 at inset 20 measured r10, identical to now — but then the minimum is
+// than a derived one. `.concentric(minimum:)` would hold today's values - minimum 10
+// inside panel 16 at inset 20 measured r10, identical to now - but then the minimum is
 // doing all of the work, which is a fixed radius with an availability branch in front
 // of it.
 //
 // Two further blockers if this is ever revisited. `ConcentricRectangle` conforms to
 // `Shape` but **not** `InsettableShape`, so it cannot be passed to `glassSurface(_:in:)`
 // and cannot take `.strokeBorder`; adopting it means dropping `strokeBorder` at every
-// converted site. And `strokeBorder` is already concentric for free —
+// converted site. And `strokeBorder` is already concentric for free  - 
 // `RoundedRectangle(12).inset(by: 4)` renders a path byte-identical to
-// `RoundedRectangle(8)` on the inset rect — so every rim in this app already follows
+// `RoundedRectangle(8)` on the inset rect - so every rim in this app already follows
 // its own fill's curve, which is the one nested-curve relationship that repeats ~40
 // times here.
 //
@@ -502,7 +502,7 @@ enum Radius {
     static let card: CGFloat = 12
     static let panel: CGFloat = 16
 
-    /// Always continuous — macOS squircles are `.continuous`; `.circular`
+    /// Always continuous - macOS squircles are `.continuous`; `.circular`
     /// reads as web CSS.
     static func rect(_ radius: CGFloat) -> RoundedRectangle {
         RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -511,13 +511,13 @@ enum Radius {
 
 // MARK: - Typography
 //
-// Body is 15pt. 13pt is the macOS *control* size — right for dense inspectors,
+// Body is 15pt. 13pt is the macOS *control* size - right for dense inspectors,
 // too tight for a full-window utility, which is why the earlier scale read as
 // cramped. Everything calibrates to body. Only three weights ship: regular,
 // medium, semibold.
 //
 // `.rounded` survives in exactly one place: `Typo.wordmark`, where the app names itself as a
-// brand — today that is About. The sidebar's mark is deliberately NOT it: there the name sits
+// brand - today that is About. The sidebar's mark is deliberately NOT it: there the name sits
 // beside a 17pt app icon and takes `.subheading`, because the icon is carrying the brand and a
 // rounded face next to it reads as two logos. So the rule is "rounded belongs to the wordmark
 // token", not "rounded appears wherever the app's name does". Elsewhere it reads
@@ -528,7 +528,7 @@ enum Typo {
     case body, bodyEmphasis, lede, transcript, callout
     case caption, captionEmphasis, numeric, timestamp, mono, keycap
     /// Editorial serif, for hero headlines and large data-card titles only.
-    /// Never for UI labels, buttons, or navigation — that split (serif for
+    /// Never for UI labels, buttons, or navigation - that split (serif for
     /// editorial voice, SF for interface) is the reference design's strongest
     /// brand cue. New York is macOS's system serif.
     case serifTitle, serifHeading
@@ -561,7 +561,7 @@ enum Typo {
         }
     }
 
-    /// Letter spacing. Only the micro label needs it, and it needs it badly —
+    /// Letter spacing. Only the micro label needs it, and it needs it badly  - 
     /// uppercase at 10pt without tracking reads as a smudge.
     var tracking: CGFloat {
         switch self {
@@ -594,7 +594,7 @@ enum Typo {
 }
 
 extension View {
-    /// Single entry point for text styling — replaces `.font(.system(size:))`
+    /// Single entry point for text styling - replaces `.font(.system(size:))`
     /// literals so the scale stays consistent.
     func typo(_ style: Typo, ink: Color? = nil) -> some View {
         self.font(style.font)
@@ -626,20 +626,20 @@ enum Layout {
     // `toolbarBand` (30) lived here: a band of window left clear at the top for the traffic
     // lights, used as padding standing in for chrome. Both of its callers are gone. The main
     // window dropped it when it became an `NSSplitViewController` with a real `NSToolbar`, and
-    // Settings dropped it when it became the same thing — AppKit supplies a measured 66pt band
+    // Settings dropped it when it became the same thing - AppKit supplies a measured 66pt band
     // and a 58pt sidebar safe area to both windows now, and the four panes read those. Nothing
     // references it, and a hand-guessed 30 is not interchangeable with a laid-out 66, so it is
     // deleted rather than left for someone to reach for.
 
     /// Sidebar row pitch.
     ///
-    /// Was 28pt (the reference's 26px at 0.9x), which measured — offscreen probe, top-down window
-    /// points — the six main-window nav rows clustered from y=109 to y=287, i.e. 178pt jammed at the
+    /// Was 28pt (the reference's 26px at 0.9x), which measured - offscreen probe, top-down window
+    /// points - the six main-window nav rows clustered from y=109 to y=287, i.e. 178pt jammed at the
     /// top of an 804pt glass column with a Spacer's worth of emptiness below them before the pinned
     /// footer at y=772. 40pt gives each tab the slightly looser vertical rhythm used by current
     /// macOS sidebars without disturbing the bottom-pinned utilities.
     ///
-    /// This is **Settings'** pitch, and only Settings' — the main window's nav column reads
+    /// This is **Settings'** pitch, and only Settings' - the main window's nav column reads
     /// `mainSidebarRowHeight` now. The claim that the two shared it "so the two nav columns stay one
     /// design" was not true at the time of writing: `FlowMainView.navRows` wrote `Space.x12` (48)
     /// inline under a comment saying 40.
@@ -648,8 +648,8 @@ enum Layout {
     /// inside its 420pt minimum height (measured at 28pt they ended at y=312).
     ///
     /// **This value is currently not reaching the rows.** `SettingsWindowView` applies it as
-    /// `.environment(\.defaultMinListRowHeight, …)`, and that key was measured — screenshot of the
-    /// running app on macOS 26.5, sidebar label centres — to have no effect under
+    /// `.environment(\.defaultMinListRowHeight, …)`, and that key was measured - screenshot of the
+    /// running app on macOS 26.5, sidebar label centres - to have no effect under
     /// `.listStyle(.sidebar)`: the main window set the same key to 56 and got a **31.7pt** pitch, i.e.
     /// well under the floor it was asking for. So Settings' group rows are at the system's own pitch,
     /// not 40. `mainSidebarRowHeight` records what does work. Not changed here, because Settings' nav
@@ -657,7 +657,7 @@ enum Layout {
     /// re-run against its 420pt floor.
     static let sidebarRowHeight: CGFloat = 40
 
-    /// The main window's nav row spacing — the one knob that moves those six rows apart.
+    /// The main window's nav row spacing - the one knob that moves those six rows apart.
     ///
     /// A **minimum height on the row's own content**, applied in `FlowMainView.navRows`, not a row
     /// pitch. The list adds its own insets on top, so read the two numbers together: 44 here measured
@@ -667,19 +667,19 @@ enum Layout {
     /// It is a content frame because the modifier that reads like the right place for it does not
     /// work. Every candidate was checked rather than assumed:
     ///
-    ///   * `.environment(\.defaultMinListRowHeight, …)` — **ignored** under `.listStyle(.sidebar)`.
+    ///   * `.environment(\.defaultMinListRowHeight, …)` - **ignored** under `.listStyle(.sidebar)`.
     ///     Set to 56 it produced a 31.7pt pitch (centres 68 / 101 / 133 / 164 / 196.2 / 227.8pt),
     ///     under the floor it was asking for. Both sidebars in this app were driving their pitch
     ///     through this key, which is why both sat at the system's own spacing however the number was
     ///     tuned. See `sidebarRowHeight`.
-    ///   * `.listRowSpacing` and `.listSectionSpacing` — `@available(macOS, unavailable)`, read from
+    ///   * `.listRowSpacing` and `.listSectionSpacing` - `@available(macOS, unavailable)`, read from
     ///     the SDK's own `SwiftUI.swiftinterface`. They do not exist to be called here.
-    ///   * `.listRowInsets` — compiles on macOS, measured as ignored.
+    ///   * `.listRowInsets` - compiles on macOS, measured as ignored.
     ///
     /// Its own constant rather than a raised `sidebarRowHeight` because the shared one cannot take
     /// it: Settings' last row bottom was measured at y=312 with a 28pt pitch, so each +1pt of pitch
     /// costs that column 6pt, and a 52pt pitch would put it near y=456 against a 420pt minimum
-    /// height. The main window has no such ceiling — six rows at 52.2pt plus `bottomBlock` sit well
+    /// height. The main window has no such ceiling - six rows at 52.2pt plus `bottomBlock` sit well
     /// inside the 680pt minimum window height, and `navRows` is a `List`, so it would scroll rather
     /// than clip if that ever stopped being true.
     ///
@@ -695,10 +695,10 @@ enum Layout {
     static let windowMinWidth: CGFloat = 1000
     static let windowMinHeight: CGFloat = 680
     /// Opening size. Raised ~17% from the shipped 1180x820 (1380x960) because the window read as
-    /// too small by default — 200pt wider and 140pt taller. The minimum floor stays 1000x680, so a
+    /// too small by default - 200pt wider and 140pt taller. The minimum floor stays 1000x680, so a
     /// small-display user still resizes down to it and `showMainWindow`'s collapse re-assert loop
     /// (which restores exactly these values) still fires only below that floor. The ideal is allowed
-    /// to exceed the 1280x800 smallest display, as the old 820 already did — only the *minimum* has
+    /// to exceed the 1280x800 smallest display, as the old 820 already did - only the *minimum* has
     /// to fit a small screen, which `WindowSizeTests.minimumsFitASmallDisplay` pins.
     static let windowIdealWidth: CGFloat = 1380
     static let windowIdealHeight: CGFloat = 960
@@ -709,7 +709,7 @@ enum Layout {
     static let settingsMinHeight: CGFloat = 420
     /// The size Settings opens at, consumed by `showSettingsWindow` for both the opening
     /// `contentRect` and `setContentSize`. Raised 20% from 720x500 to 864x600 to open with more
-    /// room by default, matching the main window's enlargement — still well above the min floor
+    /// room by default, matching the main window's enlargement - still well above the min floor
     /// and inside the 1280x710 smallest-display allowance (`WindowSizeTests`). The chrome geometry
     /// measured at the old 720x500 (band 66pt, the 58/66/160pt safe-area insets, concentric glass)
     /// is size-independent, so those probe notes in `SettingsWindowView` still hold at this size.
@@ -727,7 +727,7 @@ enum Layout {
     /// A window content size raised to the minimum it is usable at.
     ///
     /// `NSWindow.setFrameUsingName` replays an autosaved frame verbatim and does not
-    /// consult `contentMinSize` — that only constrains the user's own dragging — so
+    /// consult `contentMinSize` - that only constrains the user's own dragging - so
     /// a frame stored while a window was collapsed reopens collapsed. This app has
     /// measured that collapse (see `showMainWindow`), so a too-small stored frame is
     /// a real state, not a hypothetical one. Pure, so the arithmetic is covered by
@@ -748,9 +748,9 @@ enum Layout {
 // MARK: - Container modifiers
 
 extension View {
-    /// Grouped card. Content-layer glass, matching `BentoTile`, so a card and a
+    /// Grouped card. Content-layer glass, matching `ContentSection`, so a card and a
     /// tile are the same material rather than two similar-looking surfaces.
-    /// In-window surfaces get no shadow — hierarchy comes from the rim.
+    /// In-window surfaces get no shadow - hierarchy comes from the rim.
     func card(radius: CGFloat = Radius.card,
               padding: CGFloat = Space.cardPadding) -> some View {
         self.padding(padding)
@@ -759,34 +759,34 @@ extension View {
 
     /// Quiet grouping for a row inside a list, plus the row's hover response.
     ///
-    /// Rimless at rest — that is what "quiet" means here, and adding a resting rim
+    /// Rimless at rest - that is what "quiet" means here, and adding a resting rim
     /// would put a permanent hairline on every one of the 300+ history rows. The rim
     /// appears **only** under the pointer, which is the cue these rows were missing.
     ///
     /// **Why an edge and not a shadow.** Depth is read from a *bounded* plane: a
     /// tone change tells the eye something is different, an edge tells it where that
     /// something stops. These rows had at most the tone half, so a hovered row was a
-    /// faint wash with no boundary — no figure to separate from ground, which is
+    /// faint wash with no boundary - no figure to separate from ground, which is
     /// precisely "no depth". The edge is also the bigger of the two cues: measured on
     /// Paper's `Surface.raised` with `Line.hairlineInk`, `Line.hairline` @0.13 reads
-    /// 1.291:1 against the card and `Line.hairlineHover` @0.26 reads 1.713:1 — a
+    /// 1.291:1 against the card and `Line.hairlineHover` @0.26 reads 1.713:1 - a
     /// **1.327:1** step, against **1.148:1** for the whole fill change it is added
     /// to. `Line.hairlineHover` was measured correctly when it was written and had
     /// simply never reached a row; it reached two tiles only
     /// (`ThemeSwatchGrid`, `CompanionSettingsView`).
     ///
     /// A shadow stays out, and `Elevation.flat`'s "No shadow, ever" stands. Apple
-    /// shadows a *floating* control — the pill — and gives a row inside a pane a
+    /// shadows a *floating* control - the pill - and gives a row inside a pane a
     /// bounded fill instead; the pill's contact+ambient pair on a 34pt row reads as a
     /// torn-off card. There is also an arithmetic reason: SwiftUI derives a drop
     /// shadow from the source view's alpha mask, so a shadow cast by a 10%-alpha
-    /// hover fill measures **1.0176:1** — seven times weaker than the same shadow
+    /// hover fill measures **1.0176:1** - seven times weaker than the same shadow
     /// over an opaque fill, and below anything the eye resolves.
     ///
     /// **The fill step is weaker than this file claims elsewhere.** `Surface.fillHover`
     /// is justified as 1.253:1 in four places, but that figure is 0.10 over a *bare*
     /// card. Every caller of this function steps `fillSubtle` → `fillHover`, i.e.
-    /// 0.04 → 0.10, which is **1.1477:1** — within 0.006 of the 1.142:1 that
+    /// 0.04 → 0.10, which is **1.1477:1** - within 0.006 of the 1.142:1 that
     /// `Surface.fillHover`'s own note calls "a hover state you cannot see". So the
     /// fill alone was never going to carry this, whatever it was tuned to, and that
     /// is the second reason the rim is here rather than a larger wash.
@@ -842,7 +842,7 @@ private struct CardSurface: ViewModifier {
 // the same on 13.3.
 
 enum Motion {
-    /// Hover and fill changes. Fast in, slightly slower out — reads less twitchy.
+    /// Hover and fill changes. Fast in, slightly slower out - reads less twitchy.
     static var hoverIn: Animation { .easeOut(duration: 0.11) }
     static var hoverOut: Animation { .easeOut(duration: 0.16) }
 
@@ -867,17 +867,17 @@ enum Motion {
     // No `morphExpand`/`cardFillDelay` family any more.
     //
     // Those four constants described an animated 96pt height and ~236pt width growth of the shell,
-    // with the most detailed measurements in this file. That growth cannot happen — resizing a glass
-    // body re-anchors it and the system cross-fades a ghost — so they had no production callers and
+    // with the most detailed measurements in this file. That growth cannot happen - resizing a glass
+    // body re-anchors it and the system cross-fades a ghost - so they had no production callers and
     // their doc comments were the most likely thing in here to mislead the next reader. The
     // measurements worth keeping moved to `settle` and `settleEdgeTravel`, where they explain why the
     // size change is instant instead of describing a curve for it.
 
-    /// The pill's **settle** — the shape change itself is instant, so this is what sells it.
+    /// The pill's **settle** - the shape change itself is instant, so this is what sells it.
     ///
     /// The shell's *size* cannot be animated: `glassEffect` fills its view's bounds, so the bounds
     /// have to match the silhouette, and re-anchoring a glass body makes the system cross-fade the
-    /// old against the new — which is the ghost that got the morph deleted nine times. A `scaleEffect`
+    /// old against the new - which is the ghost that got the morph deleted nine times. A `scaleEffect`
     /// is a different thing entirely: it transforms an already-composited layer, so there is no new
     /// body and nothing to cross-fade. The pill therefore arrives at its new size instantly and then
     /// springs the last few percent into place.
@@ -888,7 +888,7 @@ enum Motion {
     /// uniform 0.94 -> 1 keeps every proportion and moves the 16pt corner radius by less than a
     /// point.
     ///
-    /// A little bounce, because a pop is the point — `.snappy` is `spring(bounce: 0.15)`.
+    /// A little bounce, because a pop is the point - `.snappy` is `spring(bounce: 0.15)`.
     /// Named so the content fill can be checked against it. An `Animation` cannot be asked for its
     /// duration, so the relationship between the two is only testable if both come from a number
     /// something can read.
@@ -896,7 +896,7 @@ enum Motion {
 
     static var settle: Animation {
         // No bounce. `.snappy`'s default 0.15 was measured to overshoot this travel by 0.0629%,
-        // which on the card is **0.18pt of width** — below one device pixel, so the "pop" the bounce
+        // which on the card is **0.18pt of width** - below one device pixel, so the "pop" the bounce
         // was there for does not exist. `.smooth` is `spring(bounce: 0)` and says what it does.
         if #available(macOS 14, *) { return .smooth(duration: settleDuration) }
         return .spring(response: settleDuration, dampingFraction: 1.0)
@@ -905,7 +905,7 @@ enum Motion {
     /// How far any shell's edge moves during the settle, in points.
     ///
     /// **A constant scale factor was the wrong model** and a flat 0.90 proved it: it gave the 56x28
-    /// capsule 2.8pt of edge travel and the 292x124 card **14.6pt** — so the state with the most
+    /// capsule 2.8pt of edge travel and the 292x124 card **14.6pt** - so the state with the most
     /// violent settle was the one whose content is text being read, arriving on top of an already
     /// instant 236pt jump and reading as a second, unrelated event. It also drew the card's 12pt
     /// transcript at 10.8pt while fading it in, which is the classic soft-text artefact.
@@ -918,7 +918,7 @@ enum Motion {
 
     /// The scale a shell of this size starts its settle at.
     ///
-    /// Referenced to `max(height, width / 2)` so the bound holds on whichever axis dominates — a wide
+    /// Referenced to `max(height, width / 2)` so the bound holds on whichever axis dominates - a wide
     /// capsule settles horizontally, which is the axis that changed, while the card settles on both.
     /// Clamped to 0.86 so a degenerate size can never scale the pill to nothing.
     static func settleScale(width: CGFloat, height: CGFloat) -> CGFloat {
@@ -935,7 +935,7 @@ enum Motion {
     /// the movement is the lobe being absorbed. So the return is the half worth lingering on.
     ///
     /// No bounce, and that is a correction rather than a preference. These used `Motion.morph`
-    /// (`spring(0.32, bounce: 0.19)`), whose overshoot pushes `extrusion` to 1.013 — and
+    /// (`spring(0.32, bounce: 0.19)`), whose overshoot pushes `extrusion` to 1.013 - and
     /// `PillMetrics.lobeCentreOffset` clamps to `0...1`, so the overshoot was discarded and all the
     /// bounce bought was a ~40ms tail of a spring oscillating invisibly against a clamp.
     static var beadEmerge: Animation {
@@ -951,14 +951,14 @@ enum Motion {
     /// The state colour crossing to a new state's hue.
     ///
     /// `easeOut`, not a spring: colour has no momentum, and a spring on a colour reads as a flicker
-    /// at the tail. This is the transition the pill was missing most — the tint and border were a
+    /// at the tail. This is the transition the pill was missing most - the tint and border were a
     /// hard cut, so every dictation began with the glass jumping from untinted to red in one frame,
     /// on *all* nine states rather than only the two that change size.
     static var tintCross: Animation { .easeOut(duration: 0.22) }
 
     /// The card's contents arriving after the shell has.
     ///
-    /// Fades **in** only. Nothing in the pill ever fades *out* any more — an outgoing row dissolving
+    /// Fades **in** only. Nothing in the pill ever fades *out* any more - an outgoing row dissolving
     /// on top of an incoming card is a second, independent ghost, and the fix for it was to make
     /// every removal instant (see `PillContent.content`). Fading only the arrival keeps the polish
     /// and cannot double anything, because there is never a moment with two states drawn.
@@ -977,8 +977,8 @@ enum Motion {
 
     /// How far a note-card row rises into place as it fades in.
     ///
-    /// 5pt. It has to stay inside the card's vertical slack — three transcript lines leave about
-    /// 6.8pt — because the shell's `clipShape` would otherwise show a row cut off at the top. Since
+    /// 5pt. It has to stay inside the card's vertical slack - three transcript lines leave about
+    /// 6.8pt - because the shell's `clipShape` would otherwise show a row cut off at the top. Since
     /// the opacity starts at 0 the rise is never visible against the clip anyway; what it buys is
     /// direction, so the card reads as filling downward rather than switching on.
     static let cardRowRise: CGFloat = 5
@@ -986,7 +986,7 @@ enum Motion {
     /// One row of the note card arriving, staggered by its position.
     ///
     /// The card used to fade its whole interior as a single opacity, so the destination, the
-    /// transcript and the footer appeared at the same instant — which reads as a picture being
+    /// transcript and the footer appeared at the same instant - which reads as a picture being
     /// uncovered rather than as a card being filled in. Top-down at 50ms apart is the difference.
     ///
     /// The last row lands at 0.14 + 0.18 = 0.32s, inside `settleDuration` (0.34s), so the interior
@@ -1004,7 +1004,7 @@ enum Motion {
 /// Tracks the system Reduce Motion and Reduce Transparency settings.
 ///
 /// The pill lives in an `NSPanel` via `NSHostingView`, so SwiftUI environment
-/// propagation isn't reliable there — read AppKit directly and observe changes.
+/// propagation isn't reliable there - read AppKit directly and observe changes.
 final class MotionPreference: ObservableObject {
     static let shared = MotionPreference()
 
@@ -1020,7 +1020,7 @@ final class MotionPreference: ObservableObject {
         // centre, so registering on the default centre meant this observer never fired:
         // turning Reduce Motion or Reduce Transparency on had no effect until the app was
         // relaunched. The pill kept spring-morphing, the companion kept hopping, and glass
-        // kept sampling the wallpaper — for exactly the users who had asked it not to.
+        // kept sampling the wallpaper - for exactly the users who had asked it not to.
         observer = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil,
@@ -1046,7 +1046,7 @@ final class MotionPreference: ObservableObject {
 /// by the sheet's own bounds while doing it.
 ///
 /// `.flat` stays despite having no call sites either, because it is not a no-op
-/// by accident — it is the app's in-window rule ("hierarchy comes from the rim,
+/// by accident - it is the app's in-window rule ("hierarchy comes from the rim,
 /// not from a shadow") given a name, so a surface that wants no shadow can say so
 /// and be reviewed. The rule has been broken once already, by the theme swatches.
 enum Elevation {
@@ -1064,7 +1064,7 @@ extension View {
             self
         case .floating:
             // Two-part: a tight contact shadow plus a wider ambient one. Dark
-            // mode needs more opacity — there's less luminance to cast into.
+            // mode needs more opacity - there's less luminance to cast into.
             self.shadow(color: .black.opacity(dark ? 0.55 : 0.16), radius: 10, y: 3)
                 .shadow(color: .black.opacity(dark ? 0.30 : 0.07), radius: 2, y: 1)
         }

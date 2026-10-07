@@ -75,17 +75,17 @@ private struct CompanionTodayView: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(minimum: 280), spacing: Space.groupGap),
-                    GridItem(.flexible(minimum: 280), spacing: Space.groupGap),
-                ],
-                alignment: .leading,
-                spacing: Space.groupGap
-            ) {
-                // Interactive Pet Stage & Mood
+            VStack(alignment: .leading, spacing: Space.x5) {
                 CompanionStageCard()
 
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 250), spacing: Space.groupGap),
+                        GridItem(.flexible(minimum: 250), spacing: Space.groupGap),
+                    ],
+                    alignment: .leading,
+                    spacing: Space.groupGap
+                ) {
                 SettingsCard(title: "Your companion") {
                     HStack(spacing: Space.x4) {
                         if let style = CodePixelCatStyle(rawValue: userData.companionCharacter) {
@@ -185,6 +185,8 @@ private struct CompanionTodayView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, Space.pageInset)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -665,12 +667,12 @@ private struct CompanionEmptyState: View {
 @MainActor
 private final class CompanionStageCardModel: ObservableObject {
     @Published var activeToyAction: String?
-    @Published var petMood: String = "Delighted 🐾"
+    @Published var activeMood: CompanionMood = .resting
 
     func triggerToy(_ actionText: String, sound: Bool, userData: UserData) {
         withAnimation {
             activeToyAction = actionText
-            petMood = "Playful & Happy ✨"
+            activeMood = actionText.contains("nap") ? .sleepy : .delighted
         }
         if sound && userData.companionSounds {
             SoundPlayer.playDone()
@@ -678,7 +680,7 @@ private final class CompanionStageCardModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
             withAnimation {
                 self?.activeToyAction = nil
-                self?.petMood = "Delighted 🐾"
+                self?.activeMood = .resting
             }
         }
     }
@@ -689,98 +691,61 @@ private struct CompanionStageCard: View {
     @StateObject private var model = CompanionStageCardModel()
 
     var body: some View {
-        SettingsCard(title: "Interactive Stage & Mood") {
-            VStack(alignment: .leading, spacing: Space.x3) {
-                HStack(spacing: Space.x4) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(LinearGradient(colors: [Tint.accent.opacity(0.2), Color.purple.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 64, height: 64)
-                        
-                        if let style = CodePixelCatStyle(rawValue: userData.companionCharacter) {
-                            CodePixelCatView(
-                                style: style,
-                                mood: .delighted,
-                                pose: .neutral,
-                                size: 52,
-                                elapsed: 1.0
-                            )
-                        } else {
-                            CodePixelCatView(
-                                style: .orange,
-                                mood: .delighted,
-                                pose: .neutral,
-                                size: 52,
-                                elapsed: 1.0
-                            )
-                        }
-                    }
+        VStack(alignment: .leading, spacing: Space.x3) {
+            HStack(alignment: .center, spacing: Space.x4) {
+                cat(mood: userData.companionEnabled ? model.activeMood : .loaf)
+                    .frame(width: 88, height: 88)
+                    .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text("Current Mood:")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Ink.secondary)
-                            Text(model.petMood)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Tint.accent)
-                        }
-
-                        HStack {
-                            Text("Friendship:")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Ink.secondary)
-                            Text("Level \(max(1, min(5, userData.companionProgress.lifetimeWords / 500 + 1))) · Close Friend")
-                                .font(.caption)
-                                .foregroundStyle(Ink.primary)
-                        }
-
-                        ProgressView(value: Double(userData.companionProgress.lifetimeWords % 500), total: 500)
-                            .controlSize(.small)
-                    }
-                    Spacer()
-                }
-
-                // Interactive Toy Box
-                VStack(alignment: .leading, spacing: Space.x2) {
-                    Text("Interactive Toy Box")
-                        .font(.system(size: 11, weight: .semibold))
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text(userData.companionEnabled ? "Here with you" : "Taking a break")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(Ink.primary)
+                    Text(model.activeToyAction ?? "A small companion for the quiet moments at your desk.")
+                        .font(.system(size: 13))
                         .foregroundStyle(Ink.secondary)
-
-                    HStack(spacing: Space.x2) {
-                        Button("🧶 Yarn") {
-                            model.triggerToy("Playing with yarn! 🧶", sound: true, userData: userData)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-
-                        Button("🐟 Snack") {
-                            model.triggerToy("Eating fish snack! 🐟", sound: true, userData: userData)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-
-                        Button("🔴 Laser") {
-                            model.triggerToy("Chasing laser dot! 🔴", sound: false, userData: userData)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-
-                        Button("🔔 Nap") {
-                            model.triggerToy("Taking a cozy catnap! 😴", sound: false, userData: userData)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-
-                    if let action = model.activeToyAction {
-                        Text(action)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(Tint.accent)
-                            .transition(.opacity)
-                    }
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label(userData.companionEnabled ? "On your desktop" : "Paused", systemImage: "circle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(userData.companionEnabled ? Tint.success : Ink.secondary)
+                        .labelStyle(.titleAndIcon)
                 }
+                Spacer(minLength: 0)
             }
+
+            HStack(spacing: Space.x2) {
+                Button {
+                    model.triggerToy("Your companion is enjoying a little play break.", sound: false, userData: userData)
+                } label: {
+                    Label("Play", systemImage: "sparkle")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!userData.companionEnabled)
+
+                Button {
+                    model.triggerToy("Your companion is settling in for a nap.", sound: false, userData: userData)
+                } label: {
+                    Label("Rest", systemImage: "moon.zzz")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!userData.companionEnabled)
+
+                Spacer()
+                Text("No streaks or decay")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Ink.secondary)
+            }
+        }
+        .padding(.vertical, Space.x2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func cat(mood: CompanionMood) -> some View {
+        if let style = CodePixelCatStyle(rawValue: userData.companionCharacter) {
+            CodePixelCatView(style: style, mood: mood, pose: .neutral, size: 80, elapsed: 1.0)
+        } else {
+            CodePixelCatView(style: .orange, mood: mood, pose: .neutral, size: 80, elapsed: 1.0)
         }
     }
 }

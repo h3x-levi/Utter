@@ -38,7 +38,7 @@ struct HotkeyOption: Identifiable {
             impact: "Safe, but not every keyboard has a right Control key.",
             // Must check the keyCode, like the other right-hand options: matching
             // the bare `.control` flag fired dictation on ⌃C, ⌃A, ⌃E and every
-            // other Control shortcut — each also injecting a ⌘C into the user's app.
+            // other Control shortcut - each also injecting a ⌘C into the user's app.
             flagCheck: { $0.modifierFlags.contains(.control) && $0.keyCode == 62 }
         ),
     ]
@@ -50,7 +50,7 @@ struct HotkeyOption: Identifiable {
 
 /// What a shortcut does, independent of how it is spelled.
 ///
-/// Each action has two spellings — a standalone `KeyChord`, and for some a `HoldTap` on
+/// Each action has two spellings - a standalone `KeyChord`, and for some a `HoldTap` on
 /// the end of the held dictation hotkey. The monitor resolves an event to an action and
 /// dispatches once, so the two spellings of one shortcut cannot drift into doing
 /// different things.
@@ -79,7 +79,7 @@ enum ShortcutAction: Equatable {
 struct KeyChord {
     let keyCode: UInt16
     let flags: NSEvent.ModifierFlags
-    /// How the key is printed on a keyboard — "Space", "N".
+    /// How the key is printed on a keyboard - "Space", "N".
     let keyLabel: String
     let action: ShortcutAction
 
@@ -105,7 +105,7 @@ struct KeyChord {
                                         action: .memoryCapture)
 
     /// Each modifier's flag, glyph and spelled name, in the order macOS prints them
-    /// in a menu — Control, Option, Shift, Command — rather than the order the flags
+    /// in a menu - Control, Option, Shift, Command - rather than the order the flags
     /// happen to be written in at the definition above.
     private static let modifiers: [(flag: NSEvent.ModifierFlags, glyph: String, name: String)] = [
         (.control, "\u{2303}", "Control"),
@@ -117,7 +117,7 @@ struct KeyChord {
     /// "⌃⌥N", for a label or a menu item.
     var symbols: String { keycaps.joined() }
 
-    /// One string per key, for `ShortcutHint`, which draws each as its own keycap —
+    /// One string per key, for `ShortcutHint`, which draws each as its own keycap  - 
     /// two chips read as two keys, which is what the user has to press.
     var keycaps: [String] {
         Self.modifiers.filter { flags.contains($0.flag) }.map(\.glyph) + [keyLabel]
@@ -136,7 +136,7 @@ struct KeyChord {
 /// Why hold-*then*-tap rather than a plain "Fn+N" chord: the hotkey starts recording on
 /// key-**down**, so by the time a letter could be seen the recording has already begun,
 /// and waiting to find out whether a letter follows would put latency on the app's
-/// primary action. Tapping during the recording needs no disambiguation at all — and
+/// primary action. Tapping during the recording needs no disambiguation at all - and
 /// both actions already know how to adopt an in-flight push-to-talk recording
 /// (`toggleHandsFree` and `toggleNoteCapture` check `audioRecorder.isRecording`), so
 /// this is an extension of the hold rather than a second chord system.
@@ -146,7 +146,7 @@ struct KeyChord {
 /// decides when to record.
 struct HoldTap {
     let keyCode: UInt16
-    /// How the key is printed on a keyboard — "Space".
+    /// How the key is printed on a keyboard - "Space".
     let keyLabel: String
     let action: ShortcutAction
 
@@ -161,7 +161,7 @@ struct HoldTap {
     /// Note capture is deliberately **not** here: macOS owns Fn+N. Read back from the
     /// live WindowServer table on this machine (macOS 26.6.1) via
     /// `CGSGetSymbolicHotKeyValue`, symbolic hotkey 212 is key code 45 (N) + fn and
-    /// enabled — Show Notification Center — as are fn+A/C/F/H/M/Q/S. Space appears in
+    /// enabled - Show Notification Center - as are fn+A/C/F/H/M/Q/S. Space appears in
     /// that table only with ⌘/⌃/⌥ and never with fn, which is what makes it safe to
     /// bind. `⌃⌥N` stays the only route to a note: a second gesture that opened
     /// Notification Center instead would be worse than none.
@@ -179,7 +179,7 @@ struct HoldTap {
 
     /// What the tap should do with a key seen while it is installed.
     enum Outcome: Equatable {
-        /// Not ours — hand it to the frontmost app untouched.
+        /// Not ours - hand it to the frontmost app untouched.
         case pass
         /// Ours, but there is nothing to do. Swallow it anyway so it never types.
         case swallow
@@ -193,7 +193,7 @@ struct HoldTap {
     /// needs Accessibility and real key presses. The two cases worth pinning are the
     /// ones that would be user-visible bugs: an unbound key must `pass` (holding the
     /// hotkey must not swallow the rest of the keyboard), and an auto-repeat must
-    /// `swallow` without firing — a held Space would otherwise toggle hands-free about
+    /// `swallow` without firing - a held Space would otherwise toggle hands-free about
     /// fifteen times a second *and* leak a stream of spaces into the frontmost app.
     static func outcome(keyCode: UInt16, isHotkeyHeld: Bool, isRepeat: Bool) -> Outcome {
         guard isHotkeyHeld, let binding = binding(forKeyCode: keyCode) else { return .pass }
@@ -205,7 +205,7 @@ struct HoldTap {
     /// whichever hotkey is configured, and so this stays testable.
     func keycaps(holdKey: String) -> [String] { [holdKey, keyLabel] }
 
-    /// "hold Fn, then Space" — for prose, the log, and VoiceOver, which reads a row of
+    /// "hold Fn, then Space" - for prose, the log, and VoiceOver, which reads a row of
     /// keycaps as nothing useful.
     func spelled(holdKey: String) -> String { "hold \(holdKey), then \(keyLabel)" }
 
@@ -214,7 +214,7 @@ struct HoldTap {
     /// False until `KeyMonitor` has an event tap: without one the tapped key cannot be
     /// swallowed, and a gesture that types a space into the field the transcript is
     /// about to land in is worse than no gesture. Settings reads this so the Hotkey card
-    /// cannot advertise a route nothing would fire — the same property that keeps the
+    /// cannot advertise a route nothing would fire - the same property that keeps the
     /// chords honest. Main thread only.
     fileprivate(set) static var isAvailable = false
 }
@@ -222,7 +222,7 @@ struct HoldTap {
 /// The event tap behind hold-then-tap.
 ///
 /// A `CGEventTap` and not `NSEvent.addGlobalMonitorForEvents` because only a tap can
-/// **consume** a key: a global monitor is observe-only — its handler returns nothing —
+/// **consume** a key: a global monitor is observe-only - its handler returns nothing  - 
 /// so a tapped Space would reach the frontmost app as well, landing a stray space in the
 /// very field the transcript is about to be typed into, or hitting play/pause in
 /// whatever is playing. The chords get away with a monitor because ⌃⌥ produces no
@@ -234,7 +234,7 @@ struct HoldTap {
 ///
 /// Must outlive its tap: the callback reaches this object through an **unretained**
 /// pointer, because a C callback cannot hold a Swift reference. `deinit` tears the tap
-/// down, and `KeyMonitor` — which owns the only instance — lives as long as the app, so
+/// down, and `KeyMonitor` - which owns the only instance - lives as long as the app, so
 /// there is no window in which a keystroke can find a freed object. Do not make this a
 /// short-lived object without retaining it for the tap's lifetime instead.
 private final class HoldTapMonitor {
@@ -250,7 +250,7 @@ private final class HoldTapMonitor {
         self.onAction = onAction
     }
 
-    /// Create the tap and start pumping it. `false` means hold-then-tap is unavailable —
+    /// Create the tap and start pumping it. `false` means hold-then-tap is unavailable  - 
     /// the caller says why in the log.
     ///
     /// Checks `AXIsProcessTrusted` first so an untrusted process never reaches
@@ -277,7 +277,7 @@ private final class HoldTapMonitor {
         lock.withLock { self.tap = tap }
 
         // Created here, pumped there. Creating on the calling thread keeps "did it work"
-        // synchronous — the startup log and the Settings card both need the answer now —
+        // synchronous - the startup log and the Settings card both need the answer now  - 
         // while the callbacks arrive on a thread of our own, because macOS disables a tap
         // whose callback is slow to return and stalls every keystroke in the system while
         // it waits. Utter loads and runs a Whisper model in-process, so the main thread is
@@ -285,13 +285,13 @@ private final class HoldTapMonitor {
         let thread = Thread { [weak self] in
             guard let self else { return }
             self.lock.withLock { self.runLoop = CFRunLoopGetCurrent() }
-            // `stop()` can land between `thread.start()` and here — two `.hotkeyChanged`
-            // notifications in quick succession are enough — and an invalidated port
+            // `stop()` can land between `thread.start()` and here - two `.hotkeyChanged`
+            // notifications in quick succession are enough - and an invalidated port
             // yields no source. Bail rather than handing the run loop a null one.
             guard let source = CFMachPortCreateRunLoopSource(nil, tap, 0) else { return }
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: true)
-            // Returns once the source is gone — see `stop()`.
+            // Returns once the source is gone - see `stop()`.
             CFRunLoopRun()
         }
         thread.name = "utter.dictation.holdtap"
@@ -303,7 +303,7 @@ private final class HoldTapMonitor {
     func stop() {
         // Clear `tap` *before* disabling it, and outside the lock. Disabling a tap can
         // call back with `.tapDisabledByUserInput`, and that branch re-enables whatever
-        // `self.tap` holds — so a stop that niled it afterwards would be undone by its
+        // `self.tap` holds - so a stop that niled it afterwards would be undone by its
         // own callback, and one that disabled the tap while holding the lock would
         // deadlock against it.
         let (tap, loop) = lock.withLock { () -> (CFMachPort?, CFRunLoop?) in
@@ -335,7 +335,7 @@ private final class HoldTapMonitor {
             let tap = lock.withLock { self.tap }
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             print("⌨️ Hold-then-tap: the system disabled the event tap "
-                  + "(\(type == .tapDisabledByTimeout ? "timeout" : "user input")) — re-enabled")
+                  + "(\(type == .tapDisabledByTimeout ? "timeout" : "user input")) - re-enabled")
             return Unmanaged.passUnretained(event)
         }
         guard type == .keyDown else { return Unmanaged.passUnretained(event) }
@@ -346,7 +346,7 @@ private final class HoldTapMonitor {
 
         // Every keystroke on this machine passes through here, so nothing about a key
         // that is not one of ours is examined further, and nothing is ever logged for
-        // one — a tap that printed key codes would be a keylogger.
+        // one - a tap that printed key codes would be a keylogger.
         switch HoldTap.outcome(keyCode: keyCode, isHotkeyHeld: isHeld, isRepeat: isRepeat) {
         case .pass:
             return Unmanaged.passUnretained(event)
@@ -423,7 +423,7 @@ class KeyMonitor {
             return event
         }
 
-        // Both chords, from any state. Hold-then-tap does *not* arrive here — it needs to
+        // Both chords, from any state. Hold-then-tap does *not* arrive here - it needs to
         // swallow its key, which a monitor cannot do, so it comes from the event tap.
         globalKeyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event)
@@ -443,7 +443,7 @@ class KeyMonitor {
             print("⌨️ Hold-then-tap unavailable: "
                   + (AXIsProcessTrusted() ? "the system refused an event tap"
                                           : "Accessibility not granted")
-                  + " — the chords still work")
+                  + " - the chords still work")
         }
 
         var gestures = ["hold \(hotkeyName) to record",
@@ -494,7 +494,7 @@ class KeyMonitor {
                 && (now - lastHotkeyReleaseTime) <= doubleTapIntervalThreshold
 
             if isDoubleTap {
-                print("✨ Hotkey double-tap (\(option.name) twice) detected — toggling hands-free")
+                print("✨ Hotkey double-tap (\(option.name) twice) detected - toggling hands-free")
                 firstTapWasQuick = false
                 lastHotkeyReleaseTime = 0
                 suppressReleaseStop = true
@@ -513,7 +513,7 @@ class KeyMonitor {
 
             // Hands-free mode keeps recording even after the hotkey is released.
             if suppressReleaseStop {
-                print("🔒 Hotkey released but hands-free mode active — keeping recorder on")
+                print("🔒 Hotkey released but hands-free mode active - keeping recorder on")
                 return
             }
             DispatchQueue.main.async { self.onRecordStop() }
@@ -525,7 +525,7 @@ class KeyMonitor {
     private func handleKeyDown(_ event: NSEvent) {
         // Auto-repeat would toggle the mode ~15x/second while the chord is held:
         // repeat 1 starts hands-free, repeat 2 immediately stops it, and the ~60ms
-        // clip is then rejected as too short — a burst of chimes and a dead turn.
+        // clip is then rejected as too short - a burst of chimes and a dead turn.
         guard !event.isARepeat else { return }
 
         // Count the keystroke for the companion, before the chord filter below returns
@@ -533,7 +533,7 @@ class KeyMonitor {
         // repeats at ~15/second, which would read as inhumanly fast typing and light up
         // the overheat reaction for someone leaning on the arrow keys.
         //
-        // The count is all that leaves this function — see `KeystrokeTicker`, which has
+        // The count is all that leaves this function - see `KeystrokeTicker`, which has
         // nowhere to put a key code even if someone later tried.
         KeystrokeTicker.note()
         // Resolve which chord this is first, so the modifier check below tests the
@@ -557,8 +557,8 @@ class KeyMonitor {
 
     /// The one place an action becomes a callback.
     ///
-    /// Both spellings funnel through here — the chord from the `NSEvent` monitor on the
-    /// main thread, hold-then-tap from the event tap's own thread — so they cannot drift,
+    /// Both spellings funnel through here - the chord from the `NSEvent` monitor on the
+    /// main thread, hold-then-tap from the event tap's own thread - so they cannot drift,
     /// and so the main-thread hop is stated once rather than per gesture.
     private func dispatch(_ action: ShortcutAction) {
         switch action {

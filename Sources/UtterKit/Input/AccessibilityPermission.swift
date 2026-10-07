@@ -4,7 +4,7 @@ import AppKit
 /// Utter's one route to the Accessibility permission, and the only place the system's own
 /// prompt is allowed to be raised.
 ///
-/// The permission is asked for in two places — the onboarding step and the launch check — and
+/// The permission is asked for in two places - the onboarding step and the launch check - and
 /// they used to raise the prompt independently, which produced the thing this type exists to
 /// stop: `OnboardingView` called `AXIsProcessTrustedWithOptions([prompt: true])` *and* opened the
 /// Accessibility pane, so one button press put macOS's "would like to control this computer …
@@ -31,7 +31,7 @@ enum AccessibilityPermission {
     /// Whether the user has already been asked, by either route.
     static var hasAsked: Bool { UserDefaults.standard.bool(forKey: askedKey) }
 
-    /// Record an ask without raising the system dialog — for the routes that show their own
+    /// Record an ask without raising the system dialog - for the routes that show their own
     /// explanation and open the pane themselves.
     static func markAsked() {
         UserDefaults.standard.set(true, forKey: askedKey)
@@ -52,7 +52,7 @@ enum AccessibilityPermission {
     /// Raise the system's own permission dialog, at most once for the life of the install.
     ///
     /// `kAXTrustedCheckOptionPrompt: true` shows the dialog on *every* call, and this used to run
-    /// at every launch — so the app nagged on startup forever, including after the user had
+    /// at every launch - so the app nagged on startup forever, including after the user had
     /// declined. Returns whether the dialog was raised, so callers can log honestly.
     @discardableResult
     static func promptOnce() -> Bool {

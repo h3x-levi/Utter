@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>utter.dictation.app</string>
     <key>CFBundleVersion</key>
-    <string>1.1.57.20260911165930</string>
+    <string>1.1.58.20261007115241</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.57</string>
+    <string>1.1.58</string>
     <key>CFBundleExecutable</key>
     <string>Utter</string>
     <key>CFBundleIconFile</key>

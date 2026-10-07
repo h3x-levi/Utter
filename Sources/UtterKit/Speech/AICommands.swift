@@ -63,7 +63,7 @@ struct AICommands {
 
         // Fixed-intent edits on what was just produced. These are the phrases
         // people reach for immediately after seeing a result, so they get exact
-        // matching rather than going through the open-ended path below — an exact
+        // matching rather than going through the open-ended path below - an exact
         // match is predictable and skips a round trip.
         let editPatterns: [(phrases: [String], instruction: String)] = [
             (["make it shorter", "make this shorter", "shorten it", "shorten this", "make it brief"],
@@ -87,8 +87,8 @@ struct AICommands {
         //
         // Gated behind an explicit lead-in ("change that to…", "rewrite that as…")
         // rather than matched loosely. Anything looser would swallow ordinary
-        // dictation — a sentence that merely begins "make sure you…" must be typed,
-        // not treated as a command — and misfiring here silently replaces the
+        // dictation - a sentence that merely begins "make sure you…" must be typed,
+        // not treated as a command - and misfiring here silently replaces the
         // user's text instead of just adding a wrong word.
         let openLeadIns = [
             "change that to ", "change this to ", "rewrite that as ",
@@ -117,7 +117,7 @@ struct AICommands {
         guard !sourceText.isEmpty else {
             return AICommandResult(
                 text: nil,
-                error: "Nothing to edit — select text or dictate first",
+                error: "Nothing to edit - select text or dictate first",
                 replacesSelection: false
             )
         }
@@ -149,7 +149,7 @@ struct AICommands {
         guard !sourceText.isEmpty else {
             return AICommandResult(
                 text: nil,
-                error: "Nothing to transform — select text or dictate first",
+                error: "Nothing to transform - select text or dictate first",
                 replacesSelection: false
             )
         }
@@ -184,7 +184,7 @@ struct AICommands {
     private static func applyStyle(_ style: String, selectedText: String) async -> AICommandResult? {
         let sourceText = !selectedText.isEmpty ? selectedText : UserData.shared.lastTranscription
         guard !sourceText.isEmpty else {
-            return AICommandResult(text: nil, error: "Nothing to restyle — select text or dictate first", replacesSelection: false)
+            return AICommandResult(text: nil, error: "Nothing to restyle - select text or dictate first", replacesSelection: false)
         }
 
         let prompts: [String: String] = [
@@ -263,7 +263,7 @@ struct AICommands {
                 instructions: "Write short, professional replies. Be concise and direct. No greetings or sign-offs unless the original has them.",
                 prompt: "Write a brief, professional reply. Return ONLY the reply.\n\nMessage: \(sourceText)"
             )
-            // Reply doesn't replace — it pastes after
+            // Reply doesn't replace - it pastes after
             return AICommandResult(text: result.trimmingCharacters(in: .whitespacesAndNewlines), error: nil, replacesSelection: false)
         } catch {
             return AICommandResult(text: nil, error: "Reply failed: \(error.localizedDescription)", replacesSelection: false)

@@ -12,7 +12,7 @@ three names for one thing.
 | **the note card** | What the pill becomes while dictating into a note: 292×124, destination, live words, elapsed, meter. Not "popup", "box", or "rectangle". | `NoteCaptureBox` → rename to `NoteCard` |
 | **the hands-free button** | The record ring the pill reveals on hover, and the stop square it becomes while latched. | `HandsFreeRevealButton` |
 | **the companion** | The animated character. Its own window, its own saved position. Never "the pet" or "the mascot". | `CompanionWindow` |
-| **a character** | One companion design — Panda, Golden Dog, Pixel Cat (Ginger), Pixel Cat (Gray). | `SpritePack` |
+| **a character** | One companion design - Panda, Golden Dog, Pixel Cat (Ginger), Pixel Cat (Gray). | `SpritePack` |
 | **a pack** | The folder of art that supplies a character. | `SpritePack`, `Companions/<id>/` |
 | **a pose** | One drawn state of a character: `resting`, `alert`, `thinking`, `delighted`, `startled`, `sleepy`. | `CompanionMood`, `CompanionPose` |
 
@@ -46,12 +46,12 @@ specifically. Say which one.
 | **a note** | One durable piece of writing. | `Note`, `NoteStore` |
 | **note actions** | The on-device AI buttons: Summarise, Find action items, Clean up, Format as document, Suggest title. | `NoteAction`, `NoteActionRunner` |
 | **a meeting** | A recording of both sides of a call, filed as a note, split into **turns** under two **speaker labels**. | `MeetingSession` |
-| **a turn** | One paragraph of a meeting transcript: contiguous speech with no real pause in it. A timing fact only — a turn never claims *which* person spoke, and "a turn" is never called "a speaker". | `SpeechTurn`, `TurnSegmenter` |
-| **a speaker label** | What a meeting calls one of its two audio **sources** — the mic (**You**) and the call (**Others**). Renameable per meeting. Say "source", not "speaker", when the distinction matters: the mic is one person, the call is however many. | `MeetingSpeakers`, `SpeakerRole` |
+| **a turn** | One paragraph of a meeting transcript: contiguous speech with no real pause in it. A timing fact only - a turn never claims *which* person spoke, and "a turn" is never called "a speaker". | `SpeechTurn`, `TurnSegmenter` |
+| **a speaker label** | What a meeting calls one of its two audio **sources** - the mic (**You**) and the call (**Others**). Renameable per meeting. Say "source", not "speaker", when the distinction matters: the mic is one person, the call is however many. | `MeetingSpeakers`, `SpeakerRole` |
 | **dictation history** | The log of what was typed into other apps. Distinct from notes. | `TranscriptionHistory` |
 
 ## Renames this implies
 
 `NoteCaptureBox` → `NoteCard` is the only code name that contradicts this table.
-Everything else already matches. Not done yet — it touches one type, its file and
+Everything else already matches. Not done yet - it touches one type, its file and
 its tests.

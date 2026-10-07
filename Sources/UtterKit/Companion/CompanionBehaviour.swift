@@ -5,7 +5,7 @@ import Combine
 ///
 /// **This exists to make the tick publish once instead of two-to-four times.** `pose`,
 /// `offsetX`, `offsetY` and `moodElapsed` were four separate `@Published` properties, and
-/// `@Published` sends `objectWillChange` on every assignment — so a single tick entered
+/// `@Published` sends `objectWillChange` on every assignment - so a single tick entered
 /// SwiftUI's dependency graph up to four times to describe one frame. SwiftUI coalesces the
 /// *view update* to one per runloop turn, but each send still costs a Combine dispatch and an
 /// AttributeGraph invalidation. Measured over 24 000 release-build ticks per scenario:
@@ -16,7 +16,7 @@ import Combine
 ///   Reduce Motion + pet signals off    4.000            ->  1.000
 ///
 /// Reduce Motion was the worst case because its branch assigns `offsetX = 0; offsetY = 0`
-/// every tick — values that were *already* zero, publishing twice to say nothing changed.
+/// every tick - values that were *already* zero, publishing twice to say nothing changed.
 ///
 /// Grouped by *rate*, not by subject: these four are the ones that move at the tick rate.
 /// `mood`, `quip`, `pomodoroCountdown` and `pinnedMessage` stay separate because they change
@@ -27,7 +27,7 @@ struct CompanionFrame: Equatable {
     var pose: CompanionPose = .neutral
 
     /// Horizontal offset from the character's home spot, in points. The companion's
-    /// *window* never moves during ambient behaviour — only this offset does, which keeps
+    /// *window* never moves during ambient behaviour - only this offset does, which keeps
     /// the character inside the panel it already owns and avoids a window-move on every one
     /// of 30 frames per second.
     var offsetX: CGFloat = 0
@@ -40,7 +40,7 @@ struct CompanionFrame: Equatable {
     /// This is what a sprite pack animates against. Deliberately a *time* rather than a
     /// frame counter: APNG frames each carry their own duration, so the pack decides which
     /// frame a given moment lands on (`CompanionAnimation.frameIndex(at:)`) and this only
-    /// has to say what moment it is. One clock still drives everything — a pack starting a
+    /// has to say what moment it is. One clock still drives everything - a pack starting a
     /// timer of its own is the drift this design exists to avoid.
     ///
     /// Reset when the mood changes, so each animation starts at its first frame rather than
@@ -51,8 +51,8 @@ struct CompanionFrame: Equatable {
 /// The character's brain: turns dictation state plus time into a pose and a
 /// position.
 ///
-/// One driver for everything on purpose. The alternative — each body part running
-/// its own `repeatForever` animation — is what makes desktop pets read as looping
+/// One driver for everything on purpose. The alternative - each body part running
+/// its own `repeatForever` animation - is what makes desktop pets read as looping
 /// GIFs: every part restarts on the same beat forever, and nothing can react.
 /// Here a single 30 Hz tick advances one behaviour at a time, so a fidget can
 /// interrupt a stroll and a recording can interrupt both.
@@ -68,7 +68,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Everything that moves at the tick rate, published as one value.
     ///
     /// Deliberately **not** `@Published`: the tick mutates this several times as it composes
-    /// a frame — zeroing an offset, easing another, writing the pose — and `@Published` would
+    /// a frame - zeroing an offset, easing another, writing the pose - and `@Published` would
     /// send `objectWillChange` on each of those writes. `tick()` sends once, up front, for the
     /// whole frame instead. See `CompanionFrame` for the measured before/after.
     ///
@@ -80,7 +80,7 @@ final class CompanionBehaviour: ObservableObject {
     /// The current frame. Renderers read this and nothing else.
     ///
     /// The four accessors below forward to `frame` so the read surface is unchanged by the
-    /// collapse — `CompanionWindow` and `NoteCaptureBox` still read `pose`, `offsetX`,
+    /// collapse - `CompanionWindow` and `NoteCaptureBox` still read `pose`, `offsetX`,
     /// `offsetY` and `moodElapsed` exactly as before.
     var pose: CompanionPose { frame.pose }
 
@@ -101,18 +101,18 @@ final class CompanionBehaviour: ObservableObject {
     /// How far the character may stray from home, in points, in each direction.
     ///
     /// Deliberately small. The companion sits beside the pill at pill scale, and
-    /// its whole charm is orbiting that anchor — a pet that wanders 200pt away is
+    /// its whole charm is orbiting that anchor - a pet that wanders 200pt away is
     /// just a second floating window.
     ///
     /// Set by the window from its own geometry rather than chosen here, because the
     /// two are the same constraint: a borderless panel clips its content, so
     /// anything past `padding - characterSize/2` is a character sliced in half at
     /// the window edge. It also changes with the character's size, which is a user
-    /// preference — see `CompanionGeometry.roamRange`.
+    /// preference - see `CompanionGeometry.roamRange`.
     var roamRange: CGFloat = 16
 
     /// Vertical clearance for a hop, in points. Bounded by the same padding as
-    /// `roamRange` — a hop that clears the top of the panel is decapitated.
+    /// `roamRange` - a hop that clears the top of the panel is decapitated.
     var hopHeight: CGFloat = 14
 
     /// Seconds of unbroken rest before the character curls up and the ticker
@@ -133,7 +133,7 @@ final class CompanionBehaviour: ObservableObject {
     ///    ~0.51) with semi-implicit Euler, so the tick length *is* the integration step and
     ///    the visible bounce changes with it. Peak overshoot toward a target at 0.5 of full
     ///    deflection, measured: 30 Hz +11.7%, 24 Hz +10.6%, 20 Hz +9.3%, 15 Hz +6.5%.
-    ///    Halving the rate halves the bounce — which is exactly the "smoothed the googly
+    ///    Halving the rate halves the bounce - which is exactly the "smoothed the googly
     ///    eyes" regression the spring's own comment exists to prevent. (At 10 Hz it reads
     ///    +40% and has not settled after 2 s, which is the independent reason the sleeping
     ///    branch does no cursor read at all rather than tracking slowly.)
@@ -150,7 +150,7 @@ final class CompanionBehaviour: ObservableObject {
     ///    30 Hz is best or joint-best on three of the four rates the shipped packs use.
     ///
     /// The idle cost this would be trying to buy back is already bought a different way: a
-    /// still character reaches `sleepAfter` and `retick`s to `sleepTickInterval` — measured
+    /// still character reaches `sleepAfter` and `retick`s to `sleepTickInterval` - measured
     /// onset at tick 2701, i.e. 90.0 s exactly. So the 30 Hz floor is bounded, not permanent.
     private let tickInterval: TimeInterval = 1.0 / 30.0
 
@@ -172,7 +172,7 @@ final class CompanionBehaviour: ObservableObject {
     ///
     /// Injectable so the ambient behaviour can be tested at all. Every act, its duration and
     /// every roam target is drawn at random, so with the global generator a test of what the
-    /// character does over 20 seconds is flaky by construction — `everyTickPublishesSomething`
+    /// character does over 20 seconds is flaky by construction - `everyTickPublishesSomething`
     /// failed roughly one run in a hundred because two consecutive ticks occasionally landed
     /// on identical values, which is a fact about the RNG rather than about the engine.
     /// Production keeps `SystemRandomNumberGenerator`.
@@ -181,7 +181,7 @@ final class CompanionBehaviour: ObservableObject {
     /// When the current mood began, so `moodElapsed` restarts each sprite animation.
     private var moodStartedAt: TimeInterval = 0
 
-    /// Where to read the live microphone level from, 0...1. Real signal — the
+    /// Where to read the live microphone level from, 0...1. Real signal - the
     /// character's reaction while listening is never a timer.
     ///
     /// A pull, not a push. The engine already ticks at 30 Hz, so subscribing to the
@@ -197,13 +197,13 @@ final class CompanionBehaviour: ObservableObject {
     //
     // Three more pulls of exactly the same shape as `levelSource`, for the same reason:
     // the engine already ticks 30 times a second, so asking is cheaper than being told.
-    // All three are **local hardware only** — a cursor position, a keystroke count and a
+    // All three are **local hardware only** - a cursor position, a keystroke count and a
     // hit test. Nothing here reaches the network, the filesystem or another process.
 
     /// Where the pointer is, in screen coordinates.
     ///
     /// Fed from a plain read of `NSEvent.mouseLocation`, which is a free poll of the
-    /// global cursor and needs no event monitor and no permission of any kind — that is
+    /// global cursor and needs no event monitor and no permission of any kind - that is
     /// why eye-follow, hunting and petting all cost one function call per frame between
     /// them rather than a tap the user has to approve.
     var cursorSource: () -> CGPoint = { .zero }
@@ -237,7 +237,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Whether the pet layer is allowed to drive the character at all.
     ///
     /// Off makes every pet signal inert, which is what Reduce Motion and the settings
-    /// toggle both need — and it is checked before the signals are even sampled, so
+    /// toggle both need - and it is checked before the signals are even sampled, so
     /// turning it off also stops the work rather than just hiding the result.
     var petBehavioursEnabled = true
 
@@ -250,7 +250,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Suppresses the cursor-driven reactions rather than the whole pet layer: a character
     /// that has deliberately got out of the way should not then chase the pointer back
     /// across the film you are watching. Typing still counts, because kneading happens in
-    /// place and costs the viewer nothing, and petting still works — reaching over to
+    /// place and costs the viewer nothing, and petting still works - reaching over to
     /// stroke it is a request for its attention.
     var isPeeking = false
 
@@ -265,12 +265,12 @@ final class CompanionBehaviour: ObservableObject {
     /// how far it actually went.
     ///
     /// This is the one thing the walk needs that a published offset cannot give: a stroll
-    /// shifts the character inside its own panel (the window never moves — see `offsetX`),
+    /// shifts the character inside its own panel (the window never moves - see `offsetX`),
     /// but a walk crosses the desktop, so the window itself has to travel. The engine asks,
     /// the window clamps to the screen edge and answers with the real distance, and a short
     /// answer is how the engine learns it has hit an edge and should turn around. The
-    /// default is inert (`0`), so a headless engine — every test that does not wire a window
-    /// — simply never walks anywhere, exactly as before.
+    /// default is inert (`0`), so a headless engine - every test that does not wire a window
+    /// - simply never walks anywhere, exactly as before.
     var walkStep: (CGFloat) -> CGFloat = { _ in 0 }
     var objectSource: () -> CompanionObject = { .none }
     var unlockSource: (CompanionUnlock) -> Bool = { _ in false }
@@ -283,13 +283,13 @@ final class CompanionBehaviour: ObservableObject {
     /// Hand the window the character's current ambient offset and zero it, at the start of a
     /// drag.
     ///
-    /// The window folds this into its own origin, so suppressing the offset — which the drag
-    /// does, see `advanceAmbientAct` — cannot make the character jump. Without it, grabbing a
+    /// The window folds this into its own origin, so suppressing the offset - which the drag
+    /// does, see `advanceAmbientAct` - cannot make the character jump. Without it, grabbing a
     /// character mid-stroll snapped it to its panel centre before the drag had even moved.
     func takeAmbientOffsetForDrag() -> CGSize {
         let carried = CGSize(width: frame.offsetX, height: frame.offsetY)
         // The one frame mutation outside `tick()`, so it publishes for itself. Sent before
-        // the write, which is `objectWillChange`'s contract — and it matters here rather
+        // the write, which is `objectWillChange`'s contract - and it matters here rather
         // than at 30 Hz: the window folds `carried` into its own origin in the same runloop
         // turn, so the view has to stop applying the offset in that same turn or the
         // character visibly doubles the distance for one frame.
@@ -332,7 +332,7 @@ final class CompanionBehaviour: ObservableObject {
         /// Walk to a new spot nearby.
         case stroll
         /// Cross the desktop under its own steam. Unlike `stroll`, which only shifts the
-        /// character inside its panel, this translates the *window* — so the character
+        /// character inside its panel, this translates the *window* - so the character
         /// genuinely walks across the screen, turning around when it reaches an edge.
         case walk
         /// A hop, with real squash on take-off and landing.
@@ -346,7 +346,7 @@ final class CompanionBehaviour: ObservableObject {
         /// Walk back to the home spot because something happened. Its own act, not
         /// a reused `.idle`: the return needs its own travel endpoints and its own
         /// duration, and `.idle` legitimately holds a *stale* `travelTo` from the
-        /// stroll before it — which is what made the character stand where it was
+        /// stroll before it - which is what made the character stand where it was
         /// and never come back.
         case returnHome
     }
@@ -367,7 +367,7 @@ final class CompanionBehaviour: ObservableObject {
     ///
     /// 10 Hz is twice the 5 fps the sleep animation is drawn at, so every frame boundary
     /// lands cleanly, and it is a third of the work the awake engine does. Nothing else runs
-    /// on these ticks — no ambient acts, no pet signals, no cursor read — so the cost is one
+    /// on these ticks - no ambient acts, no pet signals, no cursor read - so the cost is one
     /// timer wake and two published properties. The process is already awake at 1 Hz for the
     /// wake-watcher regardless.
     private let sleepTickInterval: TimeInterval = 1.0 / 10.0
@@ -375,8 +375,8 @@ final class CompanionBehaviour: ObservableObject {
     /// True while the ticker is running at the slow sleeping rate.
     ///
     /// Readable rather than fully private so the rate drop can be tested. It is the whole
-    /// point of the sleep state — a 30 Hz ticker for a character nobody is watching is the
-    /// idle cost — and `step(_:)` cannot show it, because stepping always advances by
+    /// point of the sleep state - a 30 Hz ticker for a character nobody is watching is the
+    /// idle cost - and `step(_:)` cannot show it, because stepping always advances by
     /// `tickInterval` regardless of what the real timer is set to. Without this the tests
     /// could only prove the character *looks* asleep, not that it stopped costing 30 Hz.
     private(set) var tickingSlowly = false
@@ -384,7 +384,7 @@ final class CompanionBehaviour: ObservableObject {
     private func start(interval: TimeInterval) {
         guard ticker == nil else { return }
         // `.common` mode, so behaviour keeps running while a menu is open or the
-        // user is dragging — a pet that freezes mid-stride when you open the
+        // user is dragging - a pet that freezes mid-stride when you open the
         // menu bar looks broken.
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -409,7 +409,7 @@ final class CompanionBehaviour: ObservableObject {
         // Clear any speech bubble on the way out.
         //
         // A quip expires in `tick()`, and stopping the ticker freezes the clock it is
-        // measured against — so one in flight when the companion is hidden would still be
+        // measured against - so one in flight when the companion is hidden would still be
         // there the next time the character appeared, quoting a dictation turn from earlier.
         quip = ""
         quipExpiresAt = nil
@@ -471,7 +471,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Say something the user asked to be told, and react to it.
     ///
     /// The one public way into the speech bubble. `say` stays private so every line the
-    /// character speaks comes from a real event through a named entry point — the bubble was
+    /// character speaks comes from a real event through a named entry point - the bubble was
     /// built for dictation errors, and "only ever set from real events" is a property worth
     /// keeping as the number of callers grows.
     ///
@@ -480,7 +480,7 @@ final class CompanionBehaviour: ObservableObject {
     func announce(_ reminder: CompanionReminder, name: String) {
         wake()
         currentReminder = reminder
-        // A stretch reminder is the character stretching *with* you — the point is to model
+        // A stretch reminder is the character stretching *with* you - the point is to model
         // the behaviour, not to nag. The rest just get its attention.
         switch reminder {
         case .stretch:
@@ -497,8 +497,8 @@ final class CompanionBehaviour: ObservableObject {
     /// A text countdown in the existing bubble rather than the floating pixel timer this was
     /// modelled on. That is a deliberate reduction, not an oversight: the companion's panel
     /// is sized to exactly the character's reach envelope, so a second floating element
-    /// needs either a larger panel — which re-introduces a transparent-margin bug the
-    /// geometry comments record — or a whole second window to manage, position, clamp across
+    /// needs either a larger panel - which re-introduces a transparent-margin bug the
+    /// geometry comments record - or a whole second window to manage, position, clamp across
     /// displays and tear down. `mm:ss` in the bubble delivers the actual information for one
     /// line of code. The pixel timer is a real upgrade, and it is a window problem, not a
     /// timer problem.
@@ -529,7 +529,7 @@ final class CompanionBehaviour: ObservableObject {
 
     /// Wake the character if outside activity happened while it was asleep.
     ///
-    /// Needed because sleeping *stops the ticker*, and a stopped ticker polls nothing —
+    /// Needed because sleeping *stops the ticker*, and a stopped ticker polls nothing  - 
     /// so the pet signals cannot notice the user has come back. The window watches at a
     /// low rate while asleep and calls this; everything else the engine can see for
     /// itself.
@@ -538,7 +538,7 @@ final class CompanionBehaviour: ObservableObject {
         wake()
     }
 
-    /// Nudge the character awake — called when the user interacts with it.
+    /// Nudge the character awake - called when the user interacts with it.
     func poke() {
         wake()
         set(mood: .delighted, for: 1.2)
@@ -651,12 +651,12 @@ final class CompanionBehaviour: ObservableObject {
 
     private func say(_ text: String, for duration: TimeInterval) {
         quip = text
-        // Retried every tick, exactly like `moodExpiresAt` — not checked once after a
+        // Retried every tick, exactly like `moodExpiresAt` - not checked once after a
         // `Task.sleep`.
         //
         // The sleep measured *wall* time while the deadline was in `clock`, which only
         // advances 1/30s per `tick()`. Any main-thread hitch that coalesced a single timer
-        // fire — a sprite pack decoding, a transcription landing — left `clock` short of the
+        // fire - a sprite pack decoding, a transcription landing - left `clock` short of the
         // deadline at the one moment it was tested, and the check never came round again. The
         // caption then stuck for the rest of the session: a resting or strolling character
         // with "Couldn't start the microphone" above it. `stop()` while asleep has the same
@@ -689,8 +689,8 @@ final class CompanionBehaviour: ObservableObject {
     /// Advance simulated time by `seconds`, in tick-sized steps.
     ///
     /// The same code path the timer drives, decoupled from wall-clock time. Behaviour
-    /// here plays out over tens of seconds — a 90-second sleep timer, ambient acts
-    /// lasting several seconds each — and a test that actually waited for those is a
+    /// here plays out over tens of seconds - a 90-second sleep timer, ambient acts
+    /// lasting several seconds each - and a test that actually waited for those is a
     /// test nobody runs. Stepping also removes the flakiness of asserting on a
     /// real-time timer under load.
     ///
@@ -709,8 +709,8 @@ final class CompanionBehaviour: ObservableObject {
         // One send for the whole frame, before any of it is written.
         //
         // `frame` is a plain stored property rather than `@Published` precisely so that the
-        // dozen writes below — an offset zeroed here, eased there, a pose composed at the end
-        // — cost nothing individually. This is the single point at which a tick enters
+        // dozen writes below - an offset zeroed here, eased there, a pose composed at the end
+        // - cost nothing individually. This is the single point at which a tick enters
         // SwiftUI's dependency graph, and it is up front because that is `objectWillChange`'s
         // contract: observers are told before the value moves, and they read the new value on
         // the next update pass.
@@ -739,7 +739,7 @@ final class CompanionBehaviour: ObservableObject {
             moodExpiresAt = nil
             mood = .resting
             // `moodElapsed`'s contract is that each animation starts at its first frame, and
-            // only `set(mood:)` upholds it — assigning `mood` directly leaves `moodStartedAt`
+            // only `set(mood:)` upholds it - assigning `mood` directly leaves `moodStartedAt`
             // at whenever the *previous* mood began, so the resting loop resumes mid-cycle.
             moodStartedAt = clock
             frame.moodElapsed = 0
@@ -758,7 +758,7 @@ final class CompanionBehaviour: ObservableObject {
             // its first frame. This mattered even more when falling asleep *stopped* the
             // ticker: measured, `step(95)` left `moodElapsed == 95.033` against a 4-frame
             // 5fps cycle, so `frameIndex(at:)` picked a mid-breath drawing and the frozen
-            // clock held it there forever. The ticker only slows now, so the animation runs —
+            // clock held it there forever. The ticker only slows now, so the animation runs  - 
             // but it still has to begin at the frame drawn as "settling".
             moodStartedAt = clock
             frame.moodElapsed = 0
@@ -773,7 +773,7 @@ final class CompanionBehaviour: ObservableObject {
         }
 
         // While asleep, advance only the animation clock. No ambient acts, no cursor read,
-        // no keystroke poll — a sleeping cat reacts to nothing until something wakes it, and
+        // no keystroke poll - a sleeping cat reacts to nothing until something wakes it, and
         // this is what keeps the slow ticker nearly free.
         if mood == .sleepy {
             frame.pose = sleepingPose()
@@ -812,7 +812,7 @@ final class CompanionBehaviour: ObservableObject {
         // after the collapse at 24 000 ticks per scenario, 0 were unchanged.
         //
         // What the grid did do was move frame boundaries. It is 24 Hz, so it divides
-        // evenly only for frame rates that divide 24 — and packs declare 5 and 10 fps
+        // evenly only for frame rates that divide 24 - and packs declare 5 and 10 fps
         // as well as 8 and 12. Measured frame holds for an 8-frame state, in ticks:
         //
         //   10 fps  grid [4,3,3,3,2,4,3,2]   raw [3,3,4,2,3,3,3,3]   ideal 3
@@ -836,7 +836,7 @@ final class CompanionBehaviour: ObservableObject {
     private func advanceAmbientAct() {
         // A drag owns the character's position outright: the window tracks the cursor 1:1,
         // so any ambient offset or travel here fights the gesture. It fights it twice, in
-        // fact — the offset is applied to the character view, and animating it under a live
+        // fact - the offset is applied to the character view, and animating it under a live
         // `DragGesture` shifts the gesture's own coordinate space, which is the jitter the
         // user reported. Hold everything still until the drag ends.
         guard !isBeingDragged else {
@@ -847,7 +847,7 @@ final class CompanionBehaviour: ObservableObject {
         }
 
         // Reduce Motion: no travel, no hops. The character still
-        // blinks and still reacts to state, because those carry information —
+        // blinks and still reacts to state, because those carry information  - 
         // it simply stops moving around the screen.
         guard !reduceMotion else {
             act = .idle
@@ -860,7 +860,7 @@ final class CompanionBehaviour: ObservableObject {
             // Something is happening, so whatever the character was doing is
             // abandoned and it walks back to its post beside the pill.
             //
-            // The trip is started whenever one is needed and not already running —
+            // The trip is started whenever one is needed and not already running  - 
             // testing `act != .idle` was the bug: `.idle` is by far the most common
             // act, so a character that finished a stroll and settled was already
             // `.idle` when recording began, no return was ever scheduled, and it
@@ -885,7 +885,7 @@ final class CompanionBehaviour: ObservableObject {
                     act = .idle
                     actStartedAt = clock
                     // No ambient act may start while off duty, so the window is
-                    // irrelevant — but leave it consistent rather than stale.
+                    // irrelevant - but leave it consistent rather than stale.
                     actEndsAt = clock
                     travelFrom = .zero
                     travelTo = .zero
@@ -920,8 +920,8 @@ final class CompanionBehaviour: ObservableObject {
             let actual = walkStep(requested)
             windowTravelThisTick += actual
             // Hit a screen edge: turn around and carry on the other way. If it still cannot
-            // move after turning — boxed into a corner, or the window is ordered out during
-            // the note-card handover — end the walk rather than flip its facing every tick
+            // move after turning - boxed into a corner, or the window is ordered out during
+            // the note-card handover - end the walk rather than flip its facing every tick
             // against the wall.
             if abs(actual) + 0.01 < abs(requested) {
                 walkDirection = -walkDirection
@@ -938,7 +938,7 @@ final class CompanionBehaviour: ObservableObject {
             // Measured from the ground (0), not from `travelFrom.y`. Arcing from
             // wherever the character happened to be *stacked* hops: a hop beginning
             // while still airborne added its full height to the previous offset, and
-            // measured 26.2pt of travel against a 14pt hop — nearly double, which is
+            // measured 26.2pt of travel against a 14pt hop - nearly double, which is
             // enough to clip the character against the top of its panel. There is only
             // one floor, so a hop always starts from it.
             frame.offsetY = -hopArc(progress) * hopHeight
@@ -956,7 +956,7 @@ final class CompanionBehaviour: ObservableObject {
             (.turn, 6),
             (.glanceAtPill, 8),
         ]
-        // The occasional longer journey across the desktop — but not while parked at a
+        // The occasional longer journey across the desktop - but not while parked at a
         // screen edge to stay out of something full-screen (`isPeeking`), where a walk
         // would march the character straight back over what it just got out of the way of.
         if !isPeeking { pool.append((.walk, 11)) }
@@ -990,7 +990,7 @@ final class CompanionBehaviour: ObservableObject {
             if travelTo.x != travelFrom.x { lastFacing = travelTo.x > travelFrom.x ? 1 : -1 }
         case .walk:
             // The walk moves the *window*, not the offset, so bring the in-panel offset
-            // home first — otherwise the character would travel while also hanging a few
+            // home first - otherwise the character would travel while also hanging a few
             // points off its own window for the length of the walk. A stroll biases back
             // toward home, so this is usually already ~0.
             frame.offsetX = 0
@@ -1065,7 +1065,7 @@ final class CompanionBehaviour: ObservableObject {
         if let previous = lastKeystrokeCount {
             // Unsigned wrapping subtraction is correct across the counter's rollover.
             let delta = strokes.count &- previous
-            // Capped at 8 per tick — 240 keys/second, well past physically possible. The
+            // Capped at 8 per tick - 240 keys/second, well past physically possible. The
             // cap exists so a counter that somehow jumped cannot spin this loop.
             for _ in 0..<min(delta, 8) { typing.record(at: clock) }
         }
@@ -1091,13 +1091,13 @@ final class CompanionBehaviour: ObservableObject {
     /// Choose which pet mood, if any, the character should be in.
     ///
     /// **Precedence, highest first:** being held, overheating, kneading, purring, hunting.
-    /// It is ordered by how directly the user caused it — a cat you are physically holding
+    /// It is ordered by how directly the user caused it - a cat you are physically holding
     /// should not decide to chase the cursor, and someone typing hard enough to overheat is
     /// still typing, so overheat has to outrank kneading or the two would alternate.
     ///
     /// Utter's own work always wins over all of it. A pet mood may only take hold from
     /// `resting` or from another pet mood, so a recording, a transcription or a failure is
-    /// never interrupted by the cat noticing the mouse — and `moodExpiresAt` being set
+    /// never interrupted by the cat noticing the mouse - and `moodExpiresAt` being set
     /// means a timed reaction (the celebration, the startle) is still playing out.
     private func resolvePetMood() {
         guard moodExpiresAt == nil else { return }
@@ -1128,7 +1128,7 @@ final class CompanionBehaviour: ObservableObject {
     ///
     /// Nil-safe by construction: with no window wired up, `characterRectSource` returns
     /// `.zero` and the cursor lands outside it, so the aim is computed from a centre of
-    /// (0,0) and clamps — the eyes point somewhere consistent rather than jittering. A
+    /// (0,0) and clamps - the eyes point somewhere consistent rather than jittering. A
     /// sleeping or held cat does not track: its eyes are shut, and a held one is looking
     /// at you regardless.
     private func eyeAimNow() -> CGVector {
@@ -1143,7 +1143,7 @@ final class CompanionBehaviour: ObservableObject {
         }
         // And where it actually is, having rolled there. The spring runs even when the target
         // is centre, so closing the eyes or picking the character up lets the pupils drift
-        // back rather than snapping — which is the same motion, and the reason this is one
+        // back rather than snapping - which is the same motion, and the reason this is one
         // code path instead of two.
         googly.settle(toward: target, tick: tickInterval)
         return googly.offset
@@ -1180,7 +1180,7 @@ final class CompanionBehaviour: ObservableObject {
             pose.squash = 1 + 0.10 * abs(CGFloat(sin(clock * 7.5)))
 
         case .startled:
-            // A fast shiver, decaying — a constant-amplitude shake reads as a
+            // A fast shiver, decaying - a constant-amplitude shake reads as a
             // rendering glitch rather than as a reaction.
             let remaining = moodExpiresAt.map { max(0, $0 - clock) } ?? 0
             let decay = CGFloat(min(1, remaining / 2.4))
@@ -1195,14 +1195,14 @@ final class CompanionBehaviour: ObservableObject {
             pose.lean = 2 * CGFloat(sin(clock * rate * 0.5))
 
         case .overheating:
-            // A flustered wobble, faster than thinking and shallower than startled — this
+            // A flustered wobble, faster than thinking and shallower than startled - this
             // one can run for a whole paragraph, so it has to stay watchable.
             pose.lean = 4 * CGFloat(sin(clock * 13))
             pose.squash = 1 + 0.04 * abs(CGFloat(sin(clock * 13)))
 
         case .purring:
             // The purr made visible: a slow swell at the sound's own 26 Hz would be a
-            // blur at 30 fps, so the body breathes at 2.6 Hz — a tenth of the rate,
+            // blur at 30 fps, so the body breathes at 2.6 Hz - a tenth of the rate,
             // which reads as the same rhythm without aliasing against the frame rate.
             pose.squash = 1 + 0.03 * CGFloat(sin(clock * 2.6 * .pi))
 
@@ -1215,11 +1215,11 @@ final class CompanionBehaviour: ObservableObject {
         case .held:
             // Picked up: stretched a little, and held STILL. A swing here rotated the
             // sprite every frame, which reads as jitter while the user is trying to place
-            // the character precisely — and dragging is exactly when precision matters. A
+            // the character precisely - and dragging is exactly when precision matters. A
             // steady, slightly-stretched pose says "lifted" without fighting the cursor.
             //
             // Capped under `CompanionGeometry.maxPoseScale` (1.16) on purpose: that constant
-            // is not decoration — the decoded bitmap size and the menu-bar clearance are both
+            // is not decoration - the decoded bitmap size and the menu-bar clearance are both
             // derived from it, so a stretch past it would render a soft upscaled frame and
             // could clip over the menu bar.
             pose.squash = 1.1
@@ -1233,7 +1233,7 @@ final class CompanionBehaviour: ObservableObject {
         }
 
         // Where the eyes look. Layered over every mood rather than set inside them,
-        // because looking at the cursor is not a mood — a kneading cat and a hunting cat
+        // because looking at the cursor is not a mood - a kneading cat and a hunting cat
         // both watch the pointer.
         pose.eyeAim = eyeAimNow()
         pose.heat = heat
@@ -1279,7 +1279,7 @@ final class CompanionBehaviour: ObservableObject {
 
         switch act {
         // `.returnHome` only runs while off duty, and this method returns early in
-        // that case — the mood's own pose is what should show while it walks back.
+        // that case - the mood's own pose is what should show while it walks back.
         case .idle, .returnHome:
             break
 
@@ -1290,7 +1290,7 @@ final class CompanionBehaviour: ObservableObject {
 
         case .walk:
             // A brisker version of the stroll's bob, leaning into the direction of travel.
-            // The window is doing the travelling, so this only supplies the gait — the
+            // The window is doing the travelling, so this only supplies the gait - the
             // vertical step and the forward lean that keep it from sliding like a decal.
             pose.lean = 5 * walkDirection
             pose.squash = 1 + 0.05 * abs(CGFloat(sin(clock * 9)))
@@ -1329,7 +1329,7 @@ final class CompanionBehaviour: ObservableObject {
     private func sleepingPose() -> CompanionPose {
         var pose = CompanionPose()
         // A slow sleeping breath. Kept even under Reduce Motion at very low
-        // amplitude, because a sleeping character with no breath reads as dead —
+        // amplitude, because a sleeping character with no breath reads as dead  - 
         // it is 1.5% over four seconds, well under any motion threshold.
         pose.squash = 1 + 0.015 * CGFloat(sin(clock * 0.8))
         pose.lean = 0
@@ -1339,7 +1339,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Which way the character faces, given what it is doing.
     ///
     /// Pure: it reads state and returns a value. The `.turn` flip happens in
-    /// `advanceAmbientAct`, not here — pose composition runs every frame and must
+    /// `advanceAmbientAct`, not here - pose composition runs every frame and must
     /// not have side effects, or the direction would depend on how many times the
     /// pose happened to be rebuilt.
     private func facingForCurrentAct() -> CGFloat {
@@ -1370,7 +1370,7 @@ final class CompanionBehaviour: ObservableObject {
     /// The character's ground position last tick, for measuring how fast it is really moving.
     ///
     /// Window movement and in-panel offset are summed, because the two acts that translate the
-    /// character use one each and the renderer cannot tell them apart — nor should it.
+    /// character use one each and the renderer cannot tell them apart - nor should it.
     private var lastGroundX: CGFloat?
     /// Smoothed travel speed in points per second, signed.
     ///
@@ -1405,7 +1405,7 @@ final class CompanionBehaviour: ObservableObject {
     /// Integrated window travel, so the character has one continuous ground position.
     private var groundX: CGFloat = 0
 
-    /// Walk pace, in points per second. A calm amble — faster than the in-place stroll's
+    /// Walk pace, in points per second. A calm amble - faster than the in-place stroll's
     /// implied pace, slow enough that the character crossing the desktop reads as a decision
     /// rather than as the window being flung. Over a 2.2-4.6s walk it covers roughly 90-190pt.
     /// Points per second the window travels during a `.walk`.
@@ -1416,7 +1416,7 @@ final class CompanionBehaviour: ObservableObject {
     /// own walk frames, so nothing now constrains this constant mechanically.
     ///
     /// `nonisolated` because it is an immutable constant and the renderer reads it from a
-    /// nonisolated context. Without it Swift warns — and in Swift 6 mode errors — that a
+    /// nonisolated context. Without it Swift warns - and in Swift 6 mode errors - that a
     /// main-actor-isolated static cannot be referenced from a nonisolated autoclosure. A `let` of
     /// a value type has nothing to protect, so the isolation was accidental rather than meant: it
     /// came free with the enclosing `@MainActor` class the moment this stopped being `private`.
@@ -1424,7 +1424,7 @@ final class CompanionBehaviour: ObservableObject {
 
     /// Whether the pill is to the character's right, as of right now.
     ///
-    /// A pull, not a stored side — the same shape as `levelSource`, and for a stronger
+    /// A pull, not a stored side - the same shape as `levelSource`, and for a stronger
     /// reason: the companion and the pill are independent windows that the user can drag
     /// separately, so which side the pill is on is only true at the moment it is asked.
     /// Stored, it went stale the first time either window moved, and the character glanced

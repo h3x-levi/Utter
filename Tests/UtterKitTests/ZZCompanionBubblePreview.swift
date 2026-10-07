@@ -8,13 +8,13 @@ import Testing
 ///
 /// Two halves, and the split is deliberate.
 ///
-/// **The measurable half** (`CompanionBubbleTests`) is arithmetic — contrast ratios, the line
-/// budget, which real strings fit — and it is the half that decides anything. Every number
+/// **The measurable half** (`CompanionBubbleTests`) is arithmetic - contrast ratios, the line
+/// budget, which real strings fit - and it is the half that decides anything. Every number
 /// quoted in `CompanionBubble`'s doc comments comes from here.
 ///
 /// **The preview half** (`ZZCompanionBubblePreview`) renders PNGs to /tmp so a human can look
 /// at the thing. It is a preview harness, not a test: it asserts almost nothing, and it carries
-/// one honest limitation that must not be forgotten when reading its output —
+/// one honest limitation that must not be forgotten when reading its output  - 
 ///
 /// > `ImageRenderer` does not composite `NSVisualEffectView`. `Material.regularMaterial`, which
 /// > is the bottom layer of `glassSurface(.content)`, renders as **nothing at all** offscreen.
@@ -57,7 +57,7 @@ struct CompanionBubbleTests {
 
     /// `fill` at `alpha` over `backdrop`, in sRGB. Straight source-over: no blur, no material.
     ///
-    /// Both operands are converted first, and that is required rather than defensive — the same
+    /// Both operands are converted first, and that is required rather than defensive - the same
     /// trap `TintContrastTests.luminance` records. `NSColor.white` and `.black` are
     /// `_NSTaggedPointerColor` in Generic Gray Gamma 2.2, and asking one for `redComponent`
     /// raises `NSInvalidArgumentException` rather than returning a number.
@@ -70,7 +70,7 @@ struct CompanionBubbleTests {
                        alpha: 1)
     }
 
-    /// The two extreme desktops. Not "a typical wallpaper" — the bubble's backdrop is whatever
+    /// The two extreme desktops. Not "a typical wallpaper" - the bubble's backdrop is whatever
     /// the user chose, so the only defensible claim is one that holds at both ends.
     private static let wallpapers: [(name: String, color: NSColor)] = [
         ("black desktop", NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)),
@@ -123,7 +123,7 @@ struct CompanionBubbleTests {
     @Test("Ink.secondary is wallpaper-dependent here, which is why there is no second ink level",
           arguments: [false, true])
     func secondaryInkIsNotSafeForTheBubble(isDark: Bool) {
-        // Not "secondary always fails" — it passes on nine of the twelve theme/wallpaper pairs
+        // Not "secondary always fails" - it passes on nine of the twelve theme/wallpaper pairs
         // and fails on three. That is the finding: whether the detail line is readable would
         // depend on the user's desktop picture. Measured worst cases at `surfaceAlpha`:
         // Graphite over white 3.66, Linen over black 4.29, Paper over black 4.35.
@@ -173,7 +173,7 @@ struct CompanionBubbleTests {
     // measured is one the app cannot draw: `Tint.accentText` reads
     // `ThemeManager.shared.current.accent`, so it composited the **active** theme's accent over
     // every *other* theme's surface, and the active theme is whatever was last clicked in the
-    // UI. Its result therefore moved with a persisted preference — the only reason it went red.
+    // UI. Its result therefore moved with a persisted preference - the only reason it went red.
     //
     // Nor could a threshold rescue it. The worst *coherent* pairing (each accent over its own
     // theme's surface) is 5.90:1, and an inverted `worst < 3.0` assertion is red for five of the
@@ -197,7 +197,7 @@ struct CompanionBubbleTests {
     @Test("The hardcoded line heights are still what the system font reports")
     func lineHeightsAreStillWhatWasMeasured() {
         // The line budget is arithmetic on these. If an OS update changes the metric, a line
-        // silently stops fitting — so the build says so instead.
+        // silently stops fitting - so the build says so instead.
         let layout = NSLayoutManager()
         for step in CompanionBubble.typeLadder {
             let font = NSFont.systemFont(ofSize: step.size, weight: .medium)
@@ -218,7 +218,7 @@ struct CompanionBubbleTests {
     }
 
     /// The text column's width: the panel, less the panel inset, the bubble's horizontal
-    /// padding, the glyph and the gap beside it. The glyph is measured rather than assumed —
+    /// padding, the glyph and the gap beside it. The glyph is measured rather than assumed  - 
     /// `exclamationmark.triangle.fill` is the widest of the four.
     @MainActor
     private static func textColumn(_ geometry: CompanionGeometry,
@@ -236,14 +236,14 @@ struct CompanionBubbleTests {
 
     @Test @MainActor
     func reportWhatFitsAtEverySize() {
-        // Not a pass/fail assertion about the strings — it is a *report*, printed so the
+        // Not a pass/fail assertion about the strings - it is a *report*, printed so the
         // trade-off is on the record: honouring "never overlap the character" costs line budget,
         // and this is exactly how much. The one thing asserted is that the shortest real message
         // fits everywhere, because a bubble that cannot show "Water break" is broken.
         let strings = [
-            "Recording a meeting — stop it first",   // the longest shipped error reason
+            "Recording a meeting - stop it first",   // the longest shipped error reason
             "Couldn't start the microphone",
-            "Focus done — break",
+            "Focus done - break",
             "Water break",
             "24:59",
         ]
@@ -271,7 +271,7 @@ struct CompanionBubbleTests {
         // **The only string with a hard floor is the countdown**, and that is the honest
         // contract rather than a lowered bar. `mm:ss` is generated by the app, so it is the one
         // message whose width is known; every other string is a user's words or a reason from a
-        // failure, and at `small` the panel is 77.46pt wide with 19.73pt of headroom — room for
+        // failure, and at `small` the panel is 77.46pt wide with 19.73pt of headroom - room for
         // about four characters. "Water break" needs two lines there and gets one. That is the
         // finding this suite exists to record, not a bug in the bubble: see the report above for
         // the per-size table, and `CompanionGeometryTests` for why the strip cannot be taller.
@@ -341,7 +341,7 @@ struct ZZCompanionBubblePreview {
     /// One panel: the desktop behind it, the panel's bounds outlined, the character's resting
     /// frame outlined, and the bubble where it actually lands.
     ///
-    /// The two outlines are the point of the picture — the requirement is geometric, so the
+    /// The two outlines are the point of the picture - the requirement is geometric, so the
     /// bubble has to be seen *against the character's box* rather than on its own.
     @MainActor
     private func panel(size: CompanionSize,
@@ -365,7 +365,7 @@ struct ZZCompanionBubblePreview {
         }
         .frame(width: side, height: side)
         // Mirrors `CompanionContainerView.quipBubble` exactly, including hanging the overlay off
-        // the **panel** rather than off the character — as an overlay on the character it is
+        // the **panel** rather than off the character - as an overlay on the character it is
         // proposed 84pt of width inside a 178pt panel and wraps two lines early.
         .overlay(alignment: .top) {
             CompanionBubbleView(notice: notice, geometry: geometry)
@@ -402,7 +402,7 @@ struct ZZCompanionBubblePreview {
     @Test @MainActor func sheets() {
         let short = CompanionNotice(kind: .reminder, line: "Water break", detail: nil)
         let long = CompanionNotice(kind: .failure,
-                                   line: "Recording a meeting — stop it first",
+                                   line: "Recording a meeting - stop it first",
                                    detail: nil)
         let timer = CompanionNotice(kind: .timer, line: "24:59", detail: "Ship the bubble")
         let pinned = CompanionNotice(kind: .pinned,
@@ -420,7 +420,7 @@ struct ZZCompanionBubblePreview {
         for dark in [false, true] {
             for size in [CompanionSize.small, .huge] {
                 let grid = VStack(alignment: .leading, spacing: 10) {
-                    Text("\(size.label) — \(Int(size.points))pt character, "
+                    Text("\(size.label) - \(Int(size.points))pt character, "
                          + "panel \(String(format: "%.0f", CompanionGeometry(size).panelSide))pt, "
                          + "headroom \(String(format: "%.1f", CompanionGeometry(size).bubbleHeadroom))pt"
                          + "  ·  \(dark ? "dark" : "light") appearance")
@@ -463,7 +463,7 @@ struct ZZCompanionBubblePreview {
     }
 
     /// The Reduce Transparency path, which is the one configuration whose contrast is
-    /// guaranteed rather than bounded — `ContentGlass` fills opaquely there.
+    /// guaranteed rather than bounded - `ContentGlass` fills opaquely there.
     @Test @MainActor func reduceTransparencyPath() {
         // `MotionPreference` reads the real system setting, so this cannot be toggled from a
         // test. What it *can* do is render the surface that branch draws, from the same tokens,

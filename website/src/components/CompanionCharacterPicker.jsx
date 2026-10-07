@@ -77,7 +77,7 @@ export default function CompanionCharacterPicker({
               onClick={() => onSelect && onSelect(char)}
               type="button"
               className="flex flex-col items-center group cursor-pointer focus:outline-none"
-              title={`${char.name} — ${char.description}`}
+              title={`${char.name} - ${char.description}`}
             >
               {/* Tile box */}
               <div

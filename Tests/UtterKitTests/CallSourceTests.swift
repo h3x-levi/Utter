@@ -4,8 +4,8 @@ import Foundation
 
 /// Naming the app a call is happening in.
 ///
-/// `CallSource`'s HAL reads cannot be tested on this machine — they depend on which processes happen
-/// to be playing audio right now — but every rule about *what to call* what they find is a function of
+/// `CallSource`'s HAL reads cannot be tested on this machine - they depend on which processes happen
+/// to be playing audio right now - but every rule about *what to call* what they find is a function of
 /// two strings, and all of it is here. That split is the whole reason the type exists separately from
 /// `CallDetector`, the same way `CallPresence` does.
 ///
@@ -49,8 +49,8 @@ struct CallSourceTests {
 
     @Test("Safari's WebKit GPU process is deliberately not in the table")
     func webKitGPUIsNotNamed() {
-        // Every WebKit host on the machine shares `com.apple.WebKit.GPU` — this machine had two, for
-        // Zoom and for Outlook — so mapping that prefix to any one app would confidently name the
+        // Every WebKit host on the machine shares `com.apple.WebKit.GPU` - this machine had two, for
+        // Zoom and for Outlook - so mapping that prefix to any one app would confidently name the
         // wrong one. It falls through to the system name, which is at least the truth.
         #expect(CallSource.knownName(bundleID: "com.apple.WebKit.GPU") == nil)
     }
@@ -87,7 +87,7 @@ struct CallSourceTests {
 
     @Test("A name that spans lines is flattened, not left to split the note heading")
     func newlinesAreFlattened() {
-        // The name is interpolated into "# <name> meeting — …", the note's first line, which
+        // The name is interpolated into "# <name> meeting - …", the note's first line, which
         // `Note.derivedTitle` turns into its title. A newline in it would end the heading early and
         // leave the rest of the app's chosen string as body text.
         #expect(CallSource.sanitised("Zoom\nMeeting") == "Zoom Meeting")
@@ -117,7 +117,7 @@ struct CallSourceTests {
         let long = String(repeating: "A", count: 200)
         let capped = CallSource.sanitised(long)
         #expect(capped?.count == CallSource.maximumNameLength)
-        // A capped name still has to be a name — an app called nothing but spaces past the cap must
+        // A capped name still has to be a name - an app called nothing but spaces past the cap must
         // not leave a trailing space in "You're in a … call".
         #expect(CallSource.sanitised(String(repeating: "Ab ", count: 40))?.hasSuffix(" ") == false)
     }

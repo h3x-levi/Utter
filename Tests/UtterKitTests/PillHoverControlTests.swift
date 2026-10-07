@@ -7,7 +7,7 @@ import AppKit
 ///
 /// The pill is a `.nonactivatingPanel` and a hover cannot be simulated here, so the view
 /// itself has to be watched on a real screen. What can be pinned is the pair of rules the
-/// view is built out of — and they are the pair that fails silently:
+/// view is built out of - and they are the pair that fails silently:
 ///
 ///   * **which states offer the control**, because one offered where pressing it is
 ///     swallowed is a button that does nothing, and
@@ -22,14 +22,14 @@ struct PillHoverControlTests {
     private static let allStates: [PillState] = [
         .preparing, .idle, .recording, .handsFree, .capturingNote, .capturingMemory,
         .processing(.transcribing), .processing(.rewriting), .processing(.typing),
-        .notice("New note — keep talking"), .error("No speech detected"),
+        .notice("New note - keep talking"), .error("No speech detected"),
     ]
 
     // MARK: Where the control is offered
 
     @Test("The resting pill starts hands-free, a latched pill stops it")
     func offeredToStartAndToStop() {
-        // Both directions, or the pointer route is one-way — which is how the missing
+        // Both directions, or the pointer route is one-way - which is how the missing
         // stop was reported. Every other exclusion is still a real one: `.preparing`
         // would promise dictation while the model loads, `.recording` would mean
         // "upgrade" (a third meaning a record button does not carry), `.capturingNote`
@@ -49,7 +49,7 @@ struct PillHoverControlTests {
     func revealNeedsHoverAndIdle() {
         #expect(PillHoverControl.isRevealed(in: .idle, pointerInsidePill: true))
         // Not revealed on a resting pill nobody is pointing at: that is the pill's whole
-        // job at rest — say "ready" and stay out of the way.
+        // job at rest - say "ready" and stay out of the way.
         #expect(!PillHoverControl.isRevealed(in: .idle, pointerInsidePill: false))
         #expect(PillHoverControl.isRevealed(in: .handsFree, pointerInsidePill: true))
         for state in Self.allStates where state != .idle && state != .handsFree {
@@ -63,7 +63,7 @@ struct PillHoverControlTests {
     @Test("A press away from the control still opens Utter")
     func longPressStillOpensUtter() {
         // The existing gesture, unchanged. Everywhere on the pill except the lock itself, a
-        // 2-second press does what it always did — and the window drag underneath it is
+        // 2-second press does what it always did - and the window drag underneath it is
         // untouched, because nothing new consumes a mouse-down outside the control's own
         // 20pt circle.
         #expect(PillHoverControl.longPressOpensUtter(in: .idle, pointerOnControl: false))
@@ -99,7 +99,7 @@ struct PillHoverControlTests {
     @Test("The press is only ever taken by a control that is on screen")
     func suppressionImpliesTheControlIsVisible() {
         // The invariant that ties the two rules together. The long press may only be
-        // suppressed in a state where the control can actually be revealed — otherwise the
+        // suppressed in a state where the control can actually be revealed - otherwise the
         // 2-second press would be surrendered to something the user cannot see or click,
         // and the gesture would simply be dead.
         for state in Self.allStates {
@@ -119,9 +119,9 @@ struct PillHoverControlTests {
 /// The hover-grace that stops the bead fleeing the cursor across the pill->bead gap.
 ///
 /// These model the exact interaction the user reported: hover the pill, the bead appears, then
-/// move toward it — and the pointer spends a moment in the gap over neither surface. Without
+/// move toward it - and the pointer spends a moment in the gap over neither surface. Without
 /// grace the bead retracted there; these assert it does not. (`update` is mutating, so each call
-/// is pulled into a `let` — the `#expect` macro cannot wrap a mutating call.)
+/// is pulled into a `let` - the `#expect` macro cannot wrap a mutating call.)
 @Suite("Hover reveal latch")
 struct HoverRevealLatchTests {
 
@@ -143,7 +143,7 @@ struct HoverRevealLatchTests {
         let elapsed = latch.update(present: false, at: HoverRevealLatch.grace + 0.01);   #expect(!elapsed)
     }
 
-    @Test("Grace is a reasonable window — not zero, not a lingering delay")
+    @Test("Grace is a reasonable window - not zero, not a lingering delay")
     func graceIsAReasonableWindow() {
         #expect(HoverRevealLatch.grace > 0.05)
         #expect(HoverRevealLatch.grace < 0.4)
@@ -154,7 +154,7 @@ struct HoverRevealLatchTests {
         var latch = HoverRevealLatch()
         _ = latch.update(present: true, at: 0)
         _ = latch.update(present: false, at: 0)      // hide scheduled for +grace
-        _ = latch.update(present: true, at: 0.05)    // returned — cancels the schedule
+        _ = latch.update(present: true, at: 0.05)    // returned - cancels the schedule
         let reLeft = latch.update(present: false, at: 0.05);                             #expect(reLeft)
         let reNearly = latch.update(present: false, at: 0.05 + HoverRevealLatch.grace - 0.01); #expect(reNearly)
         let reElapsed = latch.update(present: false, at: 0.05 + HoverRevealLatch.grace + 0.01); #expect(!reElapsed)

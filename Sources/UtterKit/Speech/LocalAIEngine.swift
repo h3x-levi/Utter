@@ -32,7 +32,7 @@ enum LocalAIEngine {
             case .appleIntelligenceOff:
                 return "Turn on Apple Intelligence in System Settings to use AI commands."
             case .modelNotReady(let detail):
-                return "The on-device model isn't ready yet — \(detail)"
+                return "The on-device model isn't ready yet - \(detail)"
             }
         }
 
@@ -102,7 +102,7 @@ enum LocalAIEngine {
         }
 
         // Unwrap a fully-quoted response, but only when the quotes are balanced
-        // at both ends — the text itself may legitimately contain quotes.
+        // at both ends - the text itself may legitimately contain quotes.
         for (open, close) in [("\"", "\""), ("“", "”"), ("'", "'")] {
             if result.hasPrefix(open), result.hasSuffix(close), result.count > 2 {
                 let inner = String(result.dropFirst().dropLast())

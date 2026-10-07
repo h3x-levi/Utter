@@ -1,6 +1,6 @@
 # Installing Utter on another Mac
 
-Utter is signed, but it is not **notarized** — notarization requires a paid Apple Developer
+Utter is signed, but it is not **notarized** - notarization requires a paid Apple Developer
 account, and this project deliberately does not have one. So macOS will refuse to open it on any
 Mac other than the one it was built on, until you approve it once by hand.
 
@@ -15,7 +15,7 @@ $ xcrun stapler validate Utter-3.0.15.dmg
 Utter-3.0.15.dmg does not have a ticket stapled to it.
 ```
 
-The app's own signature is intact and valid — `codesign --verify --deep --strict` passes. What is
+The app's own signature is intact and valid - `codesign --verify --deep --strict` passes. What is
 missing is Apple's notarization ticket.
 
 ## Whether you get blocked depends on how the file arrives
@@ -60,10 +60,10 @@ the refusal entirely.
 Separate from Gatekeeper: macOS ties Microphone, Accessibility and Screen Recording grants to the
 machine, so the new Mac prompts for them on first use regardless of what the old one allowed.
 
-- **Microphone** — prompted on the first dictation.
-- **Accessibility** — needed for the hotkey and for typing text into other apps. Grant it in
+- **Microphone** - prompted on the first dictation.
+- **Accessibility** - needed for the hotkey and for typing text into other apps. Grant it in
   System Settings → Privacy & Security → Accessibility.
-- **Screen Recording** — only for meeting capture, and only on hardware where the narrower
+- **Screen Recording** - only for meeting capture, and only on hardware where the narrower
   system-audio route is unavailable.
 
 ## What would remove all of this
@@ -75,7 +75,7 @@ Three changes then make the installer open anywhere with no warning:
    runtime, which notarization requires. The app currently signs with `flags=0x0(none)`, so the
    hardened runtime is off.
 2. Submit the DMG to `notarytool`, then staple the returned ticket to both the app and the image.
-3. Sign the DMG itself — right now only the app inside it is signed.
+3. Sign the DMG itself - right now only the app inside it is signed.
 
 Until then, treat this installer as something you send to people who already trust you, and send
 them this page with it.

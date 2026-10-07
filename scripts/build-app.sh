@@ -3,22 +3,18 @@
 # Utter — Complete DMG Build Script
 # Builds, bundles, and packages everything into a ready-to-install DMG.
 #
-# Usage: bash scripts/build-app.sh [--keep-permissions] [--no-dmg] [--version=X.Y.Z]
+# Usage: bash scripts/build-app.sh [--reset-dev-state] [--no-dmg] [--version=X.Y.Z]
 #
-# Every build resets system permissions, preferences and caches, and moves the app's
-# data aside, so the DMG it produces installs like a first install. That is the point
-# of building one here, and having to ask for it each time was friction with no payoff.
+# Builds preserve permissions and user data by default. Use --reset-dev-state only
+# when you explicitly want to simulate a fresh install for Utter.
 #
-#   --keep-permissions   Skip that. Use it when you are iterating on the build itself
-#                        and do not want to re-grant Microphone and Accessibility —
-#                        Utter is signed with an Apple Development certificate, so a
-#                        grant survives being replaced in /Applications, and this flag
-#                        is how you take advantage of that.
+#   --reset-dev-state    Reset Utter's TCC grants, preferences and caches, and move
+#                        its support data to a timestamped backup. Old backups are kept.
 #
 #   --no-dmg             Build and sign the .app, then stop. For iterating on the app
 #                        itself, and for packaging the installer separately.
 #
-# `--clean` is still accepted, and now does nothing beyond what happens anyway.
+# `--clean` is still accepted as a compatibility alias for SwiftPM's build cleanup.
 #
 set -e
 
@@ -55,7 +51,7 @@ EXEC_NAME="Utter"
 # dictation history and crash logs are unaffected — they live in
 # `Application Support/Utter`, which is found by folder name, not by bundle id — and
 # `AppDirectory` migrates both older folder names into it.
-# Step 0 below resets all of that on every build anyway unless `--keep-permissions`.
+# A deliberate `--reset-dev-state` affects the app-specific state only.
 BUNDLE_ID="utter.dictation.app"
 # ─── Signing identity ──────────────────────────────────────────────────────────
 # Prefer a real certificate over ad-hoc.
@@ -81,15 +77,14 @@ fi
 
 # Generate unique build ID
 # ─── Flags ───
-# Scanned across all arguments rather than testing `$1`, so `--keep-permissions
-# --no-dmg` works in either order. `$1` is still honoured below for the permissions
-# check, which is what every existing invocation passes.
-KEEP_PERMISSIONS=0
+# Scan all arguments so options work in either order.
+RESET_DEV_STATE=0
 MAKE_DMG=1
 SET_VERSION=""
 for arg in "$@"; do
     case "$arg" in
-        --keep-permissions) KEEP_PERMISSIONS=1 ;;
+        --reset-dev-state) RESET_DEV_STATE=1 ;;
+        --keep-permissions) ;;
         # Build and sign the .app and stop there. For iterating on the app itself,
         # and for anyone who packages the DMG separately.
         --no-dmg) MAKE_DMG=0 ;;
@@ -100,7 +95,7 @@ for arg in "$@"; do
         # to anything. Without this the only routes were editing `.version` to 3.0.-1, which is
         # not a version, or accepting 3.0.1 and pretending that was the intent.
         --version=*) SET_VERSION="${arg#*=}" ;;
-        --clean) ;;
+        --clean) swift package clean ;;
         *) echo "⚠️  Unknown argument: $arg" ;;
     esac
 done
@@ -168,30 +163,11 @@ if [ -f "$PROJECT_ROOT/scripts/update-changelog.py" ]; then
 fi
 
 
-# ─── Step 0: Reset permissions and app data, unless asked not to ───
-if [[ "$KEEP_PERMISSIONS" -eq 1 ]]; then
-    echo "🔒 Keeping permissions, preferences and app data (--keep-permissions)"
-    echo ""
-else
-    echo "🧹 Resetting permissions and app data for a fresh install..."
+# ─── Step 0: Optional fresh-install simulation ───
+if [[ "$RESET_DEV_STATE" -eq 1 ]]; then
+    echo "🧹 Resetting Utter state for a fresh-install simulation..."
 
-    # Move the app's data aside rather than deleting it.
-    #
-    # `Application Support/Utter` is not a cache: it holds `notes.json` — the only
-    # copy of anything the user has dictated into Utter — plus their dictation history
-    # and crash logs. This step used to `rm -rf` it, so testing a fresh install cost
-    # you your notes, silently and every time. A timestamped move gives the same clean
-    # slate and keeps the data one `mv` away.
-    #
-    # All three names are handled. The app has been renamed twice — `AWSFlow`, then `Lumen`,
-    # now `Utter` — so a machine that has not launched the current build yet still has an older
-    # folder that `AppDirectory` has not migrated.
-    #
-    # The `Lumen` and `AWSFlow` literals below are deliberate historical data, not leftover
-    # branding, and must survive any future rename — they are the twin of
-    # `AppDirectory.legacyNames`. Deleting one means a fresh-install test silently skips that
-    # folder and leaves an older user's notes sitting un-backed-up while the app migrates them.
-    # Do not "finish the job".
+    # Preserve user content in a timestamped backup. Never prune existing backups.
     for SUPPORT_DIR in "$HOME/Library/Application Support/Utter" \
                        "$HOME/Library/Application Support/Lumen" \
                        "$HOME/Library/Application Support/AWSFlow"; do
@@ -200,50 +176,19 @@ else
             mv "$SUPPORT_DIR" "$BACKUP_DIR"
             echo "   ✓ App data moved aside → $(basename "$BACKUP_DIR")"
         fi
-
-        # Keep the three newest backups of THIS folder and delete the rest.
-        #
-        # Now that this runs on every build rather than on request, an unpruned scheme
-        # would leave one directory per build sitting in Application Support forever. Three
-        # is enough to recover from a mistake noticed a couple of builds later, and the
-        # newest — the one holding whatever you had before this build — is always kept.
-        #
-        # Inside the loop, deliberately. It used to sit just after `done`, where
-        # `$SUPPORT_DIR` still held the *last* iteration's value — so only the final name's
-        # backups were ever pruned and the others accumulated one per build forever. It matters
-        # more after each rename: the old names stop being created, while the current one is
-        # the only one that grows.
-        #
-        # The `-n "$SUPPORT_DIR"` guard is belt-and-braces on an `rm -rf`: the loop can only
-        # set it to one of three literal absolute paths, but an empty value would turn the glob
-        # into a relative `-backup-*` and delete from the current directory.
-        if [ -n "$SUPPORT_DIR" ]; then
-            ls -dt "$SUPPORT_DIR"-backup-* 2>/dev/null | tail -n +4 | while read -r old; do
-                rm -rf "$old"
-                echo "   ✓ Pruned an older backup → $(basename "$old")"
-            done
-        fi
     done
 
-    # Every service the app actually asks for. ScreenCapture was missing: meeting
-    # capture was added after this block was written, so a "clean" run left Screen
-    # Recording granted and the first-run path for it untested. The app does not use
-    # the Speech framework (whisper runs locally), so SpeechRecognition is not listed.
+    # Reset only Utter grants. Never alter Terminal or another host applications grants.
     for service in Microphone Accessibility ScreenCapture; do
-        tccutil reset "$service" $BUNDLE_ID >/dev/null 2>&1 || true
+        tccutil reset "$service" "$BUNDLE_ID" >/dev/null 2>&1 || true
     done
-    # Terminal too: a binary run straight from a shell inherits the *terminal's*
-    # grants, not its own, so a dev run leaves them attached there. Note this touches
-    # an app that is not ours — other tools you run from Terminal will ask again.
-    for service in Microphone Accessibility; do
-        tccutil reset "$service" com.apple.Terminal >/dev/null 2>&1 || true
-    done
-
-    defaults delete $BUNDLE_ID 2>/dev/null || true
-    rm -rf ~/Library/Saved\ Application\ State/$BUNDLE_ID.savedState 2>/dev/null || true
-    rm -rf ~/Library/Caches/$BUNDLE_ID 2>/dev/null || true
-    echo "   ✓ Permissions reset, preferences and caches cleared"
-    echo ""
+    defaults delete "$BUNDLE_ID" 2>/dev/null || true
+    rm -rf "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" 2>/dev/null || true
+    rm -rf "$HOME/Library/Caches/$BUNDLE_ID" 2>/dev/null || true
+    echo "   ✓ Utter permissions reset; preferences and caches cleared"
+else
+    echo "🔒 Preserving Utter permissions, preferences, caches and user data"
+    echo "   Pass --reset-dev-state only to simulate a first launch."
 fi
 
 # ─── Step 1: Generate icon if needed ───
@@ -338,12 +283,32 @@ if [ -z "$CONFIG_MANAGER" ]; then
 fi
 sed -i '' "s/var appVersion: String = \".*\"/var appVersion: String = \"$VERSION\"/" "$CONFIG_MANAGER"
 
-swift build -c release
-if [ ! -f ".build/release/$EXEC_NAME" ]; then
-    echo "❌ Build failed"
-    exit 1
-fi
-echo "   ✓ Binary built"
+# The shipped whisper.cpp xcframework has a universal macOS slice. Build the Swift
+# app for both supported Mac CPU families as separate SwiftPM builds, then combine
+# only the app executable. This keeps Intel Macs on native x86_64 and Apple Silicon
+# Macs on native arm64 without relying on Rosetta for the main process.
+ARCH_STAGE=".build/utter-release-architectures-$$"
+mkdir -p "$ARCH_STAGE"
+
+for arch in arm64 x86_64; do
+    echo "   • Compiling $arch..."
+    swift build -c release --triple "$arch-apple-macosx13.3"
+    if [ ! -f ".build/release/$EXEC_NAME" ]; then
+        echo "❌ $arch build failed: .build/release/$EXEC_NAME is missing"
+        exit 1
+    fi
+    cp ".build/release/$EXEC_NAME" "$ARCH_STAGE/$EXEC_NAME-$arch"
+done
+
+lipo -create \
+    "$ARCH_STAGE/$EXEC_NAME-arm64" \
+    "$ARCH_STAGE/$EXEC_NAME-x86_64" \
+    -output "$ARCH_STAGE/$EXEC_NAME-universal"
+lipo -verify_arch arm64 "$ARCH_STAGE/$EXEC_NAME-universal"
+lipo -verify_arch x86_64 "$ARCH_STAGE/$EXEC_NAME-universal"
+mv "$ARCH_STAGE/$EXEC_NAME-universal" ".build/release/$EXEC_NAME"
+rm -rf "$ARCH_STAGE"
+echo "   ✓ Universal binary built (arm64 + x86_64)"
 
 # ─── Step 5: Create app bundle ───
 echo ""
@@ -421,16 +386,26 @@ fi
 # every tier would have made the installer ~670 MB.
 WHISPER_MODELS=("ggml-small.en-q5_1.bin")
 REQUIRED_MODEL="ggml-small.en-q5_1.bin"
+WHISPER_REVISION="0b364b566045a405be7225ee1e415a073e04da77"
+REQUIRED_MODEL_SHA256="bfdff4894dcb76bbf647d56263ea2a96645423f1669176f4844a1bf8e478ad30"
 mkdir -p "$RESOURCES/Models"
 for WM in "${WHISPER_MODELS[@]}"; do
     if [ -f "Models/$WM" ]; then
+        MODEL_SHA256=$(shasum -a 256 "Models/$WM" | awk '{print $1}')
+        if [ "$WM" = "$REQUIRED_MODEL" ] && [ "$MODEL_SHA256" != "$REQUIRED_MODEL_SHA256" ]; then
+            echo "❌ Models/$WM failed its SHA-256 integrity check."
+            echo "   Expected: $REQUIRED_MODEL_SHA256"
+            echo "   Actual:   $MODEL_SHA256"
+            exit 1
+        fi
         cp "Models/$WM" "$RESOURCES/Models/$WM"
         echo "   ✓ Speech model bundled: $WM ($(du -h "Models/$WM" | cut -f1 | tr -d ' '))"
     elif [ "$WM" = "$REQUIRED_MODEL" ]; then
         echo "❌ Missing Models/$WM — the app cannot transcribe without it."
         echo "   Fetch it with:"
-        echo "     curl -L -o Models/$WM \\"
-        echo "       https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$WM"
+        echo "     curl --fail --location -o Models/$WM \\"
+        echo "       https://huggingface.co/ggerganov/whisper.cpp/resolve/$WHISPER_REVISION/$WM"
+        echo "     echo '$REQUIRED_MODEL_SHA256  Models/$WM' | shasum -a 256 -c -"
         exit 1
     else
         echo "   ⚠️  Optional model missing, will be offered as a download: $WM"

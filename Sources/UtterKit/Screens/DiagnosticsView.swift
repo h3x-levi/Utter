@@ -35,7 +35,7 @@ struct CrashLogSummary: Identifiable {
 
         // Header keys only. `prefix(12)` stops the scan before the stack trace,
         // whose symbol lines can run to thousands of entries and cannot contain a
-        // header key anyway — and a report truncated mid-write is exactly the case
+        // header key anyway - and a report truncated mid-write is exactly the case
         // where scanning the whole body would be slowest and least useful.
         for line in content.split(separator: "\n", omittingEmptySubsequences: false).prefix(12) {
             let line = line.trimmingCharacters(in: .whitespaces)
@@ -73,17 +73,18 @@ struct CrashLogSummary: Identifiable {
 ///
 /// `CrashReporter` has been writing these to
 /// `~/Library/Application Support/Utter/crashes/` all along, and nothing ever
-/// read them back — so they existed only for someone who already knew the folder
+/// read them back - so they existed only for someone who already knew the folder
 /// was there. A crash report nobody can find is a crash report nobody files a bug
 /// about, which is the entire point of keeping one.
 ///
 /// Deliberately not behind a developer or debug flag. A report holds a signal
-/// name, the app version, the OS version and stack addresses — no transcripts, no
-/// note text, no audio — and the files are already readable in Finder by anyone
+/// name, the app version, the OS version and stack addresses - no transcripts, no
+/// note text, no audio - and the files are already readable in Finder by anyone
 /// who opens the folder. Gating them would hide them from exactly the people in a
 /// position to report the crash while protecting nothing.
 @MainActor
 final class DiagnosticsViewModel: ObservableObject {
+    let device = Device.current()
     @Published var logs: [CrashLogSummary] = []
     @Published var selectedID: URL?
     @Published var revealProblem: String?
@@ -175,35 +176,35 @@ struct DiagnosticsSettingsContent: View {
 
     @ViewBuilder
     private var telemetryCard: some View {
-        SettingsCard(title: "Hardware & Engine Telemetry") {
+        SettingsCard(title: "This Mac") {
             VStack(alignment: .leading, spacing: Space.x3) {
                 HStack(spacing: Space.x4) {
                     TelemetryTile(
                         icon: "cpu",
-                        title: "Processor Architecture",
-                        value: "\(ProcessInfo.processInfo.processorCount) Cores Active",
-                        subtitle: "Apple Silicon Optimized"
+                        title: "Processor",
+                        value: model.device.chipName,
+                        subtitle: "\(model.device.totalCores) active logical processors"
                     )
                     TelemetryTile(
-                        icon: "bolt.badge.automatic",
-                        title: "Whisper Acceleration",
-                        value: "Metal + CoreML",
-                        subtitle: "Zero-Copy Audio Shaders"
+                        icon: "waveform",
+                        title: "Speech inference",
+                        value: "Metal requested",
+                        subtitle: "The engine may use its CPU fallback where Metal is unavailable"
                     )
                 }
 
                 HStack(spacing: Space.x4) {
                     TelemetryTile(
                         icon: "memorychip",
-                        title: "Unified Memory",
-                        value: "\(ProcessInfo.processInfo.physicalMemory / (1024 * 1024 * 1024)) GB RAM",
-                        subtitle: "Shared GPU/Neural Buffer"
+                        title: model.device.isAppleSilicon ? "Unified memory" : "System memory",
+                        value: "\(model.device.ramGB) GB",
+                        subtitle: model.device.isAppleSilicon ? "Shared by CPU and GPU" : "Installed physical memory"
                     )
                     TelemetryTile(
                         icon: "waveform.badge.magnifyingglass",
-                        title: "Speech Engine Model",
-                        value: ModelStore.shared.active.rawValue.capitalized,
-                        subtitle: "16 kHz Mono PCM Float32"
+                        title: "Speech model",
+                        value: SpeechModel.model(for: ModelStore.shared.active).displayName,
+                        subtitle: "\(SpeechModel.model(for: ModelStore.shared.active).sizeMB) MB · \(SpeechModel.model(for: ModelStore.shared.active).isMultilingual ? "multilingual" : "English")"
                     )
                 }
             }
@@ -366,7 +367,7 @@ struct DiagnosticsSettingsContent: View {
 
     private var systemReportsCard: some View {
         SettingsCard(title: "System crash reports") {
-            Text("macOS files its own report for the same crash, fully symbolicated — it names the functions Utter’s report can only record as addresses. Prefer it when reporting a bug.")
+            Text("macOS files its own report for the same crash, fully symbolicated - it names the functions Utter’s report can only record as addresses. Prefer it when reporting a bug.")
                 .typo(.caption)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -420,4 +421,3 @@ private struct TelemetryTile: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
-

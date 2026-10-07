@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The trap this guards against is a Foundation gotcha: `Data.removeFirst` advances the value's
 /// `startIndex` instead of rebasing it to 0, so after one consume the buffer's indices no longer
-/// start at 0 and that 0-based `subdata` reads below `startIndex` and traps (SIGTRAP — this shipped
+/// start at 0 and that 0-based `subdata` reads below `startIndex` and traps (SIGTRAP - this shipped
 /// as a crash in a meeting past ~60s, the point at which the second 30s window is drained). The fix
 /// is `subdata`, which returns a fresh zero-based tail. These tests pin the invariant every reader
 /// depends on: after `consume`, the buffer starts at 0 and is safe to slice from 0.

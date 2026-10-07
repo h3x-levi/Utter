@@ -3,16 +3,27 @@ import AppKit
 
 public struct SnapshotRenderer {
     @MainActor
-    public static func renderAll(outputDir: String = "/Volumes/SSD/Utter/Assets/screenshots") {
+    public static func renderAll(outputDir: String? = nil) {
+        if !SnapshotPreviewMode.isActive {
+            SnapshotPreviewMode.enable()
+        }
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // App
+            .deletingLastPathComponent() // UtterKit
+            .deletingLastPathComponent() // Sources
+            .deletingLastPathComponent() // repository root
+        let primaryOutput = outputDir.map(URL.init(fileURLWithPath:))
+            ?? projectRoot.appendingPathComponent("Assets/screenshots", isDirectory: true)
         let targets = [
-            URL(fileURLWithPath: outputDir),
-            URL(fileURLWithPath: "/Volumes/SSD/Utter/docs/assets/screenshots"),
-            URL(fileURLWithPath: "/Users/skynet/.gemini/antigravity/brain/5c44a918-5999-4a98-8d05-0dcb8d51bed8/snapshots")
-        ]
+            primaryOutput.standardizedFileURL,
+            projectRoot.appendingPathComponent("docs/assets/screenshots", isDirectory: true)
+        ].reduce(into: [URL]()) { result, url in
+            if !result.contains(url) { result.append(url) }
+        }
         for dir in targets {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
-        print("📸 Rendering full Mac screen snapshots to \(outputDir)...")
+        print("📸 Rendering full Mac screen snapshots to \(primaryOutput.path)...")
 
         func renderToTargets<V: View>(_ view: V, width: CGFloat, height: CGFloat, names: [String]) {
             for dir in targets {
@@ -29,16 +40,23 @@ public struct SnapshotRenderer {
         print("Rendering 1. Hero Main on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter — Dictation Workspace",
-                windowWidth: 880,
-                windowHeight: 620,
+                windowTitle: "Utter - Voice Workspace",
+                windowWidth: 1140,
+                windowHeight: 700,
                 showPill: true,
                 pillState: .idle,
                 companionStyle: .gray,
                 companionMood: .alert,
                 companionPose: CompanionPose(gait: .walking, travelSpeed: 1.0)
             ) {
-                FlowContent()
+                HStack(spacing: 0) {
+                    WorkspaceSidebarSnapshot()
+                        .frame(width: 180)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(width: 1)
+                    FlowContent()
+                }
             }
         }, width: screenWidth, height: screenHeight, names: ["hero-main.png", "03_main_dashboard.png"])
 
@@ -52,7 +70,7 @@ public struct SnapshotRenderer {
         print("Rendering 3. Notes Studio on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter Notes — Meeting Transcription & AI Notebook",
+                windowTitle: "Utter Notes - Meeting Transcription & AI Notebook",
                 windowWidth: 920,
                 windowHeight: 640,
                 showPill: true,
@@ -69,7 +87,7 @@ public struct SnapshotRenderer {
         print("Rendering 4. AI Voice Transforms on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter Transforms — Apple Intelligence AI Actions",
+                windowTitle: "Utter Transforms - Apple Intelligence AI Actions",
                 windowWidth: 860,
                 windowHeight: 640,
                 showPill: true,
@@ -89,7 +107,7 @@ public struct SnapshotRenderer {
         print("Rendering 5. Speech Models on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter — Speech Model Catalog",
+                windowTitle: "Utter - Speech Model Catalog",
                 windowWidth: 860,
                 windowHeight: 640,
                 showPill: false
@@ -105,7 +123,7 @@ public struct SnapshotRenderer {
         print("Rendering 6. Custom Dictionary on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter — Custom Vocabulary & Snippets",
+                windowTitle: "Utter - Custom Vocabulary & Snippets",
                 windowWidth: 860,
                 windowHeight: 580,
                 showPill: false
@@ -120,7 +138,7 @@ public struct SnapshotRenderer {
         print("Rendering 7. Voice Snippets Studio on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter — Voice Snippets Studio",
+                windowTitle: "Utter - Voice Snippets Studio",
                 windowWidth: 860,
                 windowHeight: 600,
                 showPill: false
@@ -136,14 +154,18 @@ public struct SnapshotRenderer {
         print("Rendering 8. Settings & Appearance on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter Settings — Appearance & Shortcuts",
-                windowWidth: 760,
-                windowHeight: 680,
+                windowTitle: "Utter Settings - Appearance & Shortcuts",
+                windowWidth: 960,
+                windowHeight: 700,
                 showPill: false
             ) {
-                ScrollView {
-                    GeneralSettingsContent()
-                        .padding(24)
+                HStack(spacing: 0) {
+                    SettingsSidebarSnapshot()
+                        .frame(width: 176)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(width: 1)
+                    SettingsDetail()
                 }
             }
         }, width: screenWidth, height: screenHeight, names: ["feature-settings-general.png", "11_general_settings.png"])
@@ -154,8 +176,8 @@ public struct SnapshotRenderer {
             MacCompanionShowcaseDesktopView()
         }, width: screenWidth, height: screenHeight, names: ["feature-companion-showcase.png", "feature-companion.png", "05b_companion_customize.png"])
 
-        // 9. Login Screen & Onboarding on Mac Desktop
-        print("Rendering 10. Login Screen on Mac Desktop...")
+        // 9. First-run introduction and essential setup states
+        print("Rendering 10. First-run introduction on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
                 windowTitle: "Welcome to Utter",
@@ -163,19 +185,19 @@ public struct SnapshotRenderer {
                 windowHeight: 560,
                 showPill: false
             ) {
-                LoginView { _ in }
+                OnboardingView(onFinish: { _ in }, previewStep: 0)
             }
-        }, width: screenWidth, height: screenHeight, names: ["01_login_screen.png"])
+        }, width: screenWidth, height: screenHeight, names: ["01_first_run.png"])
 
-        print("Rendering 11. Onboarding Wizard on Mac Desktop...")
+        print("Rendering 11. Required-access setup on Mac Desktop...")
         renderToTargets(ThemedRoot {
             MacScreenContainer(
-                windowTitle: "Utter Setup Wizard",
+                windowTitle: "Set up dictation",
                 windowWidth: 720,
                 windowHeight: 560,
                 showPill: false
             ) {
-                OnboardingView { _ in }
+                OnboardingView(onFinish: { _ in }, previewStep: 1)
             }
         }, width: screenWidth, height: screenHeight, names: ["02_onboarding_wizard.png"])
 
@@ -218,6 +240,120 @@ public struct SnapshotRenderer {
             print("  ✓ Rendered \(url.lastPathComponent)")
         } catch {
             print("❌ Write error: \(error)")
+        }
+    }
+}
+
+// MARK: - Snapshot navigation
+
+/// NSHostingView is not attached to a window in the snapshot tool, so SwiftUI's
+/// AppKit-backed `List` rows do not receive their normal table-view lifecycle.
+/// These static rows represent the same labels and grouping in marketing previews;
+/// the running app continues to use the real `.sidebar` Lists above.
+private struct WorkspaceSidebarSnapshot: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Utter").font(.system(size: 15, weight: .semibold))
+                    Text("Private voice workspace").font(.system(size: 10))
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.top, 16)
+            .padding(.bottom, 22)
+
+            ForEach(SidebarItem.primary) { item in
+                HStack(spacing: 9) {
+                    Image(systemName: item.icon)
+                        .frame(width: 17)
+                        .foregroundStyle(item == .capture ? Color.accentColor : Ink.secondary)
+                    Text(item.rawValue)
+                        .font(.system(size: 12, weight: item == .capture ? .semibold : .regular))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 27)
+                .background {
+                    if item == .capture {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.14))
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+
+            Spacer(minLength: 12)
+            Text("\(TranscriptionHistory.shared.totalWords) words dictated")
+                .font(.system(size: 10))
+                .foregroundStyle(Ink.secondary)
+                .padding(.horizontal, 15)
+                .padding(.bottom, 13)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
+    }
+}
+
+private struct SettingsSidebarSnapshot: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Utter").font(.system(size: 14, weight: .semibold))
+                    Text("Preferences").font(.system(size: 10))
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.top, 17)
+            .padding(.bottom, 22)
+            group("Experience", items: SettingsGroup.settingsGroup)
+            group("Trust & support", items: SettingsGroup.aboutGroup)
+            Spacer(minLength: 16)
+            Text("Utter \(ConfigManager.shared.appVersion)")
+                .font(.system(size: 10))
+                .foregroundStyle(Ink.secondary)
+                .padding(14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
+    }
+
+    private func group(_ title: String, items: [SettingsGroup]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Ink.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 5)
+            ForEach(items) { item in
+                HStack(spacing: 9) {
+                    Image(systemName: item.icon)
+                        .frame(width: 17)
+                        .foregroundStyle(item == .general ? Color.accentColor : Ink.secondary)
+                    Text(item.title)
+                        .font(.system(size: 12, weight: item == .general ? .semibold : .regular))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 27)
+                .background {
+                    if item == .general {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.14))
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+            .padding(.bottom, 8)
         }
     }
 }
@@ -401,7 +537,7 @@ struct MacScreenContainer<Content: View>: View {
 struct MacPillShowcaseDesktopView: View {
     var body: some View {
         MacScreenContainer(
-            windowTitle: "main.swift — Utter Project",
+            windowTitle: "main.swift - Utter Project",
             windowWidth: 920,
             windowHeight: 560,
             showPill: false
@@ -414,7 +550,7 @@ struct MacPillShowcaseDesktopView: View {
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(Color.white.opacity(0.5))
                         Spacer()
-                        Text("UTF-8  Swift 5.9  Metal CoreML")
+                        Text("Swift 5  Local Whisper")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(Color.white.opacity(0.4))
                     }
@@ -427,7 +563,7 @@ struct MacPillShowcaseDesktopView: View {
                         codeLine("public final class TranscriptionService {", num: "4")
                         codeLine("    private let whisperContext: OpaquePointer", num: "5")
                         codeLine("    public func transcribe(pcmBuffer: [Float]) async -> String {", num: "6")
-                        codeLine("        // 100% on-device Metal accelerated local Whisper inference", num: "7", comment: true)
+                        codeLine("        // Local inference; Metal is requested where supported", num: "7", comment: true)
                         codeLine("        return await localWhisper.process(samples: pcmBuffer)", num: "8")
                         codeLine("    }", num: "9")
                         codeLine("}", num: "10")
@@ -525,7 +661,7 @@ private struct PillCardWrapper<Content: View>: View {
 struct MacCompanionShowcaseDesktopView: View {
     var body: some View {
         MacScreenContainer(
-            windowTitle: "Utter — Articulated Quadruped Desktop Pets",
+            windowTitle: "Utter - Articulated Quadruped Desktop Pets",
             windowWidth: 920,
             windowHeight: 600,
             showPill: false

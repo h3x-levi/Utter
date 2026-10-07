@@ -73,7 +73,7 @@ struct DictionaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.groupGap) {
-            BentoTile(title: "Add a word", systemImage: "plus.circle") {
+            ContentSection(title: "Add a word", systemImage: "plus.circle") {
                 Text("Custom words help Utter transcribe names, acronyms, and jargon correctly.")
                     .typo(.callout)
                     .fixedSize(horizontal: false, vertical: true)
@@ -114,7 +114,7 @@ struct DictionaryView: View {
                         + "teammates, product names, technical terms."
                 )
             } else {
-                BentoTile(
+                ContentSection(
                     title: "Your words",
                     systemImage: "character.book.closed",
                     accessory: AnyView(
@@ -280,7 +280,7 @@ struct SnippetsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.groupGap) {
-            BentoTile(title: "New snippet", systemImage: "text.badge.plus") {
+            ContentSection(title: "New snippet", systemImage: "text.badge.plus") {
                 Text("Say the trigger phrase and Utter types the full text.")
                     .typo(.callout)
                     .fixedSize(horizontal: false, vertical: true)
@@ -313,7 +313,7 @@ struct SnippetsView: View {
                 }
                 .padding(.top, 2)
 
-                // Placeholder buttons — click to insert into the expansion field.
+                // Placeholder buttons - click to insert into the expansion field.
                 VStack(alignment: .leading, spacing: Space.x2) {
                     Section {
                         FlowLayout(spacing: Space.x2) {
@@ -348,7 +348,7 @@ struct SnippetsView: View {
                         + "For example, say \u{201C}my email\u{201D} to type your address."
                 )
             } else {
-                BentoTile(
+                ContentSection(
                     title: "Your snippets",
                     systemImage: "text.quote",
                     accessory: AnyView(
@@ -487,7 +487,7 @@ struct StyleView: View {
                 .typo(.lede)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // Your custom commands — listed first since they override built-ins
+            // Your custom commands - listed first since they override built-ins
             CustomCommandsSection(
                 commands: userData.customAICommands,
                 onAdd: { model.isCreatingNew = true },
@@ -529,10 +529,10 @@ struct StyleView: View {
             ])
 
             // How it works
-            BentoTile(title: "How it works", systemImage: "sparkles") {
+            ContentSection(title: "How it works", systemImage: "sparkles") {
                 VStack(alignment: .leading, spacing: Space.x3) {
                     HowToStep(number: 1, text: "Dictate text, or select existing text in any app.")
-                    HowToStep(number: 2, text: "Hold \(userData.hotkeyName) and speak a command — for example, \u{201C}make it professional\u{201D}.")
+                    HowToStep(number: 2, text: "Hold \(userData.hotkeyName) and speak a command - for example, \u{201C}make it professional\u{201D}.")
                     HowToStep(number: 3, text: "Release the key. The original text is replaced with the result.")
                 }
             }
@@ -566,7 +566,7 @@ struct CustomCommandsSection: View {
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
-        BentoTile(
+        ContentSection(
             title: "Your commands",
             systemImage: "slider.horizontal.3",
             accessory: AnyView(
@@ -596,7 +596,7 @@ struct CustomCommandsSection: View {
                         }
                     }
                 }
-                // See `DictionaryView.listCurve` — these rows carry the same
+                // See `DictionaryView.listCurve` - these rows carry the same
                 // `.move(edge: .top)` transition.
                 .animation(motion.reduceMotion ? Motion.reduced : Motion.listChange,
                            value: commands.count)
@@ -725,7 +725,7 @@ struct CustomCommandEditor: View {
                 }
 
                 // Interactive Test Playground
-                BentoTile(title: "Test Run Playground", systemImage: "play.circle.fill", tint: Color.purple) {
+                ContentSection(title: "Test Run Playground", systemImage: "play.circle.fill", tint: Color.purple) {
                     VStack(alignment: .leading, spacing: Space.x2) {
                         Text("Preview how this transform processes sample text:").font(.caption).foregroundStyle(Ink.secondary)
                         
@@ -811,7 +811,7 @@ struct CommandSection: View {
     let commands: [CommandInfo]
 
     var body: some View {
-        BentoTile(title: title, systemImage: icon) {
+        ContentSection(title: title, systemImage: icon) {
             VStack(spacing: Space.x1) {
                 ForEach(commands.indices, id: \.self) { i in
                     HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
@@ -914,22 +914,22 @@ private struct CustomCommandRow: View {
 /// A real `Section`: the label is the `header:` and the hint is the `footer:`, which
 /// is exactly what they are. Before this they were two anonymous `Text` siblings of
 /// the control, so nothing in the view tree said that the first line named the field
-/// and the last line explained it. The enclosing `VStack` and its `Space.x2` stay —
+/// and the last line explained it. The enclosing `VStack` and its `Space.x2` stay  - 
 /// a `Section` outside a `List` is flattened into its parent's layout, so the parent
 /// is what spaces header from content from footer, and this keeps the field's rhythm
 /// byte-identical to what it was. `Section` is macOS 10.15; the three-slot
 /// `Section(content:header:footer:)` initialiser likewise.
 ///
-/// **Not `LabeledContent`, and not inside a `Form`** — the two things that would give
+/// **Not `LabeledContent`, and not inside a `Form`** - the two things that would give
 /// the label a real control association. Both change the layout to horizontal:
 /// `LabeledContent`'s default style puts content at the trailing edge, and `Form`'s
 /// `.columns` style aligns labels into a right-aligned column. That is the correct
-/// macOS look for short fields, and it is a genuine improvement over what is here —
+/// macOS look for short fields, and it is a genuine improvement over what is here  - 
 /// but one of the three fields is an 84pt-tall `GlassTextEditor`, the sheet is a fixed
 /// `.frame(width: 540)` whose height comes from its content, and whether `Form`
 /// introduces a scroll container (and so stops publishing an intrinsic height) is not
 /// answerable from the SDK. This app has already resized its own window twice from an
-/// intrinsic size propagating through `NSHostingView` — see `BentoRow.body` — so that
+/// intrinsic size propagating through `NSHostingView` - see the workspace sizing notes - so that
 /// is not a change to make without the app on screen. Routed rather than guessed.
 private struct EditorField<Content: View>: View {
     let label: String
@@ -959,7 +959,7 @@ private struct EditorField<Content: View>: View {
 /// material, plus a themed veil over it, and an opaque surface under Reduce
 /// Transparency.
 ///
-/// **This is not glass, and the comment here used to say it was** — "this is
+/// **This is not glass, and the comment here used to say it was** - "this is
 /// `.regular` glass over a scrim rather than clear glass". No branch of this view
 /// calls `glassEffect`, on any OS version. What it actually is is the same two-layer
 /// standard-material build every window shell in the app uses, which is also the
@@ -967,12 +967,12 @@ private struct EditorField<Content: View>: View {
 /// GlassSurface.swift is explicit that the content layer takes standard materials.
 /// The description was the only thing wrong.
 ///
-/// The `#available(macOS 26.0, *)` split is a *tuning knob*, not an API fallback —
+/// The `#available(macOS 26.0, *)` split is a *tuning knob*, not an API fallback  - 
 /// both branches call exactly the same two views and differ only in the veil. That is
 /// legitimate (`Veil`'s own note explains why: with no Liquid Glass above it the same
 /// veil reads heavier below 26, and a sheet is the one role whose pre-26 tuning goes
 /// up rather than down, because it must stay readable over a window still visible
-/// behind it) — but it is worth knowing it is a tuning branch, since it looks like a
+/// behind it) - but it is worth knowing it is a tuning branch, since it looks like a
 /// capability check and would be deleted as one. Left in place; the 13.3 floor is real.
 ///
 /// Re-asked during the pass that gave the Settings window's navigation column real
@@ -983,15 +983,15 @@ private struct EditorField<Content: View>: View {
 ///   * **What floats is the sheet's window, not a layer inside it.** AppKit draws the
 ///     sheet's own shadow, corner radius and animation; that framing is what expresses
 ///     "above the window", and there is no `NSWindow` glass API to add to it. Inside
-///     the panel there is no chrome layer at all — it is one form, top to bottom.
+///     the panel there is no chrome layer at all - it is one form, top to bottom.
 ///   * **The form is content, and unusually text-heavy content**: three labelled
 ///     fields, a multi-line `GlassTextEditor`, and hint prose under each. Glassing the
 ///     panel would refract the backdrop behind every text field on it, and the button
-///     row at its foot is not flush to an edge — it is the last row of the form, so a
+///     row at its foot is not flush to an edge - it is the last row of the form, so a
 ///     glass band there would be glass in the middle of content.
 ///
 /// The controls in the row already carry the sheet's glass: `GlassButton` resolves to
-/// `.glass` / `.glassProminent` on macOS 26. That is the correct division — glass on
+/// `.glass` / `.glassProminent` on macOS 26. That is the correct division - glass on
 /// the controls, standard material behind the prose.
 private struct SheetBacking: View {
     @ObservedObject private var motion = MotionPreference.shared

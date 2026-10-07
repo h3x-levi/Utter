@@ -12,7 +12,7 @@ import Foundation
 /// running audio input" and "some process that is not Utter is running audio output", read
 /// per-process and per-direction (`CallDetector.audioInUseByOtherProcesses`). It used to be one
 /// device-wide property read twice, which on AirPods and most headsets is the *same* device object
-/// both times — so `(false, true)` and `(true, false)` were combinations the shim could not
+/// both times - so `(false, true)` and `(true, false)` were combinations the shim could not
 /// physically produce, and this suite was proving the state machine against samples that never
 /// arrived while saying nothing about the signal. Every combination below is now reachable, and each
 /// test says which real situation produces it.
@@ -82,7 +82,7 @@ struct CallPresenceTests {
 
     @Test("Playback alone is not a call")
     func playbackAloneIsNotACall() {
-        // Music, a video, a podcast — by far the most common state of a machine, and the one this
+        // Music, a video, a podcast - by far the most common state of a machine, and the one this
         // must never mistake for a meeting. On AirPods this is also the exact case the old
         // device-wide read got wrong: one shared device object reported "in use" for both
         // directions, so a podcast qualified.
@@ -115,7 +115,7 @@ struct CallPresenceTests {
     @Test("Starting a capture ends a live call, and reports the change")
     func selfCaptureEndsALiveCall() {
         // The mechanism by which starting a meeting from the Notes screen takes the offer card down:
-        // the transition is what the owner turns into `onCallEnded`. Never exercised before —
+        // the transition is what the owner turns into `onCallEnded`. Never exercised before  - 
         // `selfCaptureIsSuppressed` passes `true` for every sample, so `isInCall` was false already
         // and the branch's return value was dead.
         var presence = confirmedCall()
@@ -192,7 +192,7 @@ struct CallPresenceTests {
     func declineIsNotReOffered() {
         // The defect this exists for: decline used to go through `reset()`, which zeroed the clock
         // as well as the flag. The devices had not changed, so the next samples re-qualified and a
-        // fresh card appeared `confirmAfter` later — one every five seconds for the rest of the
+        // fresh card appeared `confirmAfter` later - one every five seconds for the rest of the
         // meeting.
         var presence = confirmedCall()
         presence.decline()
@@ -243,7 +243,7 @@ struct CallPresenceTests {
     func declineSurvivesSuppression() {
         // Dictating mid-call runs the suppression branch, which clears the clock. If that also
         // cleared the decline, the card would come back a few seconds after the user stopped
-        // dictating — in the call they had already said no to.
+        // dictating - in the call they had already said no to.
         var presence = confirmedCall()
         presence.decline()
         presence.update(inputByOthers: true, outputByOthers: true,
@@ -261,7 +261,7 @@ struct CallPresenceTests {
         #expect(!presence.isInCall)
     }
 
-    @Test("A reset does ask again — it is for stopping the watch")
+    @Test("A reset does ask again - it is for stopping the watch")
     func resetForgetsTheDecline() {
         // `reset()` is `stop()`'s, and switching the feature off and on again is a fair request to
         // be asked afresh. The distinction between this and `decline()` is the whole of the fix.
@@ -290,7 +290,7 @@ struct CallPresenceTests {
     func aForwardJumpStillDebounces() {
         // What sleep/wake did on the old wall clock: `since` is only reset when the sample
         // *changes*, so an hour of sleep made `held` an hour and the very first sample after wake
-        // qualified — the debounce whose entire purpose is to sit out a chime never ran. Fed
+        // qualified - the debounce whose entire purpose is to sit out a chime never ran. Fed
         // `systemUptime` this cannot happen, because sleep does not advance it; the value type is
         // pinned anyway, since it is the thing that would be wrong.
         var presence = CallPresence()
@@ -310,7 +310,7 @@ struct CallPresenceTests {
     @Test("A clock that steps backwards restarts the run rather than sticking")
     func aBackwardStepDoesNotStickTheCall() {
         // A backwards step (NTP, or a user setting the clock) made `held` negative, and a negative
-        // interval never reaches `releaseAfter` — so `isInCall` stuck true and a capture kept
+        // interval never reaches `releaseAfter` - so `isInCall` stuck true and a capture kept
         // running after the call. The run restarts instead, at the cost of one sample.
         var presence = confirmedCall()
         let t = afterConfirm()

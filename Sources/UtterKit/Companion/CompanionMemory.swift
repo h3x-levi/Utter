@@ -236,6 +236,11 @@ final class CompanionMemoryStore: ObservableObject {
         load()
     }
 
+    /// Replaces active memories with fixed preview fixtures for snapshots.
+    func setPreviewMemories(_ previewMemories: [CompanionMemory]) {
+        memories = previewMemories
+    }
+
     var active: [CompanionMemory] {
         memories
             .filter { !$0.isCompleted }
@@ -409,6 +414,7 @@ final class CompanionMemoryStore: ObservableObject {
     }
 
     private func persist() throws {
+        guard !SnapshotPreviewMode.isActive || storageDir != AppDirectory.support else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         // Seconds are encoded as a JSON Double, which round-trips Date's stored
@@ -432,6 +438,7 @@ final class CompanionMemoryStore: ObservableObject {
     }
 
     private func load() {
+        guard !SnapshotPreviewMode.isActive || storageDir != AppDirectory.support else { return }
         guard let data = try? Data(contentsOf: fileURL) else { return }
         if let decoded = decode(data) {
             memories = decoded

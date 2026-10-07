@@ -5,19 +5,19 @@ import SwiftUI
 /// The state exists because the *destination* is the one thing a recording cannot show:
 /// ⌃⌥N dictation goes into a Utter note the user is not looking at, rather than into the
 /// app in front of them. A 28pt capsule can carry a glyph meaning "a note". It cannot say
-/// *which* note, and it cannot show the words arriving — which is what the box is for.
+/// *which* note, and it cannot show the words arriving - which is what the box is for.
 ///
 /// Everything here is either a real signal or a fixed fact:
 ///
 ///   * the destination comes from `NoteStore.captureDestination`, the same decision
 ///     `AppDelegate.deliverToNote` files the text with,
-///   * the transcript is `previewText`, the live preview pass — and when that preview is
+///   * the transcript is `previewText`, the live preview pass - and when that preview is
 ///     switched off the box says so rather than drawing an empty pane,
 ///   * the dot and meter are the capsule's own, carried across the morph, and the meter
 ///     is real microphone RMS,
 ///   * the elapsed count and the chord that stops it are real,
 ///   * the companion, when there is one, is the *same* character that was on the desktop a
-///     moment ago, still driven by the same engine — see `model.companionBehaviour`.
+///     moment ago, still driven by the same engine - see `model.companionBehaviour`.
 ///
 /// No word count, no progress bar, no ticker: the pill is a `.nonactivatingPanel` that
 /// cannot take key focus, so this is a display and not an editor.
@@ -44,13 +44,13 @@ struct NoteCaptureBox: View {
     @StateObject private var boxModel = NoteCaptureBoxModel()
 
     var body: some View {
-        // 6 above, 10 below — the same 16pt total the two 8s spent, redistributed. Tightening the
+        // 6 above, 10 below - the same 16pt total the two 8s spent, redistributed. Tightening the
         // header to its transcript says "this is the note, and here are the words"; loosening the
         // footer lets the live signals read as a status band rather than as another line of content.
         VStack(alignment: .leading, spacing: Space.x1 + 2) {
             header.cardRow(0, entered: boxModel.entered, reduceMotion: motion.reduceMotion)
             // With a companion to draw, the character takes a column of its own down the
-            // left; with none, this is the card exactly as it was — one column, full-width
+            // left; with none, this is the card exactly as it was - one column, full-width
             // transcript, no gutter.
             //
             // `noteCardSettled` gates it rather than `companionBehaviour != nil` alone: this
@@ -76,7 +76,7 @@ struct NoteCaptureBox: View {
             // Deferred by a turn. Setting the flag and animating it in one synchronous pass is what
             // made the pill's settle inert: SwiftUI coalesces the writes and interpolates from the
             // committed value to itself. `onAppear` runs after a render, so this is belt-and-braces
-            // rather than strictly required — and it costs one turn.
+            // rather than strictly required - and it costs one turn.
             DispatchQueue.main.async { boxModel.entered = true }
         }
         // Horizontal padding comes from `PillContent`, which applies it to every state.
@@ -86,7 +86,7 @@ struct NoteCaptureBox: View {
     /// The transcript and the footer, which the character stands beside rather than in.
     ///
     /// **A column, not a slot in the footer, and the card's fixed height is why.** The
-    /// footer is 20pt tall — the level meter sets it — and the three transcript lines leave
+    /// footer is 20pt tall - the level meter sets it - and the three transcript lines leave
     /// about 7pt of slack inside `noteBoxHeight`, so a character sized to the footer would
     /// be ~27pt, under the 36pt the art needs to read as a character at all (see
     /// `CompanionSize.points`). Growing the card instead would move the pill's window
@@ -127,8 +127,8 @@ struct NoteCaptureBox: View {
             // Tail truncation here, unlike the transcript: the front of a note's title
             // is what identifies it.
             // Primary ink: this names the note being written to, so it is the card's title. Every
-            // text in here used to resolve to `Ink.secondary` or `Ink.tertiary` — including the
-            // transcript — so the card's whole reason to exist was drawn in the same grey as its own
+            // text in here used to resolve to `Ink.secondary` or `Ink.tertiary` - including the
+            // transcript - so the card's whole reason to exist was drawn in the same grey as its own
             // footnote. That is the convergence failure `Ink.secondary`'s own doc records for the
             // main window, reproduced here.
             Text(destination.label)
@@ -150,7 +150,7 @@ struct NoteCaptureBox: View {
             // The words arriving are the point of the card, so they get the primary ink.
             //
             // Still 12pt (`.caption`), deliberately: 13pt would fit the three lines only if its line
-            // spacing stayed at 1.5, and `.callout` carries 3 — which lands within half a point of
+            // spacing stayed at 1.5, and `.callout` carries 3 - which lands within half a point of
             // the card's height, and system font metrics are not ours to promise. Ink carries the
             // hierarchy here; size would have bought a clipped third line.
             Text(LiveTranscript.tail(of: model.previewText))
@@ -180,7 +180,7 @@ struct NoteCaptureBox: View {
             Spacer(minLength: Space.x2)
             // Read from the same `KeyChord` value `KeyMonitor` matches on, so this line
             // cannot advertise a chord that no longer fires. Note capture is hands-free
-            // — nothing on screen otherwise says how to end it.
+            // - nothing on screen otherwise says how to end it.
             Text("\(KeyChord.noteCapture.symbols) to finish")
                 .typo(.caption, ink: Ink.tertiary)
         }
@@ -190,12 +190,12 @@ struct NoteCaptureBox: View {
 private extension View {
     /// One row of the note card, fading and rising into place on its own delay.
     ///
-    /// Opacity and offset only — both are transforms of an already-drawn row, so neither can
+    /// Opacity and offset only - both are transforms of an already-drawn row, so neither can
     /// re-anchor the glass body behind it. That is the whole constraint the card's entrance has to
     /// respect: the shell's *size* cannot animate (see `PillWindow.apply`), so everything that sells
     /// the arrival has to be something else.
     ///
-    /// Under Reduce Motion the row is simply present at full opacity — not a faster stagger. A
+    /// Under Reduce Motion the row is simply present at full opacity - not a faster stagger. A
     /// shorter animation is still an animation, and the setting asks for none.
     func cardRow(_ index: Int, entered: Bool, reduceMotion: Bool) -> some View {
         opacity(reduceMotion || entered ? 1 : 0)
@@ -212,9 +212,9 @@ private extension View {
 /// so its animation is the real one rather than a snapshot taken when the card opened.
 ///
 /// **The pose travels; the travel does not.** `mood`, `pose` and `moodElapsed` are read
-/// live — that is the handover. `behaviour.offsetX`/`offsetY` are deliberately not applied:
+/// live - that is the handover. `behaviour.offsetX`/`offsetY` are deliberately not applied:
 /// they are a stroll bounded by the desktop panel's transparent padding
-/// (`CompanionGeometry.roamRange`, 18pt at this size), and a card has no such padding — the
+/// (`CompanionGeometry.roamRange`, 18pt at this size), and a card has no such padding - the
 /// character would walk into the transcript. In practice the engine has already parked it:
 /// note capture puts the mood at `.alert`, which does not allow wandering, so the offsets
 /// are being eased back to zero anyway (`CompanionBehaviour.advanceAmbientAct`).
@@ -245,7 +245,7 @@ private struct CardCharacter: View {
                        pose: behaviour.pose,
                        size: CompanionGeometry.inCardCharacterSize,
                        elapsed: behaviour.moodElapsed)
-            // No hover lift, no poke, no drag — the desktop panel owns all three. Inside
+            // No hover lift, no poke, no drag - the desktop panel owns all three. Inside
             // the card the character is a status indicator standing next to the level
             // meter, and a click here would be a click on a panel that cannot take focus.
             .allowsHitTesting(false)
@@ -256,8 +256,8 @@ private struct CardCharacter: View {
 enum LiveTranscript {
     /// How much of the tail to keep.
     ///
-    /// Comfortably more than the three lines the box draws — measured at ~150 characters
-    /// of ordinary prose across its 272pt at 12pt — so the view's own head truncation
+    /// Comfortably more than the three lines the box draws - measured at ~150 characters
+    /// of ordinary prose across its 272pt at 12pt - so the view's own head truncation
     /// makes the exact cut and this only bounds how much text is handed to it. Trimming
     /// to the visible amount instead would need a text measurement per preview pass, and
     /// would cut the newest words off whenever the estimate ran short.
@@ -266,7 +266,7 @@ enum LiveTranscript {
     /// The end of `text`, starting on a word boundary.
     ///
     /// A growing transcript is only ever interesting at the end, and `previewText` is a
-    /// pass over *all* the audio so far — so it grows without limit through a long note
+    /// pass over *all* the audio so far - so it grows without limit through a long note
     /// while the box stays one size. Cutting at a word boundary keeps the first visible
     /// word whole, and the leading ellipsis is there because silently dropping the start
     /// of a sentence would read as the transcript having begun there.

@@ -2,12 +2,12 @@ import Testing
 import SwiftUI
 @testable import UtterKit
 
-/// The pill's settle — the animation it has *instead of* an animated resize.
+/// The pill's settle - the animation it has *instead of* an animated resize.
 ///
 /// The shell's size cannot be animated: `glassEffect` fills its view's bounds, so the bounds must
 /// track the silhouette, and re-anchoring a glass body makes the system cross-fade the outgoing one
 /// against the incoming one. That cross-fade is the ghost that had the morph deleted nine times. So
-/// the size lands instantly and a `scaleEffect` springs the last few percent — a transform on an
+/// the size lands instantly and a `scaleEffect` springs the last few percent - a transform on an
 /// already-composited layer, which creates no second body.
 ///
 /// What can be tested here is the arithmetic that keeps it *tasteful*, and the arithmetic that keeps
@@ -88,7 +88,7 @@ struct PillSettleTests {
     @Test("The content arrives behind the shell, and lands inside the settle")
     func contentFillLandsInsideTheSettle() {
         // The card should read as a shape arriving and then filling, so the content must start
-        // after the shell moves and finish before the settle does — otherwise it either pops in
+        // after the shell moves and finish before the settle does - otherwise it either pops in
         // simultaneously (no sense of arrival) or is still fading after the shape has stopped.
         // Read from the tokens, not copied from them: literals compared to literals would pass
         // whatever `Motion` said, which is the failure mode of a test that looks like coverage.
@@ -100,12 +100,12 @@ struct PillSettleTests {
 
     @Test("Reduce Motion leaves both values at rest, so nothing moves")
     func reduceMotionHasNothingToAnimate() {
-        // `restartSettle` returns early under Reduce Motion with both values at 1 — a single clean
+        // `restartSettle` returns early under Reduce Motion with both values at 1 - a single clean
         // render at full size and full opacity. Asserting the endpoints here documents what that
         // early return has to produce.
         // `restartSettle` returns early under Reduce Motion, assigning 1 to both values and the
         // colour outright. What can be checked here is that a scale of 1 is genuinely available for
-        // every shell — i.e. the function has no state whose "resting" value is already reduced.
+        // every shell - i.e. the function has no state whose "resting" value is already reduced.
         for (w, h) in [(PillMetrics.minimumCapsuleWidth, PillMetrics.capsuleHeight),
                        (PillMetrics.shellWidth(for: .capturingNote) ?? 0, PillMetrics.noteBoxHeight)] {
             #expect(Motion.settleScale(width: w, height: h) < 1,

@@ -17,19 +17,19 @@ import Testing
 ///     `pomodoroRemaining` bit pattern, equal to `TimeInterval(24 * 60)`. There is nothing for a
 ///     race to perturb: `ReminderScheduler` is a struct over constants, with no global or static
 ///     state, and every input here is a literal.
-///   * **`swift test --sanitize=thread` reports no data race** — and the test still fails under it.
+///   * **`swift test --sanitize=thread` reports no data race** - and the test still fails under it.
 ///   * **It is parallelism, not timing.** 12 failures in 25 runs at the default parallelism;
 ///     **0 in 25** with `--no-parallel`.
 ///   * The reported failure never moves: always `countdown`, always the same line, always
-///     `(remaining -> 1440.0) == (24 * 60 -> 1440)` — two values that print equal and compare
+///     `(remaining -> 1440.0) == (24 * 60 -> 1440)` - two values that print equal and compare
 ///     unequal, which is not a shape any arithmetic here can produce.
 ///
 /// So the fault is in `swift-testing` 0.99.0's parallel expectation handling on this toolchain
-/// (Swift 6.3.3). That version is pinned on purpose — see the note in `Package.swift`: the
+/// (Swift 6.3.3). That version is pinned on purpose - see the note in `Package.swift`: the
 /// Command Line Tools ship neither `XCTest` nor a built-in `Testing` module, so it has to come
 /// from the package, and the pin exists because an open range silently moved 0.10.0 -> 0.99.0
 /// once already. **When that dependency is dropped for the toolchain's own `Testing` (which
-/// needs full Xcode), remove this trait and re-run the 25x check above** — if the flake is gone,
+/// needs full Xcode), remove this trait and re-run the 25x check above** - if the flake is gone,
 /// this was never ours.
 ///
 /// Serialising costs ~0.008s across 11 tests. Leaving it would cost more than that: a suite that
@@ -63,7 +63,7 @@ struct CompanionReminderTests {
     func stretchRepeats() {
         var scheduler = self.scheduler(stretch: 45)
         #expect(scheduler.due(at: start.addingTimeInterval(45 * 60)) == .stretch)
-        // Immediately after, nothing — the interval restarts from when it fired, so a
+        // Immediately after, nothing - the interval restarts from when it fired, so a
         // reminder cannot fire twice for the same interval.
         #expect(scheduler.due(at: start.addingTimeInterval(45 * 60 + 1)) == nil)
         #expect(scheduler.due(at: start.addingTimeInterval(90 * 60)) == .stretch)
@@ -173,7 +173,7 @@ struct CompanionReminderTests {
         // A pomodoro says which way round it is, or the message is meaningless.
         #expect(CompanionReminder.pomodoro(focus: true).line(name: "")
                 != CompanionReminder.pomodoro(focus: false).line(name: ""))
-        // A user's own message is passed through untouched — no name appended, because
+        // A user's own message is passed through untouched - no name appended, because
         // they wrote the whole sentence.
         #expect(CompanionReminder.message("feed me").line(name: "Sam") == "feed me")
     }

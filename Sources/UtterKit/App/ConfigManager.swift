@@ -4,20 +4,20 @@ import Foundation
 ///
 /// Utter runs entirely on this Mac: speech recognition uses the bundled Whisper
 /// model and AI commands use Apple's on-device language model. There are no
-/// accounts, endpoints, API keys, or credentials of any kind — so this type
+/// accounts, endpoints, API keys, or credentials of any kind - so this type
 /// deliberately holds nothing secret, and there is nothing to persist to disk.
 final class ConfigManager {
     static let shared = ConfigManager()
 
     /// Marketing version, read from the bundle at launch.
-    private(set) var appVersion: String = "1.1.57"
+    private(set) var appVersion: String = "1.1.58"
 
     private init() {}
 
     func load() {
         loadVersion()
         purgeLegacyCredentialStore()
-        print("📋 Utter \(appVersion) — fully on-device, no network services configured")
+        print("📋 Utter \(appVersion) - fully on-device, no network services configured")
     }
 
     private func loadVersion() {
@@ -54,12 +54,12 @@ final class ConfigManager {
     /// 2.0.14 also shipped a `.env` *inside the app bundle*, but the app must never
     /// write to (or delete from) its own bundle: any change to `Contents/` breaks
     /// the code signature and can silently revoke the app's TCC grants. That stale
-    /// in-bundle `.env` is harmless — it holds nothing the current app reads — and
+    /// in-bundle `.env` is harmless - it holds nothing the current app reads - and
     /// it disappears on its own when the user replaces the old app with this one.
     private func purgeLegacyCredentialStore() {
         let fm = FileManager.default
         // Looked for under the *current* name, because `AppDirectory` renames the whole folder on
-        // first launch — so a credential file that was in `AWSFlow/` has already moved into
+        // first launch - so a credential file that was in `AWSFlow/` has already moved into
         // `Utter/` by the time this runs.
         let legacy = AppDirectory.file("config.json")
         guard fm.fileExists(atPath: legacy.path) else { return }

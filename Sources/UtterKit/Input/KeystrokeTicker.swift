@@ -6,8 +6,8 @@ import Foundation
 /// not the modifiers, not the frontmost app. That constraint is the whole design: the
 /// companion needs to know *that* you are typing so it can knead its paws, and a type
 /// that physically cannot hold what you typed can never be made to leak it by a later
-/// change. `KeyMonitor` already holds itself to this rule where it taps events — its own
-/// comment notes that a tap printing key codes would be a keylogger — and this is that
+/// change. `KeyMonitor` already holds itself to this rule where it taps events - its own
+/// comment notes that a tap printing key codes would be a keylogger - and this is that
 /// rule expressed as a type.
 ///
 /// **Pulled, not pushed.** The obvious shape is a callback that the companion registers,
@@ -30,7 +30,7 @@ enum KeystrokeTicker {
     private static var total: UInt64 = 0
     private static var lastAt: TimeInterval = 0
 
-    /// One keystroke happened. Called from `KeyMonitor`'s existing key handler — this
+    /// One keystroke happened. Called from `KeyMonitor`'s existing key handler - this
     /// adds no event monitor and no permission requirement of its own.
     static func note(at when: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         lock.lock()

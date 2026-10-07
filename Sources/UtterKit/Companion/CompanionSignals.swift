@@ -8,7 +8,7 @@ import Foundation
 // character's head.
 //
 // Every type here is a **pure value type over timestamps and points**. No AppKit, no
-// event monitors, no clocks of their own — a caller feeds in what it observed and the
+// event monitors, no clocks of their own - a caller feeds in what it observed and the
 // time it observed it, and reads the answer back. That is deliberate and it is the same
 // choice `HoldTap.outcome(keyCode:isHotkeyHeld:isRepeat:)` makes in `KeyMonitor`: the
 // interesting part is the rule, the rule is where the bugs are, and a rule expressed as
@@ -16,7 +16,7 @@ import Foundation
 // permission grant and no real keyboard.
 //
 // **Nothing here records what was typed.** `TypingActivity` stores timestamps and
-// nothing else — no key codes, no characters, no modifiers. That is not an accident of
+// nothing else - no key codes, no characters, no modifiers. That is not an accident of
 // the design, it is the point: the companion needs to know *that* you are typing to
 // knead its paws, and knowing *what* you typed would make this a keylogger. `KeyMonitor`
 // already holds itself to that rule where it taps events, and it holds here too.
@@ -33,7 +33,7 @@ import Foundation
 /// keys/second; a fast typist sustains 90-100 WPM, or 7.5-8.3 keys/second. So:
 ///
 ///   * **Typing at all** is >= 2 keys inside `typingWindow` (0.6 s). One key is a
-///     keystroke, not typing — a single Cmd-Tab should not make the cat knead. Two
+///     keystroke, not typing - a single Cmd-Tab should not make the cat knead. Two
 ///     inside 600 ms is the slowest real digraph.
 ///   * **Overheating** is `overheatRate` (6.0 keys/s) sustained for `overheatSustain`
 ///     (1.2 s). Six sits above every comfortable rate and below a fast typist's peak,
@@ -41,11 +41,11 @@ import Foundation
 ///
 /// The exit threshold is deliberately lower than the entry threshold (`coolRate`, 3.5
 /// keys/s). Without that gap, a typist hovering either side of 6 keys/s makes the cat
-/// flicker red-normal-red several times a second, which is both ugly and — since it is
-/// driven by a real signal — impossible to smooth out downstream.
+/// flicker red-normal-red several times a second, which is both ugly and - since it is
+/// driven by a real signal - impossible to smooth out downstream.
 struct TypingActivity: Equatable {
 
-    /// Keystroke times, newest last. Times only — never what was pressed.
+    /// Keystroke times, newest last. Times only - never what was pressed.
     private var strokes: [TimeInterval] = []
 
     /// Longest window any rule looks back over, so anything older can be discarded.
@@ -158,7 +158,7 @@ struct CursorTracking: Equatable {
     private(set) var huntingSince: TimeInterval?
 
     /// Feed the current cursor position. Called once per tick, from a plain read of
-    /// `NSEvent.mouseLocation` — no event monitor, and so no permission of any kind.
+    /// `NSEvent.mouseLocation` - no event monitor, and so no permission of any kind.
     mutating func sample(_ point: CGPoint, at now: TimeInterval) {
         defer { previous = point; previousAt = now }
 
@@ -187,14 +187,14 @@ struct CursorTracking: Equatable {
     /// cursor.
     ///
     /// Returned as a direction rather than as pixels because the art decides how far an
-    /// eye may travel — a 32px sprite can move an iris about 2px before it leaves the
+    /// eye may travel - a 32px sprite can move an iris about 2px before it leaves the
     /// socket, and only the pack knows that. Scaling a direction by the art's own limit
     /// keeps that knowledge with the art.
     ///
     /// **This divides by the distance, not by a fixed falloff, and that is the whole
     /// point.** The first version scaled each axis by a 220pt reference distance and
-    /// clamped: `dx = (cursor.x - centre.x) / 220`. Every cursor further away than that —
-    /// which on a 1512pt-wide display is nearly the entire screen — clamped *both* axes to
+    /// clamped: `dx = (cursor.x - centre.x) / 220`. Every cursor further away than that  - 
+    /// which on a 1512pt-wide display is nearly the entire screen - clamped *both* axes to
     /// ±1, so the eyes locked to one of four 45° diagonals and stopped responding to the
     /// mouse at all. Measured against the true bearing, that was wrong by up to 33°, and it
     /// is why the character appeared to stare off into a corner instead of following the
@@ -202,7 +202,7 @@ struct CursorTracking: Equatable {
     ///
     /// Dividing by the true distance makes the direction exact at every range: the
     /// magnitude is always 1, so the eyes are always fully deflected *the correct way*.
-    /// Partial deflection by distance was considered and rejected — with only two pixels of
+    /// Partial deflection by distance was considered and rejected - with only two pixels of
     /// travel available, a proportional aim spends most of its range on sub-pixel offsets
     /// that quantise to no movement, which looks exactly like the bug being fixed.
     ///
@@ -231,14 +231,14 @@ struct CursorTracking: Equatable {
 /// Modelled as a damped spring per axis, which is the standard way to get that shape and is
 /// two multiplies per axis per frame. Deliberately **underdamped**: the damping ratio is
 /// about 0.5, which overshoots the target by roughly 16% and settles in a third of a second.
-/// Critically damped would arrive smoothly with no wobble — correct for a UI transition, and
+/// Critically damped would arrive smoothly with no wobble - correct for a UI transition, and
 /// exactly the wrong feel here.
 struct GooglyEyes: Equatable {
 
     /// Spring constant. Higher is snappier and overshoots sooner.
     ///
     /// 140 with `damping` 12 gives a damping ratio of 12 / (2·√140) ≈ 0.51 and a settle time
-    /// near 0.3s — fast enough to feel attached to the cursor, slow enough that the lag is
+    /// near 0.3s - fast enough to feel attached to the cursor, slow enough that the lag is
     /// visible on a quick flick, which is where the whole effect lives.
     static let stiffness: CGFloat = 140
     static let damping: CGFloat = 12
@@ -274,7 +274,7 @@ struct GooglyEyes: Equatable {
         }
 
         // Clamp on magnitude, not per axis: the socket is round, so per-axis clamping would
-        // let the pupil sit at (1, 1) — √2 times its travel — and land outside the white on
+        // let the pupil sit at (1, 1) - √2 times its travel - and land outside the white on
         // the diagonals. This is the same reasoning as `CursorTracking.aim`.
         let magnitude = hypot(offset.dx, offset.dy)
         if magnitude > 1 {
@@ -302,7 +302,7 @@ struct GooglyEyes: Equatable {
 
 /// Detects the pointer being stroked back and forth over the character.
 ///
-/// A stroke is not "the pointer is inside the character" — that is hovering, and it
+/// A stroke is not "the pointer is inside the character" - that is hovering, and it
 /// already lifts the character slightly. Petting is *repeated reversal of direction*
 /// while inside, which is what a hand does when it strokes a cat and what nothing else
 /// does by accident.
@@ -376,7 +376,7 @@ enum CompanionReminder: Equatable {
         switch self {
         case .stretch: return "Stretch time\(you)"
         case .water: return "Water break\(you)"
-        case .pomodoro(let focus): return focus ? "Focus done — break\(you)" : "Break over\(you)"
+        case .pomodoro(let focus): return focus ? "Focus done - break\(you)" : "Break over\(you)"
         case .message(let text): return text
         }
     }
@@ -395,8 +395,8 @@ enum CompanionReminder: Equatable {
 ///
 /// Wall clock rather than the behaviour engine's own `clock`, and this is not a detail: the
 /// engine's ticker stops after 90 seconds of rest, and its clock freezes with it. Every
-/// reminder here exists for a user who is *sitting still* — stretch, water, the end of a
-/// focus block — so scheduling them on a clock that stops precisely when the user goes
+/// reminder here exists for a user who is *sitting still* - stretch, water, the end of a
+/// focus block - so scheduling them on a clock that stops precisely when the user goes
 /// quiet would mean the stretch reminder never fires for anyone who needs it.
 ///
 /// It is also why this is driven by its own low-rate timer rather than by the 30 Hz tick.
@@ -467,7 +467,7 @@ struct ReminderScheduler: Equatable {
     }
 
     /// How far through the current pomodoro block, 0...1, and whether it is a focus block.
-    /// Nil when pomodoro is off — the timer should not be drawn at all rather than drawn empty.
+    /// Nil when pomodoro is off - the timer should not be drawn at all rather than drawn empty.
     func pomodoroProgress(at now: Date) -> (fraction: Double, focus: Bool)? {
         guard let focus = pomodoroFocus, let rest = pomodoroBreak,
               let started = pomodoroStartedAt
@@ -510,7 +510,7 @@ struct ScrollActivity: Equatable {
     private var accumulated: CGFloat = 0
     private var lastScrollAt: TimeInterval?
 
-    /// 0...1 — how far the paper is unrolled.
+    /// 0...1 - how far the paper is unrolled.
     private(set) var extension_: CGFloat = 0
 
     mutating func record(delta: CGFloat, at now: TimeInterval) {

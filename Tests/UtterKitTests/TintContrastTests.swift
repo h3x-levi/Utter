@@ -10,12 +10,12 @@ import Testing
 /// which are tuned as **fills**; as 12pt text on this app's own `raised` surfaces they measured,
 /// in a light theme:
 ///
-///   * `Tint.warning` — **1.48:1** on Paper, 1.46:1 on Linen. Amber on cream, effectively invisible.
-///   * `Tint.success` — 2.17:1 / 2.14:1
-///   * `Tint.danger` — 3.48:1 / 3.44:1, and **3.46:1 on Graphite**, so it failed in a dark theme too
+///   * `Tint.warning` - **1.48:1** on Paper, 1.46:1 on Linen. Amber on cream, effectively invisible.
+///   * `Tint.success` - 2.17:1 / 2.14:1
+///   * `Tint.danger` - 3.48:1 / 3.44:1, and **3.46:1 on Graphite**, so it failed in a dark theme too
 ///
 /// Every one of those call sites is a warning or an error, which makes them the strings a user
-/// most needs to read — two were the only on-screen explanation of a failure. `Tint.*Text` are the
+/// most needs to read - two were the only on-screen explanation of a failure. `Tint.*Text` are the
 /// fixed variants, built the same way as `Tint.accentText` and for the same reason.
 ///
 /// Tested rather than eyeballed because the failure is invisible in the one place it is most likely
@@ -48,7 +48,7 @@ struct TintContrastTests {
     /// The floor for body text at these sizes.
     private static let floor = 4.5
 
-    /// Every theme's `raised` surface — the one these labels actually sit on.
+    /// Every theme's `raised` surface - the one these labels actually sit on.
     ///
     /// Taken from `ThemeManager`'s own definitions rather than restated, so a theme whose surface
     /// is retuned is checked against its new value instead of a stale copy. The system theme is
@@ -97,14 +97,14 @@ struct TintContrastTests {
     ///
     /// This is the test that would have caught the bug it was written for. `NSTableView`
     /// inverts a selected row's label to white unconditionally, which is right for the
-    /// system accents — `selectedContentBackgroundColor` carries white at 5.37:1 — and
+    /// system accents - `selectedContentBackgroundColor` carries white at 5.37:1 - and
     /// wrong for six of these seven, where white measures between 1.92:1 and 4.02:1. So
     /// hardcoding either ink fails: white fails Paper, Graphite, Violet, Pine, Ember and
     /// the system accent; black fails Linen. Only the measured choice passes all seven,
     /// and that is exactly what this asserts.
     ///
     /// `Tint.ink(on:)` rather than `Tint.onAccent` so no theme has to be installed into
-    /// `ThemeManager.shared` — the rule is a pure function of the fill.
+    /// `ThemeManager.shared` - the rule is a pure function of the fill.
     @Test("Tint.ink(on:) clears 4.5:1 on every theme's accent, and neither ink alone would")
     func selectedRowInkIsLegible() {
         let accents: [(name: String, color: NSColor)] =
@@ -134,9 +134,9 @@ struct TintContrastTests {
         // Records *why* the choice has to be measured. If either of these drops to zero
         // the token could be replaced by a constant, and this is what says so.
         #expect(whiteFailures > 0,
-                "white now clears \(Self.floor):1 on every accent — Tint.ink(on:) could be a constant")
+                "white now clears \(Self.floor):1 on every accent - Tint.ink(on:) could be a constant")
         #expect(blackFailures > 0,
-                "black now clears \(Self.floor):1 on every accent — Tint.ink(on:) could be a constant")
+                "black now clears \(Self.floor):1 on every accent - Tint.ink(on:) could be a constant")
     }
 
     /// Flatten a translucent ink onto its backdrop, so the ratio is the one drawn.
@@ -163,7 +163,7 @@ struct TintContrastTests {
         for backdrop in lightSurfaces {
             let ratio = Self.contrast(raw, backdrop.color)
             #expect(ratio < Self.floor,
-                    "Tint.warning now measures \(String(format: "%.2f", ratio)):1 on \(backdrop.name) — if the system colour or the surface changed so the raw fill passes as text, Tint.warningText may no longer be needed.")
+                    "Tint.warning now measures \(String(format: "%.2f", ratio)):1 on \(backdrop.name) - if the system colour or the surface changed so the raw fill passes as text, Tint.warningText may no longer be needed.")
         }
     }
 }

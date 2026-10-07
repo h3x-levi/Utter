@@ -105,7 +105,7 @@ struct MeetingWAVTests {
     func sizesFollowPayload() throws {
         // A short window, a full 30-second window, and an odd length. If either size
         // field were hardcoded, a decoder would read past the end or truncate the
-        // audio — dropping the tail of a meeting window silently.
+        // audio - dropping the tail of a meeting window silently.
         for bytes in [2, 4_096, 30 * 16_000 * 2, 12_345] {
             let payload = Self.pcm(bytes: bytes)
             let wav = try #require(AudioRecorder.wav(fromPCM: payload))
@@ -147,7 +147,7 @@ struct MeetingWAVTests {
         #expect(AudioRecorder.wav(fromPCM: Data()) == nil)
         #expect(AudioRecorder.wav(fromPCM: Data(), sampleRate: 44_100, channels: 2) == nil)
 
-        // One byte is not empty, so it is still wrapped — the guard is on emptiness
+        // One byte is not empty, so it is still wrapped - the guard is on emptiness
         // only, and the caller's `minimumBytes` check is what enforces a useful length.
         #expect(AudioRecorder.wav(fromPCM: Data([0x01])) != nil)
     }

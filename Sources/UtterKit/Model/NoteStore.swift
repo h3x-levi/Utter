@@ -1,9 +1,10 @@
 import Foundation
+import os
 
 /// Where a note's text came from. Kept so the UI can distinguish a typed note
 /// from a dictated one without inspecting the text, and so meeting captures can
 /// be presented differently later.
-enum NoteSource: String, Codable {
+enum NoteSource: String, Codable, Sendable {
     case typed
     case dictated
     case meeting
@@ -14,7 +15,7 @@ enum NoteSource: String, Codable {
 /// This is the unit the old scratchpad could not express: `UserData.scratchpad`
 /// was a single `String`, so there was exactly one note and writing a second one
 /// overwrote the first.
-struct Note: Identifiable, Codable, Equatable {
+struct Note: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     /// Derived from the body by `derivedTitle` unless the user typed one, in
     /// which case `titleIsCustom` pins it.
@@ -34,7 +35,7 @@ struct Note: Identifiable, Codable, Equatable {
     /// Optional rather than defaulted to `MeetingSpeakers.default`, and the difference
     /// is not cosmetic: the synthesised `Codable` decoder fails on a *missing* key for
     /// a non-optional property, so a stored default would have made every existing
-    /// `notes.json` undecodable — and `NoteStore.load` responds to an undecodable file
+    /// `notes.json` undecodable - and `NoteStore.load` responds to an undecodable file
     /// by moving the user's entire notes file aside. Optional decodes absent as `nil`.
     /// `MeetingSpeakers.default` covers the `nil` case at every read instead.
     var speakers: MeetingSpeakers?
@@ -61,7 +62,7 @@ struct Note: Identifiable, Codable, Equatable {
         self.speakers = speakers
     }
 
-    /// The labels to use for this note's turns — the user's, where they set one.
+    /// The labels to use for this note's turns - the user's, where they set one.
     var speakerLabels: MeetingSpeakers { speakers ?? .default }
 
     /// First non-empty line, trimmed. Markdown heading markers are stripped so a
@@ -74,7 +75,7 @@ struct Note: Identifiable, Codable, Equatable {
         // Split on any newline, not the literal "\n".
         //
         // Swift treats CRLF as a single grapheme cluster, so `split(separator: "\n")`
-        // never matches it — a body pasted from Windows or a Markdown file came back
+        // never matches it - a body pasted from Windows or a Markdown file came back
         // as one "line" and the title ended up 25+ characters with an embedded
         // newline in the middle. `\.isNewline` covers CR, LF, CRLF, and the Unicode
         // line separators.
@@ -119,12 +120,12 @@ struct Note: Identifiable, Codable, Equatable {
 /// Deliberately *outside* `NoteStore`, which is `@MainActor`. `JSONEncoder`'s and
 /// `JSONDecoder`'s `.custom` date strategies take `@Sendable` closures, so reading a
 /// main-actor-isolated static from inside one is a warning today and an error in the
-/// Swift 6 language mode — the closure is declared as safe to run anywhere while
+/// Swift 6 language mode - the closure is declared as safe to run anywhere while
 /// reaching for state that is not. Hoisting them says what is actually true: these
 /// are configured here, never mutated afterwards, and Foundation's date formatters
 /// have been documented as safe for concurrent formatting and parsing since
-/// macOS 10.9. Every call site is still main-actor-synchronous
-/// (`writeToDisk`/`load`), so nothing about the runtime behaviour changes.
+/// macOS 10.9. Encoding is serialized by NoteStore's persistence queue; initial
+/// decoding occurs during store construction.
 enum NoteDateFormat {
     /// What `writeToDisk` emits, and the preferred shape on read.
     static let fractional: ISO8601DateFormatter = {
@@ -154,7 +155,7 @@ struct NoteGroup: Identifiable {
 ///
 /// One authority for a decision two places need. `AppDelegate.deliverToNote` files the
 /// finished text, and the pill's note box has to *name* the destination while the user is
-/// still talking — before any text exists. Two copies of the rule would drift, and the
+/// still talking - before any text exists. Two copies of the rule would drift, and the
 /// failure mode is the pill confidently naming a note the text does not go into.
 enum NoteCaptureDestination: Equatable {
     /// A new note will be created for this capture.
@@ -164,7 +165,7 @@ enum NoteCaptureDestination: Equatable {
 
     /// Resolve the destination from the preference and the store's contents.
     ///
-    /// Pure and taking its inputs, so it can be tested without the singleton — which is
+    /// Pure and taking its inputs, so it can be tested without the singleton - which is
     /// bound to the real Application Support directory.
     ///
     /// The `notes` lookup is not redundant: `selectedNoteID` survives a note being
@@ -192,20 +193,31 @@ enum NoteCaptureDestination: Equatable {
 
 /// Durable storage for notes.
 ///
-/// Modelled on `TranscriptionHistory` — singleton `ObservableObject`, one JSON
-/// file under Application Support, date-grouped for display — with two
+/// Modelled on `TranscriptionHistory` - singleton `ObservableObject`, one JSON
+/// file under Application Support, date-grouped for display - with two
 /// deliberate departures:
 ///
 ///   * **Its own file.** `UserData.save()` re-serialises every preference on each
 ///     call; notes riding along in that blob would mean a keystroke in a note
 ///     rewrites the whole settings file, and a corrupt write loses both.
 ///   * **No entry cap.** `TranscriptionHistory` keeps `.prefix(1000)`, which is
-///     right for a rolling log of things already typed elsewhere. For notes —
-///     the only copy of the user's own writing — silently dropping the oldest
+///     right for a rolling log of things already typed elsewhere. For notes  - 
+///     the only copy of the user's own writing - silently dropping the oldest
 ///     would be data loss.
 @MainActor
 final class NoteStore: ObservableObject {
     static let shared = NoteStore()
+
+    /// Preserve mutation order while keeping JSON encoding, backup copying, and
+    /// atomic disk replacement off the UI actor.
+    private nonisolated static let persistenceQueue = DispatchQueue(
+        label: "utter.notes.persistence",
+        qos: .utility
+    )
+    private nonisolated static let performanceLog = Logger(
+        subsystem: "utter.dictation.app",
+        category: "persistence-performance"
+    )
 
     @Published private(set) var notes: [Note] = []
 
@@ -227,6 +239,13 @@ final class NoteStore: ObservableObject {
 
     private init() {
         load()
+    }
+
+    /// Replaces the active in-memory notes list with fixed preview fixtures for snapshots.
+    func setPreviewNotes(_ previewNotes: [Note], selectedID: UUID?) {
+        notes = previewNotes
+        selectedNoteID = selectedID
+        invalidateGroupCache()
     }
 
     // MARK: - Reading
@@ -373,14 +392,14 @@ final class NoteStore: ObservableObject {
         }
     }
 
-    /// Rename one of a meeting note's speaker labels — in the stored labels *and* in
+    /// Rename one of a meeting note's speaker labels - in the stored labels *and* in
     /// the transcript already written.
     ///
     /// Both halves are load-bearing:
     ///
     ///   * Without the body rewrite the visible transcript would keep saying "Others"
-    ///     while a field elsewhere claimed otherwise, and the exported Markdown — which
-    ///     carries no mapping — would keep the old label forever.
+    ///     while a field elsewhere claimed otherwise, and the exported Markdown - which
+    ///     carries no mapping - would keep the old label forever.
     ///   * Without the stored label the next 30-second window of a *live* meeting would
     ///     append "Others" again, undoing the rename the user just made.
     ///
@@ -431,11 +450,12 @@ final class NoteStore: ObservableObject {
         // their data should not have it linger on disk for another second.
         saveWorkItem?.cancel()
         writeToDisk()
+        flushPendingWrites()
     }
 
     /// Applies a change and stamps `modified`. The closure returns false when
     /// nothing actually changed, so no-op edits don't reorder the list or dirty
-    /// the file — SwiftUI binds `TextEditor` tightly enough that it re-sends the
+    /// the file - SwiftUI binds `TextEditor` tightly enough that it re-sends the
     /// same value.
     private func mutate(_ id: UUID, _ change: (inout Note) -> Bool) {
         guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
@@ -464,6 +484,7 @@ final class NoteStore: ObservableObject {
         note.title = Note.derivedTitle(from: userData.scratchpad)
         insert(note, select: true)
         writeToDisk()
+        flushPendingWrites()
 
         userData.scratchpad = ""
         userData.save()
@@ -479,16 +500,42 @@ final class NoteStore: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: item)
     }
 
-    /// Write every note. Called on a debounce while editing, and directly when
-    /// the cost of losing the last second matters (migration, clear-all, quit).
+    /// Capture the current value on MainActor, then encode and persist it in order
+    /// on a utility queue. The immutable snapshot prevents a background writer
+    /// from racing with edits to the published array.
     func writeToDisk() {
+        guard !SnapshotPreviewMode.isActive else { return }
+        let snapshot = notes
+        let destination = notesURL
+        let backup = previousNotesURL
+        Self.persistenceQueue.async {
+            Self.persist(snapshot, to: destination, keepingPreviousAt: backup)
+        }
+    }
+
+    /// Drain pending persistence work. Used only where the caller must guarantee
+    /// durability before returning, such as app termination and Clear All Data.
+    /// Ordinary editor autosaves must never call this and block the UI.
+    func flushPendingWrites() {
+        Self.persistenceQueue.sync {}
+    }
+
+    private nonisolated static func persist(_ notes: [Note], to notesURL: URL, keepingPreviousAt previousNotesURL: URL) {
+        let started = DispatchTime.now().uptimeNanoseconds
+        var byteCount = 0
+        defer {
+            let elapsedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+            performanceLog.info(
+                "notes persistence_ms=\(elapsedMilliseconds, format: .fixed(precision: 1)) count=\(notes.count) bytes=\(byteCount)"
+            )
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         // Fractional seconds, not plain `.iso8601`.
         //
         // `.iso8601` formats to whole seconds, so a Date lost up to 1s on every
         // save/load cycle. Notes are ordered by `modified`, and two notes touched
-        // within the same second would compare equal after a reload — making the
+        // within the same second would compare equal after a reload - making the
         // list order arbitrary across launches. A round-trip test caught this.
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
@@ -498,14 +545,15 @@ final class NoteStore: ObservableObject {
             print("⚠️ Failed to encode notes; keeping the previous file")
             return
         }
+        byteCount = data.count
         // Keep the previous version before overwriting it.
         //
         // Atomic writes stop a *torn* file, and moving an unreadable file aside on load stops the
-        // next save overwriting it — but neither helps against a write that succeeds and is wrong:
+        // next save overwriting it - but neither helps against a write that succeeds and is wrong:
         // a bug that empties `notes`, or an editor commit that lands stale text over a dictation.
         // Notes are the only thing in Utter that cannot be recreated from anything else, so one
         // generation back is kept beside them. `notes.previous.json` is a plain copy, readable by
-        // hand, which is the whole point — recovery must not need the app that broke it.
+        // hand, which is the whole point - recovery must not need the app that broke it.
         //
         // Only replaced when there is something to replace it with, and only when the new data
         // differs, so a run of no-op saves cannot roll the good copy off the end.
@@ -522,6 +570,7 @@ final class NoteStore: ObservableObject {
     }
 
     private func load() {
+        guard !SnapshotPreviewMode.isActive else { return }
         guard let data = try? Data(contentsOf: notesURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in

@@ -5,12 +5,12 @@ import AppKit
 ///
 /// Three parts, in the order a user needs them: turn it on, size it, then choose who it
 /// is. The character grid previews live characters rather than listing names, for the
-/// same reason `ThemeSwatchGrid` does — the choice is a visual one, so a list of
+/// same reason `ThemeSwatchGrid` does - the choice is a visual one, so a list of
 /// words is the one representation that shows nothing about it.
 struct CompanionCustomizeView: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var packStore = SpritePackStore.shared
-    /// Live Accessibility state. The typing reactions are inert without it — see the row below.
+    /// Live Accessibility state. The typing reactions are inert without it - see the row below.
     @ObservedObject private var readiness = ReadinessMonitor.shared
 
     var body: some View {
@@ -29,7 +29,7 @@ struct CompanionCustomizeView: View {
                         Text("Size").typo(.body)
                         // A segmented control rather than a slider: `CompanionSize` is a
                         // ladder of four (its own doc says why), and this is the control
-                        // the app already uses for a short, ordered set — the HIG's test
+                        // the app already uses for a short, ordered set - the HIG's test
                         // for a pop-up is more than about five options.
                         GlassSegmentedControl(
                             options: CompanionSize.allCases,
@@ -37,7 +37,7 @@ struct CompanionCustomizeView: View {
                             selection: $userData.companionSize
                         )
                         // The control is a real `Picker(.segmented)` now, and a Picker with
-                        // `labelsHidden()` names its segments but not the group — so VoiceOver
+                        // `labelsHidden()` names its segments but not the group - so VoiceOver
                         // announced four sizes with nothing saying what they sized. The "Size"
                         // Text above is the label visually but not semantically; this makes it
                         // both. `.contain` rather than `.combine` so each segment stays its own
@@ -49,7 +49,7 @@ struct CompanionCustomizeView: View {
                             // The frames are decoded at the size they are drawn at, so a
                             // size change makes every loaded frame the wrong resolution:
                             // without this the character is upscaled from a smaller
-                            // bitmap and visibly soft. Not `force` — `reload` compares
+                            // bitmap and visibly soft. Not `force` - `reload` compares
                             // the size it last decoded for, so this is a no-op for every
                             // other reason it is called.
                             packStore.reload()
@@ -83,7 +83,7 @@ struct CompanionCustomizeView: View {
                         // your typing" is the kind of sentence a reasonable person reads as
                         // "reads what I type". It does not: the character counts keystrokes
                         // and never sees which keys they were.
-                        description: "The character watches the pointer, kneads its paws while you type, gets flustered if you type very fast, and purrs when you stroke it. Only the number of keystrokes is counted — never which keys — and nothing leaves your Mac.",
+                        description: "The character watches the pointer, kneads its paws while you type, gets flustered if you type very fast, and purrs when you stroke it. Only the number of keystrokes is counted - never which keys - and nothing leaves your Mac.",
                         isOn: $userData.companionPetBehaviours
                     )
                     .onChange(of: userData.companionPetBehaviours) { _ in userData.save() }
@@ -109,8 +109,8 @@ struct CompanionCustomizeView: View {
                         }
 
                         // Live, not a static sentence. Without Accessibility the global key
-                        // monitor is COMPLETELY inert — macOS returns a valid token and then
-                        // never calls the handler — so the character silently never kneads and
+                        // monitor is COMPLETELY inert - macOS returns a valid token and then
+                        // never calls the handler - so the character silently never kneads and
                         // there is nothing on screen to explain why. That is the single most
                         // confusing failure this feature has, and it is invisible until said
                         // out loud.
@@ -171,14 +171,14 @@ struct CompanionCustomizeView: View {
                         onChange: { userData.save() }
                     )
                     MinuteRow(
-                        title: "Pomodoro — focus",
+                        title: "Pomodoro - focus",
                         description: "Set to 0 to turn the timer off. The character tells you at each switch.",
                         minutes: $userData.companionPomodoroFocusMinutes,
                         onChange: { userData.save() }
                     )
                     if userData.companionPomodoroFocusMinutes > 0 {
                         MinuteRow(
-                            title: "Pomodoro — break",
+                            title: "Pomodoro - break",
                             description: nil,
                             minutes: $userData.companionPomodoroBreakMinutes,
                             onChange: { userData.save() }
@@ -192,7 +192,7 @@ struct CompanionCustomizeView: View {
                             text: $userData.companionPinnedMessage
                         )
                         .onChange(of: userData.companionPinnedMessage) { _ in userData.save() }
-                        Text("Shown until you clear it. Keep it short — it sits in a single line beside a small character.")
+                        Text("Shown until you clear it. Keep it short - it sits in a single line beside a small character.")
                             .typo(.caption)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -285,7 +285,7 @@ struct CompanionCustomizeView: View {
                 if packStore.packs.isEmpty {
                     // Not an empty picker. Every character is a sprite pack now, so
                     // with none installed the companion cannot be shown at all,
-                    // whatever the toggle says — and this pane is the only place the
+                    // whatever the toggle says - and this pane is the only place the
                     // user can find that out or fix it. Broken packs are named
                     // separately, below.
                     HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
@@ -363,7 +363,7 @@ struct CompanionCustomizeView: View {
         }
         .onAppear {
             packStore.reload()
-            // Correct a selection that names a pack which is not there — a folder the
+            // Correct a selection that names a pack which is not there - a folder the
             // user deleted, or one of the code-drawn characters Utter used to ship.
             // Done here as well as when the companion first appears, because this pane
             // can be opened before the companion has ever been switched on, and the
@@ -376,7 +376,7 @@ struct CompanionCustomizeView: View {
                 userData.save()
             }
             // Without this the Accessibility row above shows whatever `axGranted` last
-            // happened to be — which at launch is `false` — so a user who HAS granted it
+            // happened to be - which at launch is `false` - so a user who HAS granted it
             // would be told their typing reactions are broken. Polling is reference-counted,
             // so starting it here is safe alongside the other panes that do.
             readiness.startPolling()
@@ -394,10 +394,10 @@ struct CompanionCustomizeView: View {
     ///
     /// The sizes are interpolated from the renderer's own numbers rather than typed
     /// in. This text said "shows at 28pt" after `characterSize` had been raised to
-    /// 44 — advice for the wrong target, in the one place a pack author looks for it.
+    /// 44 - advice for the wrong target, in the one place a pack author looks for it.
     ///
     /// Computed rather than a `static let` for the same reason: the size is a preference
-    /// now, so a value captured once would be stale the moment it changed — and this view
+    /// now, so a value captured once would be stale the moment it changed - and this view
     /// observes `userData`, so it re-reads.
     private var formatHelp: String {
         let characterSize = userData.companionSize.points
@@ -418,7 +418,7 @@ struct CompanionCustomizeView: View {
     Draw each frame centred on transparency. The character shows at
     \(Int(characterSize))pt at this size, so frames are kept at up to \
     \(Int(SpritePackStore.maxFrameSide(for: characterSize)))px on their
-    longest edge and anything larger is scaled down on load — it would
+    longest edge and anything larger is scaled down on load - it would
     cost memory and change nothing on screen. Draw for the largest size
     you might pick: at Huge that bound is \
     \(Int(SpritePackStore.maxFrameSide(for: CompanionSize.huge.points)))px.
@@ -549,7 +549,7 @@ private struct MinuteRow: View {
                 Text(minutes == 0 ? "Off" : "\(minutes) min")
                     .typo(.caption)
                     // Monospaced digits so the row does not shift as the number changes
-                    // width — 5 to 10 minutes is a one-character jump that reads as a jolt.
+                    // width - 5 to 10 minutes is a one-character jump that reads as a jolt.
                     .monospacedDigit()
                     .foregroundStyle(minutes == 0 ? Ink.secondary : Ink.primary)
                 Stepper(title, value: $minutes, in: 0...480, step: 5)
@@ -595,15 +595,15 @@ private struct GoalRow: View {
 private struct CompanionCharacterGrid: View {
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var packStore = SpritePackStore.shared
-    /// Live Accessibility state. The typing reactions are inert without it — see the row below.
+    /// Live Accessibility state. The typing reactions are inert without it - see the row below.
     @ObservedObject private var readiness = ReadinessMonitor.shared
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
         // No `GlassCluster` around the grid.
         //
-        // `CharacterTile` draws a `Surface.fillSubtle` rectangle and a stroke — see its
-        // body below — so there was no `glassEffect` anywhere in this subtree for a
+        // `CharacterTile` draws a `Surface.fillSubtle` rectangle and a stroke - see its
+        // body below - so there was no `glassEffect` anywhere in this subtree for a
         // `GlassEffectContainer` to batch into one pass.
         LazyVGrid(
             columns: Array(

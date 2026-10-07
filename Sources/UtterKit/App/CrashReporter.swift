@@ -4,11 +4,11 @@ import Foundation
 /// `~/Library/Application Support/Utter/crashes/`.
 ///
 /// The signal path is deliberately austere. A signal handler may only call
-/// async-signal-safe functions — essentially `write(2)`, `_exit(2)`, and
+/// async-signal-safe functions - essentially `write(2)`, `_exit(2)`, and
 /// `signal(2)`. `DateFormatter`, string interpolation, `Thread.callStackSymbols`
 /// and `String.write(to:)` all allocate or take locks, so calling them from a
 /// handler risks deadlocking against the very heap that just crashed, or
-/// re-crashing inside the reporter. Either way no report is written — precisely
+/// re-crashing inside the reporter. Either way no report is written - precisely
 /// when one is most wanted.
 ///
 /// So the two paths differ on purpose:
@@ -19,8 +19,8 @@ import Foundation
 ///     the signal name and the app version and nothing that needs to allocate.
 ///
 /// The handler also re-raises rather than calling `exit()`. `exit()` runs atexit
-/// handlers and C++ static destructors — which is how a clean quit was previously
-/// turned into a SIGABRT inside ggml's Metal teardown — and it sets an exit code
+/// handlers and C++ static destructors - which is how a clean quit was previously
+/// turned into a SIGABRT inside ggml's Metal teardown - and it sets an exit code
 /// instead of dying from the signal, so the OS never files its own `.ips` report.
 /// Re-raising with the default disposition preserves the real crash for the system
 /// crash reporter, which has symbolication this never will.
@@ -40,7 +40,7 @@ final class CrashReporter {
     ///
     /// The handler cannot build a filename: formatting a timestamp allocates. The
     /// original design wrote one fixed name with `O_TRUNC`, which meant every
-    /// signal crash overwrote the previous one — so `pruneOldLogs`, which keeps ten
+    /// signal crash overwrote the previous one - so `pruneOldLogs`, which keeps ten
     /// logs, only ever had one signal log to keep, and a second crash erased the
     /// evidence of the first.
     ///
@@ -59,17 +59,18 @@ final class CrashReporter {
     ///
     /// The `url` is part of the result because the Diagnostics pane reveals the
     /// file in Finder, and rebuilding the path at the call site would duplicate
-    /// `crashDir` — the one place that knows where these live.
+    /// `crashDir` - the one place that knows where these live.
     ///
     /// Dated by *modification* time, not creation time. The signal handler cannot
     /// format a timestamp into a filename without allocating, so it reuses one of
-    /// the pre-rendered `crash-signal-NN.log` slots with `O_TRUNC` — and once the
+    /// the pre-rendered `crash-signal-NN.log` slots with `O_TRUNC` - and once the
     /// pool is full it truncates slot 0 again. A reused slot keeps the creation date
     /// of the crash that first claimed it while its contents are from the most
     /// recent one, so creation date would put a months-old date on a crash that
     /// happened minutes ago. This also matches `detectPreviousCrash` and
     /// `pruneOldLogs`, which already use mtime.
     var crashLogs: [(url: URL, date: Date, content: String)] {
+        guard !SnapshotPreviewMode.isActive else { return [] }
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(
             at: crashDir, includingPropertiesForKeys: [.contentModificationDateKey]
@@ -92,9 +93,19 @@ final class CrashReporter {
     ///
     /// Exposed rather than merely printed: `print` goes to stdout, which nobody
     /// sees in a packaged app, so the old detection was dead code.
-    private(set) var previousRunCrashed = false
+    var previousRunCrashed: Bool {
+        get {
+            guard !SnapshotPreviewMode.isActive else { return false }
+            return _previousRunCrashed
+        }
+        set {
+            _previousRunCrashed = newValue
+        }
+    }
+    private var _previousRunCrashed = false
 
     func install() {
+        guard !SnapshotPreviewMode.isActive else { return }
         prepareSignalState()
 
         NSSetUncaughtExceptionHandler { exception in
@@ -151,7 +162,7 @@ final class CrashReporter {
         //
         // Swift initialises static storage on first access, through `swift_once`.
         // Nothing else touches `handling`, so the very first access would otherwise
-        // be the signal handler's own `if CrashReporter.handling != 0` — running
+        // be the signal handler's own `if CrashReporter.handling != 0` - running
         // `swift_once` (a `dispatch_once` underneath) inside a signal context, which
         // is not on the async-signal-safe list. Writing it once from ordinary code
         // completes the token, after which every handler access is a plain load.
@@ -172,7 +183,7 @@ final class CrashReporter {
 
     /// Write a minimal crash note using only `open`/`write`/`close`.
     ///
-    /// Fixed strings and pre-rendered bytes only — no allocation, no formatting,
+    /// Fixed strings and pre-rendered bytes only - no allocation, no formatting,
     /// no Foundation. Timestamping is left to the file's mtime, which the OS
     /// records for free.
     private static func writeSignalNote(_ sig: Int32) {
@@ -207,7 +218,7 @@ final class CrashReporter {
         put("\n\nStack (innermost first):\n")
 
         // `backtrace` walks the stack into a caller-supplied buffer and
-        // `backtrace_symbols_fd` writes straight to the descriptor — neither
+        // `backtrace_symbols_fd` writes straight to the descriptor - neither
         // allocates, so both are safe here. (`backtrace_symbols`, the more obvious
         // choice, mallocs an array of strings and must not be used in a handler.)
         //
@@ -232,7 +243,7 @@ final class CrashReporter {
     ///
     /// `StaticString`, not `String`: the literals live in the binary and `put`
     /// writes their bytes directly. Returning a `String` and taking `Array(_.utf8)`
-    /// would allocate — the exact thing a signal handler must not do.
+    /// would allocate - the exact thing a signal handler must not do.
     ///
     /// The previous version interpolated the *number* into `"SIG\(n)"`, so a
     /// SIGABRT was recorded as "SIG6", which is not a signal name at all.

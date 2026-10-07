@@ -9,7 +9,7 @@ import Foundation
 /// Caching it fixed the scroll stutter and introduced the classic hazard of any cache:
 /// a key that does not cover everything the value depends on. Two things it depends on:
 ///
-///   * **`entries`** — covered by `entries.didSet`.
+///   * **`entries`** - covered by `entries.didSet`.
 ///   * **the current date**, because `dateLabel` returns TODAY / YESTERDAY / a weekday.
 ///     Not covered at first, so a window left open across midnight kept yesterday's
 ///     dictations under a "TODAY" heading until the next mutation. That is what
@@ -36,7 +36,7 @@ struct HistoryGroupingTests {
         #expect(history.groupedByDate.count == 1)
         #expect(history.groupedByDate.first?.entries.count == 1)
 
-        // A second day, so the group *count* changes and not merely the contents —
+        // A second day, so the group *count* changes and not merely the contents  - 
         // a stale cache would still report one group.
         let threeDaysAgo = today.addingTimeInterval(-3 * 86_400)
         history.entries = [
@@ -50,7 +50,7 @@ struct HistoryGroupingTests {
     func inPlaceMutationInvalidatesTheCache() {
         // `delete(entry:)` and `load()` mutate through `removeAll`/`append` rather than
         // assigning a new array. Those go through the same setter, but only because
-        // Swift's exclusive-access rules turn them into get-modify-set — worth pinning,
+        // Swift's exclusive-access rules turn them into get-modify-set - worth pinning,
         // since a future switch to a non-`@Published` storage could silently break it.
         let history = TranscriptionHistory()
         let now = Date()
@@ -73,7 +73,7 @@ struct HistoryGroupingTests {
 
         history.entries = [
             TranscriptionEntry(text: "noon", timestamp: noon),
-            // Same calendar day, eight hours earlier — one group, not two.
+            // Same calendar day, eight hours earlier - one group, not two.
             TranscriptionEntry(text: "morning", timestamp: noon.addingTimeInterval(-8 * 3_600)),
             TranscriptionEntry(text: "last week", timestamp: noon.addingTimeInterval(-9 * 86_400)),
         ]
@@ -107,7 +107,7 @@ struct HistoryGroupingTests {
     func midnightDoesNotExpireInstantly() {
         // The boundary case. If `nextMidnight` returned the start of the same day, the
         // cache would be born already expired at 00:00:00 and rebuild on every single
-        // read for that instant — reintroducing the stutter the cache exists to remove.
+        // read for that instant - reintroducing the stutter the cache exists to remove.
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
         let midnight = cal.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
@@ -121,8 +121,8 @@ struct HistoryGroupingTests {
     func springForwardDayIsTwentyThreeHours() {
         // Why the expiry is derived from the calendar instead of `+86_400`. On
         // 2023-03-12 in Los Angeles the clocks go forward at 02:00, so that local day is
-        // 23 hours long. A fixed-seconds deadline would keep the cache — and its "TODAY"
-        // labels — alive for an hour into the next day, which is precisely the window
+        // 23 hours long. A fixed-seconds deadline would keep the cache - and its "TODAY"
+        // labels - alive for an hour into the next day, which is precisely the window
         // where the label is wrong.
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
@@ -140,7 +140,7 @@ struct HistoryGroupingTests {
     @Test("A long DST day expires after 25 hours, so the cache is not cut short")
     func fallBackDayIsTwentyFiveHours() {
         // The mirror image: 2023-11-05 in Los Angeles is 25 hours long. `+86_400` would
-        // expire the cache an hour *early* — harmless for correctness but it would
+        // expire the cache an hour *early* - harmless for correctness but it would
         // rebuild the groups for no reason, which is the cost the cache exists to avoid.
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!

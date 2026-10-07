@@ -4,7 +4,7 @@ import Testing
 /// Which of the three treatments a permission row gets.
 ///
 /// `PermRow` cannot be rendered on this machine, so what is pinned here is the rule it
-/// is built out of — and it is a rule that fails silently in both directions. Too eager
+/// is built out of - and it is a rule that fails silently in both directions. Too eager
 /// and a fresh install shows a warning and a call to action for a permission the user
 /// may never need, which is the bug this replaced. Too relaxed and Screen Recording
 /// reads as optional at the moment meeting capture actually needs it, which produces a
@@ -34,7 +34,7 @@ struct PermissionNeedTests {
                                                   meetingCaptureUnderway: false)
         #expect(need == .optional(reason: PermissionNeed.meetingsOnly))
         // The optional state is the only one that carries a supporting line, and it
-        // must carry one — it is what tells a sighted user this is not a problem, and
+        // must carry one - it is what tells a sighted user this is not a problem, and
         // the row would otherwise be distinguishable from `.required` by the dot's
         // colour alone.
         #expect(need.reason != nil)
@@ -83,7 +83,7 @@ struct PermissionNeedTests {
     func eachStateIsSpokenDistinctly() {
         // The requirement this exists for: the three states must not be told apart
         // only by the dot. VoiceOver never sees the dot, so if two of these strings
-        // matched, two states would be indistinguishable to a screen reader — and
+        // matched, two states would be indistinguishable to a screen reader - and
         // `optional` vs `required` is the pair that matters, since one is "you have
         // nothing to do" and the other is "this feature will not work".
         let spoken = [
@@ -92,7 +92,7 @@ struct PermissionNeedTests {
             PermissionNeed.optional(reason: PermissionNeed.meetingsOnly).spoken,
         ]
         #expect(Set(spoken).count == spoken.count)
-        // The reason is spoken, not just drawn — it is hidden from VoiceOver as its own
+        // The reason is spoken, not just drawn - it is hidden from VoiceOver as its own
         // element precisely because it is folded in here, so losing it would lose it
         // outright.
         #expect(PermissionNeed.optional(reason: PermissionNeed.meetingsOnly).spoken

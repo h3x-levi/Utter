@@ -3,14 +3,14 @@ import SwiftUI
 import CoreGraphics
 @testable import UtterKit
 
-/// `PillShellShape` — the pill's silhouette with the hands-free bead extruded out of it.
+/// `PillShellShape` - the pill's silhouette with the hands-free bead extruded out of it.
 ///
 /// A shape cannot be looked at on this machine, but almost everything that can be *wrong* with
 /// this one is arithmetic on a `CGPath`, and the two defects that matter most are both invisible
 /// to the kind of check that only reads a bounding box:
 ///
 ///   * **How many outlines it has.** `strokeBorder` is `inset(by:).stroke(...)`, and `stroke`
-///     strokes every subpath — so a shape assembled as rounded-rect + circle + neck-patch inks
+///     strokes every subpath - so a shape assembled as rounded-rect + circle + neck-patch inks
 ///     the capsule's buried trailing arc, the lobe's buried arc and both neck chords as well.
 ///     Five or six outlines where the fill shows one, which is worse than the two-outlined-objects
 ///     problem the whole design exists to delete. A bounding box is identical either way, which is
@@ -23,7 +23,7 @@ import CoreGraphics
 @Suite("Pill shell shape")
 struct PillShellShapeTests {
 
-    /// The rect the shell is drawn in — `shellWidthWithBead` wide, so the lobe has room.
+    /// The rect the shell is drawn in - `shellWidthWithBead` wide, so the lobe has room.
     private func rect(capsuleWidth: CGFloat,
                       height: CGFloat = PillMetrics.capsuleHeight) -> CGRect {
         CGRect(x: 0, y: 0,
@@ -39,7 +39,7 @@ struct PillShellShapeTests {
             .path(in: rect(capsuleWidth: capsuleWidth, height: height))
     }
 
-    /// How many separate contours the path has — one `moveTo` each.
+    /// How many separate contours the path has - one `moveTo` each.
     private func contourCount(_ path: Path) -> Int {
         var count = 0
         path.cgPath.applyWithBlock { element in
@@ -51,8 +51,8 @@ struct PillShellShapeTests {
     /// The spans of `x` where a 1pt stroke of `path` inks the horizontal line `y`.
     ///
     /// This is the constraint the design is judged on, measured the only way it can be: one
-    /// silhouette inks two spans on a line that crosses it — the leading edge and the trailing
-    /// edge — however complicated the shape between them is.
+    /// silhouette inks two spans on a line that crosses it - the leading edge and the trailing
+    /// edge - however complicated the shape between them is.
     private func inkedSpans(_ path: Path, y: CGFloat,
                             from x0: CGFloat, to x1: CGFloat,
                             step: CGFloat = 0.02) -> [ClosedRange<CGFloat>] {
@@ -77,7 +77,7 @@ struct PillShellShapeTests {
     func oneSilhouetteWhileJoined() {
         // The failure this pins, verbatim: a compound path made of a rounded rect, an ellipse and
         // a neck quad has the same bounding box and the same fill as this single contour, and
-        // stroking it draws six outlines — the capsule's trailing semicircle straight across the
+        // stroking it draws six outlines - the capsule's trailing semicircle straight across the
         // neck, the lobe's full circle including the arc buried in the capsule, and the neck's own
         // two chords. Measured on the centre line at extrusion 0.25: six spans against two.
         let width = PillMetrics.minimumCapsuleWidth
@@ -92,7 +92,7 @@ struct PillShellShapeTests {
             #expect(contourCount(shell) == 1,
                     "extrusion \(extrusion) is \(contourCount(shell)) contours, not one")
             // Two, except for the one frame where the neck is thinner than the pen drawing it and
-            // the ink closes across it — a third band, not a third outline. Measured: that happens
+            // the ink closes across it - a third band, not a third outline. Measured: that happens
             // at exactly extrusion 0.92, where the inset neck is 0.86pt against a 1pt line, and
             // nowhere else. It reads as the neck about to snap, which is what it is.
             #expect(spans.count == 2 || spans.count == 3,
@@ -147,7 +147,7 @@ struct PillShellShapeTests {
     func contourDoesNotCrossItself() {
         // A closed loop that never crosses itself fills identically under both rules. If the neck
         // arcs were traced in the wrong rotational sense they would cross, and the even-odd fill
-        // would punch a hole where the winding fill does not — which is also the state in which a
+        // would punch a hole where the winding fill does not - which is also the state in which a
         // stroke doubles back over itself.
         let width = PillMetrics.minimumCapsuleWidth
         let bounds = rect(capsuleWidth: width)
@@ -166,7 +166,7 @@ struct PillShellShapeTests {
                 x += 0.5
             }
             #expect(disagreements == 0,
-                    "extrusion \(extrusion): \(disagreements) points fill differently under winding and even-odd — the contour crosses itself")
+                    "extrusion \(extrusion): \(disagreements) points fill differently under winding and even-odd - the contour crosses itself")
         }
     }
 
@@ -190,7 +190,7 @@ struct PillShellShapeTests {
         // The invariant that caught a real bug while this shape was being written: three of the
         // four `clockwise:` combinations put a fillet centre outside the shell and blew the height
         // from 28pt to as much as 29.88pt, spilling the outline above the capsule's top edge. It
-        // matters beyond looks — `PillMetrics.capsuleCentreAboveBottom` is what
+        // matters beyond looks - `PillMetrics.capsuleCentreAboveBottom` is what
         // `CompanionWindow.placeBesidePill` puts the character on, and it is only true while the
         // shell stays in its band.
         var worstHeight: CGFloat = 0
@@ -234,7 +234,7 @@ struct PillShellShapeTests {
     func restingSilhouetteIsUnchanged() {
         // The pill spends most of its life here, so the change cannot be allowed to regress it.
         // Byte-identical rather than merely close: at extrusion 0 the bead is internally tangent
-        // to the capsule's end — 1 + 13 == 14 — so it contributes nothing and the shape
+        // to the capsule's end - 1 + 13 == 14 - so it contributes nothing and the shape
         // short-circuits.
         for (width, height) in [(PillMetrics.minimumCapsuleWidth, PillMetrics.capsuleHeight),
                                 (200 as CGFloat, PillMetrics.capsuleHeight),
@@ -251,7 +251,7 @@ struct PillShellShapeTests {
         // Hover the pill, then hit the note chord: a ~300ms extrusion collapse overlaps a 0.46s
         // height growth, so the shape is asked for a lobe on a 124pt-tall shell. The neck is
         // derived against a trailing end modelled as a semicircle of radius height/2, which
-        // `Path(roundedRect:)` only draws while the corner radius reaches that far — so at 124pt
+        // `Path(roundedRect:)` only draws while the corner radius reaches that far - so at 124pt
         // the arithmetic would be meaningless and it drew a tab at the card's mid-height right
         // edge. The guard is the derived condition, not a state comparison, so a future expanded
         // state inherits it.
@@ -274,7 +274,7 @@ struct PillShellShapeTests {
 
     @Test("inset(by:) is concentric and strictly interior, neck included")
     func insetStaysInside() {
-        // `strokeBorder` insets by half the line width, and the inner highlight insets again — so
+        // `strokeBorder` insets by half the line width, and the inner highlight insets again - so
         // the outer 1pt ring and the 0.8pt highlight are two insets of the same shape. If an
         // inward offset failed to *grow* the concave fillet radius, they would cross inside the
         // neck. Sampled along the inner contour rather than compared as boxes, because a box
@@ -291,7 +291,7 @@ struct PillShellShapeTests {
                 if !outer.contains(point, using: .winding) { outside += 1 }
             }
             #expect(outside == 0,
-                    "extrusion \(extrusion): \(outside) points of the inset contour fall outside the uninset fill — the strokes cross")
+                    "extrusion \(extrusion): \(outside) points of the inset contour fall outside the uninset fill - the strokes cross")
             // Concentric on all four sides, not merely smaller.
             let box = inner.boundingRect, hull = outer.boundingBoxOfPath
             #expect(abs((box.minX - hull.minX) - 0.5) < 0.001)
@@ -336,7 +336,7 @@ struct PillShellShapeTests {
     func neckIsBackLoaded() {
         // The cue that says surface tension rather than rigid extrusion. A real liquid bridge holds
         // its girth while the droplet pulls away and then necks down sharply, and here that comes
-        // free from the geometry of two separating circles — no second animation, no phase offset.
+        // free from the geometry of two separating circles - no second animation, no phase offset.
         //
         // Measured full widths at capsule width 56 (`2 * (h - fillet)`, the closed form):
         // 25.83pt at 0.2, 23.69 at 0.4, 19.49 at 0.6, 11.91 at 0.8, 4.52 at 0.9, 1.86 at 0.92.
@@ -382,7 +382,7 @@ struct PillShellShapeTests {
         let restingSeparation = (rA - rB) + PillMetrics.handsFreeButtonReach
         #expect(restingSeparation == 33)
         #expect(pinch < restingSeparation,
-                "the neck survives to rest — the bead would stay a permanent lobe")
+                "the neck survives to rest - the bead would stay a permanent lobe")
 
         // The closed form has to agree with the predicate the shape actually branches on, or the
         // documented pinch and the drawn one are two different numbers.
@@ -408,7 +408,7 @@ struct PillShellShapeTests {
                 "the resting pill's bead has to come off")
         #expect(separationAtRest(capsuleWidth: 240) > pinch)
         #expect(separationAtRest(capsuleWidth: 292) < pinch,
-                "a note-card-width capsule is expected to keep its lobe — see lobeCentreOffset")
+                "a note-card-width capsule is expected to keep its lobe - see lobeCentreOffset")
     }
 
     // MARK: The shell fits the panel it is drawn in
@@ -423,7 +423,7 @@ struct PillShellShapeTests {
         // The domain ends at the panel's own width, and that is not a convenience. The widest shell
         // the pill ever draws is the note card at `noteContentWidth + horizontalPadding * 2` = 292pt
         // (and the widest `.handsFree` row is ~277pt), and a capsule wider than 320pt cannot be
-        // drawn inside a 320pt panel at all — `PillWindow.drawnShellRect` clamps to
+        // drawn inside a 320pt panel at all - `PillWindow.drawnShellRect` clamps to
         // `content.bounds.width` for that reason, which `PillMorphTests` covers separately. At
         // exactly 320 the bead has nowhere left to go and the shell is the capsule.
         #expect(PillMetrics.noteContentWidth + PillMetrics.horizontalPadding * 2 == 292)
@@ -446,7 +446,7 @@ struct PillShellShapeTests {
     @Test("The lobe's two endpoints are the tuck and the resting button position")
     func lobeEndpointsAreTheOnesTheGlyphUses() {
         // One function places the lobe and positions the glyph, so this pins that its ends are the
-        // positions the glyph had before the shape existed — `tuckedX` and `restX`.
+        // positions the glyph had before the shape existed - `tuckedX` and `restX`.
         for width in stride(from: PillMetrics.minimumCapsuleWidth, through: 300, by: 3) {
             let tucked = PillMetrics.lobeCentreOffset(extrusion: 0, capsuleWidth: width)
             let rest = PillMetrics.lobeCentreOffset(extrusion: 1, capsuleWidth: width)

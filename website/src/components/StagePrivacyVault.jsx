@@ -26,7 +26,7 @@ export default function StagePrivacyVault() {
             <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
             <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
             <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-            <span className="text-xs text-white/50 ml-3">Terminal — Security Verification Audit</span>
+            <span className="text-xs text-white/50 ml-3">Terminal - Security Verification Audit</span>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
@@ -57,7 +57,7 @@ export default function StagePrivacyVault() {
             <div>
               <p className="text-white/40 mb-2 font-mono-sm"># Test if any open sockets belong to Utter</p>
               <p className="text-green-400 mb-4">$ lsof -i -P | grep -i utter</p>
-              <p className="text-white/60 italic mb-4"># Exit code 1 (no output — 0 network sockets open)</p>
+              <p className="text-white/60 italic mb-4"># Exit code 1 (no output - 0 network sockets open)</p>
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-center gap-3">
                 <CheckCircle2 size={18} className="shrink-0" />
                 <span>Audited: Utter process has zero active connections and zero listening ports.</span>

@@ -46,7 +46,7 @@ export default function StageDictationHUD() {
               <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
               <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
               <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
-              <span className="text-xs text-white/50 ml-3">TranscriptionService.swift — Xcode / Cursor</span>
+              <span className="text-xs text-white/50 ml-3">TranscriptionService.swift - Xcode / Cursor</span>
             </div>
             <button
               onClick={() => setIsDictating(!isDictating)}

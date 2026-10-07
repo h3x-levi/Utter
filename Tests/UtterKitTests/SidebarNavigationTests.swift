@@ -5,7 +5,7 @@ import Testing
 /// Pins what the sidebar's *navigation* has to satisfy now that its rows are a system
 /// `List(selection:).listStyle(.sidebar)`.
 ///
-/// This file used to be `SidebarLiftTests` and pinned `SidebarLift` — the ordering of two hand-drawn
+/// This file used to be `SidebarLiftTests` and pinned `SidebarLift` - the ordering of two hand-drawn
 /// white washes, `0 < hover < selected`, in both appearances. That enum is deleted, and the reason it
 /// went is worth keeping here rather than only in the source, because it is the more useful half of
 /// the lesson: **the test passed and the bug shipped anyway.** Composited over a backdrop *B*, a lift
@@ -17,7 +17,7 @@ import Testing
 /// proved about a colour is not the same as a property you can check by looking at one.
 ///
 /// AppKit owns hover, selection, the focus ring and keyboard traversal now, so there is nothing left
-/// here to pin about appearance — and nothing this suite could honestly claim about it either. What
+/// here to pin about appearance - and nothing this suite could honestly claim about it either. What
 /// *is* newly load-bearing is the data the list is built from, because two things that used to be
 /// cosmetic became structural when `SidebarItem` started acting as a selection tag:
 ///
@@ -33,7 +33,7 @@ struct SidebarNavigationTests {
 
     /// `--screen <name>` searches `SidebarItem.allCases`; the list draws `SidebarItem.primary`. If a
     /// case is added to the enum and not to `primary`, launching with `--screen` on it leaves the
-    /// window showing that screen with no row selected — and the selection binding is non-optional,
+    /// window showing that screen with no row selected - and the selection binding is non-optional,
     /// so there is no state in which the sidebar can honestly say "none of these".
     @Test("Every destination the launch flag can select is a row the sidebar draws")
     func primaryCoversAllCases() {

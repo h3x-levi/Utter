@@ -2,18 +2,18 @@ import SwiftUI
 
 // MARK: - Empty state
 
-/// The one empty-state treatment. No card, no border, no coloured icon —
+/// The one empty-state treatment. No card, no border, no coloured icon  - 
 /// an empty list should look intentional, not broken.
 ///
 /// `ContentUnavailableView` is macOS's own component for this, and it is what the
-/// system uses in Mail, Notes and Spotlight — so an empty Utter list now reads the
+/// system uses in Mail, Notes and Spotlight - so an empty Utter list now reads the
 /// way an empty list reads everywhere else on the machine, including the icon size,
 /// the title/description hierarchy and the vertical centring this view used to
 /// approximate with `Space.x12` of hand-set padding.
 ///
 /// It arrived in macOS 14.0 and this app's floor is 13.3 (`Package.swift`, set by
 /// the prebuilt whisper.cpp xcframework), so it is gated and the previous
-/// hand-built body is kept verbatim as the fallback rather than deleted — on 13.3
+/// hand-built body is kept verbatim as the fallback rather than deleted - on 13.3
 /// it is still the only implementation there is.
 struct EmptyStateView: View {
     let icon: String
@@ -38,7 +38,7 @@ struct EmptyStateView: View {
             }
             // No `.accessibilityElement(children: .combine)` on this branch, unlike
             // the fallback. Combining here would fold the action button into the
-            // description and take it out of VoiceOver's control order — the system
+            // description and take it out of VoiceOver's control order - the system
             // component already pairs its own label and description, so the manual
             // grouping is both unnecessary and harmful.
             .frame(maxWidth: .infinity)
@@ -70,7 +70,7 @@ struct EmptyStateView: View {
             if let actionLabel, let action {
                 // `GlassButton`, not a bare `Button`. This is used at eight sites and was the
                 // last system-default button left in the app, which made an empty state the one
-                // place a primary action looked like a different app's — the same drift already
+                // place a primary action looked like a different app's - the same drift already
                 // corrected in onboarding, the model chooser and Settings. `.regular` rather than
                 // the default `.large`: an empty state's action is an offer, not the screen's
                 // main event.
@@ -123,7 +123,7 @@ struct SectionHeader: View {
 /// This was the app's second implementation of that, and the hand-drawn one: a
 /// `.buttonStyle(.plain)` `Button` with `@State hovering`, an `.onHover` that ran
 /// `withAnimation` on every pointer crossing, and a `Surface.fillHover` rectangle
-/// behind the glyph. That fill *is* the user's report — 10% white on a near-white
+/// behind the glyph. That fill *is* the user's report - 10% white on a near-white
 /// tile measures **1.253:1**, and the 6% it replaced measured **1.142:1**
 /// (`Surface.fillHover`'s own note). Neither is a hover state anyone can see in a
 /// light theme, and no amount of tuning a hand-painted wash fixes that, because the
@@ -132,7 +132,7 @@ struct SectionHeader: View {
 ///
 /// So this now forwards to `GlassIconButton`, which is a real `Button` with an
 /// `Image` label, `#available(macOS 26.0, *)`-gated `.glass` over a `.bordered`
-/// fallback, `.help(label)` and `.accessibilityLabel(label)` — that is, everything
+/// fallback, `.help(label)` and `.accessibilityLabel(label)` - that is, everything
 /// this type was hand-rolling, already reviewed, already type-checked, and already
 /// the thing used for the identical job in `WordRow`, `SnippetRow` and
 /// `CustomCommandRow`. Keeping two divergent icon buttons was the actual defect;
@@ -157,7 +157,7 @@ struct IconButton: View {
 
 // MARK: - Status row
 
-/// Label + value with a state glyph. Colour never carries meaning alone — the
+/// Label + value with a state glyph. Colour never carries meaning alone - the
 /// value text always states the status too.
 ///
 /// `LabeledContent`, macOS's own label/value pairing, replaces the hand-built
@@ -166,7 +166,7 @@ struct IconButton: View {
 /// which is the part a `Spacer` could never express: two `Text`s in a stack are two
 /// unrelated strings that happen to sit on one line.
 ///
-/// Available macOS 13.0, under the 13.3 floor — no availability branch.
+/// Available macOS 13.0, under the 13.3 floor - no availability branch.
 ///
 /// **Why the 4.01:1 objection to `LabeledContent` recorded in `GlassControls`
 /// (`GlassToggle`) does not apply here.** That note is correct: the default style
@@ -174,7 +174,7 @@ struct IconButton: View {
 /// translucent tiles against a 4.5:1 floor. It bites when the text inherits its
 /// colour. Every string in this row goes through `typo(_:ink:)`, and that helper
 /// applies `.foregroundStyle(ink ?? style.ink)` unconditionally
-/// (`DesignTokens.swift:511`) — an explicit colour on every call, which wins over
+/// (`DesignTokens.swift:511`) - an explicit colour on every call, which wins over
 /// the style's restyle. So the measured inks survive. Any future row that puts bare
 /// `Text` inside a `LabeledContent` on a tile *would* hit 4.01:1.
 struct StatusRow: View {
@@ -192,7 +192,7 @@ struct StatusRow: View {
         ///
         /// The row's promise is that colour never carries meaning alone, and it kept
         /// that promise only through the value text. Three different shapes mean the
-        /// glyph itself stops depending on hue — which matters most for `.neutral`,
+        /// glyph itself stops depending on hue - which matters most for `.neutral`,
         /// whose `Ink.quaternary` is the dimmest ink in the app and was never going
         /// to clear the 3:1 floor a non-text indicator is held to.
         var symbol: String {
@@ -215,7 +215,7 @@ struct StatusRow: View {
         //
         // `.accessibilityElement(children: .combine)` used to be applied to the
         // whole row unconditionally, including the two rows that carry a "Grant"
-        // button — which folded that button into the combined element and took it
+        // button - which folded that button into the combined element and took it
         // out of VoiceOver's control order. On the Home screen those are the only
         // two controls that lead a blocked user to the permission they are missing.
         // Rows without an action keep the "Microphone: Allowed" phrasing; rows with
@@ -237,7 +237,7 @@ struct StatusRow: View {
                 if let actionLabel, let action {
                     // A real button, not text styled to look like one. This was a
                     // `.buttonStyle(.plain)` `Button` wearing `Tint.accentText`,
-                    // which gave it no bezel, no hover and no pressed state — the
+                    // which gave it no bezel, no hover and no pressed state - the
                     // "Grant" affordance on the app's landing screen was
                     // indistinguishable from the label beside it. `GlassButton`
                     // resolves to `.glass` on macOS 26 and `.bordered` below, both

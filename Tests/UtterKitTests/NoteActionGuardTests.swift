@@ -5,7 +5,7 @@ import Foundation
 /// The guard that stops a misbehaving model from destroying a note.
 ///
 /// `.cleanUp` and `.format` overwrite the note's body, and `NoteStore` keeps no undo
-/// history and no previous revision on disk — so if an implausible result is applied,
+/// history and no previous revision on disk - so if an implausible result is applied,
 /// the user's writing is gone. `isPlausibleReplacement` is the only thing between the
 /// model's output and that overwrite, which makes it the most safety-critical pure
 /// function here.
@@ -100,7 +100,7 @@ struct NoteActionGuardTests {
     func rejectsConversationalAnswer() {
         // The documented real-world failure: `SentencePolish` measured this exact
         // behaviour ("I'm sorry to hear that…" plus an explanation) in testing. Its
-        // length happens to be almost identical to the original — 95% — so a
+        // length happens to be almost identical to the original - 95% - so a
         // length-only check waves it straight through and the note becomes the
         // model's chit-chat.
         let chatty = """
@@ -120,8 +120,8 @@ struct NoteActionGuardTests {
 
     @Test("Inventing whole new sections is rejected even when the original is kept intact")
     func rejectsInventedSections() {
-        // The dangerous shape: the author's text is preserved verbatim — retention is
-        // 95%, so the word check is satisfied — and the model has appended "## Risks"
+        // The dangerous shape: the author's text is preserved verbatim - retention is
+        // 95%, so the word check is satisfied - and the model has appended "## Risks"
         // and "## Owner" containing claims the user never made. Only the growth bound
         // stops this, which is why `.format` caps at 1.60 rather than trusting
         // retention alone.
@@ -161,7 +161,7 @@ struct NoteActionGuardTests {
     @Test("An empty candidate and an empty original are both rejected")
     func rejectsEmptyInput() {
         for action in [NoteAction.cleanUp, .format] {
-            // An empty candidate would blank the note outright — the worst possible
+            // An empty candidate would blank the note outright - the worst possible
             // outcome, and the first thing the function guards.
             #expect(!NoteActionRunner.isPlausibleReplacement(
                 "", original: Self.dictated, action: action))
@@ -187,7 +187,7 @@ struct NoteActionGuardTests {
     @Test("An original with no words rejects any candidate, however short")
     func rejectsWordlessOriginal() {
         // An original with nothing in it has no words to retain, so no candidate can be
-        // judged faithful to it — approving here would let arbitrary text be written
+        // judged faithful to it - approving here would let arbitrary text be written
         // into a note the guard knows nothing about.
         //
         // The candidates are deliberately *shorter* than the originals. A long
@@ -213,7 +213,7 @@ struct NoteActionGuardTests {
 
     @Test("The same words in reversed order are rejected, so the check is not bag-of-words")
     func rejectsReorderedWords() {
-        // Identical vocabulary, identical length, every word present — and meaning
+        // Identical vocabulary, identical length, every word present - and meaning
         // destroyed. A set- or multiset-based comparison scores this 100% and applies
         // it. The in-order walk scores it 5%.
         let reversed = Self.dictated
@@ -234,7 +234,7 @@ struct NoteActionGuardTests {
 
     @Test("Heavy Markdown scaffolding passes format's growth bound but not clean-up's")
     func growthBoundDiffersByAction() {
-        // Every word is the author's, in order (95% retention) — the extra characters
+        // Every word is the author's, in order (95% retention) - the extra characters
         // are purely headings, bullet markers and blank lines. At 134% of the original
         // it sits in the gap between `.cleanUp`'s 1.30 ceiling and `.format`'s 1.60.
         //

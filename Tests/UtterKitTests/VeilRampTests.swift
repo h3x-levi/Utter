@@ -6,7 +6,7 @@ import Testing
 /// These are constants, so the thing worth pinning is not a value but the
 /// *ordering* between them, which is load-bearing and has been got wrong once
 /// already: the bento tiles were a neutral `.regularMaterial` that landed one unit
-/// from the sidebar, and the nesting hierarchy read backwards — a tile looked like
+/// from the sidebar, and the nesting hierarchy read backwards - a tile looked like
 /// it was behind the card it sat on. The fix was to raise the tile's veil, and
 /// nothing but a comment stops the next retune from inverting it again.
 ///
@@ -14,7 +14,7 @@ import Testing
 @Suite("Veil translucency ramp")
 struct VeilRampTests {
 
-    /// The three roles, outermost first — the order a user's eye goes through them.
+    /// The three roles, outermost first - the order a user's eye goes through them.
     private static func ramp(isDark: Bool) -> [(name: String, opacity: Double)] {
         [("windowShell", Veil.windowShell(isDark: isDark)),
          ("contentSurface", Veil.contentSurface(isDark: isDark)),
@@ -26,13 +26,13 @@ struct VeilRampTests {
         let ramp = Self.ramp(isDark: false)
         for (outer, inner) in zip(ramp, ramp.dropFirst()) {
             #expect(outer.opacity < inner.opacity,
-                    "\(inner.name) must be more opaque than \(outer.name) — equal or thinner and the nesting reads backwards")
+                    "\(inner.name) must be more opaque than \(outer.name) - equal or thinner and the nesting reads backwards")
         }
     }
 
     @Test("The innermost surface is the most opaque in both appearances")
     func nestedIsAlwaysHeaviest() {
-        // Dark mode is not the light ramp inverted — there is far less luminance
+        // Dark mode is not the light ramp inverted - there is far less luminance
         // behind the window, so the shell can be thinner than the content card and
         // still separate (0.55 shell vs 0.45 content). The one relationship that
         // has to survive in both is the innermost surface being the most opaque,
@@ -64,7 +64,7 @@ struct VeilRampTests {
     @Test("The three roles are genuinely different recipes")
     func rolesDoNotCollide() {
         // The defect this enum replaced was seven hand-written recipes where two
-        // pairs differed by 0.02-0.04 — a difference nobody could name, and one of
+        // pairs differed by 0.02-0.04 - a difference nobody could name, and one of
         // them made Settings read cooler than the window that opened it. If two
         // roles ever tune to the same number they are one role, and the answer is
         // to delete a case rather than keep a synonym.

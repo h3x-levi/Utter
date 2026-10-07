@@ -46,7 +46,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     var statusItem: NSStatusItem!
     var pillWindow: PillWindow!
     /// The desktop companion. Created lazily the first time it is switched on, so a
-    /// user who never enables it pays nothing — no panel, no ticker, no sprite scan.
+    /// user who never enables it pays nothing - no panel, no ticker, no sprite scan.
     var companionWindow: CompanionWindow?
     var mainWindow: NSWindow?
     var audioRecorder: AudioRecorder!
@@ -54,14 +54,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     var keyMonitor: KeyMonitor!
 
     /// Meeting capture. Owned here because it needs the app's single
-    /// `AudioRecorder` and `TranscriptionService` — a view cannot construct those
+    /// `AudioRecorder` and `TranscriptionService` - a view cannot construct those
     /// without opening a second microphone tap on the same device.
     /// Lazy because `MeetingSession` is `@MainActor` and stored-property
     /// initialisers run in a nonisolated context; first access is from the UI.
     @MainActor lazy var meetingSession = MeetingSession()
 
     /// Notices when you are in a call, so Utter can offer to transcribe it. Only running while
-    /// `UserData.offerToTranscribeCalls` is on — see `applyCallWatch`.
+    /// `UserData.offerToTranscribeCalls` is on - see `applyCallWatch`.
     @MainActor lazy var callDetector = CallDetector()
 
     /// The offer card above the pill. Non-nil only while it is on screen.
@@ -69,6 +69,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.current = self
+
+        // Preview generation is a rendering-only tool. Isolate all data stores in memory
+        // and keep it ahead of notification restoration, crash reporting, credential
+        // migration, and audio/model service startup.
+        if CommandLine.arguments.contains("--render-snapshots") {
+            SnapshotPreviewMode.enable()
+            NSApp.setActivationPolicy(.accessory)
+            ConfigManager.shared.load()
+            ThemeManager.shared.applyAppearance()
+            SnapshotRenderer.renderAll()
+            exit(0)
+        }
+
         NSApp.setActivationPolicy(.accessory)
         UNUserNotificationCenter.current().delegate = self
         CompanionNotificationScheduler.shared.registerCategory()
@@ -96,22 +109,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Build the history store now, off the window-open path.
         //
         // `showMainWindow` constructs `FlowContent()` synchronously, and `FlowContent` carries
-        // `@ObservedObject private var history = TranscriptionHistory.shared` — a *property
+        // `@ObservedObject private var history = TranscriptionHistory.shared` - a *property
         // initialiser*, so the singleton is created at `FlowContent()`, before the window exists.
         // Its `init` reads history.json and streak.json and parses every entry.
         //
         // Measured, on a verbatim replica of `TranscriptionHistory.load()` against synthetic
         // files: 2.8 ms at 50 entries, 8.8 ms at 250, **33.8 ms at the 1000 entries `saveHistory`
         // caps at**, and 50.8 ms if those entries are long. Roughly 27 of those 34 ms are
-        // per-entry work — `ISO8601DateFormatter.date(from:)` measured 21.7 us a call, and
-        // `TranscriptionEntry.init`'s `text.split(separator: " ")` 5.6 us — so it scales with the
+        // per-entry work - `ISO8601DateFormatter.date(from:)` measured 21.7 us a call, and
+        // `TranscriptionEntry.init`'s `text.split(separator: " ")` 5.6 us - so it scales with the
         // user's history and is worst for the users who have most of it. All of it landed between
         // the hotkey and the window appearing, once per launch.
         //
         // Deferred a runloop turn rather than run inline, so it is not on the launch path either:
         // the store is only needed when a window opens, and the pill has to come up first.
         // `--open-window` (below) still pays it inline, since that opens a window in this same
-        // call — a dev flag, and no worse than before.
+        // call - a dev flag, and no worse than before.
         DispatchQueue.main.async {
             let history = TranscriptionHistory.shared
             _ = UserData.shared.syncCompanionLifetimeWords(history.totalWords)
@@ -194,11 +207,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // reachable from `open -a Utter --args --open-window`, which is the only
         // way to inspect the window when Accessibility is switched off (the
         // hotkey and the status-item menu both need it).
-        if CommandLine.arguments.contains("--render-snapshots") {
-            SnapshotRenderer.renderAll()
-            exit(0)
-        }
-
         if CommandLine.arguments.contains("--open-window") {
             showMainWindow()
         }
@@ -236,10 +244,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Onboarding gets the same translucent backing and theming as every other
-        // window. It starts with Login if unauthenticated, then transitions to Onboarding.
+        // Onboarding is the first-run product flow; Utter has no account step.
         let hosting = NSHostingView(rootView: ThemedRoot {
-            FirstRunFlowView(onFinish: { [weak self] skipped in
+            OnboardingView(onFinish: { [weak self] skipped in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
                 self?.applyDockVisibility()
@@ -249,7 +256,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             })
         })
         // Never let the hosting view size the window. `OnboardingView` is flexible
-        // now — it has to be, to resize — and an NSHostingView that publishes an
+        // now - it has to be, to resize - and an NSHostingView that publishes an
         // intrinsic size drives the window's dimensions instead of the reverse,
         // which is the collapse documented in `showMainWindow`.
         if #available(macOS 13.0, *) { hosting.sizingOptions = [] }
@@ -279,7 +286,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Resizable with a floor, rather than the previous fixed 620x600: the
         // tallest step still fits at this height, and below it the step content
         // scrolls (see the GeometryReader in `OnboardingView`) instead of pushing
-        // the nav row off the bottom edge. No frame autosave — this window is shown
+        // the nav row off the bottom edge. No frame autosave - this window is shown
         // once, on first run, so there is no size worth remembering and no chance
         // for a stale tiny frame to greet a new user.
         window.contentMinSize = NSSize(width: Layout.onboardingMinWidth,
@@ -292,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         //
         // Onboarding sends the user out to System Settings at the microphone,
         // accessibility and screen-recording steps, and an accessory app has no Dock
-        // icon and no Cmd-Tab entry to come back through — and unlike the main window,
+        // icon and no Cmd-Tab entry to come back through - and unlike the main window,
         // Settings and What's New, no menu-bar item reopens it. The Dock icon is the
         // way back to a flow the user is in the middle of. `onFinish` hands the policy
         // back to the preference.
@@ -310,15 +317,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// Without this, whisper's Metal device was destroyed by a C++ static
     /// destructor during process teardown and aborted, so every normal quit was
-    /// logged as a SIGABRT crash. Freeing it here — while the runtime is still
-    /// fully alive — makes the shutdown ordinary.
+    /// logged as a SIGABRT crash. Freeing it here - while the runtime is still
+    /// fully alive - makes the shutdown ordinary.
     func applicationWillTerminate(_ notification: Notification) {
         // A meeting in progress holds un-transcribed audio. Nothing can be done
         // about that window at quit time, but everything already transcribed is in
         // the note and the flush below persists it.
         // Notes save on a 1s debounce, so a quit within that window would drop the
-        // last edit. Flush before anything else — this is the user's own writing.
+        // last edit. Queue the latest snapshot and wait for the serial writer to drain.
         NoteStore.shared.writeToDisk()
+        NoteStore.shared.flushPendingWrites()
+        TranscriptionHistory.shared.flushPendingWrites()
         transcriptionService.localProvider?.shutdown()
     }
 
@@ -330,7 +339,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // The app's own mark, as a template image.
             //
             // `isTemplate = true` is what makes it adapt: macOS then ignores the
-            // file's colour and tints the alpha channel itself — black on a light
+            // file's colour and tints the alpha channel itself - black on a light
             // menu bar, white on a dark one, and highlighted while the menu is
             // open. A non-template image would render as a fixed-colour slab in
             // one of the two appearances.
@@ -362,7 +371,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         hintItem.tag = MenuHintTag.hotkey
         menu.addItem(hintItem)
 
-        // Hands-free, spelled whichever way will actually fire — see
+        // Hands-free, spelled whichever way will actually fire - see
         // `handsFreeHintTitle`. Both spellings name the hotkey or the chord from the
         // values `KeyMonitor` matches on, so this line cannot get out of step with it.
         let handsFreeHint = NSMenuItem(title: handsFreeHintTitle, action: nil, keyEquivalent: "")
@@ -394,7 +403,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         menu.addItem(NSMenuItem.separator())
         // Setup, reachable again. Onboarding is where microphone, Accessibility, Screen
         // Recording and the model choice are all explained in one place, and it was
-        // presented exactly once, on first launch — a user who pressed Skip, or who
+        // presented exactly once, on first launch - a user who pressed Skip, or who
         // denied a permission and wanted the walkthrough back, had no route to it short
         // of deleting a UserDefaults key. Every other window in this menu is reopenable;
         // this was the one that was not.
@@ -454,8 +463,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // `HStack { sidebar; content }` with a hand-written `glassEffect` on the sidebar column and
         // 30pt of padding standing in for a titlebar. The reason for the change is that macOS only
         // attaches automatic Liquid Glass, automatic scroll-edge treatment and automatic
-        // accessibility adaptation to chrome *structures* — a titlebar, an `NSToolbar`, an
-        // `NSSplitViewItem` sidebar — and an `HStack` is not one, so that layout could not inherit
+        // accessibility adaptation to chrome *structures* - a titlebar, an `NSToolbar`, an
+        // `NSSplitViewItem` sidebar - and an `HStack` is not one, so that layout could not inherit
         // any of it however the glass was applied inside it. `FlowMainView.swift`'s file note
         // carries the full before/after and the probe measurements; the AppKit half is here.
         //
@@ -469,17 +478,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         //      its SwiftUI content's intrinsic size up through the content-view relationship, which
         //      no `contentMinSize`, `minSize`, constraint or `windowWillResize` veto could reject
         //      because it does not arrive as a resize request. Two hosting views now instead of one,
-        //      so both are muzzled. The loop below stays regardless — the collapse was intermittent
+        //      so both are muzzled. The loop below stays regardless - the collapse was intermittent
         //      (2 of 5 launches) and a measurement is not a guarantee.
         //   2. The sidebar cannot vanish. `minimumThickness == maximumThickness == 168` held exactly
         //      at 1180, 1000 and 640pt wide, and `canCollapseFromWindowResize = false` kept
-        //      `isCollapsed` false at 640x480 — below the window's own minimum. Without that a narrow
+        //      `isCollapsed` false at 640x480 - below the window's own minimum. Without that a narrow
         //      window would auto-collapse the sidebar, and this app has no toggle to bring it back.
         //   3. The toolbar does not cross the sidebar. This was the recorded objection to ever adding
         //      one: a toolbar spans the window and would land on the wordmark. It does not. The
-        //      titlebar comes back as *two* sections — `NSTitlebarBackgroundView` at
+        //      titlebar comes back as *two* sections - `NSTitlebarBackgroundView` at
         //      (0, 0, 1180, 66) for the content pane and a second one at (0, 0, 176, 66) inside the
-        //      sidebar's own wrapper, with the sidebar's glass drawn over it — because a `.sidebar`
+        //      sidebar's own wrapper, with the sidebar's glass drawn over it - because a `.sidebar`
         //      split item on a `.fullSizeContentView` window gets `allowsFullHeightLayout` for free.
         //      The wordmark lands at y=74 and the close button ends at y=33. (Rects here and below
         //      are top-down window points, converted from AppKit's bottom-left origin.)
@@ -490,11 +499,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // `sidebar(with:)` is what buys the material: per its header it gives the item a
         // "translucent material background", which on macOS 26 is a real
-        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view — Liquid Glass that
+        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view - Liquid Glass that
         // is concentric with the window's corner radius, which a `glassEffect(_:in: Rectangle())`
         // cannot be. Whether it *also* substitutes for itself under Reduce Transparency is the
-        // documented promise for standard components and is **not verified here** — no way to check
-        // it without the accessibility switch and a screen — so `FlowSidebar` keeps drawing its own
+        // documented promise for standard components and is **not verified here** - no way to check
+        // it without the accessibility switch and a screen - so `FlowSidebar` keeps drawing its own
         // opaque fill on that path rather than trusting it.
         //
         // `FlowSidebar`'s rows are a `List(selection:).listStyle(.sidebar)` inside this, i.e. an
@@ -516,7 +525,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if #available(macOS 26.0, *) {
             // The one line that makes content run *under* the sidebar, which was structurally
             // impossible with the `HStack` and is why nothing in this window could refract app
-            // content — the glass had only the desktop to sample. Its header: "other items such as
+            // content - the glass had only the desktop to sample. Its header: "other items such as
             // sidebars or inspectors may appear overlaid on top of this item's viewController and
             // this item's safeAreaInsets will be adjusted with respect to overlaid content."
             //
@@ -572,7 +581,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         //
         // The name carries a size suffix (`.1380x960`) so that enlarging the default *takes
         // effect*. `setFrameUsingName` restores the last saved frame, and every prior build wrote
-        // the old 1180x820 — so without changing the key, the bigger default would be shadowed by
+        // the old 1180x820 - so without changing the key, the bigger default would be shadowed by
         // the stored small frame on every machine that ran an older build, and only a truly fresh
         // install would ever see it. Bumping the key once abandons that stale frame; the user's
         // own later resizes are saved under the new key and respected as before. Bump the suffix
@@ -630,7 +639,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc private func showPill() {
-        // Explicitly asking for the pill also turns the preference back on —
+        // Explicitly asking for the pill also turns the preference back on  - 
         // otherwise the menu item would appear to do nothing.
         if !UserData.shared.alwaysShowPill {
             UserData.shared.alwaysShowPill = true
@@ -645,7 +654,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// menu-bar-only. This is the only place the policy is chosen: it used to be that
     /// every window-opening path also forced `.regular` so its window could take
     /// focus, which meant "Show in Dock" off still put Utter in the Dock for as long
-    /// as any window was open — the switch did not do what it said.
+    /// as any window was open - the switch did not do what it said.
     ///
     /// It does not have to: an accessory app "may be activated programmatically or by
     /// clicking on one of its windows" (`NSRunningApplication.h`, the definition of
@@ -654,7 +663,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// leave the policy to the preference. What an accessory app does *not* get is its
     /// own menu bar; ⌘C/⌘V/⌘W/⌘Q keep working because AppKit dispatches key
     /// equivalents through `NSApp.mainMenu` whether or not that menu is on screen
-    /// (they are not in `StandardKeyBinding.dict`, so the menu is the only route —
+    /// (they are not in `StandardKeyBinding.dict`, so the menu is the only route  - 
     /// this is the part that needs confirming on a device).
     private func applyDockVisibility() {
         let target: NSApplication.ActivationPolicy =
@@ -662,7 +671,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         guard NSApp.activationPolicy() != target else { return }
 
         // Dropping to `.accessory` deactivates the app, so a window on screen would
-        // lose focus underneath the user — and one of the ways to get here is the
+        // lose focus underneath the user - and one of the ways to get here is the
         // "Show in Dock" toggle inside the Settings window itself. Defer it instead:
         // every path that closes a window calls back here, so the policy always ends
         // up matching the preference once the last window is gone. Escalating to
@@ -679,7 +688,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// `.nonactivatingPanel`s, so they never hold focus and there is nothing for a
     /// policy change to disturb. Settings and What's New used to be absent too, which
     /// is how closing either one could leave the app `.regular` with the preference
-    /// off — nothing reasserted it afterwards.
+    /// off - nothing reasserted it afterwards.
     private var isAnyWindowVisible: Bool {
         [mainWindow, onboardingWindow, settingsWindow, whatsNewWindow, reportIssueWindow]
             .contains { $0?.isVisible == true }
@@ -691,7 +700,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if UserData.shared.alwaysShowPill {
             if !pill.isVisible { pill.orderFront(nil) }
         } else if pill.isVisible, !pill.currentState.isRecordingLike {
-            // Never yank it away mid-recording — that's the one moment it is
+            // Never yank it away mid-recording - that's the one moment it is
             // carrying live information.
             pill.orderOut(nil)
         }
@@ -712,7 +721,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // `hide()` stops the behaviour ticker, but the subscription outlived it:
             // the next dictation turn delivered a `PillState` to `apply(pillState:)`,
             // which calls `set(mood:)` -> `wake()` -> `start()` and restarted the
-            // 30 Hz ticker behind `hide()`'s back — publishing into an ordered-out
+            // 30 Hz ticker behind `hide()`'s back - publishing into an ordered-out
             // window with nothing left to stop it. `applyCompanionVisibility` returns
             // at this guard on every later call, so it never got another chance.
             companionStateObserver?.cancel()
@@ -725,7 +734,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // Release the window as well, so `deinit` actually runs and the panel,
             // its hosting view, its observations and the behaviour engine are freed
             // rather than kept for the process lifetime. Nothing else holds a
-            // reference — the companion is not a child of the pill any more, so the
+            // reference - the companion is not a child of the pill any more, so the
             // pill does not retain it either; a later enable rebuilds it.
             companionWindow = nil
             return
@@ -756,7 +765,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Hand the pill the live engine, so the note card can draw the character itself
         // while it is open and this panel steps aside for the duration. The *same*
-        // instance, deliberately — that is what carries mood, pose and frame timing across
+        // instance, deliberately - that is what carries mood, pose and frame timing across
         // the handover instead of restarting them. Set every time, not just on creation: a
         // disable clears it.
         pill.stateModel.companionBehaviour = companionWindow?.behaviour
@@ -765,7 +774,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // is the whole of its visibility: on screen while the preference is on. It used
         // to be a child window of the pill, which meant AppKit ordered it in and out
         // with the pill and the character came and went with each dictation turn when
-        // "always show the pill" was off — the companion has its own toggle, and that
+        // "always show the pill" was off - the companion has its own toggle, and that
         // is the one it should follow.
         //
         // It declines to appear at all if the selection resolves to no installed pack,
@@ -784,7 +793,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// rule applies here: a new exit path must not be able to leave the character
     /// stuck mid-thought.
     ///
-    /// The level is *pulled* instead, once per animation frame — see
+    /// The level is *pulled* instead, once per animation frame - see
     /// `CompanionBehaviour.levelSource`. `PillStateModel.level` is already the
     /// smoothed signal the pill's meter draws, so the character bounces to the same
     /// real audio the pill does, never to a timer.
@@ -793,7 +802,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Start or stop watching for calls, to match the preference.
     ///
     /// Called at launch and whenever the preference changes. With the preference off nothing samples
-    /// CoreAudio at all — the feature costs nothing when unused, rather than running and discarding
+    /// CoreAudio at all - the feature costs nothing when unused, rather than running and discarding
     /// its answer. Restarting it here is also the detector's second chance to probe for the
     /// per-process API it needs, which it stops itself over when the system will not answer.
     @MainActor
@@ -805,7 +814,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         guard !callDetector.isWatching else { return }
 
-        // Not to stop the detector seeing Utter's own microphone — it excludes our pid itself now.
+        // Not to stop the detector seeing Utter's own microphone - it excludes our pid itself now.
         // This covers what a pid cannot: meeting capture takes the other participants through
         // `ScreenCaptureKit`, which is not a HAL client of ours, and a capture started from the Notes
         // screen has to withdraw a live offer card. Read live rather than captured, because both can
@@ -829,12 +838,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let panel = MeetingOfferPanel(
             pill: pill,
             // "You're in a Zoom call" when CoreAudio would say which app is doing the audio, and
-            // "You're in a call" when it would not — which is the ordinary case for a meeting in a
+            // "You're in a call" when it would not - which is the ordinary case for a meeting in a
             // browser tab, not a failure. The card's height is measured from whichever string this is,
             // because a long app name wraps the title and the overflow is the button row.
             title: CallSource.offerTitle(appName: callDetector.currentCall?.appName),
-            // Deliberately does *not* dismiss the card first. A start can fail — no Screen
-            // Recording, the microphone busy — and the card is the only surface that can say why and
+            // Deliberately does *not* dismiss the card first. A start can fail - no Screen
+            // Recording, the microphone busy - and the card is the only surface that can say why and
             // the only try-again for this call: `onCallStarted` fires on a transition, so once the
             // card is gone nothing offers again until the next call. `startMeetingFromOffer`
             // dismisses it once a capture is actually running.
@@ -862,7 +871,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Begin a meeting capture from the offer, filing it into a note.
     ///
     /// Goes through the same `MeetingSession.start` the Notes screen uses rather than a second
-    /// entry point, including the permission check — which is now `MeetingSession.prepare`, shared
+    /// entry point, including the permission check - which is now `MeetingSession.prepare`, shared
     /// with that screen so the two cannot answer the same denial differently. Whichever permission
     /// ends up being needed, capture without it records only the user, which is the failure most
     /// likely to go unnoticed: it produces a transcript that simply has half a conversation in it.
@@ -893,7 +902,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             dismissMeetingOffer()
 
             // Recording a call captures other people's voices, so the running state has to be
-            // obvious for the whole of it — `NotesView.meetingBar` states that invariant, and it is
+            // obvious for the whole of it - `NotesView.meetingBar` states that invariant, and it is
             // the app's one recording banner: a red dot, the elapsed time, a Stop button, and the
             // warning that nothing has been heard from the other side yet. Opening the screen it
             // lives on reuses all of that; a new persistent `PillState` would be a second indicator
@@ -902,13 +911,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // It costs an activation, which pulls focus from the call for a moment. That is the
             // deliberate trade: the alternative is recording other people with nothing on screen
             // saying so.
-            SidebarSelection.shared.item = .notes
+            WorkspaceSectionSelection.shared.library = .notes
+            SidebarSelection.shared.item = .library
             showMainWindow()
 
             // And a transient confirmation on the pill, which has to be brought up first: with
             // "show at all times" off, `setState(.idle)` has already ordered it out and `.notice`
             // does not bring it back, so both the success and the failure were invisible. Same
-            // reasoning as `startRecording` — this is exactly when its feedback matters.
+            // reasoning as `startRecording` - this is exactly when its feedback matters.
             if !pillWindow.isVisible { pillWindow.orderFront(nil) }
             showPillNotice("Recording the meeting")
         }
@@ -917,7 +927,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Report a failed start where the user pressed the button.
     ///
     /// On the card, which keeps its buttons so Transcribe is the try-again, and which is wide enough
-    /// for a sentence — the pill is not, and these messages name a System Settings pane.
+    /// for a sentence - the pill is not, and these messages name a System Settings pane.
     @MainActor
     private func reportOfferFailure(_ message: String) {
         if let panel = meetingOfferPanel {
@@ -947,7 +957,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 MainActor.assumeIsolated {
                     companion.behaviour.apply(pillState: state)
                     // The note card draws the character itself while it is open, so the
-                    // panel steps aside — and comes back however the turn ends, which is
+                    // panel steps aside - and comes back however the turn ends, which is
                     // why this rides the same single observation the mood does rather than
                     // the twenty-odd `setState` sites. Idempotent: it orders a window out
                     // or in and touches no frame.
@@ -964,17 +974,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var settingsWindow: NSWindow?
 
     /// Autosave key for the Settings window's frame. Distinct from the main
-    /// window's "UtterMain" — AppKit refuses a duplicate autosave name and then
+    /// window's "UtterMain" - AppKit refuses a duplicate autosave name and then
     /// silently stops remembering either window's geometry.
     /// Suffixed with the size so enlarging the default is not shadowed by a frame saved at the
-    /// old size — see the note on the main window's autosave name.
+    /// old size - see the note on the main window's autosave name.
     private static let settingsFrameName = "UtterSettings.864x600"
 
     /// Open Settings in its own window.
     ///
     /// Settings used to be a page inside the main window's sidebar. It is a
-    /// different *kind* of thing from the feature screens — you visit it, change
-    /// something, and leave — so it gets its own window, which is also what the
+    /// different *kind* of thing from the feature screens - you visit it, change
+    /// something, and leave - so it gets its own window, which is also what the
     /// reference design does and what Cmd-, already implies on macOS.
     @objc func showSettingsWindow() {
         if let existing = settingsWindow {
@@ -983,7 +993,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // The same structure as `showMainWindow`, for the same reason — this was the same shape of
+        // The same structure as `showMainWindow`, for the same reason - this was the same shape of
         // window carrying the same hand-written substitutes:
         //
         //     NSWindow  .titled + .fullSizeContentView, NSToolbar attached
@@ -1003,14 +1013,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         //
         // `sizingOptions = []` on both controllers: `NSHostingView.sizingOptions` defaults to
         // `.standardBounds`, which includes `intrinsicContentSize`, and that is the ~133x142
-        // collapse `showMainWindow` carries a re-assert loop for — a size applied through the
+        // collapse `showMainWindow` carries a re-assert loop for - a size applied through the
         // content-view relationship rather than as a resize request, which no `contentMinSize` or
         // `windowWillResize` veto can refuse. Measured here: `intrinsicContentSize` (-1, -1),
         // `fittingSize` (0, 0) and `preferredContentSize` (0, 0) on both, and the window held
         // 720x500 across a 1.2s runloop. Two hosting views instead of one, so both are muzzled.
-        // Settings has never carried the loop and one is not added here — the collapse was only
+        // Settings has never carried the loop and one is not added here - the collapse was only
         // ever observed with the hosting view as the window's own `contentView`, which is what this
-        // change moves away from — but the failure was intermittent (2 of 5 launches), so if it
+        // change moves away from - but the failure was intermittent (2 of 5 launches), so if it
         // ever appears in this window the fix is the loop in `showMainWindow`, verbatim.
         let sidebarController = NSHostingController(rootView: SettingsSidebar())
         sidebarController.sizingOptions = []
@@ -1019,7 +1029,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // `sidebar(with:)` is what buys the material: per its header it gives the item a
         // "translucent material background", which on macOS 26 is a real
-        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view — Liquid Glass
+        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view - Liquid Glass
         // concentric with the window's corner radius, which a `glassEffect(_:in: Rectangle())`
         // cannot be. Measured at x 8-160, y 8-492, with the SwiftUI content as its *subview*, so
         // the rows' white selection lift still composites on top of the material.
@@ -1037,7 +1047,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if #available(macOS 26.0, *) {
             // The one line that makes the detail pane run *under* the group list, which was
             // structurally impossible with the `HStack` and is why nothing in this window could
-            // refract app content — the glass had only the desktop to sample. Measured, at
+            // refract app content - the glass had only the desktop to sample. Measured, at
             // 720x500: on → the detail view is (0, 0, 720, 500) with a 160pt leading safe-area
             // inset (152pt column plus the glass's 8pt outset). Off → (160, 0, 560, 500) with no
             // leading inset, i.e. exactly the old `HStack` geometry.
@@ -1078,7 +1088,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // cannot work in: `setFrameUsingName` replays the stored frame verbatim and
         // never consults `contentMinSize`, so a frame saved while the window was
         // collapsed would come back collapsed. Register the autosave name *after*
-        // restoring — registering writes the current frame when nothing is stored
+        // restoring - registering writes the current frame when nothing is stored
         // yet, the same ordering `showMainWindow` depends on.
         if window.setFrameUsingName(Self.settingsFrameName) {
             window.setContentSize(Layout.size(
@@ -1098,7 +1108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.setFrameAutosaveName(Self.settingsFrameName)
         window.isReleasedWhenClosed = false
         // Only for `windowWillClose`, so the Dock preference is reasserted once this
-        // window is gone. `windowShouldClose` deliberately excludes it — this is an
+        // window is gone. `windowShouldClose` deliberately excludes it - this is an
         // ordinary closable window, unlike the main one.
         window.delegate = self
         settingsWindow = window
@@ -1131,7 +1141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// The hint line names the user's configured hotkey, so it must be rebuilt
     /// when that changes rather than hardcoding "Fn".
     /// Tags for the hint items the hotkey preference rewrites. Tagged rather than found
-    /// by index — this used `menu.items[1]`, which silently retitles the wrong row the
+    /// by index - this used `menu.items[1]`, which silently retitles the wrong row the
     /// first time an item is inserted above it, and there are two of them now.
     private enum MenuHintTag {
         static let hotkey = 1001
@@ -1152,7 +1162,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         guard let menu = statusItem?.menu else { return }
         menu.item(withTag: MenuHintTag.hotkey)?.title = "Hold \(UserData.shared.hotkeyName) to dictate"
         // `.hotkeyChanged` also fires the moment Accessibility is granted (see
-        // `ReadinessMonitor`), which is exactly when hold-then-tap becomes available —
+        // `ReadinessMonitor`), which is exactly when hold-then-tap becomes available  - 
         // so this line has to be re-read here too, not only on a hotkey change.
         menu.item(withTag: MenuHintTag.handsFree)?.title = handsFreeHintTitle
     }
@@ -1167,7 +1177,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             size: NSSize(width: 560, height: 620),
             // No `ScrollView` here. `WhatsNewView` is a `List` now, which is itself a
             // scroll view: nested, the inner one is handed unbounded height, never
-            // scrolls, and the outer one owns the wheel — so the release sections laid
+            // scrolls, and the outer one owns the wheel - so the release sections laid
             // out at full height inside a second scroller.
             content: AnyView(
                 WhatsNewView()
@@ -1201,8 +1211,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             defer: false
         )
         window.title = title
-        // These keep a normal titlebar — they're secondary windows and the title
-        // is the only thing naming them — but the content still gets the
+        // These keep a normal titlebar - they're secondary windows and the title
+        // is the only thing naming them - but the content still gets the
         // translucent backing so cards inside read as the same material as the
         // main window's.
         window.isOpaque = false
@@ -1212,7 +1222,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 .background(WindowBacking(material: .underWindowBackground)
                     .ignoresSafeArea())
         })
-        // Let the window drive the view's size rather than the reverse — **and that takes both
+        // Let the window drive the view's size rather than the reverse - **and that takes both
         // lines.** `autoresizingMask` alone only says how the view follows a frame it is given; it
         // does nothing about the view *publishing* a size upward. `NSHostingView.sizingOptions`
         // defaults to `.standardBounds`, which includes `.intrinsicContentSize`, so as this
@@ -1220,7 +1230,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // dimensions instead of the reverse. That is the ~133x142 collapse `showMainWindow`
         // documents and carries a re-assert loop for, and it is why `showOnboarding`,
         // `showMainWindow`, `showSettingsWindow` and `PillWindow` all set this. This was the one
-        // window still exposed to it — and the clamp above is the same defect's other half, seen
+        // window still exposed to it - and the clamp above is the same defect's other half, seen
         // as "a long settings pane produced a window whose title bar and bottom edge were both
         // off-screen". Every window in the app is now muzzled.
         if #available(macOS 13.0, *) { hosting.sizingOptions = [] }
@@ -1252,11 +1262,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///   * **"start a new note" / "continue the note"** *arm* it for the turn that
     ///     follows, because the spoken phrase is the command and what comes next is
     ///     the content. That arming has to outlive the turn it was spoken in, so
-    ///     `routeNextDictation` is called *after* `finishTurn()` — see the voice
+    ///     `routeNextDictation` is called *after* `finishTurn()` - see the voice
     ///     command branch in `stopRecording`.
     ///
     /// Cleared via `finishTurn()` rather than at each of the six places a turn can
-    /// end — the same reasoning `PillWindow.setState` uses for its hide-on-idle
+    /// end - the same reasoning `PillWindow.setState` uses for its hide-on-idle
     /// rule: a new exit path must not be able to leave the flag stuck on, or every
     /// later dictation would silently land in a note.
     private var captureToNote = false
@@ -1285,16 +1295,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // A meeting owns the microphone tap. Without this the dictation path would
         // call `startRecording` (a silent no-op while the tap is live) and then, on
         // release, `stopRecording` would hand back the ENTIRE meeting so far and
-        // type it into the frontmost app — while tearing down the engine the
+        // type it into the frontmost app - while tearing down the engine the
         // meeting was still recording through.
         guard !meetingIsRecording else {
-            showPillError("Recording a meeting — stop it first")
+            showPillError("Recording a meeting - stop it first")
             return
         }
         // Something is already recording through this tap, so there is nothing to start.
         //
-        // `KeyMonitor` delivers `onRecordStart` on every hotkey press regardless of state —
-        // `suppressReleaseStop` only suppresses the *release* — so brushing the dictation
+        // `KeyMonitor` delivers `onRecordStart` on every hotkey press regardless of state  - 
+        // `suppressReleaseStop` only suppresses the *release* - so brushing the dictation
         // hotkey during a latched hands-free session or a note capture ran this whole path:
         // `audioRecorder.startRecording` returns false while its engine is already up, so the
         // user got "Couldn't start the microphone" over a capture that was in fact recording
@@ -1303,13 +1313,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // has a more specific thing to say about it.
         guard !audioRecorder.isRecording else { return }
         // If the pill is hidden ("show at all times" off), bring it up for the
-        // duration of the turn — this is exactly when its feedback matters.
+        // duration of the turn - this is exactly when its feedback matters.
         if !pillWindow.isVisible { pillWindow.orderFront(nil) }
 
         // Show the recording state **first**, before anything slow.
         //
         // This used to sit five statements further down, after `MediaControl.pauseIfPlaying()` and
-        // after `captureCurrentSelection()` — and the second of those is an Accessibility query into
+        // after `captureCurrentSelection()` - and the second of those is an Accessibility query into
         // whatever app is frontmost, i.e. a synchronous cross-process round trip that can take
         // hundreds of milliseconds and is at the mercy of how busy the other app is. The pill could
         // not react until both had finished, which is the whole of "pressing the key to the pill
@@ -1317,7 +1327,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // pill does not depend on.
         //
         // Nothing below needs the state to be set late. `captureToNote` is already decided, and the
-        // failure path a few lines down re-sets the state anyway — `setState` coalesces repeats
+        // failure path a few lines down re-sets the state anyway - `setState` coalesces repeats
         // inside one runloop turn, which is exactly what `requestedState` exists for.
         pillWindow.setState(recordingPillState)
 
@@ -1336,20 +1346,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // in-process after a `whisper_free` with the file still in the page cache, and
         // **7,686 ms** for a first load with a cold one. Eviction is deliberately aggressive and
         // a menu-bar app can sit idle for hours, so a long-idle rebuild is somewhere on that
-        // range rather than reliably at the low end — and the user cannot tell in advance which
+        // range rather than reliably at the low end - and the user cannot tell in advance which
         // turn will be the slow one. This removes the variance, which is the part that is felt.
         //
         // Non-blocking, and deliberately silent: nothing about the engine's *capability* changed
         // while it was unloaded, so it publishes no `loadState`. See `LocalWhisperProvider.warmUp`.
         //
         // Hopped to the main actor because `warmUp` reads the active tier from `ModelStore`, which
-        // lives there, and `startRecording` is nonisolated — the same reason the tier-change preload
+        // lives there, and `startRecording` is nonisolated - the same reason the tier-change preload
         // at `observeModelTier` is wrapped. One runloop turn of delay is irrelevant here: what this
         // has to beat is the user finishing their sentence, not the next frame.
         Task { @MainActor in self.transcriptionService.warmUp() }
 
         if !modelReady {
-            // Recording is safe — audio capture doesn't need the model. The clip
+            // Recording is safe - audio capture doesn't need the model. The clip
             // will transcribe as soon as the load finishes, so capture it rather
             // than dropping what the user said.
             print("⏳ Recording while the speech model finishes loading")
@@ -1364,7 +1374,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         SoundPlayer.playStart()
-        // The state was already shown above, before the slow work — see the note there. It named the
+        // The state was already shown above, before the slow work - see the note there. It named the
         // destination rather than merely the fact of recording, and it still does: `captureToNote`
         // may already be armed by a spoken "start a new note" from the previous turn, in which case
         // this dictation lands in a note, and `.capturingNote` exists precisely because where the
@@ -1383,14 +1393,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// Read through the delegate's lazy session without creating it: touching
     /// `meetingSession` would instantiate it on the first hotkey press, which is
-    /// wasteful but harmless — the guard is about the *state*, so a session that
+    /// wasteful but harmless - the guard is about the *state*, so a session that
     /// does not exist yet is by definition not recording.
     /// Whether a meeting still owns the shared recorder.
     ///
     /// `.finishing` counts. `MeetingSession.stop()` closes the tap, then awaits the tail
     /// inference for seconds before calling `recorder?.consume(micConsumed)` and releasing
     /// the recorder. A dictation started inside that window has its own opening seconds
-    /// deleted by that `consume` — up to a 30s window of bytes — and the user is never told.
+    /// deleted by that `consume` - up to a 30s window of bytes - and the user is never told.
     private var meetingIsRecording: Bool {
         MainActor.assumeIsolated {
             meetingSession.state == .recording || meetingSession.state == .finishing
@@ -1405,7 +1415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///   - hands-free        → finalize and transcribe
     /// ⌃⌥N: dictate into a Utter note rather than the frontmost app.
     ///
-    /// Runs the same recording machinery as hands-free — the only difference is
+    /// Runs the same recording machinery as hands-free - the only difference is
     /// `captureToNote`, which redirects the finished text at the end of the
     /// pipeline. Deliberately hands-free rather than push-to-talk: notes tend to
     /// be longer than a sentence typed into a field, and holding a chord for a
@@ -1426,7 +1436,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         guard !meetingIsRecording else {
-            showPillError("Recording a meeting — stop it first")
+            showPillError("Recording a meeting - stop it first")
             return
         }
 
@@ -1494,7 +1504,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
         guard !meetingIsRecording else {
-            showPillError("Recording a meeting — stop it first")
+            showPillError("Recording a meeting - stop it first")
             return
         }
 
@@ -1536,7 +1546,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// Must be called *after* `finishTurn()`, never before: `finishTurn` clears
     /// `captureToNote`, so arming first and finishing second undid the arming in the
-    /// same statement list — the command created an empty note, said "keep talking",
+    /// same statement list - the command created an empty note, said "keep talking",
     /// and then the next dictation typed into the frontmost app anyway.
     ///
     /// Leaves the pill in `.notice` and does not return it to `.idle`; the notice
@@ -1551,11 +1561,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // it rather than creating a second one.
             NoteStore.shared.create(body: "", source: .dictated)
             UserData.shared.captureAppendsToOpenNote = true
-            showPillNotice("New note — keep talking")
+            showPillNotice("New note - keep talking")
         case .continueNote:
             UserData.shared.captureAppendsToOpenNote = true
             showPillNotice(NoteStore.shared.selectedNote == nil
-                            ? "No note open — starting one"
+                            ? "No note open - starting one"
                             : "Adding to the open note")
             if NoteStore.shared.selectedNote == nil {
                 NoteStore.shared.create(body: "", source: .dictated)
@@ -1570,7 +1580,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// Extracted so the two callers cannot drift: an ordinary dictation reaches it
     /// after the AI-command pass declines the text, and a note capture reaches it
-    /// directly (that pass is skipped — see `stopRecording`). Every correction stage
+    /// directly (that pass is skipped - see `stopRecording`). Every correction stage
     /// runs identically either way, so a note never gets second-class text for
     /// having skipped the dictionary or snippet pass; the destination at the end is
     /// the only difference.
@@ -1589,7 +1599,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         } else {
             // Context formatting is destination formatting, so it only applies on the path
             // that actually types into the destination. `AppContext.detect()` reads
-            // `NSWorkspace.frontmostApplication`, and a note capture never changes that —
+            // `NSWorkspace.frontmostApplication`, and a note capture never changes that  - 
             // the pill and the note card are both `.nonactivatingPanel`, so whatever the
             // user was looking at stays frontmost. A note dictated with a terminal in front
             // was therefore filed under `.code` rules and had its full stop stripped; with
@@ -1697,7 +1707,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         guard !meetingIsRecording else {
-            showPillError("Recording a meeting — stop it first")
+            showPillError("Recording a meeting - stop it first")
             return
         }
 
@@ -1764,19 +1774,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     /// Copy selected text from the focused app using Cmd+C.
     /// Uses the pasteboard changeCount to detect whether Cmd+C actually copied
-    /// anything — if nothing was selected, the clipboard is never modified
+    /// anything - if nothing was selected, the clipboard is never modified
     /// (no clear/restore churn for clipboard-manager apps to record).
     /// Read whatever is selected in the frontmost app, by copying it and putting the pasteboard back.
     ///
     /// **Waits for the copy to land rather than sleeping through it.** This used to be a flat
-    /// `usleep(80_000)` — 80ms of the main thread doing nothing, on *every* hotkey press, before the
+    /// `usleep(80_000)` - 80ms of the main thread doing nothing, on *every* hotkey press, before the
     /// pill could paint. That is the whole of "pressing the key to the pill reacting is very slow":
     /// the app was asleep for it. Polling `changeCount` exits as soon as the target app has answered,
     /// which is typically 10-20ms, and keeps the same 80ms as a *ceiling* rather than a cost.
     ///
     /// The ceiling still has to exist: an app that is busy or has nothing selected never bumps
     /// `changeCount`, and there is no notification for "the copy you synthesised has completed".
-    /// 2ms between polls is fine — the wait is dominated by another process's response, not by this
+    /// 2ms between polls is fine - the wait is dominated by another process's response, not by this
     /// loop.
     private func captureCurrentSelection() -> String {
         let pasteboard = NSPasteboard.general
@@ -1789,7 +1799,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         //
         // `changeCount` is bumped by `declareTypes(_:owner:)`, which a copying app calls *before* it
         // writes the data. Polling the count alone therefore exits up to a whole write too early and
-        // reads nil — which silently becomes "nothing was selected", so a spoken "make it
+        // reads nil - which silently becomes "nothing was selected", so a spoken "make it
         // professional" would run against no text and say nothing about why. That is the trap the
         // flat 80ms sleep this replaced did not have, because it always gave the other app the full
         // window.
@@ -1829,8 +1839,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         audioRecorder.stopRecording { [weak self] audioData in
             guard let self = self else { return }
             // No usable audio. `AudioRecorder.stopRecording` reports nil for four different
-            // reasons — nothing captured, the trim left under 640 bytes, the WAV encode
-            // failed, or it was not recording — and this collapsed all of them to a silent
+            // reasons - nothing captured, the trim left under 640 bytes, the WAV encode
+            // failed, or it was not recording - and this collapsed all of them to a silent
             // return to idle. With "show at all times" off that also orders the pill away, so
             // a capture that filed nothing into the note looked exactly like one that worked.
             // The empty-transcript branch below already treats this as an error; so does this.
@@ -1851,12 +1861,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                             // While dictating into a note, only the *routing* commands
                             // are honoured. The editing ones (`select all`, `copy`,
                             // `new line`…) are keystrokes for the frontmost app's text
-                            // field, and the text is not going there — so obeying them
+                            // field, and the text is not going there - so obeying them
                             // would type into an unrelated document. Nor are they
                             // swallowed as rejected commands: `checkVoiceCommand`
                             // matches on `hasSuffix`, so "the old config is stale so
                             // I'll delete that" *is* the `undo` command by that test
-                            // (verified — see `VoiceCommandRoutingTests`), and dropping
+                            // (verified - see `VoiceCommandRoutingTests`), and dropping
                             // it would delete a sentence from the only copy the user
                             // has. Treating them as ordinary text puts them in the
                             // note, which is where the user was speaking.
@@ -1869,7 +1879,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 SoundPlayer.playDone()
                                 // Finish the turn *first*. `finishTurn` clears
                                 // `captureToNote`, and the note-routing commands set
-                                // it to arm the *next* dictation — so routing before
+                                // it to arm the *next* dictation - so routing before
                                 // finishing wiped the arming one line later and the
                                 // commands did nothing at all.
                                 self.finishTurn()
@@ -1893,7 +1903,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 //
                                 // `AICommands.process` matches its style patterns with
                                 // `hasSuffix`, so a note whose last words happen to be
-                                // "…make it shorter" was read as a command — and every
+                                // "…make it shorter" was read as a command - and every
                                 // one of its outcomes acts on the *frontmost app*: the
                                 // rewrite is pasted there, and because
                                 // `sourceWasDictation` is `capturedSelection.isEmpty`
@@ -1910,7 +1920,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                     if let result = await AICommands.process(text, selectedText: self.capturedSelection) {
                                         if let aiText = result.text {
                                             // If we captured a live selection before recording, that
-                                            // selection is still highlighted — a plain paste replaces
+                                            // selection is still highlighted - a plain paste replaces
                                             // it. Issuing Cmd+Z here would wrongly undo the user's own
                                             // last edit in their app. Only undo-then-paste when the
                                             // source was our own just-dictated text (no selection).
@@ -1922,7 +1932,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                             }
                                             await MainActor.run {
                                                 self.pillWindow.setState(.processing(.typing))
-                                                // Replace (selection still highlighted) or append —
+                                                // Replace (selection still highlighted) or append  - 
                                                 // both are a paste at the current cursor/selection.
                                                 TextInjector.typeText(aiText)
                                                 // Same opt-out as ordinary dictation: an
@@ -1937,7 +1947,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                                 self.pillWindow.setState(.idle)
                                             }
                                         } else {
-                                            // Command failed (e.g. nothing to transform). Surface it —
+                                            // Command failed (e.g. nothing to transform). Surface it  - 
                                             // don't play the success chime and silently return to idle.
                                             await MainActor.run {
                                                 if let err = result.error { print("⚠️ AI command: \(err)") }
@@ -2020,7 +2030,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// The hands-free silence countdown used to be forwarded here too, for the amber drain
     /// along the pill's foot. That line is gone (see `PillContent`), so nothing consumes the
-    /// progress and the subscription went with it — `AudioRecorder` still measures it and
+    /// progress and the subscription went with it - `AudioRecorder` still measures it and
     /// still auto-stops on it; it is simply no longer drawn.
     private func startPillTelemetry() {
         recordingStart = Date()
@@ -2061,14 +2071,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Start the live preview for a recording that is already running.
     ///
     /// `startLivePreview` is only ever reached from `startPillTelemetry`, i.e. at the moment
-    /// recording begins — and its first guard is `livePreviewEnabled || captureToNote`. Both
+    /// recording begins - and its first guard is `livePreviewEnabled || captureToNote`. Both
     /// note-capture *redirects* arm `captureToNote` on an already-live recording, long after
     /// that guard was evaluated as false, so with the preference off (the default) the note
     /// card sat reading "Listening…" for the whole capture: the one thing the card exists to
     /// show never appeared.
     ///
     /// Guarded on the task rather than calling straight through, because `startLivePreview`
-    /// blanks `previewText` and cancels the running task — with the preference *on* a plain
+    /// blanks `previewText` and cancels the running task - with the preference *on* a plain
     /// call would throw away a transcript that was already accumulating and re-impose the
     /// 900ms warm-up.
     private func startLivePreviewIfNeeded() {
@@ -2080,7 +2090,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Note capture always previews, whatever the preference says.
         //
         // The note card exists to show the words landing in the note as they are heard
-        // — that is the whole reason the pill grows into it. With
+        // - that is the whole reason the pill grows into it. With
         // `livePreviewEnabled` off, which is the default, the card had room for three
         // lines of transcript and drew a message asking the user to switch a setting on.
         // Ordinary dictation keeps honouring the preference: there the preview is a
@@ -2101,7 +2111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 // The tail only. An uncapped read re-transcribed the whole utterance from its
                 // first byte on every pass, so the work grew as the square of the utterance's
                 // length and a single pass eventually took longer than the interval between
-                // passes — previews then ran back to back on the serial whisper queue and
+                // passes - previews then ran back to back on the serial whisper queue and
                 // delayed the final transcript they are supposed to stay out of the way of.
                 let snapshot = self.audioRecorder.audioSnapshot(
                     lastBytes: AudioRecorder.previewWindowBytes
@@ -2127,7 +2137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func stopLivePreview() {
         previewTask?.cancel()
         previewTask = nil
-        // Abandon in-flight inference too — cancelling the Task alone would leave
+        // Abandon in-flight inference too - cancelling the Task alone would leave
         // a started pass running on the whisper queue, delaying the real one.
         transcriptionService.localProvider?.cancelPreviews()
         pillWindow.stateModel.previewText = ""
@@ -2155,7 +2165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     ///
     /// The return to `.idle` is guarded on the state still *being* the notice, so a
     /// recording started inside the 2.5s window is not cancelled out from under the
-    /// user — the same guard `showPillError` uses.
+    /// user - the same guard `showPillError` uses.
     private func showPillNotice(_ message: String) {
         stopPillTelemetry()
         pillWindow.setState(.notice(message))
@@ -2182,8 +2192,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     /// Ask for Accessibility once, then stop asking.
     ///
-    /// The rules — once ever, never when already granted, never a second ask after a screen has
-    /// opened the pane itself — live in `AccessibilityPermission`, because they were previously
+    /// The rules - once ever, never when already granted, never a second ask after a screen has
+    /// opened the pane itself - live in `AccessibilityPermission`, because they were previously
     /// enforced here and *not* in the onboarding step, which is how one button press ended up
     /// raising the system dialog on top of the System Settings pane it had just opened.
     ///
@@ -2213,7 +2223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         case .denied, .restricted:
             // No prompt here either: once denied, macOS will not show the dialog
             // again, and asking would be a no-op. Settings has a Grant button.
-            print("⚠️ Microphone: denied — grant it in Settings > General")
+            print("⚠️ Microphone: denied - grant it in Settings > General")
         @unknown default:
             break
         }
@@ -2224,19 +2234,19 @@ extension AppDelegate: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         // Only the main window is hidden rather than closed. Settings and What's New
         // are this delegate's clients purely for `windowWillClose`, and they are
-        // ordinary closable windows — vetoing their close would leave AppKit
+        // ordinary closable windows - vetoing their close would leave AppKit
         // considering them open forever, which `isAnyWindowVisible` would then read as
         // a window on screen and never let the Dock icon go.
         guard sender == mainWindow else { return true }
 
-        // Don't actually close — just hide the window and go back to pill mode
+        // Don't actually close - just hide the window and go back to pill mode
         sender.orderOut(nil)
         // Keep `mainWindow` pointing at it.
         //
         // This used to nil the reference while also returning false, so the window
         // was hidden but never closed and nothing of ours pointed at it any more.
         // The next "Open Utter" therefore missed `showMainWindow`'s reuse branch and
-        // built a *second* window with the same `frameAutosaveName` — and AppKit
+        // built a *second* window with the same `frameAutosaveName` - and AppKit
         // refuses a duplicate autosave name, so from the first close onwards the
         // user's window size and position stopped being remembered. Every cycle also
         // left another split-view controller and its two SwiftUI trees alive for the
@@ -2259,7 +2269,7 @@ extension AppDelegate: NSWindowDelegate {
     /// `.accessory` that was postponed because a window was up has to actually happen
     /// when that window goes away, or turning "Show in Dock" off inside the Settings
     /// window would leave Utter in the Dock until the next launch. Never fires for the
-    /// main window, which vetoes its own close — that path calls back directly above.
+    /// main window, which vetoes its own close - that path calls back directly above.
     func windowWillClose(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in self?.applyDockVisibility() }
     }
@@ -2371,28 +2381,3 @@ private extension NSToolbar.Identifier {
 private extension NSToolbarItem.Identifier {
     static let utterSettings = NSToolbarItem.Identifier("UtterSettings")
 }
-
-@MainActor
-private final class FirstRunFlowModel: ObservableObject {
-    @Published var showingLogin: Bool = !UserData.shared.isAuthenticated && !UserData.shared.isGuestMode
-}
-
-struct FirstRunFlowView: View {
-    var onFinish: (_ skipped: Bool) -> Void
-    @StateObject private var model = FirstRunFlowModel()
-
-    var body: some View {
-        Group {
-            if model.showingLogin {
-                LoginView { isGuest in
-                    withAnimation(Motion.layout) {
-                        model.showingLogin = false
-                    }
-                }
-            } else {
-                OnboardingView(onFinish: onFinish)
-            }
-        }
-    }
-}
-

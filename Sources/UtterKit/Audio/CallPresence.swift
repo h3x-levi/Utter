@@ -18,8 +18,8 @@ import Foundation
 ///
 /// **Why "by others", and why that word is load-bearing.** The first version of the shim read
 /// `kAudioDevicePropertyDeviceIsRunningSomewhere` on the default input device and again on the
-/// default output device. That property is documented as device-wide — "the AudioDevice is running
-/// in at least one process on the system" — with no direction in it, and on AirPods, most USB and
+/// default output device. That property is documented as device-wide - "the AudioDevice is running
+/// in at least one process on the system" - with no direction in it, and on AirPods, most USB and
 /// Bluetooth headsets, and any aggregate device the default input and the default output are the
 /// *same* `AudioObjectID`. So both reads returned one value, `input && output` degenerated to "this
 /// device is in use by something", and a podcast on AirPods was a call. The two facts now come from
@@ -46,7 +46,7 @@ struct CallPresence: Equatable {
 
     /// When the current run of "both open" or "both closed" began.
     ///
-    /// On the caller's clock, which must be monotonic — `CallDetector` feeds
+    /// On the caller's clock, which must be monotonic - `CallDetector` feeds
     /// `ProcessInfo.systemUptime`. `update` defends against a clock that moves backwards anyway,
     /// because a value type should not be wrong about its caller.
     private var since: TimeInterval?
@@ -59,7 +59,7 @@ struct CallPresence: Equatable {
     /// This is a latch and not a reset, and the difference was a real defect: declining used to
     /// call `reset()`, which zeroed `since` and `lastQualified` as well. The devices had not
     /// changed, so the very next sample started a fresh run of "both open", `confirmAfter` later the
-    /// transition fired again and an identical card appeared — one every five seconds, so roughly
+    /// transition fired again and an identical card appeared - one every five seconds, so roughly
     /// 540 of them over a 45-minute meeting. Cleared only when the release condition is actually
     /// met, so one "not now" covers this call and nothing beyond it.
     private var declined = false
@@ -138,7 +138,7 @@ struct CallPresence: Equatable {
         isInCall = false
     }
 
-    /// Forget everything — for `CallDetector.stop()`, which is the only caller.
+    /// Forget everything - for `CallDetector.stop()`, which is the only caller.
     ///
     /// Not for declining. That used to come through here, and zeroing the clock was exactly the
     /// bug `declined` documents.

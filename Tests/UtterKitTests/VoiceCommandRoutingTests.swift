@@ -5,7 +5,7 @@ import Testing
 ///
 /// While dictation is being filed into a Utter note, only the *routing* commands are
 /// obeyed. The editing ones are keystrokes aimed at the frontmost app's text field,
-/// and the text is not going there — obeying them typed into an unrelated document.
+/// and the text is not going there - obeying them typed into an unrelated document.
 /// They are also not swallowed as recognised-but-refused, because
 /// `checkVoiceCommand` matches on `hasSuffix`: an ordinary sentence can end in a
 /// command phrase, and dropping it would delete words from the only copy the user has.
@@ -34,7 +34,7 @@ struct VoiceCommandRoutingTests {
         data.voiceCommandsEnabled = true
         defer { data.voiceCommandsEnabled = wasEnabled }
 
-        // Not instructions — the closing words of sentences somebody dictated. Each
+        // Not instructions - the closing words of sentences somebody dictated. Each
         // of these is read as an editing command, which during a note capture would
         // have fired a keystroke at the frontmost app *and* dropped the sentence.
         #expect(data.checkVoiceCommand("the old config is stale so I'll delete that") == .undo)

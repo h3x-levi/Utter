@@ -9,11 +9,16 @@ private final class HomeViewModel: ObservableObject {
 }
 
 struct HomeView: View {
+    enum Mode { case capture, library }
+
+    let mode: Mode
     @ObservedObject private var history = TranscriptionHistory.shared
     @ObservedObject private var userData = UserData.shared
     @StateObject private var model = HomeViewModel()
 
     private static let searchWidth: CGFloat = 196
+
+    init(mode: Mode = .capture) { self.mode = mode }
 
     private var filteredGroups: [HistoryGroup] {
         let groups = history.groupedByDate
@@ -27,47 +32,47 @@ struct HomeView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.groupGap) {
-            BentoRow(columns: 4) {
-                BentoStat(
-                    value: history.totalWords.formatted(),
-                    label: "Words Dictated",
-                    systemImage: "mic",
-                    tint: Tint.accent
-                )
-                BentoStat(
-                    value: history.averageWPM,
-                    label: "Avg Speed",
-                    systemImage: "speedometer",
-                    tint: Color.cyan
-                )
-                BentoStat(
-                    value: history.entries.count.formatted(),
-                    label: "Dictations",
-                    systemImage: "waveform",
-                    tint: Color.purple
-                )
-                BentoStat(
-                    value: history.streakDays > 0 ? "\(history.streakDays) Days" : "\u{2014}",
-                    label: "Day Streak",
-                    systemImage: "flame",
-                    tint: Color.orange
-                )
+        VStack(alignment: .leading, spacing: Space.x5) {
+            // Dictation is a work surface, not an analytics dashboard. Put the one
+            // action that matters first; usage history follows it as supporting context.
+            if mode == .capture {
+                ReadyPanel()
+                if let latest = history.entries.first {
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        SectionHeader(title: "Last captured")
+                        Text(latest.text)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Ink.primary)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(latest.timestamp.formatted(date: .abbreviated, time: .shortened))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Ink.secondary)
+                    }
+                    .padding(.vertical, Space.x2)
+                } else {
+                    EmptyStateView(
+                        icon: "waveform",
+                        title: "Your first capture starts here",
+                        message: "Hold \(userData.hotkeyName) in any app and speak. Utter types your words into the field you’re working in."
+                    )
+                }
+            } else {
+                WorkspaceMetricStrip(metrics: [
+                    (history.totalWords.formatted(), "Words dictated"),
+                    (history.entries.count.formatted(), "Dictations"),
+                    (history.averageWordsPerDictation, "Average words"),
+                ])
+                WeeklyActivityChart()
             }
 
-            // 7-Day Dictation Activity Bar Chart
-            WeeklyActivityChart()
-
-            // Readiness — a wide tile, since every row is live state.
-            ReadyPanel(transcriptionCount: history.entries.count)
-
             // History tile, with search and export in its header.
-            BentoTile(
-                title: "History",
+            if mode == .library { ContentSection(
+                title: "Recent dictation",
                 systemImage: "clock.arrow.circlepath",
                 accessory: AnyView(
                     HStack(spacing: Space.x2) {
-                        // `GlassTextField`, not a hand-rolled well — and it is now a
+                        // `GlassTextField`, not a hand-rolled well - and it is now a
                         // real `TextField` with `.textFieldStyle(.roundedBorder)`
                         // inside, so the focus ring this screen used to lack comes
                         // from AppKit. That gap was an accessibility defect, not
@@ -117,8 +122,8 @@ struct HomeView: View {
                     // `LazyVStack`, not `VStack`: history is unbounded (300+ entries
                     // on this machine after a fortnight) and a plain VStack builds
                     // and measures every row on every scroll frame, which is what
-                    // made trackpad scrolling stutter while dragging the scrollbar —
-                    // which only moves the clip rect — stayed smooth.
+                    // made trackpad scrolling stutter while dragging the scrollbar  - 
+                    // which only moves the clip rect - stayed smooth.
                     LazyVStack(alignment: .leading, spacing: Space.x3) {
                         ForEach(filteredGroups) { group in
                             // Inner stack stays eager: a day's entries are few, and
@@ -131,7 +136,7 @@ struct HomeView: View {
                                 // Be precise about what this buys, because outside a
                                 // `List` it is less than it looks: a `Section` in a
                                 // plain stack renders header-then-content in order and
-                                // adds no VoiceOver grouping — the `.isHeader` trait
+                                // adds no VoiceOver grouping - the `.isHeader` trait
                                 // still comes from `SectionHeader` itself. What it does
                                 // buy is that the grouping is now stated in the
                                 // framework's own vocabulary, so if the history ever
@@ -146,7 +151,7 @@ struct HomeView: View {
                                 // A lazy stack flattens a section's header and content
                                 // into its own layout, so hoisting it would apply
                                 // `Space.x3` (12pt) between every row in a day instead
-                                // of `Space.x1` (4pt) — tripling the height of a
+                                // of `Space.x1` (4pt) - tripling the height of a
                                 // 300-row list and putting the day header as far from
                                 // its first row as the days are from each other. Nested
                                 // this way the geometry is unchanged. The cost is that
@@ -167,7 +172,7 @@ struct HomeView: View {
                         }
                     }
                 }
-            }
+            } }
         }
     }
 
@@ -203,7 +208,7 @@ struct HomeView: View {
             // so the save panel doesn't coerce the filename to .txt.
             contentType = UTType(filenameExtension: "md") ?? .plainText
             content = entries
-                .map { "**\(fmt.string(from: $0.timestamp))** — \($0.text)" }
+                .map { "**\(fmt.string(from: $0.timestamp))** - \($0.text)" }
                 .joined(separator: "\n\n---\n\n")
         case .csv:
             ext = "csv"
@@ -243,6 +248,39 @@ struct HomeView: View {
     }
 }
 
+/// A quiet, single-line summary of work already done. No colored tiles or
+/// gamified streak counter compete with the dictation task above it.
+private struct WorkspaceMetricStrip: View {
+    let metrics: [(value: String, label: String)]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Space.x4) {
+            ForEach(Array(metrics.enumerated()), id: \.offset) { index, metric in
+                VStack(alignment: .leading, spacing: Space.x1) {
+                    Text(metric.value)
+                        .font(.system(size: 22, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Ink.primary)
+                    Text(metric.label)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Ink.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(metric.label): \(metric.value)")
+
+                if index < metrics.count - 1 {
+                    Rectangle()
+                        .fill(Line.hairline)
+                        .frame(width: 1, height: 32)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .padding(.vertical, Space.x2)
+    }
+}
+
 // MARK: - Ready panel
 
 @MainActor
@@ -251,8 +289,6 @@ private final class ReadyPanelModel: ObservableObject {
 }
 
 struct ReadyPanel: View {
-    let transcriptionCount: Int
-
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var readiness = ReadinessMonitor.shared
     @ObservedObject private var motion = MotionPreference.shared
@@ -272,11 +308,12 @@ struct ReadyPanel: View {
     }
 
     private var modelValue: String {
+        let name = SpeechModel.model(for: ModelStore.shared.active).displayName
         switch readiness.modelLoad {
         case .loading, .idle:
-            return modelPresent ? "Loading\u{2026}" : "Missing"
+            return modelPresent ? "Preparing \(name)\u{2026}" : "Unavailable"
         case .ready:
-            return "Whisper small \u{00B7} ready"
+            return "\(name) \u{00B7} ready"
         case .failed:
             return "Failed to load"
         }
@@ -294,7 +331,7 @@ struct ReadyPanel: View {
         readiness.modelLoad == .loading || readiness.modelLoad == .idle
     }
 
-    private var shouldCollapse: Bool { allReady && transcriptionCount >= 5 }
+    private var shouldCollapse: Bool { allReady }
 
     private var disclosure: Binding<Bool> {
         Binding(
@@ -303,22 +340,70 @@ struct ReadyPanel: View {
         )
     }
 
+    private var readyCount: Int {
+        [micGranted, axGranted, modelPresent && readiness.modelLoad == .ready]
+            .filter { $0 }
+            .count
+    }
+
     var body: some View {
-        BentoTile(title: nil) {
-            if shouldCollapse {
-                DisclosureGroup(isExpanded: disclosure) {
-                    panelContent
-                } label: {
-                    if model.expanded { heading } else { summary }
+        VStack(alignment: .leading, spacing: Space.x3) {
+            HStack(alignment: .center, spacing: Space.x4) {
+                Image(systemName: isPreparing ? "waveform" : "mic.fill")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 76, height: 76)
+                    .background(Circle().fill(Color.accentColor.opacity(0.10)))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    Text(heroTitle)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Ink.primary)
+                    Text(heroDetail)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Space.x1) {
+                        Text("Hold").foregroundStyle(Ink.secondary)
+                        Keycap(key: userData.hotkeyName)
+                        Text("to speak").foregroundStyle(Ink.secondary)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.top, Space.x1)
                 }
-            } else {
-                VStack(alignment: .leading, spacing: Space.x3) {
-                    heading
-                    panelContent
+                Spacer(minLength: Space.x2)
+                VStack(alignment: .trailing, spacing: Space.x1) {
+                    Image(systemName: allReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(allReady ? Tint.success : Tint.warning)
+                    Text(allReady ? "Ready" : "Setup")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Ink.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            HairlineDivider()
+
+            DisclosureGroup(isExpanded: disclosure) {
+                panelContent
+                    .padding(.top, Space.x2)
+            } label: {
+                HStack {
+                    Text("Permissions and model")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Ink.primary)
+                    Spacer()
+                    Text("\(readyCount) of 3 essentials ready")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Ink.secondary)
+                        .monospacedDigit()
                 }
             }
         }
-        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.x3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             readiness.startPolling()
             model.expanded = !shouldCollapse
@@ -326,40 +411,20 @@ struct ReadyPanel: View {
         .onDisappear { readiness.stopPolling() }
     }
 
-    @ViewBuilder
-    private var heading: some View {
-        HStack(spacing: Space.x2) {
-            if isPreparing {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.trailing, Space.x1)
-                Text("Getting ready\u{2026}").typo(.heading)
-            } else {
-                Text("Hold").typo(.heading)
-                Keycap(key: userData.hotkeyName)
-                Text("to dictate").typo(.heading)
-            }
-            Spacer()
-        }
+    private var heroTitle: String {
+        if isPreparing { return "Getting Utter ready" }
+        return allReady ? "Speak naturally." : "Finish setup to dictate."
     }
 
-    private var summary: some View {
-        HStack(spacing: Space.x2) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Tint.success)
-            Text("Everything ready").typo(.body)
-            Text("Hold").typo(.caption)
-            Keycap(key: userData.hotkeyName)
-            Text("to dictate").typo(.caption)
-            Spacer()
-        }
+    private var heroDetail: String {
+        if isPreparing { return "Checking microphone access and preparing the speech model on this Mac." }
+        return allReady
+            ? "Utter types your words into the app you’re using. Audio stays on this Mac."
+            : "Allow the required access and install the speech model. Your audio stays on this Mac."
     }
 
     private var panelContent: some View {
-        VStack(alignment: .leading, spacing: Space.x3) {
-            HairlineDivider()
-
+        VStack(alignment: .leading, spacing: Space.x2) {
             StatusRow(
                 label: "Microphone",
                 value: micGranted ? "Allowed" : "Not allowed",
@@ -377,15 +442,22 @@ struct ReadyPanel: View {
             StatusRow(
                 label: "Speech model",
                 value: modelValue,
-                state: modelState
+                state: modelState,
+                actionLabel: modelPresent ? "Manage" : "Choose",
+                action: openSpeechSettings
             )
             StatusRow(
-                label: "AI commands",
-                value: aiState.isReady ? "On-device" : "Unavailable",
-                state: aiState.isReady ? .ok : .neutral
+                label: "AI transforms",
+                value: aiState.isReady ? "Available on this Mac" : "Optional feature unavailable",
+                state: .neutral
             )
-            StatusRow(label: "Network", value: "Never used", state: .ok)
+            StatusRow(label: "Network", value: "Used only for model downloads and app updates", state: .neutral)
         }
+    }
+
+    private func openSpeechSettings() {
+        SettingsSelection.shared.group = .speech
+        AppDelegate.current?.showSettingsWindow()
     }
 
     private func openPane(_ pane: String) {
@@ -520,16 +592,14 @@ struct HistoryRow: View {
 
 struct WeeklyActivityChart: View {
     @ObservedObject private var history = TranscriptionHistory.shared
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isDark: Bool { colorScheme == .dark }
 
     struct DayMetric: Identifiable {
-        let id = UUID()
         let dayName: String
         let date: Date
         let count: Int
         let isToday: Bool
+
+        var id: Date { date }
     }
 
     private static let dayFormatter: DateFormatter = {
@@ -541,13 +611,19 @@ struct WeeklyActivityChart: View {
     private var chartData: (days: [DayMetric], maxCount: Int) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
+        let firstDay = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        var countsByDay: [Date: Int] = [:]
+        for entry in history.entries where entry.timestamp >= firstDay {
+            let day = calendar.startOfDay(for: entry.timestamp)
+            countsByDay[day, default: 0] += entry.wordCount
+        }
+
         var days: [DayMetric] = []
         var maximum = 10
 
         for offset in (0..<7).reversed() {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
-            let nextDate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
-            let count = history.entries.filter { $0.timestamp >= date && $0.timestamp < nextDate }.reduce(0) { $0 + $1.wordCount }
+            let count = countsByDay[date, default: 0]
             let isToday = calendar.isDateInToday(date)
             if count > maximum { maximum = count }
             days.append(DayMetric(
@@ -562,7 +638,7 @@ struct WeeklyActivityChart: View {
 
     var body: some View {
         let (days, maxCount) = chartData
-        BentoTile(
+        ContentSection(
             title: "7-Day Dictation Activity",
             systemImage: "chart.bar.xaxis",
             tint: Tint.accent
@@ -581,12 +657,8 @@ struct WeeklyActivityChart: View {
 
                             VStack {
                                 Spacer(minLength: 0)
-                                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                    .fill(
-                                        metric.isToday
-                                            ? LinearGradient(colors: [Tint.accent, Tint.accent.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                                            : LinearGradient(colors: [Color.primary.opacity(0.25), Color.primary.opacity(0.1)], startPoint: .top, endPoint: .bottom)
-                                    )
+                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                    .fill(metric.isToday ? Color.accentColor : Color.primary.opacity(0.18))
                                     .frame(height: barHeight)
                             }
                             .frame(height: 48)

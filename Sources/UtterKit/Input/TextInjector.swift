@@ -2,7 +2,7 @@ import Cocoa
 import Carbon.HIToolbox
 
 /// Full-fidelity snapshot of the pasteboard: every item with every type it holds,
-/// so restoring preserves rich text, images, and files — not just the plain string.
+/// so restoring preserves rich text, images, and files - not just the plain string.
 struct PasteboardSnapshot {
     private let items: [[NSPasteboard.PasteboardType: Data]]
 
@@ -36,7 +36,11 @@ struct TextInjector {
         let snapshot = PasteboardSnapshot(pasteboard)
 
         pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        guard pasteboard.setString(text, forType: .string) else {
+            snapshot.restore(to: pasteboard)
+            return
+        }
+        let injectedChangeCount = pasteboard.changeCount
 
         // 2ms yield is sufficient for NSPasteboard system daemon synchronization
         // without introducing perceptible UI micro-stalls.
@@ -44,6 +48,9 @@ struct TextInjector {
         simulateKeyCombo(key: kVK_ANSI_V, flags: .maskCommand)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // A user may copy something new while the target app processes the
+            // paste. Do not replace that newer clipboard with our old snapshot.
+            guard pasteboard.changeCount == injectedChangeCount else { return }
             snapshot.restore(to: pasteboard)
         }
     }
@@ -52,7 +59,7 @@ struct TextInjector {
     static func executeAction(_ action: VoiceAction) {
         switch action {
         case .startNewNote, .continueNote:
-            // Routing decisions, not keystrokes — AppDelegate handles these before
+            // Routing decisions, not keystrokes - AppDelegate handles these before
             // dispatching here. Listed explicitly so a new VoiceAction can't be
             // silently ignored by a `default`.
             break

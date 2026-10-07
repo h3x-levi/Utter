@@ -12,9 +12,9 @@ import AppKit
 /// itself and the desktop panel steps aside, so there is only ever one character on screen
 /// and the collision is impossible rather than corrected. What is left to get wrong is:
 ///
-///   * **which surface draws it** — a rule, and the failure is two characters on screen at
+///   * **which surface draws it** - a rule, and the failure is two characters on screen at
 ///     once or none at all, and
-///   * **how big it is in there** — a number with a real ceiling *and* a real floor, and
+///   * **how big it is in there** - a number with a real ceiling *and* a real floor, and
 ///     the failure at either end is silent (a blurry character, or one too small to have a
 ///     face).
 ///
@@ -32,12 +32,12 @@ struct CompanionHandoverTests {
     func onlyTheCardTakesTheCharacter() {
         // Every capsule state leaves the character on the desktop. The pill widens during
         // ordinary recording, but it is still a 28pt capsule the character is *designed* to
-        // lean in front of — the companion sits one window level above the pill for exactly
-        // that — and it hides nothing, where the card is 292x124pt of text.
+        // lean in front of - the companion sits one window level above the pill for exactly
+        // that - and it hides nothing, where the card is 292x124pt of text.
         let capsuleStates: [PillState] = [
             .preparing, .idle, .recording, .handsFree, .capturingMemory,
             .processing(.transcribing), .processing(.rewriting), .processing(.typing),
-            .notice("New note — keep talking"), .error("No speech detected"),
+            .notice("New note - keep talking"), .error("No speech detected"),
         ]
         for state in capsuleStates {
             #expect(!CompanionWindow.noteCardDrawsCharacter(pillState: state,
@@ -66,7 +66,7 @@ struct CompanionHandoverTests {
         let size = CompanionGeometry.inCardCharacterSize
 
         // The floor. `CompanionSize`'s own reasoning: the character grew 28 -> 44 -> 52
-        // because sprite art at 28pt puts the face — the entire point of having moods — in
+        // because sprite art at 28pt puts the face - the entire point of having moods - in
         // a handful of pixels, and 36 is the smallest step that still reads as a character
         // at a glance.
         #expect(size >= CompanionSize.small.points)
@@ -75,7 +75,7 @@ struct CompanionHandoverTests {
         // at `maxFrameSide` of the size the user chose, so the binding case is a user on
         // `small`: 92px. Drawing at `size` needs `size * maxPoseScale` points at the peak
         // stretch, and twice that in pixels on a retina display. Past the cap the card
-        // would upscale a bitmap that was decoded smaller — for precisely the users who
+        // would upscale a bitmap that was decoded smaller - for precisely the users who
         // asked for the smallest character.
         let decoded = SpritePackStore.maxFrameSide(for: CompanionSize.small.points)
         let needed = size * CompanionGeometry.maxPoseScale * 2
@@ -98,7 +98,7 @@ struct CompanionHandoverTests {
         let narrowed = PillMetrics.noteContentWidth - gutter
         #expect(narrowed == 228)
         // Still a majority of the card, and still wide enough that the tail handed to it
-        // exceeds what it can show — so the head truncation, not this, decides the cut.
+        // exceeds what it can show - so the head truncation, not this, decides the cut.
         #expect(narrowed > PillMetrics.noteContentWidth * 0.8)
     }
 }

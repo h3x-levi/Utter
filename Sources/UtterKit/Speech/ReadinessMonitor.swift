@@ -4,7 +4,7 @@ import ApplicationServices
 
 /// Centralized, cached readiness state for the Home panel and Settings.
 ///
-/// The previous implementation computed each value inside `body` — `modelPresent`
+/// The previous implementation computed each value inside `body` - `modelPresent`
 /// stat'd the filesystem and `LocalAIEngine.availability` queried the system
 /// model, several times per render, on a 1.5 s timer. That work landed in the
 /// render path and made every animation stutter.
@@ -21,7 +21,7 @@ final class ReadinessMonitor: ObservableObject {
     /// Screen Recording, needed only for meeting capture.
     ///
     /// Tracked here with the others so it can be shown in the Permissions card and
-    /// on the onboarding checklist — a permission the app needs but never surfaces
+    /// on the onboarding checklist - a permission the app needs but never surfaces
     /// is one the user only discovers when a feature mysteriously fails.
     @Published private(set) var screenRecordingGranted = false
     @Published private(set) var aiState: LocalAIEngine.Availability = .unsupportedOS
@@ -30,10 +30,14 @@ final class ReadinessMonitor: ObservableObject {
     @Published var modelLoad: LocalWhisperProvider.LoadState = .idle
 
     private var timer: Timer?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration: UInt64 = 0
     private var observerCount = 0
-    /// The model is bundled and immutable at runtime, so one check per launch is
-    /// enough — no reason to keep hitting the filesystem.
+    /// Cache availability per selected tier. A downloaded model can be switched
+    /// at runtime, so a process-wide one-time check would report the bundled file
+    /// while another tier is selected.
     private var modelChecked = false
+    private var checkedModelTier: SpeechModel.Tier?
 
     private init() {}
 
@@ -54,6 +58,9 @@ final class ReadinessMonitor: ObservableObject {
         guard observerCount == 0 else { return }
         timer?.invalidate()
         timer = nil
+        refreshGeneration &+= 1
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 
     private func refresh() {
@@ -67,14 +74,14 @@ final class ReadinessMonitor: ObservableObject {
             // Re-register the global hotkeys the moment Accessibility is granted.
             //
             // `NSEvent.addGlobalMonitorForEvents` returns a non-nil token even when
-            // the process is untrusted — the handler is simply never called. So a
+            // the process is untrusted - the handler is simply never called. So a
             // monitor installed at launch without Accessibility is inert *forever*,
             // and nothing previously told `KeyMonitor` that the permission had
             // arrived. The hotkeys only started working after a relaunch, with no
             // hint that a relaunch was needed.
             //
             // This is the common path, not an edge case: the app replaces an older
-            // copy, macOS invalidates the old TCC grant, the user re-grants — and
+            // copy, macOS invalidates the old TCC grant, the user re-grants - and
             // without this the app stays deaf until quit.
             if ax, wasDenied {
                 NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
@@ -87,17 +94,39 @@ final class ReadinessMonitor: ObservableObject {
         if screen != screenRecordingGranted { screenRecordingGranted = screen }
 
         // Filesystem + system-model queries move off the main thread.
-        let needsModelCheck = !modelChecked
-        Task.detached(priority: .utility) {
-            let model = needsModelCheck ? (LocalWhisperProvider.modelURL() != nil) : nil
-            let ai = LocalAIEngine.availability
-            await MainActor.run {
-                if let model {
-                    self.modelChecked = true
-                    if model != self.modelPresent { self.modelPresent = model }
-                }
-                if ai != self.aiState { self.aiState = ai }
-            }
+        // Timer ticks coalesce behind one retained task. Without this guard a slow
+        // system-model availability query could overlap the next two-second tick.
+        guard refreshTask == nil else { return }
+        let selectedTier = ModelStore.shared.active
+        if selectedTier != checkedModelTier {
+            checkedModelTier = selectedTier
+            modelChecked = false
+            refreshGeneration &+= 1
+            refreshTask?.cancel()
+            refreshTask = nil
         }
+        let needsModelCheck = !modelChecked
+        let generation = refreshGeneration
+        refreshTask = Task.detached(priority: .utility) { [weak self] in
+            let model = needsModelCheck ? (ModelStore.url(for: selectedTier) != nil) : nil
+            let ai = LocalAIEngine.availability
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            await self.publishRefreshResult(model: model, ai: ai, generation: generation)
+        }
+    }
+
+    private func publishRefreshResult(
+        model: Bool?,
+        ai: LocalAIEngine.Availability,
+        generation: UInt64
+    ) {
+        guard refreshGeneration == generation else { return }
+        refreshTask = nil
+        if let model {
+            modelChecked = true
+            if model != modelPresent { modelPresent = model }
+        }
+        if ai != aiState { aiState = ai }
     }
 }

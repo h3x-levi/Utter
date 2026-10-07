@@ -1,15 +1,21 @@
 import Foundation
+import os
 
-/// Transcription provider protocol — swap implementations easily
+/// Transcription provider protocol - swap implementations easily
 protocol TranscriptionProvider {
     func transcribe(audioData: Data) async throws -> String
 }
 
 // MARK: - TranscriptionService (facade)
 
-/// Main transcription service — delegates to the active provider.
+/// Main transcription service - delegates to the active provider.
 /// Change provider in one line to swap between cloud/local/mock.
 class TranscriptionService {
+
+    private static let performanceLog = Logger(
+        subsystem: "utter.dictation.app",
+        category: "speech-performance"
+    )
 
     /// The active provider. Change this to swap implementations.
     private let provider: TranscriptionProvider
@@ -23,7 +29,12 @@ class TranscriptionService {
     }
 
     func transcribe(audioData: Data) async throws -> String {
+        let requestStarted = DispatchTime.now().uptimeNanoseconds
         let raw = try await provider.transcribe(audioData: audioData)
+        guard TranscriptText.isUsable(raw) else {
+            Self.performanceLog.info("dictation produced no usable speech text")
+            return ""
+        }
         let formatted = Self.formatText(raw)
 
         // Gather destination context before polishing. Both are read on the main
@@ -42,17 +53,23 @@ class TranscriptionService {
         // capitalisation. `SentencePolish` fails open, returning `formatted`
         // unchanged if the language model is unavailable or its output looks
         // like anything other than a repunctuation.
+        let polishStarted = DispatchTime.now().uptimeNanoseconds
         let polished = await SentencePolish.polish(
             formatted, precedingText: preceding, tone: tone
         )
-        // Never log the transcript itself — a word count is enough to confirm the
+        let polishMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - polishStarted) / 1_000_000
+        let totalMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - requestStarted) / 1_000_000
+        Self.performanceLog.info(
+            "dictation total_ms=\(totalMilliseconds, format: .fixed(precision: 1)) polish_ms=\(polishMilliseconds, format: .fixed(precision: 1)) words=\(polished.split(separator: " ").count)"
+        )
+        // Never log the transcript itself - a word count is enough to confirm the
         // pipeline produced text without recording what the user said.
         print("✅ Transcribed: \(polished.split(separator: " ").count) words")
         return polished
     }
 
-    /// Transcribe one buffer into **turns** — contiguous speech separated by real
-    /// silence — instead of one paragraph.
+    /// Transcribe one buffer into **turns** - contiguous speech separated by real
+    /// silence - instead of one paragraph.
     ///
     /// Meeting capture uses this where dictation uses `transcribe`, and every
     /// difference is deliberate:
@@ -64,14 +81,14 @@ class TranscriptionService {
     ///   * **No surrounding-app context and no per-app tone.** `transcribe` reads the
     ///     frontmost text field to decide whether the first word continues an existing
     ///     sentence, because dictation is typed *into* that field. A meeting
-    ///     transcript goes into a note, so that read would be meaningless here — and
+    ///     transcript goes into a note, so that read would be meaningless here - and
     ///     it would be one accessibility-API call per turn rather than per utterance.
     ///   * **Polish runs per turn.** `SentencePolish` repunctuates one speaker's
     ///     run-on speech, which is exactly what a turn is; handing it a window
     ///     spanning several people's contributions gives it a harder problem than it
     ///     was built for. Turns under eight words skip it outright
     ///     (`SentencePolish.minimumWords`), and the whole thing is a no-op unless the
-    ///     Mac has macOS 26 with Apple Intelligence on — so this is not the per-turn
+    ///     Mac has macOS 26 with Apple Intelligence on - so this is not the per-turn
     ///     round trip it looks like on most machines.
     ///
     /// Only the on-device whisper provider reports timings. Any other provider gets
@@ -91,7 +108,7 @@ class TranscriptionService {
             else { continue }
             turns.append(finished)
         }
-        // Turn and word counts only — never the transcript. Meeting audio is other
+        // Turn and word counts only - never the transcript. Meeting audio is other
         // people's speech, and the reason meeting capture is defensible at all is that
         // nothing but the note itself ever holds it.
         print("✅ Transcribed \(turns.count) turn(s), \(turns.reduce(0) { $0 + $1.text.split(separator: " ").count }) words")
@@ -122,7 +139,7 @@ class TranscriptionService {
     }
 
     /// Rebuild the speech context ahead of a transcription that is about to need it, for callers
-    /// that know one is coming — i.e. the moment recording starts.
+    /// that know one is coming - i.e. the moment recording starts.
     ///
     /// Distinct from `preload` in that it announces nothing: `preload` is the launch-time load,
     /// where "loading" is true and worth showing, while this covers a rebuild after idle eviction,
@@ -258,7 +275,7 @@ enum TranscriptionError: LocalizedError {
         case .apiError(let code, let msg): return "API error \(code): \(msg)"
         case .invalidAudio: return "Could not read the recorded audio"
         case .modelMissing(let name):
-            return "Speech model \(name) is missing from the app bundle — reinstall Utter"
+            return "Speech model \(name) is missing from the app bundle - reinstall Utter"
         case .modelLoadFailed(let name): return "Could not load speech model \(name)"
         case .inferenceFailed(let code): return "Transcription failed (code \(code))"
         }

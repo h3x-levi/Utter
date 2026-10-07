@@ -5,7 +5,7 @@ import Foundation
 /// Whisper is an autoregressive model: it predicts each token given the audio *and*
 /// the text so far. `initial_prompt` seeds that text, so words appearing in it
 /// become cheaper for the decoder to produce. This is the only supported way to
-/// bias recognition toward vocabulary the model would otherwise mis-hear — proper
+/// bias recognition toward vocabulary the model would otherwise mis-hear - proper
 /// nouns, product names, internal jargon.
 ///
 /// It is genuinely better than fixing the output afterwards, because
@@ -21,7 +21,7 @@ import Foundation
 ///
 ///   * **Echoing.** On near-silent audio the decoder can simply continue the
 ///     prompt, emitting the word list as if it had been spoken.
-///   * **Style transfer.** The prompt's register bleeds into the output — a prompt
+///   * **Style transfer.** The prompt's register bleeds into the output - a prompt
 ///     written as a bare comma-list encourages comma-spliced transcripts, which
 ///     is exactly the punctuation problem `SentencePolish` exists to fix.
 ///   * **Crowding.** The prompt shares a fixed token budget with the decoding
@@ -29,12 +29,12 @@ import Foundation
 ///
 /// So: a natural-language sentence rather than a raw list, a hard character
 /// budget, and only terms the user explicitly added. `DictionaryCorrector` still
-/// runs afterwards as a backstop — the two are complementary, not redundant.
+/// runs afterwards as a backstop - the two are complementary, not redundant.
 enum SpeechBias {
 
     /// Character ceiling for the whole prompt.
     ///
-    /// Whisper reserves `n_text_ctx / 2` tokens for the prompt — 224 on the models
+    /// Whisper reserves `n_text_ctx / 2` tokens for the prompt - 224 on the models
     /// Utter ships. At roughly 4 characters per English token that is ~900
     /// characters, but the budget is shared with the audio's own decoding context,
     /// and an over-long prompt is the documented cause of the crowding regression
@@ -44,7 +44,7 @@ enum SpeechBias {
     /// Terms shorter than this are skipped.
     ///
     /// Whisper already gets common short words right, so biasing them spends
-    /// budget for nothing — and a short entry is the most likely to distort a
+    /// budget for nothing - and a short entry is the most likely to distort a
     /// homophone the user *did* say ("Ana" pulling in "and").
     private static let minTermLength = 3
 
@@ -60,7 +60,7 @@ enum SpeechBias {
         var terms = biasTerms(from: data.dictionaryWords)
 
         // Then proper nouns already on screen. These cover the case the dictionary
-        // cannot — a colleague's name or project that the user never thought to add,
+        // cannot - a colleague's name or project that the user never thought to add,
         // but which is sitting three lines above the cursor.
         let context = SurroundingContext.capture()
         if !context.isEmpty {

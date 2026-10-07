@@ -1,6 +1,7 @@
 import Foundation
+import os
 
-struct TranscriptionEntry: Identifiable {
+struct TranscriptionEntry: Identifiable, Sendable {
     let id: UUID
     let text: String
     let timestamp: Date
@@ -26,6 +27,14 @@ struct HistoryGroup: Identifiable {
 
 class TranscriptionHistory: ObservableObject {
     static let shared = TranscriptionHistory()
+    private static let persistenceQueue = DispatchQueue(
+        label: "utter.history.persistence",
+        qos: .utility
+    )
+    private static let performanceLog = Logger(
+        subsystem: "utter.dictation.app",
+        category: "persistence-performance"
+    )
 
     /// Invalidating from `didSet` rather than at each mutation site: `entries` is
     /// touched from `add`, `delete`, `deleteAll` and `load`, and a future fifth
@@ -37,9 +46,12 @@ class TranscriptionHistory: ObservableObject {
     @Published var totalWords: Int = 0
     @Published var streakDays: Int = 0
 
-    var averageWPM: String {
+    /// Average words per saved dictation. Audio duration is not persisted, so
+    /// reporting words per minute here would be fabricated precision.
+    var averageWordsPerDictation: String {
         guard !entries.isEmpty else { return "\u{2014}" }
-        return "145 WPM"
+        let mean = Double(totalWords) / Double(entries.count)
+        return mean.formatted(.number.precision(.fractionLength(0)))
     }
 
     private let storageDir: URL = AppDirectory.support
@@ -55,6 +67,7 @@ class TranscriptionHistory: ObservableObject {
     // MARK: - Public API
 
     func add(text: String, language: String = "") {
+        guard TranscriptText.isUsable(text) else { return }
         let entry = TranscriptionEntry(text: text, language: language)
         DispatchQueue.main.async {
             self.entries.insert(entry, at: 0)
@@ -82,6 +95,7 @@ class TranscriptionHistory: ObservableObject {
             self.streakDays = 0
             self.activeDays = []
             self.saveHistory()
+            self.flushPendingWrites()
         }
     }
 
@@ -89,14 +103,14 @@ class TranscriptionHistory: ObservableObject {
     /// Cached date grouping, rebuilt when `entries` changes or the day rolls over.
     ///
     /// This was a computed property, so a SwiftUI body reading it re-ran a
-    /// `Dictionary(grouping:)` plus a sort over every entry on every layout pass —
+    /// `Dictionary(grouping:)` plus a sort over every entry on every layout pass  - 
     /// 300+ entries, many times a second while scrolling. The cache is invalidated
     /// from `entries.didSet`.
     private var groupCache: [HistoryGroup]?
 
     /// When the cached *labels* stop being true.
     ///
-    /// `dateLabel` is relative to now — TODAY, YESTERDAY, a weekday — so entries
+    /// `dateLabel` is relative to now - TODAY, YESTERDAY, a weekday - so entries
     /// alone are not enough to key the cache on. Left to `entries.didSet`, a window
     /// open across midnight kept showing yesterday's dictations under a "TODAY"
     /// heading until the user happened to dictate again, which could be hours. The
@@ -121,7 +135,7 @@ class TranscriptionHistory: ObservableObject {
     ///
     /// Derived by adding a calendar day to the start of `date`'s day rather than
     /// adding 86,400 seconds: on a DST transition a local day is 23 or 25 hours long,
-    /// and a fixed-seconds deadline would land an hour either side of midnight —
+    /// and a fixed-seconds deadline would land an hour either side of midnight  - 
     /// exactly the case where a "TODAY" label is wrong and nobody would think to
     /// look. Falls back to +24h only if the calendar cannot answer at all.
     static func nextMidnight(after date: Date, calendar: Calendar = .current) -> Date {
@@ -167,14 +181,16 @@ class TranscriptionHistory: ObservableObject {
 
     private var activeDays: Set<String> {
         get {
+            guard !SnapshotPreviewMode.isActive else { return [] }
             guard let data = try? Data(contentsOf: streakURL),
                   let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
             return Set(arr)
         }
         set {
+            guard !SnapshotPreviewMode.isActive else { return }
             let arr = Array(newValue).sorted()
             if let data = try? JSONSerialization.data(withJSONObject: arr) {
-                // `.atomic` for the same reason as `saveHistory` — a torn write here loses
+                // `.atomic` for the same reason as `saveHistory` - a torn write here loses
                 // the whole streak rather than a day of it.
                 do { try data.write(to: streakURL, options: .atomic) }
                 catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
@@ -183,6 +199,7 @@ class TranscriptionHistory: ObservableObject {
     }
 
     private func recordToday() {
+        guard !SnapshotPreviewMode.isActive else { return }
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         var days = activeDays
@@ -191,6 +208,7 @@ class TranscriptionHistory: ObservableObject {
     }
 
     private func calculateStreak() {
+        guard !SnapshotPreviewMode.isActive else { return }
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let days = activeDays
@@ -209,26 +227,37 @@ class TranscriptionHistory: ObservableObject {
     // MARK: - Persistence
 
     private func saveHistory() {
-        let fmt = ISO8601DateFormatter()
-        let data: [[String: String]] = entries.prefix(1000).map {
-            ["id": $0.id.uuidString, "text": $0.text, "ts": fmt.string(from: $0.timestamp), "lang": $0.language]
-        }
-        if let json = try? JSONSerialization.data(withJSONObject: data, options: .prettyPrinted) {
-            // `.atomic`, and not `try?`.
-            //
-            // Written in place, a crash or power loss mid-write left truncated JSON — and
-            // because `load` simply returned on a parse failure, the app started with an
-            // empty History and the very next dictation overwrote the file. Every earlier
-            // entry was then unrecoverable even though most of the bytes were still on disk.
-            // Atomic writes replace the file only once it is complete, so the old one
-            // survives any failure; `NoteStore` already does this.
-            do { try json.write(to: historyURL, options: .atomic) }
+        guard !SnapshotPreviewMode.isActive else { return }
+        let snapshot = Array(entries.prefix(1000))
+        let destination = historyURL
+        Self.persistenceQueue.async {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let fmt = ISO8601DateFormatter()
+            let rows: [[String: String]] = snapshot.map {
+                ["id": $0.id.uuidString, "text": $0.text, "ts": fmt.string(from: $0.timestamp), "lang": $0.language]
+            }
+            guard let json = try? JSONSerialization.data(withJSONObject: rows, options: .prettyPrinted) else {
+                print("⚠️ Could not encode transcription history")
+                return
+            }
+            // `.atomic`, and not `try?`: keep the previous generation if a write fails.
+            do { try json.write(to: destination, options: .atomic) }
             catch { print("⚠️ Could not write history: \(error.localizedDescription)") }
+            let elapsedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+            Self.performanceLog.info(
+                "history persistence_ms=\(elapsedMilliseconds, format: .fixed(precision: 1)) count=\(snapshot.count) bytes=\(json.count)"
+            )
         }
     }
 
+    /// Wait for queued history writes during explicit data clearing or shutdown.
+    func flushPendingWrites() {
+        Self.persistenceQueue.sync {}
+    }
+
     private func load() {
-        // Nothing on disk yet is the ordinary first-launch case, not a corruption — so it
+        guard !SnapshotPreviewMode.isActive else { return }
+        // Nothing on disk yet is the ordinary first-launch case, not a corruption - so it
         // must come before the salvage below, or every first launch renames a missing file.
         guard let data = try? Data(contentsOf: historyURL) else { return }
         guard let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] else {
@@ -242,14 +271,24 @@ class TranscriptionHistory: ObservableObject {
             return
         }
         let fmt = ISO8601DateFormatter()
+        var discardedNoSpeechMarkers = false
         for item in arr {
             guard let text = item["text"] else { continue }
+            guard TranscriptText.isUsable(text) else {
+                discardedNoSpeechMarkers = true
+                continue
+            }
             let ts = item["ts"].flatMap { fmt.date(from: $0) } ?? Date()
             let id = item["id"].flatMap { UUID(uuidString: $0) } ?? UUID()
             let lang = item["lang"] ?? ""
             let entry = TranscriptionEntry(text: text, timestamp: ts, id: id, language: lang)
             entries.append(entry)
             totalWords += entry.wordCount
+        }
+        if discardedNoSpeechMarkers {
+            // Clean up old placeholder rows on the next atomic history write so
+            // they cannot reappear after a relaunch.
+            saveHistory()
         }
     }
 }

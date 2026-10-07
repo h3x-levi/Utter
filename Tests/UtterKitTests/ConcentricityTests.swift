@@ -5,14 +5,14 @@ import Testing
 /// Why every nested surface in this app keeps a fixed corner radius.
 ///
 /// macOS 26 adds `ConcentricRectangle` and the `containerShape(_:)` overload that
-/// publishes a container's curve, and the obvious reading of this codebase — a row at
-/// `Radius.control` sitting inside a tile at `Radius.panel` — is that those fixed
+/// publishes a container's curve, and the obvious reading of this codebase - a row at
+/// `Radius.control` sitting inside a tile at `Radius.panel` - is that those fixed
 /// constants are a concentricity bug waiting to be converted. They are not, and the
 /// reason is arithmetic rather than taste: **a `.concentric` child resolves to
 /// `container radius − inset`, and every inset in this app is already at or beyond its
 /// container's radius.** Converting would render sharp corners throughout.
 ///
-/// That was measured, not reasoned about — `ConcentricRectangle` was rendered offscreen
+/// That was measured, not reasoned about - `ConcentricRectangle` was rendered offscreen
 /// at 1pt scale and its corner compared against `RoundedRectangle` references; the full
 /// results are recorded above `Radius` in DesignTokens.swift. Two of them matter here:
 /// with no container published the shape resolves to a **sharp rectangle**, and the
@@ -20,7 +20,7 @@ import Testing
 /// container's corner on **both** axes before concentricity has anything to act on.
 ///
 /// So this suite pins the *precondition* rather than a shape. Nothing in a build catches
-/// a spacing retune that quietly makes concentricity applicable — or, worse, one that
+/// a spacing retune that quietly makes concentricity applicable - or, worse, one that
 /// makes a future `.concentric` conversion look reasonable while still resolving to
 /// zero. If a pair here ever moves inside its container's corner, this fails and names
 /// it, which is the moment the API is worth reaching for.
@@ -32,7 +32,7 @@ struct ConcentricityTests {
     /// Every place this app nests a rounded surface inside another one.
     ///
     /// `inset` is the distance from the container's edge to the child's edge on the
-    /// tighter axis — the one that governs — so a pair passes only if the child stays
+    /// tighter axis - the one that governs - so a pair passes only if the child stays
     /// outside the container's corner on both.
     private static let pairs: [(container: CGFloat, inset: CGFloat, label: String)] = [
         (Radius.panel, Space.cardPadding,
@@ -53,7 +53,7 @@ struct ConcentricityTests {
                     \(pair.label): inset \(pair.inset)pt is now inside the container's \
                     \(pair.container)pt corner, so a concentric child would resolve to \
                     \(pair.container - pair.inset)pt instead of 0. Concentricity now \
-                    applies here — see the note above `Radius` in DesignTokens.swift \
+                    applies here - see the note above `Radius` in DesignTokens.swift \
                     before keeping the fixed value.
                     """)
         }
@@ -77,7 +77,7 @@ struct ConcentricityTests {
     /// This is the invariant that survives whatever happens to concentricity: a larger
     /// surface never gets a tighter corner than a smaller one, so nesting reads as
     /// nesting. It is the same class of ordering `VeilRampTests` pins for translucency,
-    /// and it has the same failure mode — five constants that each look deliberate in
+    /// and it has the same failure mode - five constants that each look deliberate in
     /// isolation while two of them have crossed over.
     @Test("The radius ladder increases with the size of the surface")
     func radiusLadderIsMonotonic() {
@@ -90,7 +90,7 @@ struct ConcentricityTests {
         ]
         for (smaller, larger) in zip(ladder, ladder.dropFirst()) {
             #expect(smaller.radius < larger.radius,
-                    "\(larger.name) must have a wider corner than \(smaller.name) — equal or tighter and the nesting reads backwards")
+                    "\(larger.name) must have a wider corner than \(smaller.name) - equal or tighter and the nesting reads backwards")
         }
     }
 
@@ -99,7 +99,7 @@ struct ConcentricityTests {
     /// Pinned because this is the branch a future reader is most likely to assume is
     /// dead. The package floor is macOS 13.3 (set by the prebuilt whisper xcframework),
     /// so `Radius.rect` is not a fallback for a `ConcentricRectangle` that ships
-    /// elsewhere — it is the only shape any of these surfaces ever gets, on every OS the
+    /// elsewhere - it is the only shape any of these surfaces ever gets, on every OS the
     /// app supports including 26. `.continuous` is part of that: macOS squircles are
     /// continuous, and `.circular` reads as web CSS.
     @Test("Radius.rect is a continuous rounded rectangle at the radius asked for")

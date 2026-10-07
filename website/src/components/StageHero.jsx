@@ -25,7 +25,7 @@ export default function StageHero({ onExploreFeatures }) {
 
       {/* Subtitle */}
       <p className="text-base sm:text-lg text-zinc-400 max-w-xl mb-6 leading-relaxed font-normal">
-        Hold a key, speak, let go. Utter transcribes at 180 WPM using local Whisper models in unified memory — zero cloud, zero telemetry, zero latency.
+        Hold a key, speak, let go. Utter transcribes at 180 WPM using local Whisper models in unified memory - zero cloud, zero telemetry, zero latency.
       </p>
 
       {/* Dual CTA Buttons */}

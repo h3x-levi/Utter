@@ -2,7 +2,7 @@ import Foundation
 
 /// The one directory Utter keeps its data in, and the only place its name is written down.
 ///
-/// Six stores used to derive this path independently — `UserData`, `NoteStore`,
+/// Six stores used to derive this path independently - `UserData`, `NoteStore`,
 /// `TranscriptionHistory`, `CrashReporter`, `SpritePackStore` and `PrivacyView` each spelled out
 /// their own copy of the folder name, and they did not all agree. So the app was writing to two
 /// different folders depending on which store you asked, and renaming the folder meant finding
@@ -12,10 +12,10 @@ import Foundation
 /// It also does the three things a data directory should do and none of those seven did:
 ///
 ///   * **migrates** the old folder rather than orphaning it. A rename on the same volume is what
-///     `FileManager.moveItem` performs, so the move is atomic — there is no window where half the
+///     `FileManager.moveItem` performs, so the move is atomic - there is no window where half the
 ///     notes are in one folder and half in the other.
 ///   * **creates it owner-only** (0o700). The old call sites let it default to the process umask,
-///     which is 0o755 — world-readable. `Application Support` is itself 0o700 so nothing could
+///     which is 0o755 - world-readable. `Application Support` is itself 0o700 so nothing could
 ///     traverse in, but a directory holding dictation transcripts should not be relying on its
 ///     parent for that.
 ///   * **cannot trap.** Every old call site did
@@ -30,7 +30,7 @@ enum AppDirectory {
     /// The names to migrate away from, **newest first**.
     ///
     /// **These literals are deliberate historical data and must survive any future de-brand.**
-    /// The app has been renamed twice — `AWSFlow` was the original working title, `Lumen` came
+    /// The app has been renamed twice - `AWSFlow` was the original working title, `Lumen` came
     /// next, and `Utter` is current. Neither old name is branding any more: each is the on-disk
     /// name of a real folder on the Mac of anyone who ran a build from that era, and they are the
     /// only things that find their notes, dictation history and crash logs. A future sweep for an
@@ -40,7 +40,7 @@ enum AppDirectory {
     /// Order is load-bearing. `resolve()` takes the **first** name that exists on disk, so the
     /// newest wins: someone who ran an `AWSFlow` build and then a `Lumen` build has both folders,
     /// and `Lumen` is the one holding the notes they can actually remember writing. Appending a
-    /// future name to the end of this array would migrate the *oldest* data and abandon the rest —
+    /// future name to the end of this array would migrate the *oldest* data and abandon the rest  - 
     /// new names go at the **front**.
     ///
     /// Their twin is the same list in the permission-reset step of `scripts/build-app.sh`. Both
@@ -73,7 +73,7 @@ enum AppDirectory {
     /// says it destroyed is worse than no control, so this returns all of them and the caller
     /// removes each.
     ///
-    /// Not filtered by existence — `removeItem` on a missing path is already a no-op, and a
+    /// Not filtered by existence - `removeItem` on a missing path is already a no-op, and a
     /// `fileExists` check here would be a race with nothing to gain.
     static var legacySupportDirectories: [URL] {
         guard let base = base() else { return [] }
@@ -103,7 +103,7 @@ enum AppDirectory {
         let url = base.appendingPathComponent(name, isDirectory: true)
 
         if !fm.fileExists(atPath: url.path) {
-            // The newest surviving old folder wins — see the note on `legacyNames`.
+            // The newest surviving old folder wins - see the note on `legacyNames`.
             let found = legacyNames
                 .map { (name: $0, url: base.appendingPathComponent($0, isDirectory: true)) }
                 .filter { fm.fileExists(atPath: $0.url.path) }
@@ -123,7 +123,7 @@ enum AppDirectory {
                 } catch {
                     // Keep using the old folder rather than starting empty beside it. Losing sight
                     // of existing notes is far worse than keeping the old name for another launch.
-                    print("⚠️ Could not rename data folder: \(error.localizedDescription) — "
+                    print("⚠️ Could not rename data folder: \(error.localizedDescription) - "
                           + "using \(migrate.name)")
                     create(migrate.url)
                     return migrate.url
@@ -148,7 +148,7 @@ enum AppDirectory {
     /// Create `url` if needed, and make sure it is owner-only either way.
     ///
     /// `createDirectory` applies `attributes` only when it actually creates the directory, so an
-    /// existing folder — every install that predates this — needs the explicit `setAttributes`.
+    /// existing folder - every install that predates this - needs the explicit `setAttributes`.
     private static func create(_ url: URL) {
         let fm = FileManager.default
         try? fm.createDirectory(at: url,

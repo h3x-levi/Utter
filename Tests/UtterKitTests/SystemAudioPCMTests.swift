@@ -4,8 +4,8 @@ import Foundation
 
 /// The conversion both meeting-capture routes share.
 ///
-/// Worth a test rather than trusted because it is now the single implementation for two callers —
-/// ScreenCaptureKit's `CMSampleBuffer` and the process tap's `AudioBufferList` — so a defect here is a
+/// Worth a test rather than trusted because it is now the single implementation for two callers  - 
+/// ScreenCaptureKit's `CMSampleBuffer` and the process tap's `AudioBufferList` - so a defect here is a
 /// defect in every recorded meeting, and because the two things it does wrong most easily are silent:
 /// a downmix that reads past the end of a deinterleaved buffer, and a clamp that lets a hot sample
 /// wrap to the opposite sign and click.
@@ -47,7 +47,7 @@ struct SystemAudioPCMTests {
     @Test("A deinterleaved buffer is channel 0 only, and never reads past it")
     func deinterleavedTakesTheFirstChannel() {
         // CoreAudio's native layout puts each channel in its own buffer, so the buffer handed over is
-        // one channel's worth of frames — dividing by the channel count here would drop half of it,
+        // one channel's worth of frames - dividing by the channel count here would drop half of it,
         // and multiplying the index by it would read off the end.
         let (out, _) = convert([0.25, 0.5, 0.75, 1.0], channels: 2, interleaved: false)
         #expect(out.count == 4)
@@ -76,7 +76,7 @@ struct SystemAudioPCMTests {
     @Test("Samples outside -1...1 clamp instead of wrapping sign")
     func hotSamplesClamp() {
         // Float PCM is not promised to stay inside the range and a mixdown of several loud sources is
-        // exactly when it does not. Without the clamp, `Int16(1.5 * 32767)` traps in Swift — and the
+        // exactly when it does not. Without the clamp, `Int16(1.5 * 32767)` traps in Swift - and the
         // C version of the same bug wraps to a large negative value, which is a click at full scale in
         // the middle of a transcript.
         let (out, peak) = convert([1.5, -2.0, 40.0], channels: 1, interleaved: true)

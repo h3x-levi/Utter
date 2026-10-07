@@ -38,7 +38,7 @@ struct AppIconView: View {
             // The .icns already carries its own rounded silhouette with
             // transparent corners (see scripts/generate_icon.py). Clipping again
             // shaved a second, *circular* radius off a squircle that was already
-            // the right shape — visible as flattened corners at larger sizes.
+            // the right shape - visible as flattened corners at larger sizes.
             Image(nsImage: nsImage)
                 .resizable()
                 .frame(width: size, height: size)

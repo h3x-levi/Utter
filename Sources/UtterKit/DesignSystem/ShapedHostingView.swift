@@ -6,14 +6,14 @@ import SwiftUI
 /// Both floating windows are much larger than their contents, and for good reasons: the
 /// pill's panel is a fixed 320×60 so the note card has room to grow into it without a
 /// resize, and the companion's panel is roughly three times the character so a hop or a
-/// stroll is not clipped. The cost was paid by the user — the transparent margin still
+/// stroll is not clipped. The cost was paid by the user - the transparent margin still
 /// swallowed clicks, so a wide dead zone around a 56pt capsule ate presses meant for the
 /// desktop or the window underneath, and hover was reported as only working near one end
 /// of the pill.
 ///
 /// `hitTest` returning nil is the AppKit answer: the event is offered to whatever is
 /// behind instead, so the margin becomes genuinely transparent to the mouse rather than
-/// merely invisible. It also fixes hover as a side effect — SwiftUI's tracking follows
+/// merely invisible. It also fixes hover as a side effect - SwiftUI's tracking follows
 /// hit-testing, so the reveal now happens anywhere on the capsule instead of wherever the
 /// glyph row happened to reach.
 ///

@@ -4,13 +4,13 @@ import Foundation
 ///
 /// This is the *second* of two passes. `SpeechBias` now also conditions Whisper
 /// with an `initial_prompt` before decoding, which this file previously argued
-/// against — the objection was to an unbounded raw word list, and it still stands
+/// against - the objection was to an unbounded raw word list, and it still stands
 /// for that; see `SpeechBias` for the budget and phrasing that make biasing safe.
 ///
 /// Both passes are kept because they fail in opposite directions. Biasing prevents
 /// an unfamiliar name from being split into common words in the first place, but
 /// cannot help a term the user never added. This pass repairs a near-miss whatever
-/// its cause, but only while the word is still recognisable as one — once
+/// its cause, but only while the word is still recognisable as one - once
 /// "Kubernetes" has become "cooper netties", the token boundaries are gone and edit
 /// distance can no longer find it.
 ///
@@ -18,8 +18,8 @@ import Foundation
 /// case-insensitive Levenshtein distance, and a token that is a close-but-not-exact
 /// match is replaced with the canonical spelling.
 ///
-/// The matcher is deliberately conservative — it only fires on small edit distances
-/// scaled to word length — so ordinary words are never rewritten into jargon.
+/// The matcher is deliberately conservative - it only fires on small edit distances
+/// scaled to word length - so ordinary words are never rewritten into jargon.
 enum DictionaryCorrector {
 
     /// Apply dictionary corrections to `text` using the given canonical words.
@@ -79,7 +79,7 @@ enum DictionaryCorrector {
         if let canonicalForm = canonicalByLower[lower] { return canonicalForm }
 
         // Fuzzy matching is only safe for long, distinctive tokens. Short words
-        // (≤5 chars) are within one edit of countless common words — e.g. a dictionary
+        // (≤5 chars) are within one edit of countless common words - e.g. a dictionary
         // name "Jon" would rewrite "job"/"son", "Ana" would rewrite "and". So short
         // tokens get ONLY the exact-casing correction above; we never fuzzy-match them.
         guard token.count >= minFuzzyLength else { return token }

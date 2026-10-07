@@ -2,7 +2,7 @@ import Foundation
 
 /// Repunctuates a raw transcript into grammatical sentences.
 ///
-/// Whisper predicts punctuation from *prosody* — pitch, intonation, pause length —
+/// Whisper predicts punctuation from *prosody* - pitch, intonation, pause length  - 
 /// not from grammar. A 400ms breath in the middle of a clause and a 400ms breath
 /// at the end of a thought are acoustically identical to it, so it emits a comma
 /// for both. That is why dictating naturally produces long comma-spliced runs:
@@ -39,7 +39,7 @@ enum SentencePolish {
     /// Punctuate `text`, or return it unchanged.
     ///
     /// `precedingText` is the sentence fragment the dictation continues, when
-    /// available — it decides whether the first word should be capitalised or is
+    /// available - it decides whether the first word should be capitalised or is
     /// mid-clause. `tone` is register guidance for the destination app. Both are
     /// optional and additive: with neither, behaviour is exactly as before.
     static func polish(
@@ -59,7 +59,7 @@ enum SentencePolish {
             guard isPlausible(cleaned, original: trimmed) else { return text }
             return cleaned
         } catch {
-            // Unavailable, timed out, or refused — keep what the user said.
+            // Unavailable, timed out, or refused - keep what the user said.
             return text
         }
     }
@@ -143,7 +143,7 @@ enum SentencePolish {
         // Framed as a transformation function, with a worked example.
         //
         // The obvious phrasing ("you fix punctuation… reply with the corrected
-        // text") failed in testing: the model answered the *content* instead —
+        // text") failed in testing: the model answered the *content* instead  - 
         // "I'm sorry to hear that the speech recognition system is having
         // difficulty…" followed by an explanation, then the corrected text buried
         // at the end. Measured 188% length drift, which the plausibility check

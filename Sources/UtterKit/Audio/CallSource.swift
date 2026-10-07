@@ -25,7 +25,7 @@ import Foundation
 /// all. Browsers are intentionally absent.
 ///
 /// **On Zoom's and Teams' virtual audio devices.** Both install one ("ZoomAudioDevice", "Microsoft
-/// Teams Audio" — both were enumerated on this machine even with neither app in a meeting). They are
+/// Teams Audio" - both were enumerated on this machine even with neither app in a meeting). They are
 /// *not* used as corroboration and should not be: their presence says the app is installed, not that
 /// it is in a call, and the process signal already says the stronger thing per direction and per
 /// process. Reading device names would add a second mechanism to answer a question the first one
@@ -34,7 +34,7 @@ struct CallSource: Equatable {
 
     /// The HAL process object doing the audio.
     ///
-    /// Kept because it is exactly what a Core Audio process tap takes — see `ProcessTapCapture` —
+    /// Kept because it is exactly what a Core Audio process tap takes - see `ProcessTapCapture`  - 
     /// so identifying the call and capturing only the call are the same fact, read once.
     let processObject: AudioObjectID
 

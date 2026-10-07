@@ -7,7 +7,7 @@ import Testing
 /// characters drawn in code, and later two Persian cats plus the two Mochi sprite packs.
 /// A `userdata.json` written before either removal still names one of them. Left
 /// unresolved, that selection matches no pack and the companion cannot be shown at all
-/// — so the rule has to be exercised directly rather than inferred from a running app.
+/// - so the rule has to be exercised directly rather than inferred from a running app.
 ///
 /// The pure `static` form is what is tested. The instance method around it writes to
 /// the real `~/Library/Application Support/Utter/userdata.json`, so calling it from a
@@ -16,7 +16,7 @@ import Testing
 @Suite("Companion selection")
 struct CompanionSelectionTests {
 
-    /// The packs Utter bundles, in the order the picker lists them — sorted by display
+    /// The packs Utter bundles, in the order the picker lists them - sorted by display
     /// name, which is what `SpritePackStore.reload()` produces: Golden Dog, Panda,
     /// Pixel Cat (Ginger), Pixel Cat (Gray).
     ///
@@ -46,7 +46,7 @@ struct CompanionSelectionTests {
     func retiredBuiltinFallsBack() {
         // Every id that used to be valid, across both removals: the four code-drawn
         // characters, then the two Persian cats and the two Mochi packs. None of them is a
-        // pack now, so each has to resolve to something real rather than to nothing — and to
+        // pack now, so each has to resolve to something real rather than to nothing - and to
         // the character a fresh install would get, not to whichever pack happens to sort
         // first. A `userdata.json` written before either removal still names one of these.
         for retired in ["mochi", "nori", "pip", "tori",

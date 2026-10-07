@@ -173,19 +173,12 @@ struct ZZProductShotPreview {
         for (name, group) in [
             ("settings-general", SettingsGroup.general),
             ("settings-speech", SettingsGroup.speech),
+            ("settings-appearance", SettingsGroup.appearance),
+            ("settings-privacy", SettingsGroup.privacy),
         ] {
             SettingsSelection.shared.group = group
             settleLayout()
             try capture(window: window, name: name)
-        }
-        SettingsSelection.shared.group = .companion
-        for section in CompanionSection.allCases {
-            CompanionSectionSelection.shared.section = section
-            settleLayout()
-            try capture(
-                window: window,
-                name: "companion-\(section.rawValue.lowercased())"
-            )
         }
         window.orderOut(nil)
     }
@@ -236,10 +229,21 @@ struct ZZProductShotPreview {
         for (name, item) in [
             ("main-dictation", SidebarItem.dictation),
             ("main-notes", SidebarItem.notes),
+            ("main-companion", SidebarItem.companion),
         ] {
             SidebarSelection.shared.item = item
             settleLayout()
             try capture(window: window, name: name)
+        }
+
+        SidebarSelection.shared.item = .companion
+        for section in CompanionSection.allCases {
+            CompanionSectionSelection.shared.section = section
+            settleLayout()
+            try capture(
+                window: window,
+                name: "companion-\(section.rawValue.lowercased())"
+            )
         }
 
         window.orderOut(nil)
