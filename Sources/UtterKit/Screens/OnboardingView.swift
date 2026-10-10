@@ -1,36 +1,102 @@
-import SwiftUI
 import AVFoundation
-import ApplicationServices
+import AppKit
 import Combine
+import SwiftUI
 
-/// A short, resumable first-run flow: explain dictation, obtain required access,
-/// choose an on-device speech model, then show the shortcut and a test field.
-///
-/// Shown once, gated by the `hasCompletedOnboarding` flag in UserDefaults. The user
-/// can re-open it any time, but it won't auto-present again after completion.
-///
-/// An unfinished run is resumable: the current step is written to UserDefaults on
-/// every move, so leaving to System Settings does not lose the user's place.
+/// First run in three steps: watch a sentence appear, allow the two permissions, dictate one
+/// sentence. The step is stored on every move, so a trip to System Settings or a quit mid-way
+/// reopens where the user left.
+@Observable
 @MainActor
-final class OnboardingViewModel: ObservableObject {
-    static let totalSteps = 4
+final class OnboardingViewModel {
+    enum Step: Int, CaseIterable {
+        case welcome, permissions, tryIt
 
-    @Published var step: Int
-    @Published var micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-    @Published var axGranted = AXIsProcessTrusted()
-    @Published var modelReady = ModelStore.url(for: ModelStore.shared.active) != nil
-    @Published var sampleTestText: String = ""
-
-    init(stepOverride: Int? = nil) {
-        step = stepOverride.map { min(max($0, 0), Self.totalSteps - 1) }
-            ?? OnboardingState.resumeStep(stepCount: Self.totalSteps)
+        var name: String {
+            switch self {
+            case .welcome: "Welcome"
+            case .permissions: "Permissions"
+            case .tryIt: "Try it"
+            }
+        }
     }
 
-    func refresh() {
-        micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        axGranted = AXIsProcessTrusted()
-        modelReady = ModelStore.url(for: ModelStore.shared.active) != nil
+    var step: Step {
+        didSet { if !isPreview { OnboardingState.recordStep(step.rawValue) } }
     }
+    private(set) var movingForward = true
+    var micGranted = false
+    var axGranted = false
+    var demoFrame = OnboardingDemo.restFrame
+    private(set) var demoRun = 0
+    var typed = "" {
+        didSet { if OnboardingState.looksDictated(old: oldValue, new: typed) { dictated = true } }
+    }
+    private(set) var dictated = false
+
+    let hotkey: HotkeyLabel
+    let handsFree: String
+
+    private let readiness: ReadinessMonitor
+    private let isPreview: Bool
+    @ObservationIgnored private var subscriptions: Set<AnyCancellable> = []
+
+    /// `stepOverride` is for previews and snapshots: it pins the step and never touches the stored one.
+    init(stepOverride: Int? = nil, readiness: ReadinessMonitor? = nil, userData: UserData = .shared) {
+        let count = Step.allCases.count
+        let index = stepOverride.map { min(max($0, 0), count - 1) }
+            ?? OnboardingState.resumeStep(stepCount: count)
+        step = Step(rawValue: index) ?? .welcome
+        isPreview = stepOverride != nil
+        hotkey = HotkeyLabel(HotkeyOption.find(id: userData.hotkeyId))
+        handsFree = userData.doubleTapHotkeyForHandsFree
+            ? "Double-tap for hands-free."
+            : "\(KeyChord.handsFree.symbols) for hands-free."
+        self.readiness = readiness ?? .shared
+    }
+
+    var canContinue: Bool {
+        OnboardingState.canAdvance(step: step.rawValue, microphoneGranted: micGranted,
+                                   accessibilityGranted: axGranted, dictated: dictated)
+    }
+
+    var demoFinished: Bool { demoFrame >= OnboardingDemo.restFrame }
+
+    func start() {
+        guard !isPreview, subscriptions.isEmpty else { return }
+        readiness.startPolling()
+        readiness.$micGranted.sink { [weak self] in self?.micGranted = $0 }.store(in: &subscriptions)
+        readiness.$axGranted.sink { [weak self] in self?.axGranted = $0 }.store(in: &subscriptions)
+    }
+
+    func stop() {
+        guard !subscriptions.isEmpty else { return }
+        subscriptions.removeAll()
+        readiness.stopPolling()
+    }
+
+    func aim(forward: Bool) { movingForward = forward }
+
+    func move(by delta: Int) {
+        guard let next = Step(rawValue: step.rawValue + delta) else { return }
+        movingForward = delta > 0
+        step = next
+    }
+
+    func playDemo(reduceMotion: Bool) async {
+        guard !reduceMotion else {
+            demoFrame = OnboardingDemo.restFrame
+            return
+        }
+        guard !isPreview else { return }
+        for frame in 0...OnboardingDemo.restFrame {
+            demoFrame = frame
+            guard frame < OnboardingDemo.restFrame,
+                  (try? await Task.sleep(for: OnboardingDemo.hold(frame))) != nil else { return }
+        }
+    }
+
+    func replayDemo() { demoRun += 1 }
 
     func requestMic() {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -51,6 +117,10 @@ final class OnboardingViewModel: ObservableObject {
         AccessibilityPermission.openSettingsPane()
     }
 
+    func finish() {
+        if !isPreview { OnboardingState.markCompleted() }
+    }
+
     private func openSettings(_ pane: String) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
             NSWorkspace.shared.open(url)
@@ -58,80 +128,86 @@ final class OnboardingViewModel: ObservableObject {
     }
 }
 
-/// The first-launch setup: purpose, permissions, model choice, and first capture.
+/// The dictation key as a keycap and as a word in a sentence.
+struct HotkeyLabel: Equatable {
+    let cap: String
+    let word: String
+
+    init(_ option: HotkeyOption) {
+        switch option.id {
+        case "rightOption": (cap, word) = ("\u{2325}", "right Option")
+        case "rightCommand": (cap, word) = ("\u{2318}", "right Command")
+        case "rightControl": (cap, word) = ("\u{2303}", "right Control")
+        default: (cap, word) = ("fn", "fn")
+        }
+    }
+}
+
+/// The welcome step's synthetic dictation: an empty plate while the key goes down, a word at a
+/// time while speaking, the finished line once the key is let go, then rest.
+enum OnboardingDemo {
+    enum Phase: CaseIterable {
+        case hold, speak, release
+    }
+
+    static let words = "Thanks Priya, Thursday at two works for me.".split(separator: " ").map(String.init)
+    static var restFrame: Int { words.count + 2 }
+
+    static func phase(_ frame: Int) -> Phase? {
+        switch frame {
+        case 0: .hold
+        case 1...words.count: .speak
+        case words.count + 1: .release
+        default: nil
+        }
+    }
+
+    static func caption(_ frame: Int) -> (text: String, live: String?) {
+        let shown = min(max(frame, 0), words.count)
+        guard phase(frame) == .speak else { return (words.prefix(shown).joined(separator: " "), nil) }
+        return (words.prefix(shown - 1).joined(separator: " "), words[shown - 1])
+    }
+
+    static func hold(_ frame: Int) -> Duration {
+        switch phase(frame) {
+        case .hold: .milliseconds(800)
+        case .speak: frame == words.count ? .milliseconds(600) : .milliseconds(300)
+        default: .milliseconds(1400)
+        }
+    }
+}
+
 struct OnboardingView: View {
     var onFinish: (_ skipped: Bool) -> Void
 
-    @StateObject private var model: OnboardingViewModel
-    @ObservedObject private var userData = UserData.shared
-    @ObservedObject private var motion = MotionPreference.shared
-
-    private let poll = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    @State private var model: OnboardingViewModel
+    @FocusState private var fieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(onFinish: @escaping (_ skipped: Bool) -> Void, previewStep: Int? = nil) {
+        self.init(model: OnboardingViewModel(stepOverride: previewStep), onFinish: onFinish)
+    }
+
+    init(model: OnboardingViewModel, onFinish: @escaping (_ skipped: Bool) -> Void) {
         self.onFinish = onFinish
-        _model = StateObject(wrappedValue: OnboardingViewModel(stepOverride: previewStep))
+        _model = State(initialValue: model)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Setup is local; show progress without account framing.
-            HStack {
-                HStack(spacing: 6) {
-                    ForEach(0..<OnboardingViewModel.totalSteps, id: \.self) { i in
-                        Capsule()
-                            .fill(i == model.step ? Tint.accent : Color.primary.opacity(0.15))
-                            .frame(width: i == model.step ? 20 : 7, height: 7)
-                            .animation(motion.reduceMotion ? Motion.reduced : Motion.layout,
-                                       value: model.step)
-                    }
+            ScrollView {
+                ZStack(alignment: .top) {
+                    stepView
+                        .id(model.step)
+                        .transition(stepTransition)
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Step \(model.step + 1) of \(OnboardingViewModel.totalSteps)")
-
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.horizontal, Look.Space.x8)
+                .padding(.top, Look.Space.x6)
+                .padding(.bottom, Look.Space.x4)
             }
-            .padding(.horizontal, Space.x5)
-            .padding(.top, 18)
-
-            GeometryReader { proxy in
-                ScrollView {
-                    stepContent
-                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
-                        .padding(.vertical, Space.x3)
-                }
-            }
-
-            // Nav buttons
-            HStack {
-                if model.step > 0 {
-                    GlassButton(title: "Back") {
-                        withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
-                            model.step -= 1
-                        }
-                    }
-                }
-
-                if model.step < OnboardingViewModel.totalSteps - 1 {
-                    GlassButton(title: "Set up later") { finish(skipped: true) }
-                }
-
-                Spacer()
-                GlassButton(
-                    title: model.step == OnboardingViewModel.totalSteps - 1 ? "Get started" : "Continue",
-                    prominent: true
-                ) {
-                    if model.step < OnboardingViewModel.totalSteps - 1 {
-                        withAnimation(motion.reduceMotion ? Motion.reduced : Motion.layout) {
-                            model.step += 1
-                        }
-                    } else {
-                        finish(skipped: false)
-                    }
-                }
-                .disabled(!canAdvance)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(Space.x5)
+            .scrollBounceBehavior(.basedOnSize)
+            navBar
         }
         .frame(minWidth: Layout.onboardingMinWidth,
                idealWidth: Layout.onboardingIdealWidth,
@@ -139,236 +215,269 @@ struct OnboardingView: View {
                minHeight: Layout.onboardingMinHeight,
                idealHeight: Layout.onboardingIdealHeight,
                maxHeight: .infinity)
-        .background(OnboardingBacking())
-        .onReceive(poll) { _ in
-            model.refresh()
-        }
-        .onChange(of: model.step) { value in OnboardingState.recordStep(value) }
-    }
-
-    private var canAdvance: Bool {
-        OnboardingState.canAdvance(
-            step: model.step,
-            microphoneGranted: model.micGranted,
-            accessibilityGranted: model.axGranted,
-            modelReady: model.modelReady
-        )
-    }
-
-    // MARK: - Steps
-
-    private var stepContent: some View {
-        Group {
-            switch model.step {
-            case 0: welcomeStep
-            case 1: accessStep
-            case 2: modelStep
-            default: readyStep
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, Space.x10)
-        .transition(
-            motion.reduceMotion
-                ? .opacity
-                : .asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                  )
-        )
-        .id(model.step)
-    }
-
-    private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: Space.x5) {
-            HStack(spacing: Space.x2) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                Text("Utter")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Ink.primary)
-            }
-
-            VStack(alignment: .leading, spacing: Space.x2) {
-                Text("Speak. Keep your flow.")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(Ink.primary)
-                Text("Hold a shortcut, say what you mean, then release. Utter types your words into the app you’re already using.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(alignment: .top, spacing: Space.x4) {
-                onboardingStep("Hold", detail: "Your shortcut", symbol: "keyboard")
-                onboardingStep("Speak", detail: "Naturally", symbol: "mic")
-                onboardingStep("Type", detail: "Text appears", symbol: "text.cursor")
-            }
-            .padding(.vertical, Space.x3)
-
-            HairlineDivider()
-
-            VStack(alignment: .leading, spacing: Space.x2) {
-                Label("Private by default", systemImage: "lock.shield")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Ink.primary)
-                Text("Speech recognition runs on this Mac. Small is included; downloading another model is optional. Utter does not upload your audio or text.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Ink.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: 520, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private func onboardingStep(_ title: String, detail: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: Space.x1) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.accentColor)
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Ink.primary)
-            Text(detail)
-                .font(.system(size: 11))
-                .foregroundStyle(Ink.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var accessStep: some View {
-        VStack(alignment: .leading, spacing: Space.x4) {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Allow the two things dictation needs").typo(.heading)
-                Text("Utter listens only while you hold the shortcut. Recognition stays on this Mac.")
-                    .typo(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            PermissionStep(
-                icon: "mic.fill",
-                iconColor: Tint.recording,
-                title: "Microphone",
-                message: "Used only while you dictate or explicitly record a note.",
-                granted: model.micGranted,
-                grantedLabel: "Microphone ready",
-                actionLabel: "Allow microphone",
-                action: { model.requestMic() }
-            )
-            PermissionStep(
-                icon: "accessibility",
-                iconColor: Tint.accent,
-                title: "Accessibility",
-                message: "Lets Utter detect your shortcut and type finished words into the app you’re using.",
-                granted: model.axGranted,
-                grantedLabel: "Text insertion ready",
-                actionLabel: "Open Accessibility settings",
-                action: { model.requestAccessibility() }
-            )
+        .background(Look.Color.ground.ignoresSafeArea())
+        .onAppear { model.start() }
+        .onDisappear { model.stop() }
+        .onChange(of: model.step) { _, step in announce(stepLabel(step)) }
+        .onChange(of: model.dictated) { _, dictated in
+            if dictated { announce("It works. Hold \(model.hotkey.word) to talk in any app.") }
         }
     }
 
-    private var modelStep: some View {
-        ModelChooserView()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, Space.x2)
+    @ViewBuilder private var stepView: some View {
+        switch model.step {
+        case .welcome: welcome
+        case .permissions: permissions
+        case .tryIt: tryIt
+        }
     }
 
-    private var readyStep: some View {
-        VStack(spacing: Space.groupGap) {
-            VStack(spacing: Space.x2) {
-                Image(systemName: model.modelReady ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(model.modelReady ? Tint.successText : Tint.warningText)
-                Text(model.modelReady ? "You\u{2019}re all set" : "Speech model missing")
-                    .typo(.title)
-            }
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let forward = model.movingForward
+        return .asymmetric(insertion: .move(edge: forward ? .trailing : .leading),
+                           removal: .move(edge: forward ? .leading : .trailing))
+            .combined(with: .opacity)
+    }
 
-            VStack(alignment: .leading, spacing: Space.x4) {
-                ContentSection(title: "Your shortcut", systemImage: "keyboard") {
-                    AppleSettingsRow(title: "Hold to dictate", subtitle: "You can change this later in Workflow settings.") {
-                        Picker("Dictation shortcut", selection: $userData.hotkeyName) {
-                            ForEach(HotkeyOption.options) { option in
-                                Text(option.name).tag(option.name)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 130)
-                        .onChange(of: userData.hotkeyName) { _ in
-                            userData.save()
-                            NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
-                        }
-                    }
-                }
+    // MARK: - Welcome
 
-                ContentSection(title: "Try a first capture", systemImage: "waveform") {
-                    VStack(alignment: .leading, spacing: Space.x2) {
-                        Text("Click the field, hold \(userData.hotkeyName), and speak. Your words should appear here.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Ink.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        TextField("Your words will appear here", text: $model.sampleTestText, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .lineLimit(2...5)
-                    }
-                }
-            }
-
-            Text(model.modelReady
-                 ? "Hold \(UserData.shared.hotkeyName) anywhere and start dictating."
-                 : "The bundled speech model couldn\u{2019}t be found. Reinstalling Utter should restore it.")
-                .typo(.callout)
-                .multilineTextAlignment(.center)
+    private var welcome: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label { Text("Utter") } icon: { Image(systemName: "waveform") }
+                .font(Look.Font.body.weight(.bold))
+                .foregroundStyle(Look.Color.ink)
+            Text("Hold \(model.hotkey.word), say what you mean, and let go. Utter types it where your cursor is.")
+                .font(Look.Font.body)
+                .foregroundStyle(Look.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Look.Space.x2)
+            demo.padding(.top, Look.Space.x6)
+            Label {
+                Text("Utter runs on this Mac. Your voice and words never leave it.")
+            } icon: {
+                Image(systemName: "lock").foregroundStyle(Look.Color.inkTertiary)
+            }
+            .font(Look.Font.body)
+            .foregroundStyle(Look.Color.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, Look.Space.x8)
         }
     }
 
-    // MARK: - Actions
+    private var demo: some View {
+        let caption = OnboardingDemo.caption(model.demoFrame)
+        let phase = OnboardingDemo.phase(model.demoFrame)
+        return VStack(alignment: .leading, spacing: Look.Space.x3) {
+            Look.CaptionPlate(text: caption.text, liveWord: caption.live, caret: phase == .hold || phase == .speak)
+                .accessibilityHidden(true)
+            HStack(spacing: Look.Space.x3) {
+                HStack(spacing: Look.Space.x3) {
+                    Look.Keycap(model.hotkey.cap)
+                    ForEach(OnboardingDemo.Phase.allCases, id: \.self) { step in
+                        ZStack {
+                            Look.SoundTag(phaseLabel(step), state: .live).hidden()
+                            Look.SoundTag(phaseLabel(step), state: step == phase ? .live : .neutral)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Example: hold \(model.hotkey.word), speak, then let go, and your words are typed.")
+                Spacer(minLength: Look.Space.x3)
+                if model.demoFinished, !reduceMotion {
+                    Button("Replay example") { model.replayDemo() }
+                        .buttonStyle(Look.QuietButtonStyle())
+                } else {
+                    Look.SoundTag("example").accessibilityHidden(true)
+                }
+            }
+        }
+        .task(id: model.demoRun) { await model.playDemo(reduceMotion: reduceMotion) }
+    }
+
+    private func phaseLabel(_ phase: OnboardingDemo.Phase) -> String {
+        switch phase {
+        case .hold: "hold \(model.hotkey.cap)"
+        case .speak: "speak"
+        case .release: "let go"
+        }
+    }
+
+    // MARK: - Permissions
+
+    private var permissions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Let Utter hear you and type for you")
+                .font(Look.Font.body.weight(.semibold))
+                .foregroundStyle(Look.Color.ink)
+            Text("If System Settings opens, switch Utter on there and come back.")
+                .font(Look.Font.secondary)
+                .foregroundStyle(Look.Color.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Look.Space.x1)
+            Look.Well(spacing: Look.Space.x5) {
+                PermissionRow(title: "Microphone",
+                              why: "Hears you only while you hold \(model.hotkey.word).",
+                              granted: model.micGranted,
+                              grant: model.requestMic)
+                PermissionRow(title: "Accessibility",
+                              why: "Lets Utter notice \(model.hotkey.word) and type your words where your cursor is.",
+                              granted: model.axGranted,
+                              grant: model.requestAccessibility)
+            }
+            .padding(.top, Look.Space.x5)
+        }
+    }
+
+    // MARK: - Try it
+
+    private var tryIt: some View {
+        let blocked = !model.micGranted || !model.axGranted
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Try it")
+                .font(Look.Font.body.weight(.semibold))
+                .foregroundStyle(Look.Color.ink)
+            Text("Hold \(model.hotkey.word) and say anything.")
+                .font(Look.Font.body)
+                .foregroundStyle(Look.Color.inkSecondary)
+                .padding(.top, Look.Space.x1)
+            TextField("Your words appear here", text: $model.typed, axis: .vertical)
+                .font(Look.Font.body)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(3...6)
+                .focused($fieldFocused)
+                .accessibilityLabel("Practice field")
+                .padding(.top, Look.Space.x4)
+            Look.SoundTag(model.dictated ? "it works" : blocked ? "not ready" : "ready",
+                          state: model.dictated ? .ok : blocked ? .warn : .neutral,
+                          widest: "not ready")
+                .padding(.top, Look.Space.x3)
+            if blocked, !model.dictated {
+                Text("Utter still needs both permissions. Go back to allow them.")
+                    .font(Look.Font.secondary)
+                    .foregroundStyle(Look.Color.inkSecondary)
+                    .padding(.top, Look.Space.x1)
+            }
+            if model.dictated {
+                shortcutSummary
+                    .padding(.top, Look.Space.x5)
+                    .transition(.opacity)
+            }
+        }
+        .lookAnimation(.settle, value: model.dictated)
+        .onAppear { fieldFocused = true }
+    }
+
+    private var shortcutSummary: some View {
+        Look.Well(spacing: Look.Space.x4) {
+            Text("That\u{2019}s it. It works the same in any app.")
+                .font(Look.Font.body)
+                .foregroundStyle(Look.Color.ink)
+            HStack(alignment: .top, spacing: Look.Space.x3) {
+                Look.Keycap(model.hotkey.cap)
+                VStack(alignment: .leading, spacing: Look.Space.x1) {
+                    Text("Hold to talk.").foregroundStyle(Look.Color.ink)
+                    Text(model.handsFree).foregroundStyle(Look.Color.inkSecondary)
+                }
+                .font(Look.Font.body)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    // MARK: - Navigation
+
+    private var navBar: some View {
+        HStack(spacing: Look.Space.x3) {
+            Button("Set up later") { finish(skipped: true) }
+                .buttonStyle(Look.QuietButtonStyle())
+                .keyboardShortcut(.cancelAction)
+            Spacer()
+            if model.step != .welcome {
+                Button("Back") { go(-1) }
+            }
+            Button(model.step == .tryIt ? "Done" : "Continue") {
+                if model.step == .tryIt { finish(skipped: false) } else { go(1) }
+            }
+            .keyboardShortcut(.defaultAction)
+            .disabled(!model.canContinue)
+        }
+        .overlay { pager }
+        .padding(.horizontal, Look.Space.x8)
+        .padding(.vertical, Look.Space.x5)
+    }
+
+    private var pager: some View {
+        HStack(spacing: Look.Space.x2) {
+            ForEach(OnboardingViewModel.Step.allCases, id: \.self) { step in
+                Circle()
+                    .fill(step == model.step ? Look.Color.ink : Look.Color.inkTertiary.opacity(0.35))
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .lookAnimation(.settle, value: model.step)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(stepLabel(model.step))
+    }
+
+    private func go(_ delta: Int) {
+        model.aim(forward: delta > 0)
+        // The leaving step takes its removal edge from the previous render, so the direction lands a turn early.
+        DispatchQueue.main.async {
+            withAnimation(Look.Motion.settle.animation(reduceMotion: reduceMotion)) { model.move(by: delta) }
+        }
+    }
 
     private func finish(skipped: Bool) {
-        OnboardingState.markCompleted()
+        model.finish()
         onFinish(skipped)
+    }
+
+    private func stepLabel(_ step: OnboardingViewModel.Step) -> String {
+        "Step \(step.rawValue + 1) of \(OnboardingViewModel.Step.allCases.count), \(step.name)"
+    }
+
+    private func announce(_ text: String) {
+        AccessibilityNotification.Announcement(text).post()
     }
 }
 
-// MARK: - Reusable permission step
-
-private struct PermissionStep: View {
-    let icon: String
-    let iconColor: Color
+/// One permission: what it is, why Utter needs it, and its state or the button that asks for it.
+private struct PermissionRow: View {
     let title: String
-    let message: String
+    let why: String
     let granted: Bool
-    let grantedLabel: String
-    let actionLabel: String
-    let action: () -> Void
+    let grant: () -> Void
 
     var body: some View {
-        ContentSection(title: title, systemImage: icon, tint: granted ? Tint.success : iconColor) {
-            VStack(alignment: .leading, spacing: Space.x3) {
-                Text(message)
-                    .typo(.callout)
+        HStack(alignment: .center, spacing: Look.Space.x4) {
+            VStack(alignment: .leading, spacing: Look.Space.x1) {
+                Text(title)
+                    .font(Look.Font.heading)
+                    .foregroundStyle(Look.Color.ink)
+                Text(why)
+                    .font(Look.Font.secondary)
+                    .foregroundStyle(Look.Color.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(granted ? "On" : "Off")
+            ZStack(alignment: .trailing) {
+                status(granted: false).hidden()
+                status(granted: granted)
+            }
+        }
+    }
 
-                if granted {
-                    HStack(spacing: Space.x2) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Tint.success)
-                            .scaleEffect(1.05)
-                        Text(grantedLabel)
-                            .typo(.caption, ink: Tint.successText)
-                    }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 10)
-                    .background(Tint.success.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    GlassButton(title: actionLabel, prominent: true, action: action)
-                }
+    @ViewBuilder private func status(granted: Bool) -> some View {
+        if granted {
+            Look.ReadinessTag(label: "on", state: .ready).accessibilityHidden(true)
+        } else {
+            HStack(spacing: Look.Space.x2) {
+                Look.SoundTag("off", state: .warn).accessibilityHidden(true)
+                Button("Grant", action: grant)
+                    .accessibilityLabel("Grant \(title) access")
             }
         }
     }
@@ -376,11 +485,7 @@ private struct PermissionStep: View {
 
 // MARK: - Onboarding completion flag
 
-/// Tracks whether the user has finished first-run onboarding, and how far an
-/// unfinished run got.
-///
-/// Both facts live here rather than in the view so onboarding's persistence is one
-/// type with one set of keys.
+/// Whether the user has finished first-run onboarding, and how far an unfinished run got.
 enum OnboardingState {
     private static let completedKey = "hasCompletedOnboarding"
     /// The step the user was last on. Cleared on completion - see `markCompleted`.
@@ -390,48 +495,31 @@ enum OnboardingState {
         UserDefaults.standard.bool(forKey: completedKey)
     }
 
-    static func canAdvance(
-        step: Int,
-        microphoneGranted: Bool,
-        accessibilityGranted: Bool,
-        modelReady: Bool
-    ) -> Bool {
+    static func canAdvance(step: Int, microphoneGranted: Bool, accessibilityGranted: Bool, dictated: Bool) -> Bool {
         switch step {
-        case 1: return microphoneGranted && accessibilityGranted
-        case 2: return modelReady
-        default: return true
+        case 1: microphoneGranted && accessibilityGranted
+        case 2: dictated
+        default: true
         }
     }
 
-    /// Remember the step the user is on.
+    // ponytail: any insertion of two or more characters counts, so a manual paste passes too; hook the dictation pipeline if that matters.
+    static func looksDictated(old: String, new: String) -> Bool {
+        new.count - old.count >= 2 && new.contains { !$0.isWhitespace }
+    }
+
     static func recordStep(_ step: Int) {
         UserDefaults.standard.set(step, forKey: stepKey)
     }
 
-    /// Which step an unfinished run should reopen on.
     static func resumeStep(stepCount: Int) -> Int {
         resumeStep(stored: UserDefaults.standard.integer(forKey: stepKey),
                    completed: hasCompleted,
                    stepCount: stepCount)
     }
 
-    /// The resume rule, taking its inputs directly so it can be tested without
-    /// writing to the user's defaults.
-    ///
-    /// Three decisions are encoded here:
-    ///
-    ///   * **The step they left, not the furthest they reached.** Going back is a
-    ///     deliberate act - someone who returned to the microphone step to re-read it
-    ///     and then quit wants that step again, not the one they had already moved
-    ///     past.
-    ///   * **Clamped into range.** A step stored by a build with more steps than this
-    ///     one must not survive: `stepContent` falls through to the ready step for any
-    ///     unknown index, but the nav row only finishes the flow at
-    ///     `totalSteps - 1`, so an out-of-range step would show "Continue" on the
-    ///     final screen and count upwards forever with no way out.
-    ///   * **A completed run never resumes.** `markCompleted` clears the step, and
-    ///     this check means that even a stored one cannot pull a deliberate re-open
-    ///     into the middle of the flow.
+    /// The step they left (not the furthest reached), clamped so a step stored by a longer flow
+    /// lands on the last one, and never mid-flow once completed.
     static func resumeStep(stored: Int, completed: Bool, stepCount: Int) -> Int {
         guard stepCount > 0, !completed else { return 0 }
         return min(max(stored, 0), stepCount - 1)
@@ -439,78 +527,7 @@ enum OnboardingState {
 
     static func markCompleted() {
         UserDefaults.standard.set(true, forKey: completedKey)
-        // Forget the anchor. Leaving it behind would drop anyone who later replays
-        // onboarding - which means clearing `hasCompletedOnboarding` - straight back
-        // into the middle of the flow they just finished.
+        // Leaving the step behind would drop a later replay of onboarding into the middle of the flow.
         UserDefaults.standard.removeObject(forKey: stepKey)
-    }
-}
-
-/// One readiness row on the final onboarding step: what it is, and whether it's ready.
-///
-/// `LabeledContent` - the system's label/value row, `@available(macOS 13.0)`, so no
-/// availability branch at this target. It replaces a hand-built `HStack` carrying a
-/// `Circle().frame(width: 7, height: 7)` and a manually composed
-/// `accessibilityElement(children: .combine)` + `accessibilityLabel("\(label): ready")`.
-/// The system now supplies the label/value pairing VoiceOver reads, the alignment
-/// between the four rows, and the trailing-value layout - including under a large
-/// system text size, where the hand-built version simply grew wider.
-///
-/// The status is a `Label`, not a bare colour, so the state is legible without relying
-/// on hue: a dot at `Tint.warning` on cream measures 1.48:1 (the figure recorded on the
-/// step's own header glyph), and colour alone fails the same test for anyone who cannot
-/// separate the two hues. The word "Ready" carries the meaning; the tint only reinforces
-/// it, and uses the `*Text` variants that were measured against these tiles.
-///
-/// `Ink.secondary` for the label, not `.secondary`: `secondaryLabelColor` is calibrated
-/// against an opaque control background and measures **4.01:1** on this app's
-/// translucent tiles (see `Ink.secondary`'s own note) - under the 4.5:1 floor, and this
-/// row sits inside a `ContentSection`.
-private struct ReadinessRow: View {
-    let label: String
-    let ok: Bool
-    /// What to say when a requirement is missing.
-    var pendingText: String = "Needs attention"
-
-    var body: some View {
-        LabeledContent(label) {
-            Label(ok ? "Ready" : pendingText,
-                  systemImage: ok ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .labelStyle(.titleAndIcon)
-                .typo(.caption, ink: ok ? Tint.successText : Tint.warningText)
-        }
-        .typo(.caption, ink: Ink.secondary)
-    }
-}
-
-
-/// The onboarding window's surface.
-///
-/// Matches `FlowContent.windowSurface` rather than inventing its own - this
-/// is the very first screen, and having it read as a different app's window was
-/// the most visible inconsistency in the app.
-struct OnboardingBacking: View {
-    @ObservedObject private var motion = MotionPreference.shared
-    /// Observed although the body never names it: `Surface.canvas` resolves
-    /// `ThemeManager.shared.current`, and without a dependency on the manager this
-    /// body is not re-evaluated when the theme changes - so the window kept the
-    /// previous theme's canvas whenever the two themes shared an appearance
-    /// (Paper → Linen, or any of the four dark themes), where `colorScheme` alone
-    /// does not change.
-    @ObservedObject private var theme = ThemeManager.shared
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        if motion.reduceTransparency {
-            Surface.canvas
-        } else {
-            ZStack {
-                WindowBacking(material: .underWindowBackground).ignoresSafeArea()
-                // Same values it already carried; the token is now where they live.
-                Surface.canvas
-                    .opacity(Veil.windowShell(isDark: colorScheme == .dark))
-                    .ignoresSafeArea()
-            }
-        }
     }
 }
