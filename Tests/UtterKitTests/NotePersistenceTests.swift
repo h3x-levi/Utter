@@ -288,4 +288,32 @@ struct NotePersistenceTests {
         let decoded = try decoder().decode(Note.self, from: encoder().encode(note))
         #expect(decoded.body == nasty)
     }
+
+    static let fractionalFile = """
+    [{"id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F", "title": "Pinned title",
+      "body": "Shipped.", "created": "2023-11-14T22:13:20.125Z",
+      "modified": "2023-11-14T23:13:20.875Z", "tags": ["work"],
+      "source": "meeting", "titleIsCustom": true}]
+    """
+
+    static let wholeSecondFile = """
+    [{"id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F", "title": "Pinned title",
+      "body": "Shipped.", "created": "2023-11-14T22:13:20Z",
+      "modified": "2023-11-14T23:13:20Z", "tags": ["work"],
+      "source": "meeting", "titleIsCustom": true}]
+    """
+
+    @Test("Golden notes.json files in both date shapes decode")
+    func goldenFilesDecodeInBothDateShapes() throws {
+        let fractional = try decoder().decode([Note].self, from: Data(Self.fractionalFile.utf8))
+        let whole = try decoder().decode([Note].self, from: Data(Self.wholeSecondFile.utf8))
+
+        #expect(fractional.count == 1 && whole.count == 1)
+        #expect(fractional[0].created.timeIntervalSince1970 == 1_700_000_000.125)
+        #expect(whole[0].created.timeIntervalSince1970 == 1_700_000_000)
+        #expect(fractional[0].id == whole[0].id)
+        #expect(fractional[0].source == .meeting && whole[0].source == .meeting)
+        #expect(fractional[0].titleIsCustom && whole[0].titleIsCustom)
+        #expect(fractional[0].tags == ["work"] && whole[0].tags == ["work"])
+    }
 }
