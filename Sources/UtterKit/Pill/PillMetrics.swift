@@ -113,7 +113,7 @@ enum PillMetrics {
     /// **The states that are actually morph endpoints are all in the first group**, which is
     /// what makes the fallback's one-pass lag harmless in practice rather than in theory:
     /// `.capturingNote` is entered from `.idle`, `.recording` and `.handsFree`, and left only
-    /// for `.processing(.transcribing)` (`AppDelegate.stopRecording`) or `.idle`. Entering is
+    /// for `.processing(.transcribing)` (`CaptureMachine`'s stop) or `.idle`. Entering is
     /// safe from a measured state - the pill already *has* that width, settled, from the
     /// previous pass. Leaving is the direction that needs the destination's width up front,
     /// and both destinations have one. `PillMorphTests` pins that list, because a future
