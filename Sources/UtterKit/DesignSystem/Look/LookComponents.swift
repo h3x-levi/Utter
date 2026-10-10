@@ -18,17 +18,18 @@ private struct PlateSurface: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         shape.fill(Look.Color.plate)
-            .background { if opaque || reduceTransparency { shape.fill(.black) } }
+            .background { if opaque || reduceTransparency { shape.fill(Look.Color.ground) } }
             .overlay { Hairline(shape: shape) }
     }
 }
 
 private struct Hairline<S: InsettableShape>: View {
     let shape: S
+    var color = Look.Color.hairline
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        shape.strokeBorder(Look.Color.hairline, lineWidth: 1 / displayScale)
+        shape.strokeBorder(color, lineWidth: 1 / displayScale)
     }
 }
 
@@ -66,6 +67,7 @@ extension Look {
                             caretGap: metrics.caretGap, centred: size == .pill, hasCaret: caret) {
                     ForEach(words.items) { item in
                         WordCell(word: item.word, isLive: item.id == words.liveID, font: metrics.font)
+                            .equatable()
                     }
                     if caret {
                         Rectangle().fill(Color.live).frame(width: 2, height: metrics.caretHeight)
@@ -255,31 +257,35 @@ extension Look {
         }
 
         var body: some View {
-            HStack(spacing: Space.x1) {
-                Text(verbatim: "[")
-                word
-                Text(verbatim: "]")
+            ZStack(alignment: .leading) {
+                if let widest { tag(widest).hidden() }
+                tag(label)
             }
-            .font(Font.tag.weight(.regular))
-            .foregroundStyle(Color.ink)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
         }
 
-        private var word: some View {
-            ZStack(alignment: .leading) {
-                if let widest { Text(widest).hidden() }
-                Text(label)
+        private func tag(_ text: String) -> some View {
+            HStack(spacing: Space.x1) {
+                Text(verbatim: "[")
+                word(text)
+                Text(verbatim: "]")
             }
-            .font(Font.tag)
-            .tracking(Font.tagTracking)
-            .textCase(.uppercase)
-            .foregroundStyle(ink)
-            .padding(.horizontal, state == .live ? 5 : 0)
-            .padding(.vertical, state == .live ? 2 : 0)
-            .background {
-                if state == .live { RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color.plate) }
-            }
+            .font(Font.tag.weight(.regular))
+            .foregroundStyle(Color.ink)
+        }
+
+        private func word(_ text: String) -> some View {
+            Text(text)
+                .font(Font.tag)
+                .tracking(Font.tagTracking)
+                .textCase(.uppercase)
+                .foregroundStyle(ink)
+                .padding(.horizontal, state == .live ? 5 : 0)
+                .padding(.vertical, state == .live ? 2 : 0)
+                .background {
+                    if state == .live { RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color.plate) }
+                }
         }
 
         private var ink: SwiftUI.Color {
@@ -364,8 +370,8 @@ extension Look {
                 .frame(minWidth: 34, minHeight: 30, alignment: .bottomLeading)
                 .background {
                     shape.fill(Color.wellRaised)
-                        .shadow(color: Color.hairline, radius: 0.5, y: 1.5)
-                        .overlay { Hairline(shape: shape) }
+                        .shadow(color: Color.ink.opacity(0.2), radius: 0.5, y: 1)
+                        .overlay { Hairline(shape: shape, color: Color.ink.opacity(0.26)) }
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(key) key")
@@ -479,6 +485,8 @@ extension Look {
                         .accessibilityHint(label)
                 }
             }
+            // Tall enough for the small button, so granting never changes the row's height.
+            .frame(minHeight: 24)
             .accessibilityElement(children: .contain)
         }
 
@@ -555,6 +563,7 @@ extension Look {
             content
                 .font(isSelected ? Font.heading : Font.secondary)
                 .foregroundStyle(isSelected ? Color.plateInk : Color.ink)
+                .listItemTint(isSelected ? Color.plateInk : Color.inkSecondary)
                 .listRowBackground(isSelected ? PlateSurface(radius: Radius.plate, opaque: true)
                     .padding(.horizontal, Space.x2) : nil)
         }
