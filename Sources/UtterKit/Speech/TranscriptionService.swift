@@ -28,6 +28,8 @@ class TranscriptionService {
         self.provider = provider
     }
 
+    /// Whisper, then mechanical formatting. Polish and the later text stages belong to
+    /// `DictationPipeline`.
     func transcribe(audioData: Data) async throws -> String {
         let requestStarted = DispatchTime.now().uptimeNanoseconds
         let raw = try await Signposts.interval("Transcription") {
@@ -38,34 +40,14 @@ class TranscriptionService {
             return ""
         }
         let formatted = Self.formatText(raw)
-
-        // Gather destination context before polishing. Both degrade to "" / nil, so a
-        // failure here costs the hint, not the transcription.
-        let preceding = await SurroundingContext.capture().trailingFragment
-        let tone = await MainActor.run { () -> String? in
-            UserData.shared.perAppToneEnabled
-                ? AppContext.tone(for: AppContext.detect())
-                : nil
-        }
-
-        // Then repunctuate. Whisper guesses punctuation from pauses, so raw output
-        // is comma-spliced; `formatText` can only fix mechanical things like
-        // capitalisation. `SentencePolish` fails open, returning `formatted`
-        // unchanged if the language model is unavailable or its output looks
-        // like anything other than a repunctuation.
-        let polishStarted = DispatchTime.now().uptimeNanoseconds
-        let polished = await Signposts.interval("Polish") {
-            await SentencePolish.polish(formatted, precedingText: preceding, tone: tone)
-        }
-        let polishMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - polishStarted) / 1_000_000
         let totalMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - requestStarted) / 1_000_000
         Self.performanceLog.info(
-            "dictation total_ms=\(totalMilliseconds, format: .fixed(precision: 1)) polish_ms=\(polishMilliseconds, format: .fixed(precision: 1)) words=\(polished.split(separator: " ").count)"
+            "dictation transcribe_ms=\(totalMilliseconds, format: .fixed(precision: 1)) words=\(formatted.split(separator: " ").count)"
         )
         // Never log the transcript itself - a word count is enough to confirm the
         // pipeline produced text without recording what the user said.
-        print("✅ Transcribed: \(polished.split(separator: " ").count) words")
-        return polished
+        print("✅ Transcribed: \(formatted.split(separator: " ").count) words")
+        return formatted
     }
 
     /// Transcribe one buffer into **turns** - contiguous speech separated by real

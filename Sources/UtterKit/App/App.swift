@@ -1572,30 +1572,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// having skipped the dictionary or snippet pass; the destination at the end is
     /// the only difference.
     @MainActor
-    private func deliverTranscript(_ text: String, elapsed: TimeInterval) {
-        // Fix custom-dictionary near-misses (Whisper can't be biased at the
-        // endpoint, so we correct its output here).
+    private func deliverTranscript(_ text: String, elapsed: TimeInterval, pipeline: DictationPipeline) {
         let delivery = Signposts.poster.beginInterval("Delivery")
         defer { Signposts.poster.endInterval("Delivery", delivery) }
-        var processed = DictionaryCorrector.correct(text, using: UserData.shared.dictionaryWords)
-        processed = UserData.shared.applySnippets(to: processed)
+        let destination: CaptureDestination = captureToMemory ? .memory : captureToNote ? .note : .app
+        let processed = pipeline.prepare(text, for: destination)
 
-        if captureToMemory {
+        switch destination {
+        case .memory:
             saveSpokenMemory(processed, elapsed: elapsed)
             return
-        } else if captureToNote {
+        case .note:
             deliverToNote(processed)
-        } else {
-            // Context formatting is destination formatting, so it only applies on the path
-            // that actually types into the destination. `AppContext.detect()` reads
-            // `NSWorkspace.frontmostApplication`, and a note capture never changes that  - 
-            // the pill and the note card are both `.nonactivatingPanel`, so whatever the
-            // user was looking at stays frontmost. A note dictated with a terminal in front
-            // was therefore filed under `.code` rules and had its full stop stripped; with
-            // Slack in front it was shortened as a chat message. None of those rules describe
-            // a note.
-            let context = AppContext.detect()
-            processed = AppContext.adjustFormatting(processed, context: context)
+        case .app:
             TextInjector.typeText(processed)
         }
         UserData.shared.lastTranscription = processed
@@ -1608,10 +1597,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // → the transcript is typed but never written to `history.json`. The
         // language detection only feeds the history entry, so it is skipped too.
         if UserData.shared.keepHistory {
-            let detected = LanguageDetector.detect(processed)
             TranscriptionHistory.shared.add(
                 text: processed,
-                language: detected?.displayName ?? ""
+                language: pipeline.detectLanguage(processed) ?? ""
             )
         }
         print("⚡ Total latency: \(String(format: "%.1f", elapsed))s")
@@ -1810,28 +1798,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
             Task {
                 do {
-                    let text = try await self.transcriptionService.transcribe(audioData: audioData)
+                    let pipeline = DictationPipeline.live()
+                    let raw = try await self.transcriptionService.transcribe(audioData: audioData)
+                    let text = raw.isEmpty ? raw : await pipeline.polish(raw)
                     let elapsed = Date().timeIntervalSince(sendTime)
                     await MainActor.run {
                         if !text.isEmpty {
-                            // Check for voice commands first.
-                            //
-                            // While dictating into a note, only the *routing* commands
-                            // are honoured. The editing ones (`select all`, `copy`,
-                            // `new line`…) are keystrokes for the frontmost app's text
-                            // field, and the text is not going there - so obeying them
-                            // would type into an unrelated document. Nor are they
-                            // swallowed as rejected commands: `checkVoiceCommand`
-                            // matches on `hasSuffix`, so "the old config is stale so
-                            // I'll delete that" *is* the `undo` command by that test
-                            // (verified - see `VoiceCommandRoutingTests`), and dropping
-                            // it would delete a sentence from the only copy the user
-                            // has. Treating them as ordinary text puts them in the
-                            // note, which is where the user was speaking.
+                            let destination: CaptureDestination =
+                                self.captureToMemory ? .memory : self.captureToNote ? .note : .app
                             if self.captureToMemory {
-                                self.deliverTranscript(text, elapsed: elapsed)
-                            } else if let action = UserData.shared.checkVoiceCommand(text),
-                               !self.captureToNote || action.isNoteRouting {
+                                self.deliverTranscript(text, elapsed: elapsed, pipeline: pipeline)
+                            } else if let action = pipeline.command(in: text, for: destination) {
                                 // Log the matched action, not the spoken text it came from.
                                 print("🗣️ Voice command: \(action)")
                                 SoundPlayer.playDone()
@@ -1870,7 +1847,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 // document happened to be in front. AI actions on note
                                 // bodies belong to the note editor, where the user can
                                 // see what is being rewritten.
-                                self.deliverTranscript(text, elapsed: elapsed)
+                                self.deliverTranscript(text, elapsed: elapsed, pipeline: pipeline)
                             } else {
                                 // Check for AI commands (async)
                                 Task {
@@ -1919,7 +1896,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                     } else {
                                         // Normal transcription
                                         await MainActor.run {
-                                            self.deliverTranscript(text, elapsed: elapsed)
+                                            self.deliverTranscript(text, elapsed: elapsed, pipeline: pipeline)
                                         }
                                     }
                                 }
