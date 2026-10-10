@@ -64,6 +64,7 @@ class TranscriptionHistory: ObservableObject {
     init(storageDir: URL? = AppDirectory.support) {
         self.storageDir = storageDir
         load()
+        activeDays = Self.readStreak(at: streakURL)
         calculateStreak()
     }
 
@@ -182,30 +183,30 @@ class TranscriptionHistory: ObservableObject {
 
     // MARK: - Streak
 
-    private var activeDays: Set<String> {
-        get {
-            guard let streakURL, let data = try? Data(contentsOf: streakURL),
-                  let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
-            return Set(arr)
-        }
-        set {
-            guard let streakURL else { return }
-            let arr = Array(newValue).sorted()
-            if let data = try? JSONSerialization.data(withJSONObject: arr) {
-                // `.atomic` for the same reason as `saveHistory` - a torn write here loses
-                // the whole streak rather than a day of it.
-                do { try data.write(to: streakURL, options: .atomic) }
-                catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
-            }
+    private var activeDays: Set<String> = [] {
+        didSet { saveStreak() }
+    }
+
+    private static func readStreak(at url: URL?) -> Set<String> {
+        guard let url, let data = try? Data(contentsOf: url),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
+        return Set(arr)
+    }
+
+    private func saveStreak() {
+        guard let destination = streakURL,
+              let data = try? JSONSerialization.data(withJSONObject: activeDays.sorted()) else { return }
+        Self.persistenceQueue.async {
+            do { try data.write(to: destination, options: .atomic) }
+            catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
         }
     }
 
     private func recordToday() {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
-        var days = activeDays
-        days.insert(fmt.string(from: Date()))
-        activeDays = days
+        let today = fmt.string(from: Date())
+        if !activeDays.contains(today) { activeDays.insert(today) }
     }
 
     private func calculateStreak() {

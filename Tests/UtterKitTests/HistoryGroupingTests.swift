@@ -215,4 +215,43 @@ struct HistoryPersistenceTests {
         #expect(names.contains { $0.hasPrefix("history-unreadable-") })
         #expect(!names.contains("history.json"))
     }
+
+    private func dayString(daysAgo: Int) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!)
+    }
+
+    @Test("The streak is read once at launch and kept in memory, not re-read on each dictation")
+    @MainActor
+    func streakIsCached() async throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let streakFile = directory.appendingPathComponent("streak.json")
+        let stored = [dayString(daysAgo: 2), dayString(daysAgo: 1)]
+        try JSONSerialization.data(withJSONObject: stored).write(to: streakFile)
+
+        let history = TranscriptionHistory(storageDir: directory)
+        #expect(history.streakDays == 0)
+        try FileManager.default.removeItem(at: streakFile)
+
+        history.add(text: "counts for today")
+        await MainActor.run {}
+        history.flushPendingWrites()
+
+        #expect(history.streakDays == 3)
+        let written = try JSONSerialization.jsonObject(with: Data(contentsOf: streakFile)) as? [String]
+        #expect(written == (stored + [dayString(daysAgo: 0)]).sorted())
+    }
+
+    @Test("Opening the history writes no streak file until a day is recorded")
+    func launchDoesNotWriteStreak() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let history = TranscriptionHistory(storageDir: directory)
+        history.flushPendingWrites()
+
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
 }
