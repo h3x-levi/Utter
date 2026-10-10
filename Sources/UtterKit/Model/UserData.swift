@@ -14,6 +14,7 @@ class UserData: ObservableObject {
     @Published var voiceCommandsEnabled: Bool = true
     @Published var spokenPunctuationEnabled: Bool = false // "period"/"comma" → symbols; off by default (words are ambiguous)
     @Published var hotkeyName: String = "Fn"
+    var hotkeyId: String { HotkeyOption.find(stored: hotkeyName).id }
     /// Double-tap the hotkey (e.g. Fn twice) to start or toggle hands-free dictation.
     @Published var doubleTapHotkeyForHandsFree: Bool = true
     @Published var lastTranscription: String = ""
@@ -363,6 +364,7 @@ class UserData: ObservableObject {
             "language": selectedLanguage,
             "voiceCommands": voiceCommandsEnabled,
             "spokenPunctuation": spokenPunctuationEnabled,
+            "hotkeyId": hotkeyId,
             "hotkeyName": hotkeyName,
             "doubleTapHotkeyForHandsFree": doubleTapHotkeyForHandsFree,
             "appTheme": appTheme,
@@ -433,7 +435,9 @@ class UserData: ObservableObject {
         if let lang = json["language"] as? String { selectedLanguage = lang }
         if let vc = json["voiceCommands"] as? Bool { voiceCommandsEnabled = vc }
         if let sp = json["spokenPunctuation"] as? Bool { spokenPunctuationEnabled = sp }
-        if let hn = json["hotkeyName"] as? String { hotkeyName = hn }
+        if let stored = (json["hotkeyId"] as? String) ?? (json["hotkeyName"] as? String) {
+            hotkeyName = HotkeyOption.find(stored: stored).name
+        }
         if let dth = json["doubleTapHotkeyForHandsFree"] as? Bool { doubleTapHotkeyForHandsFree = dth }
         if let theme = json["appTheme"] as? String {
             appTheme = (theme == "ember") ? ThemeManager.systemThemeID : theme

@@ -77,7 +77,7 @@ struct UserDataPersistenceTests {
     }
 
     private static let goldenKeys: Set<String> = [
-        "words", "snippets", "language", "voiceCommands", "spokenPunctuation", "hotkeyName",
+        "words", "snippets", "language", "voiceCommands", "spokenPunctuation", "hotkeyId", "hotkeyName",
         "doubleTapHotkeyForHandsFree", "appTheme", "scratchpad", "customAICommands",
         "alwaysShowPill", "showInDock", "soundsEnabled", "muteMusicWhileDictating",
         "captureAppendsToOpenNote", "sentencePolishEnabled", "speechBiasEnabled",
@@ -99,6 +99,7 @@ struct UserDataPersistenceTests {
       "language": "english",
       "voiceCommands": false,
       "spokenPunctuation": true,
+      "hotkeyId": "rightOption",
       "hotkeyName": "Right ⌥ Option",
       "doubleTapHotkeyForHandsFree": false,
       "appTheme": "midnight",
@@ -196,6 +197,48 @@ struct UserDataPersistenceTests {
         let saved = try jsonObject(at: directory)
         #expect(saved["captureAppendsToOpenNote"] as? Bool == false)
         #expect(saved["scratchpadResumesLastNote"] == nil)
+    }
+
+    private func loadHotkey(_ fields: String) throws -> (loaded: UserData, saved: NSDictionary) {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data("{\(fields)}".utf8).write(to: directory.appendingPathComponent("userdata.json"))
+        let loaded = UserData(storageDir: directory)
+        loaded.save()
+        loaded.flushNow()
+        return (loaded, try jsonObject(at: directory))
+    }
+
+    @Test("Every stored hotkey label migrates to its id, and ids are written from then on",
+          arguments: [
+            ("Fn", "fn"),
+            ("Right ⌥ Option", "rightOption"),
+            ("Right ⌘ Command", "rightCommand"),
+            ("Right ⌃ Control", "rightControl"),
+          ])
+    func hotkeyLabelMigratesToId(label: String, id: String) throws {
+        let (loaded, saved) = try loadHotkey("\"hotkeyName\": \"\(label)\"")
+
+        #expect(loaded.hotkeyId == id)
+        #expect(loaded.hotkeyName == label)
+        #expect(saved["hotkeyId"] as? String == id)
+    }
+
+    @Test("A stored id wins over a stale label")
+    func hotkeyIdWins() throws {
+        let (loaded, _) = try loadHotkey("\"hotkeyId\": \"rightControl\", \"hotkeyName\": \"Renamed\"")
+
+        #expect(loaded.hotkeyId == "rightControl")
+        #expect(loaded.hotkeyName == "Right ⌃ Control")
+    }
+
+    @Test("An unknown hotkey value falls back to Fn")
+    func unknownHotkeyFallsBackToFn() throws {
+        let (loaded, saved) = try loadHotkey("\"hotkeyName\": \"Caps Lock\"")
+
+        #expect(loaded.hotkeyId == "fn")
+        #expect(loaded.hotkeyName == "Fn")
+        #expect(saved["hotkeyId"] as? String == "fn")
     }
 
     @Test("A burst of saves is debounced into one write holding the latest value")
