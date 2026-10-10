@@ -18,8 +18,7 @@ import PackageDescription
 // appending would migrate the oldest data and abandon the rest.
 let package = Package(
     name: "Utter",
-    // 13.3 is the floor set by the prebuilt whisper.cpp xcframework.
-    platforms: [.macOS("13.3")],
+    platforms: [.macOS(.v14)],
     dependencies: [
         // Swift Testing.
         //
