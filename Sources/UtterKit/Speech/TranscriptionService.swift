@@ -37,15 +37,13 @@ class TranscriptionService {
         }
         let formatted = Self.formatText(raw)
 
-        // Gather destination context before polishing. Both are read on the main
-        // actor (AX API and UserData) and both degrade to "" / nil, so a failure
-        // here costs the hint, not the transcription.
-        let (preceding, tone) = await MainActor.run { () -> (String, String?) in
-            let fragment = SurroundingContext.capture().trailingFragment
-            let tone = UserData.shared.perAppToneEnabled
+        // Gather destination context before polishing. Both degrade to "" / nil, so a
+        // failure here costs the hint, not the transcription.
+        let preceding = await SurroundingContext.capture().trailingFragment
+        let tone = await MainActor.run { () -> String? in
+            UserData.shared.perAppToneEnabled
                 ? AppContext.tone(for: AppContext.detect())
                 : nil
-            return (fragment, tone)
         }
 
         // Then repunctuate. Whisper guesses punctuation from pauses, so raw output

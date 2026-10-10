@@ -80,60 +80,40 @@ enum SurroundingContext {
     }
 
     private static let cacheLock = NSLock()
-    private static var prewarmedSnapshot: Snapshot?
-    private static var prewarmedAt: Date?
+    private static var prewarmed: (read: Task<Snapshot, Never>, at: Date)?
 
-    /// Pre-warm surrounding context when recording starts.
-    /// Captures the insertion point state ahead of time so Whisper and SentencePolish
-    /// find a warm cache with zero main-thread AX delay when recording completes.
+    /// Starts the read when recording begins, on `AXReader`'s queue, so `capture` finds it ready.
     static func prewarm() {
-        guard UserData.shared.useSurroundingContext, AXIsProcessTrusted() else {
-            cacheLock.lock()
-            prewarmedSnapshot = nil
-            prewarmedAt = nil
-            cacheLock.unlock()
+        guard UserData.shared.useSurroundingContext else {
+            clearPrewarmed()
             return
         }
-        let captured = directCapture()
-        cacheLock.lock()
-        prewarmedSnapshot = captured
-        prewarmedAt = Date()
-        cacheLock.unlock()
+        let read = Task { await AXReader.read(directCapture) }
+        cacheLock.withLock { prewarmed = (read, Date()) }
     }
 
     /// Clear the cached prewarmed snapshot after a dictation turn finishes.
     static func clearPrewarmed() {
-        cacheLock.lock()
-        prewarmedSnapshot = nil
-        prewarmedAt = nil
-        cacheLock.unlock()
+        cacheLock.withLock { prewarmed = nil }
     }
 
     /// Read the context, or return an empty snapshot.
-    /// Returns the prewarmed snapshot if still fresh (<= 45s), falling back to direct capture.
-    static func capture() -> Snapshot {
-        let empty = Snapshot(before: "")
-        guard UserData.shared.useSurroundingContext else { return empty }
-        guard AXIsProcessTrusted() else { return empty }
-
-        cacheLock.lock()
-        let cached = prewarmedSnapshot
-        let at = prewarmedAt
-        cacheLock.unlock()
-
-        if let cached, let at, Date().timeIntervalSince(at) <= 45.0 {
-            return cached
+    /// Returns the prewarmed snapshot if still fresh (<= 45s), falling back to a direct read.
+    @MainActor
+    static func capture() async -> Snapshot {
+        guard UserData.shared.useSurroundingContext else { return Snapshot(before: "") }
+        if let cached = cacheLock.withLock({ prewarmed }), Date().timeIntervalSince(cached.at) <= 45.0 {
+            return await cached.read.value
         }
-
-        return directCapture()
+        return await AXReader.read(directCapture)
     }
 
     private static func directCapture() -> Snapshot {
         let empty = Snapshot(before: "")
-        guard let focused = focusedTextElement() else { return empty }
-        guard !isSecure(focused) else { return empty }
+        guard AXIsProcessTrusted(), let focused = AXReader.focusedElement() else { return empty }
+        guard !AXReader.isSecure(focused) else { return empty }
 
-        guard let value = stringAttribute(focused, kAXValueAttribute as CFString),
+        guard let value = AXReader.string(focused, kAXValueAttribute as CFString),
               !value.isEmpty else { return empty }
 
         // Where the cursor is. Without a selection range we cannot know which part
@@ -146,49 +126,6 @@ enum SurroundingContext {
         let before = String(value[value.startIndex..<cut]).suffix(maxCharacters)
 
         return Snapshot(before: String(before))
-    }
-
-    // MARK: - Accessibility plumbing
-
-    /// The focused element, if it is a text-bearing control.
-    private static func focusedTextElement() -> AXUIElement? {
-        let system = AXUIElementCreateSystemWide()
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            system, kAXFocusedUIElementAttribute as CFString, &focused
-        ) == .success else { return nil }
-
-        // `as?` on a CFTypeRef whose type is AXUIElement does not bridge, so the
-        // check has to go through CFGetTypeID.
-        guard let ref = focused, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
-        return (ref as! AXUIElement)
-    }
-
-    /// Whether the element is a password field, or claims to be.
-    ///
-    /// `AXSecureTextField` is checked as both role and subrole. AppKit's
-    /// `NSSecureTextField` reports it as the *subrole* (the only form the SDK
-    /// defines a constant for, `kAXSecureTextFieldSubrole`), while some web and
-    /// Electron inputs report it as the role instead. The string is spelled out
-    /// because there is no `kAXSecureTextFieldRole` in the headers - only the
-    /// subrole constant exists.
-    ///
-    /// A field reporting neither is read. Refusing everything unlabelled would
-    /// disable the feature in most apps; the `maxCharacters` cap and the
-    /// never-logged, never-persisted rules are what bound the damage if some app
-    /// mislabels a sensitive field.
-    private static let secureIdentifier = "AXSecureTextField"
-
-    private static func isSecure(_ element: AXUIElement) -> Bool {
-        if let role = stringAttribute(element, kAXRoleAttribute as CFString),
-           role == secureIdentifier {
-            return true
-        }
-        if let subrole = stringAttribute(element, kAXSubroleAttribute as CFString),
-           subrole == secureIdentifier {
-            return true
-        }
-        return false
     }
 
     /// The insertion point as a character offset.
@@ -205,12 +142,5 @@ enum SurroundingContext {
         // With a selection active, the location is still the start - which is the
         // boundary the preceding text ends at, so this is correct either way.
         return cfRange.location
-    }
-
-    private static func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
-        var out: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &out) == .success,
-              let value = out, CFGetTypeID(value) == CFStringGetTypeID() else { return nil }
-        return (value as! CFString) as String
     }
 }
