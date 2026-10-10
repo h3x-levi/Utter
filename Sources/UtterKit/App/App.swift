@@ -276,10 +276,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             contentRect: NSRect(x: 0, y: 0,
                                 width: Layout.onboardingIdealWidth,
                                 height: Layout.onboardingIdealHeight),
-            styleMask: [.titled, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        window.delegate = self
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
@@ -1359,6 +1360,10 @@ extension AppDelegate: NSWindowDelegate {
     /// window would leave Utter in the Dock until the next launch. Never fires for the
     /// main window, which vetoes its own close - that path calls back directly above.
     func windowWillClose(_ notification: Notification) {
+        if let closing = notification.object as? NSWindow, closing === onboardingWindow {
+            OnboardingState.markCompleted()
+            onboardingWindow = nil
+        }
         DispatchQueue.main.async { [weak self] in self?.applyDockVisibility() }
     }
 }
