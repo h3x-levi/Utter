@@ -219,8 +219,8 @@ class PillWindow: NSPanel {
     private var onLongPress: (() -> Void)?
     /// The pointer route into hands-free dictation - see `PillHoverControl`.
     ///
-    /// Deliberately the *same* callback the ⌃⌥Space chord fires (`AppDelegate
-    /// .toggleHandsFree`) rather than a second path into the recorder: a pointer route with
+    /// Deliberately the *same* callback the ⌃⌥Space chord fires (`CaptureSession
+    /// .toggle(.handsFree)`) rather than a second path into the recorder: a pointer route with
     /// its own entry point would be free to drift out of step with the chord's handling of
     /// upgrade, refusal-while-processing and rollback.
     private var onStartHandsFree: (() -> Void)?
