@@ -3,7 +3,9 @@ import Carbon.HIToolbox
 
 /// Shared persistent store for all user preferences.
 class UserData: ObservableObject {
-    static let shared = UserData()
+    private static let live = UserData()
+    nonisolated(unsafe) static var preview: UserData?
+    static var shared: UserData { preview ?? live }
 
     @Published var dictionaryWords: [String] = []
     @Published var snippets: [(trigger: String, expansion: String)] = []
@@ -273,9 +275,9 @@ class UserData: ObservableObject {
         ("continue note", "Add to the note already open", .continueNote),
     ]
 
-    private let storageDir: URL
+    private let storageDir: URL?
 
-    init(storageDir: URL = AppDirectory.support) {
+    init(storageDir: URL? = AppDirectory.support) {
         self.storageDir = storageDir
         load()
     }
@@ -306,7 +308,7 @@ class UserData: ObservableObject {
     }
 
     func save() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard let storageDir else { return }
         let snipData = snippets.map { ["trigger": $0.trigger, "expansion": $0.expansion] }
         let customCmdData = (try? JSONEncoder().encode(customAICommands))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
@@ -364,7 +366,7 @@ class UserData: ObservableObject {
     }
 
     private func load() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard let storageDir else { return }
         let url = storageDir.appendingPathComponent("userdata.json")
         guard let data = try? Data(contentsOf: url) else { return }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {

@@ -206,7 +206,9 @@ enum NoteCaptureDestination: Equatable {
 ///     would be data loss.
 @MainActor
 final class NoteStore: ObservableObject {
-    static let shared = NoteStore()
+    private static let live = NoteStore()
+    static var preview: NoteStore?
+    static var shared: NoteStore { preview ?? live }
 
     /// Preserve mutation order while keeping JSON encoding, backup copying, and
     /// atomic disk replacement off the UI actor.
@@ -225,27 +227,25 @@ final class NoteStore: ObservableObject {
     /// which is what makes "keep talking into the same note" work.
     @Published var selectedNoteID: UUID?
 
-    private let storageDir: URL = AppDirectory.support
+    private let storageDir: URL?
 
-    private var notesURL: URL { storageDir.appendingPathComponent("notes.json") }
+    private var notesURL: URL? { storageDir?.appendingPathComponent("notes.json") }
 
     /// The generation before the current one. See `writeToDisk`.
-    private var previousNotesURL: URL { storageDir.appendingPathComponent("notes.previous.json") }
+    private var previousNotesURL: URL? { storageDir?.appendingPathComponent("notes.previous.json") }
 
     /// Coalesces disk writes while the user types. Same shape as the old
     /// `ScratchpadSaver`, kept inside the store so every mutation path benefits
     /// rather than only the text editor.
     private var saveWorkItem: DispatchWorkItem?
 
-    private init() {
+    init(storageDir: URL? = AppDirectory.support, seed: [Note] = [], selectedID: UUID? = nil) {
+        self.storageDir = storageDir
         load()
-    }
-
-    /// Replaces the active in-memory notes list with fixed preview fixtures for snapshots.
-    func setPreviewNotes(_ previewNotes: [Note], selectedID: UUID?) {
-        notes = previewNotes
-        selectedNoteID = selectedID
-        invalidateGroupCache()
+        if !seed.isEmpty {
+            notes = seed
+            selectedNoteID = selectedID
+        }
     }
 
     // MARK: - Reading
@@ -504,10 +504,8 @@ final class NoteStore: ObservableObject {
     /// on a utility queue. The immutable snapshot prevents a background writer
     /// from racing with edits to the published array.
     func writeToDisk() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard let destination = notesURL, let backup = previousNotesURL else { return }
         let snapshot = notes
-        let destination = notesURL
-        let backup = previousNotesURL
         Self.persistenceQueue.async {
             Self.persist(snapshot, to: destination, keepingPreviousAt: backup)
         }
@@ -570,8 +568,7 @@ final class NoteStore: ObservableObject {
     }
 
     private func load() {
-        guard !SnapshotPreviewMode.isActive else { return }
-        guard let data = try? Data(contentsOf: notesURL) else { return }
+        guard let notesURL, let data = try? Data(contentsOf: notesURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
