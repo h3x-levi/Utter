@@ -382,71 +382,17 @@ class PillWindow: NSPanel {
         return convertToScreen(windowRect)
     }
 
-    /// The most recent state any caller has asked for, applied or not.
-    ///
-    /// `setState` is called from 20-odd places and more than one of them fires twice in a
-    /// single runloop turn. Two of those double-fires were real bugs:
-    ///
-    ///   * `⌃⌥N` from idle set `.capturingNote` twice - once inside `startRecording` (which
-    ///     reads the same `captureToNote` flag) and once after it. The first call resized the
-    ///     window and deferred its animation; the second, drained from the same libdispatch
-    ///     drain, saw a window that was already tall and animated *immediately*, inside the
-    ///     resize's own display cycle - defeating the deferral that existed to prevent that,
-    ///     and then getting a second transaction on the same state a turn later. The
-    ///     redundant call is gone and the window no longer resizes, but the shape of the
-    ///     mistake is a property of the call sites, not of that one caller.
-    ///   * A failed microphone start set `.capturingNote` and then `.error` in one turn. The
-    ///     error applied inline while the note state was still deferred, so the note state
-    ///     landed *after* it: the pill sat wedged as a note card that was recording nothing
-    ///     and the error was never seen.
-    ///
-    /// So the newest request wins and repeats coalesce, rather than every call site having to
-    /// know what the others did in the same turn.
-    private var requestedState: PillState?
-
-    /// Whether an apply is already queued for the next turn.
-    private var applyScheduled = false
-
+    /// Applied at once on the main thread, so the first frame of a key-down is not queued behind
+    /// the rest of that turn's work. Off main it hops.
     func setState(_ state: PillState) {
-        // One runloop turn of delay, not two.
-        //
-        // This used to open with an unconditional `DispatchQueue.main.async` *and then* schedule a
-        // second one, so even a call already on the main thread waited two turns before anything
-        // reached the screen. That is invisible on an idle app and not on a busy one: the main
-        // thread here also carries the companion's ticker and every SwiftUI update, so two turns is
-        // two chances to queue behind other work - and this is the path from a keypress to the pill
-        // reacting.
-        //
-        // The hop is still needed when the caller is off the main thread, and the *scheduled* apply
-        // is still needed: it is what coalesces repeats, which is the whole point of
-        // `requestedState` (see its doc for the two real bugs that came from applying twice in one
-        // turn). What is gone is the hop that bought nothing when already on main.
-        if Thread.isMainThread {
-            enqueue(state)
-        } else {
-            DispatchQueue.main.async { self.enqueue(state) }
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.setState(state) }
+            return
         }
-    }
-
-    /// Record the newest requested state and make sure exactly one apply is queued for this turn.
-    /// **Main thread only.**
-    private func enqueue(_ state: PillState) {
-        requestedState = state
-        // One apply per turn, carrying whatever the newest request turned out to be.
-        // A second `setState` in the same turn updates `requestedState` and returns  - 
-        // it does not get an apply of its own to race the first one with.
-        guard !applyScheduled else { return }
-        applyScheduled = true
-        DispatchQueue.main.async {
-            self.applyScheduled = false
-            guard let target = self.requestedState else { return }
-            self.apply(target)
-            // Returning to rest is the moment to honour "don't show the pill at all
-            // times". Handled here rather than at the six `setState(.idle)` call sites,
-            // so a new one can't forget to hide it.
-            if target == .idle, !UserData.shared.alwaysShowPill, self.isVisible {
-                self.orderOut(nil)
-            }
+        apply(state)
+        // Returning to rest is the moment to honour "don't show the pill at all times".
+        if state == .idle, !UserData.shared.alwaysShowPill, isVisible {
+            orderOut(nil)
         }
     }
 
@@ -465,13 +411,6 @@ class PillWindow: NSPanel {
     /// recomputation, stepping 56 -> 292 in the pass the state changed in. `ShellSize` is what
     /// turned the width into a value, so the two axes are now one interpolation rather than one
     /// interpolation and one relayout. That is the "jittery" as distinct from the "very fast".
-    ///
-    /// Nothing here resizes a window, so there is no display cycle for a SwiftUI animation to
-    /// start inside: `PillMetrics.windowHeight` is a constant (its doc explains why), and the only
-    /// frame calls anywhere in the pill are the two `setFrameOrigin`s in the position methods,
-    /// neither on a state path. The two `DispatchQueue.main.async` hops above are kept exactly as
-    /// they were - they are no longer buying crash avoidance, they are buying the coalescing that
-    /// `requestedState` documents.
     private func apply(_ target: PillState) {
         // **The shell's size change is instant, and that is now an evidence-based decision rather
         // than a taste one.**
@@ -521,16 +460,7 @@ class PillWindow: NSPanel {
         }
     }
 
-    /// The state the pill is going to be in - the newest request, applied or not.
-    ///
-    /// Reads the *requested* state rather than the applied one, because `setState` defers its apply
-    /// by a runloop turn and callers use this to decide whether to overwrite it. `showPillError`'s
-    /// 2.5-second timer asks "is an error still showing?" before returning the pill to `.idle`: if a
-    /// recording started in the same turn as that timer fired, the applied state was still `.error`,
-    /// the guard passed, and `.idle` overwrote the pending `.recording` - hiding the pill while a
-    /// recording ran invisibly, which is the exact outcome the guard exists to prevent.
-    /// `applyPillVisibility` reads `isRecordingLike` off this for the same reason.
-    var currentState: PillState { requestedState ?? stateModel.state }
+    var currentState: PillState { stateModel.state }
 
     // MARK: - Position
 

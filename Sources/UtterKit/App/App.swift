@@ -83,6 +83,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         NSApp.setActivationPolicy(.accessory)
+        AXReader.configure()
         UNUserNotificationCenter.current().delegate = self
         CompanionNotificationScheduler.shared.registerCategory()
         CompanionMemoryStore.shared.restoreScheduledNotifications()
@@ -1249,7 +1250,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private var isProcessing = false
-    private var capturedSelection = ""
     private var isHandsFree = false
 
     /// When true, the finished transcript goes into a Utter note instead of being
@@ -1288,10 +1288,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         SurroundingContext.clearPrewarmed()
     }
 
-    private func startRecording() {
+    private func startRecording(vad: Bool = false) {
         guard !isProcessing else { return }
-        // Prewarm surrounding text context right as recording begins
-        SurroundingContext.prewarm()
         // A meeting owns the microphone tap. Without this the dictation path would
         // call `startRecording` (a silent no-op while the tap is live) and then, on
         // release, `stopRecording` would hand back the ENTIRE meeting so far and
@@ -1317,20 +1315,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if !pillWindow.isVisible { pillWindow.orderFront(nil) }
         Signposts.beginKeyDownToPill()
 
-        // Show the recording state **first**, before anything slow.
-        //
-        // This used to sit five statements further down, after `MediaControl.pauseIfPlaying()` and
-        // after `captureCurrentSelection()` - and the second of those is an Accessibility query into
-        // whatever app is frontmost, i.e. a synchronous cross-process round trip that can take
-        // hundreds of milliseconds and is at the mercy of how busy the other app is. The pill could
-        // not react until both had finished, which is the whole of "pressing the key to the pill
-        // reacting is very slow": the delay was never in the pill, it was queued behind work the
-        // pill does not depend on.
-        //
-        // Nothing below needs the state to be set late. `captureToNote` is already decided, and the
-        // failure path a few lines down re-sets the state anyway - `setState` coalesces repeats
-        // inside one runloop turn, which is exactly what `requestedState` exists for.
+        // First, and applied at once: everything after this is work the first frame must not wait on.
         pillWindow.setState(recordingPillState)
+        Task { await AXReader.read { SurroundingContext.prewarm() } }
 
         // Pause other audio so music doesn't bleed into the microphone.
         MediaControl.pauseIfPlaying()
@@ -1366,27 +1353,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             print("⏳ Recording while the speech model finishes loading")
         }
 
-        // Capture any selected text in the focused app BEFORE we start recording
-        // This is needed for AI commands like "make it professional" on selected text
-        capturedSelection = captureCurrentSelection()
-        if !capturedSelection.isEmpty {
-            // Log that a selection was captured, never its text (it comes from another app).
-            print("📎 Pre-captured selection: \(capturedSelection.count) chars")
-        }
-
+        // Before the mic opens, so the chime stays out of the recording.
         SoundPlayer.playStart()
-        // The state was already shown above, before the slow work - see the note there. It named the
-        // destination rather than merely the fact of recording, and it still does: `captureToNote`
-        // may already be armed by a spoken "start a new note" from the previous turn, in which case
-        // this dictation lands in a note, and `.capturingNote` exists precisely because where the
-        // text is going is the one thing the user cannot otherwise see.
         startPillTelemetry()
-        // No VAD callback in push-to-talk mode; release of hotkey ends recording.
-        guard audioRecorder.startRecording(onVoiceStopped: nil) else {
-            stopPillTelemetry()
+        openMicrophone(vad: vad)
+    }
+
+    /// Open the mic off main; a failed start rolls back the turn the caller set up.
+    private func openMicrophone(vad: Bool) {
+        let onVoiceStopped: (() -> Void)? = vad
+            ? { [weak self] in self?.handsFreeFinalize(reason: "VAD silence") }
+            : nil
+        audioRecorder.open(onVoiceStopped: onVoiceStopped) { [weak self] started in
+            guard let self, !started else { return }
+            if self.isHandsFree {
+                self.isHandsFree = false
+                self.keyMonitor.suppressReleaseStop = false
+                self.captureToNote = false
+                self.captureToMemory = false
+            }
+            self.stopPillTelemetry()
             MediaControl.resumeIfPaused()
-            showPillError("Couldn\u{2019}t start the microphone")
-            return
+            self.showPillError("Couldn\u{2019}t start the microphone")
         }
     }
 
@@ -1470,7 +1458,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         isHandsFree = true
         keyMonitor.suppressReleaseStop = true
-        startRecording()
+        startRecording(vad: true)
         // `startRecording` reports failure through the pill, so treat "not
         // recording" as the signal to unwind rather than duplicating its checks.
         guard audioRecorder.isRecording else {
@@ -1479,12 +1467,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             captureToNote = false
             return
         }
-        // No `setState(.capturingNote)` here. `startRecording` has already applied it from
-        // the `captureToNote` flag set above, and the second call was a real defect: both
-        // landed in one runloop turn, so the pill ran two morph transactions for one state
-        // change and the second one started inside the first's window resize. That is what
-        // made opening the note card look jittery while closing it looked correct.
-        installHandsFreeVAD()
     }
 
     /// Toggle voice capture into the companion's private memory store.
@@ -1529,14 +1511,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         isHandsFree = true
         keyMonitor.suppressReleaseStop = true
-        startRecording()
+        startRecording(vad: true)
         guard audioRecorder.isRecording else {
             isHandsFree = false
             keyMonitor.suppressReleaseStop = false
             captureToMemory = false
             return
         }
-        installHandsFreeVAD()
     }
 
     /// Point the next dictation at a new or the currently open note.
@@ -1733,31 +1714,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         Signposts.beginKeyDownToPill()
         isHandsFree = true
         keyMonitor.suppressReleaseStop = true
-        capturedSelection = captureCurrentSelection()
-        if !capturedSelection.isEmpty {
-            // Log that a selection was captured, never its text (it comes from another app).
-            print("📎 Pre-captured selection: \(capturedSelection.count) chars")
-        }
-        SoundPlayer.playStart()
         pillWindow.setState(recordingPillState)
+        SoundPlayer.playStart()
         startPillTelemetry()
-        // Install the VAD callback at start time so we don't have to attach it later.
-        let started = audioRecorder.startRecording { [weak self] in
-            self?.handsFreeFinalize(reason: "VAD silence")
-        }
-        // Roll back on failure. Leaving `isHandsFree` and `suppressReleaseStop` set
-        // for a recording that never began was the worst of the state-machine bugs:
-        // no VAD callback exists to finalize the turn, and `suppressReleaseStop`
-        // makes KeyMonitor swallow every hotkey release, so push-to-talk stays dead
-        // until the user happens to press the chord a second time.
-        guard started else {
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            stopPillTelemetry()
-            MediaControl.resumeIfPaused()
-            showPillError("Couldn\u{2019}t start the microphone")
-            return
-        }
+        openMicrophone(vad: true)
     }
 
     /// Attach a VAD silence callback to an in-flight recording.
@@ -1776,50 +1736,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         stopRecording()
     }
 
-    /// Copy selected text from the focused app using Cmd+C.
-    /// Uses the pasteboard changeCount to detect whether Cmd+C actually copied
-    /// anything - if nothing was selected, the clipboard is never modified
-    /// (no clear/restore churn for clipboard-manager apps to record).
-    /// Read whatever is selected in the frontmost app, by copying it and putting the pasteboard back.
+    /// The frontmost app's selection, for an AI command that has matched. Accessibility first, off
+    /// main; ⌘C only where that attribute is not exposed.
+    @MainActor
+    private func readSelection() async -> String {
+        let selected = await AXReader.read {
+            AXReader.focusedElement().flatMap { AXReader.string($0, kAXSelectedTextAttribute as CFString) }
+        }
+        if let selected { return selected }
+        return await copySelection()
+    }
+
+    /// Copy the selection with ⌘C and put the pasteboard back, awaiting rather than sleeping.
     ///
-    /// **Waits for the copy to land rather than sleeping through it.** This used to be a flat
-    /// `usleep(80_000)` - 80ms of the main thread doing nothing, on *every* hotkey press, before the
-    /// pill could paint. That is the whole of "pressing the key to the pill reacting is very slow":
-    /// the app was asleep for it. Polling `changeCount` exits as soon as the target app has answered,
-    /// which is typically 10-20ms, and keeps the same 80ms as a *ceiling* rather than a cost.
-    ///
-    /// The ceiling still has to exist: an app that is busy or has nothing selected never bumps
-    /// `changeCount`, and there is no notification for "the copy you synthesised has completed".
-    /// 2ms between polls is fine - the wait is dominated by another process's response, not by this
-    /// loop.
-    private func captureCurrentSelection() -> String {
+    /// Waits for the count to move *and* a readable string: an app bumps `changeCount` in
+    /// `declareTypes` before it writes the data. 80 ms ceiling, for an app with nothing selected.
+    @MainActor
+    private func copySelection() async -> String {
         let pasteboard = NSPasteboard.general
         let snapshot = PasteboardSnapshot(pasteboard)
         let changeCountBefore = pasteboard.changeCount
 
         TextInjector.simulateCopy()
 
-        // Wait for the **payload**, not for the change count.
-        //
-        // `changeCount` is bumped by `declareTypes(_:owner:)`, which a copying app calls *before* it
-        // writes the data. Polling the count alone therefore exits up to a whole write too early and
-        // reads nil - which silently becomes "nothing was selected", so a spoken "make it
-        // professional" would run against no text and say nothing about why. That is the trap the
-        // flat 80ms sleep this replaced did not have, because it always gave the other app the full
-        // window.
-        //
-        // So both conditions have to hold before we stop waiting: the count moved *and* a string is
-        // actually readable. The 80ms ceiling is unchanged, and the common case still exits in
-        // 10-20ms rather than always paying the full window.
         var selected = ""
-        let deadline = Date().addingTimeInterval(0.080)
-        while Date() < deadline {
+        let deadline = ContinuousClock.now + .milliseconds(80)
+        while ContinuousClock.now < deadline {
             if pasteboard.changeCount != changeCountBefore,
                let string = pasteboard.string(forType: .string) {
                 selected = string
                 break
             }
-            usleep(2_000)
+            try? await Task.sleep(for: .milliseconds(2))
         }
 
         // Cmd+C with no selection leaves the pasteboard untouched.
@@ -1910,7 +1858,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 // "…make it shorter" was read as a command - and every
                                 // one of its outcomes acts on the *frontmost app*: the
                                 // rewrite is pasted there, and because
-                                // `sourceWasDictation` is `capturedSelection.isEmpty`
+                                // `sourceWasDictation` is "no selection"
                                 // (true during a note capture) it first sent Cmd+Z to
                                 // "undo" text it had never typed, corrupting whatever
                                 // document happened to be in front. AI actions on note
@@ -1921,14 +1869,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 // Check for AI commands (async)
                                 Task {
                                     await MainActor.run { self.pillWindow.setState(.processing(.rewriting)) }
-                                    if let result = await AICommands.process(text, selectedText: self.capturedSelection) {
+                                    var selection: String?
+                                    if let result = await AICommands.process(text, selectedText: {
+                                        if selection == nil { selection = await self.readSelection() }
+                                        return selection ?? ""
+                                    }) {
                                         if let aiText = result.text {
-                                            // If we captured a live selection before recording, that
-                                            // selection is still highlighted - a plain paste replaces
-                                            // it. Issuing Cmd+Z here would wrongly undo the user's own
-                                            // last edit in their app. Only undo-then-paste when the
-                                            // source was our own just-dictated text (no selection).
-                                            let sourceWasDictation = self.capturedSelection.isEmpty
+                                            // A live selection is still highlighted, so a plain paste
+                                            // replaces it; ⌘Z would undo the user's own last edit.
+                                            // Undo-then-paste only when the source was our dictation.
+                                            let sourceWasDictation = (selection ?? "").isEmpty
                                             if result.replacesSelection && sourceWasDictation {
                                                 // Replace our own dictation: undo it, then paste.
                                                 await MainActor.run { TextInjector.undoLastTranscription() }
