@@ -11,7 +11,7 @@ import Testing
 struct OnboardingResumeTests {
 
     /// The flow's real step count, so the boundary cases below are the ones that ship.
-    private static let steps = 4
+    private static let steps = OnboardingViewModel.Step.allCases.count
 
     @Test("An interrupted run reopens on the step it left")
     func resumesTheRecordedStep() {
@@ -27,10 +27,7 @@ struct OnboardingResumeTests {
 
     @Test("A step from a build with more steps lands on the last one")
     func clampsAStepBeyondTheEnd() {
-        // Without the clamp this is a trap rather than a cosmetic slip: `stepContent`
-        // falls through to the ready step for any unknown index, but the nav row only
-        // finishes at `totalSteps - 1`, so the button would read "Continue" on the
-        // final screen and keep counting upwards with no way to finish.
+        // The old four-step flow stored up to 3; its model step and ready step both land on Try it.
         #expect(OnboardingState.resumeStep(stored: 9, completed: false,
                                            stepCount: Self.steps) == Self.steps - 1)
         // The off-by-one that a shrunk flow actually produces: the old last index.
@@ -81,21 +78,15 @@ struct OnboardingResumeTests {
 
     @Test("Required setup steps cannot advance before they work")
     func requiredStepsGateContinue() {
-        #expect(!OnboardingState.canAdvance(
-            step: 1, microphoneGranted: false,
-            accessibilityGranted: true, modelReady: true
-        ))
-        #expect(!OnboardingState.canAdvance(
-            step: 1, microphoneGranted: true,
-            accessibilityGranted: false, modelReady: true
-        ))
-        #expect(!OnboardingState.canAdvance(
-            step: 2, microphoneGranted: true,
-            accessibilityGranted: true, modelReady: false
-        ))
-        #expect(OnboardingState.canAdvance(
-            step: 3, microphoneGranted: true,
-            accessibilityGranted: true, modelReady: true
-        ))
+        #expect(!OnboardingState.canAdvance(step: 1, microphoneGranted: false,
+                                            accessibilityGranted: true, dictated: false))
+        #expect(!OnboardingState.canAdvance(step: 1, microphoneGranted: true,
+                                            accessibilityGranted: false, dictated: false))
+        #expect(OnboardingState.canAdvance(step: 1, microphoneGranted: true,
+                                           accessibilityGranted: true, dictated: false))
+        #expect(!OnboardingState.canAdvance(step: 2, microphoneGranted: true,
+                                            accessibilityGranted: true, dictated: false))
+        #expect(OnboardingState.canAdvance(step: 2, microphoneGranted: true,
+                                           accessibilityGranted: true, dictated: true))
     }
 }
