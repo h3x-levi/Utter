@@ -79,7 +79,8 @@ enum PillMetrics {
     /// The shell's height for a state. The only state that is not a capsule is note
     /// capture, which is the whole point of the box.
     static func shellHeight(for state: PillState) -> CGFloat {
-        state == .capturingNote ? noteBoxHeight : capsuleHeight
+        if state.isIsland { return islandHeight }
+        return state == .capturingNote ? noteBoxHeight : capsuleHeight
     }
 
     /// The shell's width for a state, or `nil` when the state's *content* decides it.
@@ -112,7 +113,7 @@ enum PillMetrics {
     /// **The states that are actually morph endpoints are all in the first group**, which is
     /// what makes the fallback's one-pass lag harmless in practice rather than in theory:
     /// `.capturingNote` is entered from `.idle`, `.recording` and `.handsFree`, and left only
-    /// for `.processing(.transcribing)` (`AppDelegate.stopRecording`) or `.idle`. Entering is
+    /// for `.processing(.transcribing)` (`CaptureMachine`'s stop) or `.idle`. Entering is
     /// safe from a measured state - the pill already *has* that width, settled, from the
     /// previous pass. Leaving is the direction that needs the destination's width up front,
     /// and both destinations have one. `PillMorphTests` pins that list, because a future
@@ -120,7 +121,7 @@ enum PillMetrics {
     /// the whole shrink and then snap, and nothing else would catch it.
     static func shellWidth(for state: PillState) -> CGFloat? {
         switch state {
-        case .capturingNote: return noteContentWidth + horizontalPadding * 2
+        case .capturingNote, .island: return noteContentWidth + horizontalPadding * 2
         case .idle, .processing: return minimumCapsuleWidth
         case .preparing, .recording, .handsFree, .capturingMemory, .notice, .error: return nil
         }

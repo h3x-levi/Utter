@@ -4,15 +4,15 @@ import Cocoa
 /// Works on: last transcription, selected text in any app, or clipboard content.
 struct AICommands {
 
-    /// Check if transcribed text is an AI command.
-    static func process(_ text: String, selectedText: String = "") async -> AICommandResult? {
+    /// Check if transcribed text is an AI command. `selectedText` is read only once a command matches.
+    static func process(_ text: String, selectedText: () async -> String) async -> AICommandResult? {
         let lower = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let cleaned = lower.trimmingCharacters(in: CharacterSet(charactersIn: ".,!?"))
 
         // 1) User-defined commands win over built-ins so users can override defaults
         for command in UserData.shared.customAICommands {
             if command.matches(cleaned) {
-                return await runCustom(command, selectedText: selectedText)
+                return await runCustom(command, selectedText: await selectedText())
             }
         }
 
@@ -33,7 +33,7 @@ struct AICommands {
         ]
         for (phrase, style) in stylePatterns {
             if cleaned == phrase || cleaned.hasSuffix(phrase) {
-                return await applyStyle(style, selectedText: selectedText)
+                return await applyStyle(style, selectedText: await selectedText())
             }
         }
 
@@ -43,22 +43,22 @@ struct AICommands {
                 .replacingOccurrences(of: "translate this to ", with: "")
                 .replacingOccurrences(of: "translate to ", with: "")
                 .trimmingCharacters(in: .whitespaces)
-            return await translateText(to: lang, selectedText: selectedText)
+            return await translateText(to: lang, selectedText: await selectedText())
         }
 
         // Fix grammar
         if cleaned == "fix this" || cleaned == "fix grammar" || cleaned == "fix that" {
-            return await fixGrammar(selectedText: selectedText)
+            return await fixGrammar(selectedText: await selectedText())
         }
 
         // Reply
         if cleaned == "reply to this" || cleaned.hasPrefix("reply to this") {
-            return await generateReply(selectedText: selectedText)
+            return await generateReply(selectedText: await selectedText())
         }
 
         // Summarize
         if cleaned == "summarize this" || cleaned == "summarize" {
-            return await summarize(selectedText: selectedText)
+            return await summarize(selectedText: await selectedText())
         }
 
         // Fixed-intent edits on what was just produced. These are the phrases
@@ -80,7 +80,7 @@ struct AICommands {
              "Return the text with its final sentence removed. Change nothing else."),
         ]
         for (phrases, instruction) in editPatterns where phrases.contains(cleaned) {
-            return await edit(instruction: instruction, selectedText: selectedText)
+            return await edit(instruction: instruction, selectedText: await selectedText())
         }
 
         // Open-ended edits: "change that to past tense", "make that a question".
@@ -99,7 +99,7 @@ struct AICommands {
             guard request.count >= 3 else { break }
             return await edit(
                 instruction: "Apply this change to the text: \(request). Change nothing else.",
-                selectedText: selectedText
+                selectedText: await selectedText()
             )
         }
 

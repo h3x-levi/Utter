@@ -1,5 +1,6 @@
 import SwiftUI
 import Cocoa
+import Carbon.HIToolbox
 
 enum PillState: Equatable {
     /// The speech model is still loading. Distinct from `idle` because holding
@@ -24,6 +25,9 @@ enum PillState: Equatable {
     /// `.error` because that one carries a warning glyph and a danger tint, which
     /// would tell the user something had gone wrong when nothing had.
     case notice(String)
+    /// A transcript that was not typed because the user moved to an app with nothing to type
+    /// into, offered for copying until it is copied, closed or replaced by a new turn.
+    case island(String)
 
     enum Phase: String {
         case transcribing = "Transcribing"
@@ -40,6 +44,11 @@ enum PillState: Equatable {
     /// a held hotkey is released.
     var isHandsFreeLike: Bool {
         self == .handsFree || self == .capturingNote || self == .capturingMemory
+    }
+
+    var isIsland: Bool {
+        if case .island = self { return true }
+        return false
     }
 }
 
@@ -219,12 +228,18 @@ class PillWindow: NSPanel {
     private var onLongPress: (() -> Void)?
     /// The pointer route into hands-free dictation - see `PillHoverControl`.
     ///
-    /// Deliberately the *same* callback the ⌃⌥Space chord fires (`AppDelegate
-    /// .toggleHandsFree`) rather than a second path into the recorder: a pointer route with
+    /// Deliberately the *same* callback the ⌃⌥Space chord fires (`CaptureSession
+    /// .toggle(.handsFree)`) rather than a second path into the recorder: a pointer route with
     /// its own entry point would be free to drift out of step with the chord's handling of
     /// upgrade, refusal-while-processing and rollback.
     private var onStartHandsFree: (() -> Void)?
+    /// The island's copy, close and Escape all end it here.
+    var onCloseIsland: (() -> Void)?
+    private var escapeMonitor: Any?
     private let positionKey = "pillWindowPosition"
+
+    /// Only the island takes keys (⌘C, Escape), and only once the user clicks it.
+    override var canBecomeKey: Bool { stateModel.state.isIsland }
 
     /// `onStartHandsFree` defaults to nothing so the pill still builds without it; with no
     /// handler the hover control is not offered at all rather than drawn and inert.
@@ -273,7 +288,8 @@ class PillWindow: NSPanel {
         let hostingView = ShapedHostingView(rootView: PillContainerView(
             stateModel: stateModel,
             onLongPress: { [weak self] in self?.onLongPress?() },
-            onStartHandsFree: { [weak self] in self?.onStartHandsFree?() }
+            onStartHandsFree: { [weak self] in self?.onStartHandsFree?() },
+            onCloseIsland: { [weak self] in self?.onCloseIsland?() }
         ))
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
@@ -382,130 +398,37 @@ class PillWindow: NSPanel {
         return convertToScreen(windowRect)
     }
 
-    /// The most recent state any caller has asked for, applied or not.
-    ///
-    /// `setState` is called from 20-odd places and more than one of them fires twice in a
-    /// single runloop turn. Two of those double-fires were real bugs:
-    ///
-    ///   * `⌃⌥N` from idle set `.capturingNote` twice - once inside `startRecording` (which
-    ///     reads the same `captureToNote` flag) and once after it. The first call resized the
-    ///     window and deferred its animation; the second, drained from the same libdispatch
-    ///     drain, saw a window that was already tall and animated *immediately*, inside the
-    ///     resize's own display cycle - defeating the deferral that existed to prevent that,
-    ///     and then getting a second transaction on the same state a turn later. The
-    ///     redundant call is gone and the window no longer resizes, but the shape of the
-    ///     mistake is a property of the call sites, not of that one caller.
-    ///   * A failed microphone start set `.capturingNote` and then `.error` in one turn. The
-    ///     error applied inline while the note state was still deferred, so the note state
-    ///     landed *after* it: the pill sat wedged as a note card that was recording nothing
-    ///     and the error was never seen.
-    ///
-    /// So the newest request wins and repeats coalesce, rather than every call site having to
-    /// know what the others did in the same turn.
-    private var requestedState: PillState?
-
-    /// Whether an apply is already queued for the next turn.
-    private var applyScheduled = false
-
+    /// Applied at once on the main thread, so the first frame of a key-down is not queued behind
+    /// the rest of that turn's work. Off main it hops.
     func setState(_ state: PillState) {
-        // One runloop turn of delay, not two.
-        //
-        // This used to open with an unconditional `DispatchQueue.main.async` *and then* schedule a
-        // second one, so even a call already on the main thread waited two turns before anything
-        // reached the screen. That is invisible on an idle app and not on a busy one: the main
-        // thread here also carries the companion's ticker and every SwiftUI update, so two turns is
-        // two chances to queue behind other work - and this is the path from a keypress to the pill
-        // reacting.
-        //
-        // The hop is still needed when the caller is off the main thread, and the *scheduled* apply
-        // is still needed: it is what coalesces repeats, which is the whole point of
-        // `requestedState` (see its doc for the two real bugs that came from applying twice in one
-        // turn). What is gone is the hop that bought nothing when already on main.
-        if Thread.isMainThread {
-            enqueue(state)
-        } else {
-            DispatchQueue.main.async { self.enqueue(state) }
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { self.setState(state) }
+            return
+        }
+        apply(state)
+        // Returning to rest is the moment to honour "don't show the pill at all times".
+        if state == .idle, !UserData.shared.alwaysShowPill, isVisible {
+            orderOut(nil)
         }
     }
 
-    /// Record the newest requested state and make sure exactly one apply is queued for this turn.
-    /// **Main thread only.**
-    private func enqueue(_ state: PillState) {
-        requestedState = state
-        // One apply per turn, carrying whatever the newest request turned out to be.
-        // A second `setState` in the same turn updates `requestedState` and returns  - 
-        // it does not get an apply of its own to race the first one with.
-        guard !applyScheduled else { return }
-        applyScheduled = true
-        DispatchQueue.main.async {
-            self.applyScheduled = false
-            guard let target = self.requestedState else { return }
-            self.apply(target)
-            // Returning to rest is the moment to honour "don't show the pill at all
-            // times". Handled here rather than at the six `setState(.idle)` call sites,
-            // so a new one can't forget to hide it.
-            if target == .idle, !UserData.shared.alwaysShowPill, self.isVisible {
-                self.orderOut(nil)
-            }
-        }
-    }
-
-    /// The one transaction that drives the morph.
-    ///
-    /// Everything the shell does - width, height, glass, both strokes, the clip and the bead's
-    /// lobe - rides this single `withAnimation`, and reaches the screen through the single
-    /// `AnimatablePair` in `ShellSize`. Those are two separate requirements and it took both.
-    ///
-    /// It used to ride two transactions: this one, plus an `.animation(morphAnimation, value:
-    /// stateKey)` attached inside `PillContent`. Deleting that left one transaction - and the
-    /// morph still read as a snap followed by a growth, because one transaction cannot animate a
-    /// quantity that is not a value. The height was `.frame(height:)`, an animatable number. The
-    /// width was intrinsic, resolved from the content's ideal size by `.fixedSize()` in
-    /// `PillContainerView`, which sits *above* every animation in the chain: a layout
-    /// recomputation, stepping 56 -> 292 in the pass the state changed in. `ShellSize` is what
-    /// turned the width into a value, so the two axes are now one interpolation rather than one
-    /// interpolation and one relayout. That is the "jittery" as distinct from the "very fast".
-    ///
-    /// Nothing here resizes a window, so there is no display cycle for a SwiftUI animation to
-    /// start inside: `PillMetrics.windowHeight` is a constant (its doc explains why), and the only
-    /// frame calls anywhere in the pill are the two `setFrameOrigin`s in the position methods,
-    /// neither on a state path. The two `DispatchQueue.main.async` hops above are kept exactly as
-    /// they were - they are no longer buying crash avoidance, they are buying the coalescing that
-    /// `requestedState` documents.
+    /// Both shell axes come from `ShellSize`'s one `AnimatablePair`, so they change together.
     private func apply(_ target: PillState) {
-        // **The shell's size change is instant, and that is now an evidence-based decision rather
-        // than a taste one.**
-        //
-        // Nine attempts at an animated morph have failed, and they failed for one reason that took
-        // all nine to name: `glassEffect` fills its view's *bounds*, so the bounds must match the
-        // silhouette, and a bounds change re-anchors the glass body - at which point the system
-        // cross-fades the outgoing body against the incoming one. Every intermediate frame of an
-        // animated resize is a doubled pill. There is no intermediate frame if there is no
-        // animation.
-        //
-        // The dead ends, so nobody spends another release on them:
-        //
-        //   * Animating the frame, with or without `ShellSize` as a single `AnimatablePair` - the
-        //     original ghost, seen repeatedly.
-        //   * A constant `glassEffectID` inside a `GlassEffectContainer` - Apple documents that
-        //     identity as acting "during view hierarchy transitions", i.e. when a shape appears or
-        //     disappears. It has nothing to say about a resize, so it silently does nothing.
-        //   * Constant oversized bounds with only the `Shape`'s path animating inside them. This
-        //     looked correct on paper and was worse in practice: the material filled the whole
-        //     fixed rectangle instead of being clipped to the path, so a pale full-panel slab sat
-        //     behind the pill for as long as it was on screen - several seconds during
-        //     transcription.
-        //   * Masking a full-size body down, and `scaleEffect`. The first strips the specular rim
-        //     (a mask removes pixels and cannot synthesise a new lit edge, so it reads as a die-cut
-        //     hole); the second needs anisotropic scaling, because the capsule and the card are
-        //     2.00 and 2.355 aspect ratios, which turns the corner arcs into ellipses.
-        //
-        // What *is* animated is everything that is not the glass body: the hands-free bead's
-        // extrusion, the hover reveal and the state tint all keep their own transactions, none of
-        // which resizes a glass body. If an animated expansion is wanted later, the route left is
-        // AppKit's `NSGlassEffectView` driven by Core Animation, which is a different rendering
-        // path - not another SwiftUI transaction.
+        let leavingIsland = stateModel.state.isIsland && !target.isIsland
+        let height = target.isIsland ? PillMetrics.islandWindowHeight : PillMetrics.windowHeight
+        // Grow before the island draws and shrink after it has gone, so it is never clipped.
+        if height > frame.height { setWindowHeight(height) }
+        // Instant rather than animated: glass fills its bounds, so a resizing shell cross-fades
+        // into a doubled pill.
         stateModel.state = target
+        if height < frame.height { setWindowHeight(height) }
+        if target.isRecordingLike { Signposts.endKeyDownToPill() }
+        watchEscape(target.isIsland)
+        // Give the keyboard back to the app the user was in.
+        if leavingIsland, isKeyWindow {
+            orderOut(nil)
+            orderFront(nil)
+        }
 
         // Staged by one runloop turn during expansion: allows the shell frame to render
         // its first frame smoothly before the heavy companion APNG decoder and 30Hz ticker
@@ -520,16 +443,24 @@ class PillWindow: NSPanel {
         }
     }
 
-    /// The state the pill is going to be in - the newest request, applied or not.
-    ///
-    /// Reads the *requested* state rather than the applied one, because `setState` defers its apply
-    /// by a runloop turn and callers use this to decide whether to overwrite it. `showPillError`'s
-    /// 2.5-second timer asks "is an error still showing?" before returning the pill to `.idle`: if a
-    /// recording started in the same turn as that timer fired, the applied state was still `.error`,
-    /// the guard passed, and `.idle` overwrote the pending `.recording` - hiding the pill while a
-    /// recording ran invisibly, which is the exact outcome the guard exists to prevent.
-    /// `applyPillVisibility` reads `isRecordingLike` off this for the same reason.
-    var currentState: PillState { requestedState ?? stateModel.state }
+    /// Keeps the bottom edge, where the shell is anchored, in place.
+    private func setWindowHeight(_ height: CGFloat) {
+        setFrame(NSRect(x: frame.minX, y: frame.minY, width: frame.width, height: height), display: true)
+    }
+
+    /// Escape closes the island from any app. A global monitor sees the key without taking it.
+    private func watchEscape(_ on: Bool) {
+        if on, escapeMonitor == nil {
+            escapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if event.keyCode == UInt16(kVK_Escape) { self?.onCloseIsland?() }
+            }
+        } else if !on, let monitor = escapeMonitor {
+            NSEvent.removeMonitor(monitor)
+            escapeMonitor = nil
+        }
+    }
+
+    var currentState: PillState { stateModel.state }
 
     // MARK: - Position
 
@@ -689,10 +620,12 @@ struct PillContainerView: View {
         case .processing: return 6
         case .notice: return 7
         case .error: return 8
+        case .island: return 9
         }
     }
 
     var onStartHandsFree: (() -> Void)? = nil
+    var onCloseIsland: () -> Void = {}
 
     private var extrusion: CGFloat {
         guard onStartHandsFree != nil,
@@ -717,7 +650,8 @@ struct PillContainerView: View {
                             containerModel.refreshReveal()
                         },
                         colorState: containerModel.colorState,
-                        extrusion: extrusion)
+                        extrusion: extrusion,
+                        onCloseIsland: onCloseIsland)
                 .fixedSize()
                 .onLongPressGesture(minimumDuration: 2.0) {
                     if PillHoverControl.longPressOpensUtter(in: stateModel.state,
@@ -800,6 +734,7 @@ struct PillContent: View {
     /// `PillShellShape.extrusion`. Owned by `PillContainerView`, which also positions the glyph
     /// from it. It starts at 0 while the pill is collapsed.
     var extrusion: CGFloat = 0
+    var onCloseIsland: () -> Void = {}
     @ObservedObject private var motion = MotionPreference.shared
     @ObservedObject private var userData = UserData.shared
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -949,7 +884,8 @@ struct PillContent: View {
         .contentShape(PillShape())
         // The pill's own hover, on the pill's own silhouette.
         .onHover(perform: onHoverChanged)
-        .accessibilityElement(children: .ignore)
+        // The island's buttons have to stay reachable; every other state is one element.
+        .accessibilityElement(children: model.state.isIsland ? .contain : .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(model.state.isRecordingLike ? .updatesFrequently : [])
@@ -1154,6 +1090,9 @@ struct PillContent: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Tint.danger)
+
+        case .island(let transcript):
+            TranscriptIsland(transcript: transcript, onClose: onCloseIsland)
         }
     }
 
@@ -1202,7 +1141,7 @@ struct PillContent: View {
     static func glassTint(for state: PillState) -> Color? {
         switch state {
         case .idle: return nil
-        case .preparing, .processing, .notice: return Tint.accent.opacity(0.45)
+        case .preparing, .processing, .notice, .island: return Tint.accent.opacity(0.45)
         case .recording: return Tint.recording.opacity(0.50)
         case .handsFree: return Tint.handsFree.opacity(0.52)
         case .capturingNote, .capturingMemory: return Tint.accent.opacity(0.52)
@@ -1240,7 +1179,7 @@ struct PillContent: View {
             // Dark, always. On a pale backdrop this is the edge; on a dark one it recedes and the
             // inner highlight takes over.
             return .black.opacity(0.30)
-        case .preparing, .processing, .notice:
+        case .preparing, .processing, .notice, .island:
             return Tint.accent.opacity(0.65)
         case .recording:
             return Tint.recording.opacity(0.75)
@@ -1287,6 +1226,7 @@ struct PillContent: View {
         case .capturingMemory: return "Utter, listening for a memory"
         case .processing(let phase): return "Utter, \(phase.rawValue.lowercased())"
         case .error: return "Utter, error"
+        case .island: return "Utter, transcript not typed"
         }
     }
 
@@ -1323,7 +1263,56 @@ struct PillContent: View {
             return "Please wait"
         case .error(let reason):
             return reason
+        case .island:
+            return "No text field was focused, so nothing was typed. Copy it from here."
         }
+    }
+}
+
+extension PillMetrics {
+    static let islandLines: CGFloat = 6
+    static let islandLineHeight = ceil(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: 13)))
+    static let islandButtonRow: CGFloat = 22
+    static var islandHeight: CGFloat { islandLines * islandLineHeight + islandButtonRow + Space.x2 * 3 }
+    static var islandWindowHeight: CGFloat { max(windowHeight, islandHeight + verticalInset * 2) }
+}
+
+/// A transcript held on the pill because there was nowhere to type it: up to six lines, then it
+/// scrolls. Copy (⌘C once the island is clicked) and close both end it.
+struct TranscriptIsland: View {
+    let transcript: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.x2) {
+            ScrollView {
+                Text(transcript)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: PillMetrics.islandLines * PillMetrics.islandLineHeight)
+
+            HStack(spacing: Space.x2) {
+                Spacer()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(transcript, forType: .string)
+                    onClose()
+                }
+                .keyboardShortcut("c", modifiers: .command)
+                .accessibilityLabel("Copy transcript")
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                }
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("Close")
+            }
+            .frame(height: PillMetrics.islandButtonRow)
+        }
+        .padding(.vertical, Space.x2)
+        .frame(width: PillMetrics.noteContentWidth)
     }
 }
 

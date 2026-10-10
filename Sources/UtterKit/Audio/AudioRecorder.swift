@@ -1,11 +1,16 @@
 import AVFoundation
 import Foundation
+import os
 
 class AudioRecorder: ObservableObject {
+    /// Engine create, start and stop run here, off main, in the order they were requested.
+    private let engineQueue = DispatchQueue(label: "utter.dictation.audioengine", qos: .userInitiated)
+    /// Only touched on `engineQueue`.
     private var audioEngine: AVAudioEngine?
-    /// Whether a capture is live. Readable so callers can verify a start actually
-    /// took effect before committing state that depends on it.
+    /// Whether a capture is claimed: from the start request until `stopRecording` or a failed
+    /// start. Main thread.
     private(set) var isRecording = false
+    private var claim = 0
 
     /// Smoothed input level, 0...1, published for the pill's level meter.
     ///
@@ -41,20 +46,32 @@ class AudioRecorder: ObservableObject {
     /// never drained or compacted - losing up to a window of the user's audio at
     /// stop() and growing without bound in the meantime.
     private var everDetectedVoice = false
+    private var engineStartInterval: OSSignpostIntervalState?
     private var vadCallback: (() -> Void)?
     /// `UInt16` to match `peakAmplitude`, which reports a magnitude - see the trap
     /// documented there.
     private let silenceThreshold: UInt16 = 500
     private let silenceTimeout: TimeInterval = 3.0 // Auto-send after 3s of silence (was 1.2s - too aggressive for paragraphs)
 
-    /// Begin capturing. Returns false when capture could not start.
+    /// Open the microphone off the main thread. `completion` runs on main with whether it started.
+    func open(onVoiceStopped: (() -> Void)? = nil, completion: @escaping (Bool) -> Void) {
+        guard !isRecording else { return completion(false) }
+        isRecording = true
+        claim += 1
+        let request = claim
+        engineQueue.async { [self] in
+            let started = startEngine(onVoiceStopped: onVoiceStopped)
+            DispatchQueue.main.async { [self] in
+                if !started, claim == request { isRecording = false }
+                completion(started)
+            }
+        }
+    }
+
+    /// Begin capturing synchronously. Returns false when capture could not start.
     ///
-    /// Previously `Void` with five silent failure exits, which let callers set up
-    /// state for a recording that never began: `toggleHandsFree` would flip
-    /// `isHandsFree` and `suppressReleaseStop` on, the pill would show a running
-    /// timer, and - because no VAD callback was installed - nothing could ever end
-    /// the turn. Push-to-talk stayed dead until the user guessed to press the
-    /// chord again. Callers must now check the result.
+    /// Callers must check the result: setting up state for a recording that never began left
+    /// nothing able to end the turn.
     @discardableResult
     func startRecording(onVoiceStopped: (() -> Void)? = nil) -> Bool {
         // Already capturing: refuse rather than no-op silently. A second caller
@@ -62,80 +79,94 @@ class AudioRecorder: ObservableObject {
         // owns the tap, and its `stopRecording` would steal the first session's
         // audio and tear the engine down underneath it.
         guard !isRecording else { return false }
+        claim += 1
+        isRecording = engineQueue.sync { startEngine(onVoiceStopped: onVoiceStopped) }
+        return isRecording
+    }
 
-        audioData = Data()
+    private static let targetFormat = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate: 16000,
+        channels: 1,
+        interleaved: true
+    )
+
+    /// `engineQueue` only.
+    private func startEngine(onVoiceStopped: (() -> Void)?) -> Bool {
         // Under the queue: the tap reads all of these from the render thread.
-        // `silenceStart` belongs in here too - it sat outside, contradicting this
-        // comment, and it is written by `checkVoiceActivity` under the queue and by
-        // `installVoiceStoppedCallback` under the queue.
         bufferQueue.sync {
+            _audioData = Data()
             silenceStart = nil
             hasDetectedVoice = false
             everDetectedVoice = false
             vadCallback = onVoiceStopped
         }
-        audioEngine = AVAudioEngine()
-
-        guard let audioEngine = audioEngine else { return false }
-
+        let audioEngine = AVAudioEngine()
         let inputNode = audioEngine.inputNode
         let nativeFormat = inputNode.outputFormat(forBus: 0)
 
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: 16000,
-            channels: 1,
-            interleaved: true
-        ) else { return false }
-
-        guard let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else { return false }
+        guard let targetFormat = Self.targetFormat,
+              let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else { return false }
 
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, _ in
-            guard let self = self else { return }
-
-            let ratio = 16000.0 / nativeFormat.sampleRate
-            let outputFrameCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
-            guard outputFrameCapacity > 0 else { return }
-
-            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputFrameCapacity) else {
-                return
-            }
-
-            var error: NSError?
-            let status = converter.convert(to: outputBuffer, error: &error) { _, outStatus in
-                outStatus.pointee = .haveData
-                return buffer
-            }
-
-            if status == .error { return }
-
-            if let channelData = outputBuffer.int16ChannelData {
-                let frameLength = Int(outputBuffer.frameLength)
-                let data = Data(bytes: channelData[0], count: frameLength * 2)
-                // Copy the PCM while its source pointer is valid, then enqueue all
-                // mutable capture state off the render callback. The queue is serial,
-                // so appends remain ordered; snapshots and stopRecording use the same
-                // queue and therefore drain every callback already submitted.
-                self.bufferQueue.async { [weak self, outputBuffer] in
-                    guard let self, let queuedChannelData = outputBuffer.int16ChannelData else { return }
-                    self._audioData.append(data)
-                    self.checkVoiceActivity(channelData: queuedChannelData[0], frameLength: frameLength)
-                    self.publishLevel(channelData: queuedChannelData[0], frameLength: frameLength)
+            guard let self, let outputBuffer = Self.convert(buffer, with: converter),
+                  let channelData = outputBuffer.int16ChannelData else { return }
+            let frameLength = Int(outputBuffer.frameLength)
+            let data = Data(bytes: channelData[0], count: frameLength * 2)
+            // Copy the PCM while its source pointer is valid, then enqueue all
+            // mutable capture state off the render callback. The queue is serial,
+            // so appends remain ordered; snapshots and stopRecording use the same
+            // queue and therefore drain every callback already submitted.
+            self.bufferQueue.async { [weak self, outputBuffer] in
+                guard let self, let queuedChannelData = outputBuffer.int16ChannelData else { return }
+                if let interval = self.engineStartInterval {
+                    self.engineStartInterval = nil
+                    Signposts.poster.endInterval("EngineStartToFirstBuffer", interval)
                 }
+                self._audioData.append(data)
+                self.checkVoiceActivity(channelData: queuedChannelData[0], frameLength: frameLength)
+                self.publishLevel(channelData: queuedChannelData[0], frameLength: frameLength)
             }
         }
 
+        bufferQueue.sync { engineStartInterval = Signposts.poster.beginInterval("EngineStartToFirstBuffer") }
         do {
             try audioEngine.start()
-            isRecording = true
+            self.audioEngine = audioEngine
             print("🎙️ Recording started")
             return true
         } catch {
             print("❌ Failed to start audio engine: \(error)")
+            bufferQueue.sync {
+                if let interval = engineStartInterval { Signposts.poster.endInterval("EngineStartToFirstBuffer", interval) }
+                engineStartInterval = nil
+            }
             inputNode.removeTap(onBus: 0)
-            self.audioEngine = nil
             return false
         }
+    }
+
+    /// Resample one tap buffer to the converter's output format.
+    static func convert(_ buffer: AVAudioPCMBuffer, with converter: AVAudioConverter) -> AVAudioPCMBuffer? {
+        let ratio = converter.outputFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+        guard capacity > 0,
+              let output = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity)
+        else { return nil }
+        var error: NSError?
+        var supplied = false
+        // Once only: answering every pull with the same buffer repeated its audio and then
+        // skipped a later tap buffer to catch up.
+        let status = converter.convert(to: output, error: &error) { _, outStatus in
+            guard !supplied else {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        return status == .error ? nil : output
     }
 
     /// A snapshot of the audio captured so far, as headerless 16 kHz mono PCM.
@@ -230,14 +261,15 @@ class AudioRecorder: ObservableObject {
     /// Used for hands-free mode where the user toggles VAD on mid-recording.
     /// Resets silence tracking so the callback only fires after a NEW silence period.
     func installVoiceStoppedCallback(_ callback: @escaping () -> Void) {
-        bufferQueue.sync {
+        // Behind any start still in flight, which would otherwise reset the callback to its own.
+        engineQueue.async { [self] in bufferQueue.sync {
             self.vadCallback = callback
             self.silenceStart = nil
             // Force hasDetectedVoice = true so the next quiet period triggers the
             // timeout. `everDetectedVoice` is deliberately NOT set here: this is a
             // synthetic nudge for hands-free VAD, not evidence that the user spoke.
             self.hasDetectedVoice = true
-        }
+        } }
     }
 
     /// Compute a display level for the pill meter.
@@ -322,39 +354,56 @@ class AudioRecorder: ObservableObject {
         }
     }
 
-    func stopRecording(completion: @escaping (Data?) -> Void) {
-        guard isRecording, let audioEngine = audioEngine else {
+    /// Close the microphone off the main thread; `completion` runs on main with the trimmed WAV.
+    /// Queued behind a start that is still in flight, so a quick tap still stops what it opened.
+    /// `onClosed` runs on main once the engine has stopped, for the stop chime.
+    func stopRecording(onClosed: (() -> Void)? = nil, completion: @escaping (Data?) -> Void) {
+        guard isRecording else {
+            onClosed?()
             completion(nil)
             return
         }
-
-        let stopStart = Date()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
         isRecording = false
-        self.audioEngine = nil
-        // Clearing the callback is the write that most needed protecting: the tap
-        // does `if vadCallback != nil { ... vadCallback?() }`, so tearing it down
-        // from main mid-check was an unsynchronised release of a live closure.
-        bufferQueue.sync {
-            vadCallback = nil
-            smoothedLevel = 0
-        }
-        DispatchQueue.main.async { [weak self] in
-            self?.inputLevel = 0
-        }
 
-        let capturedData = audioData
-        let stopTime = Date().timeIntervalSince(stopStart)
-        let durationSec = Double(capturedData.count) / (16000.0 * 2.0)
-        print("⏱️ [0] Stop engine: \(String(format: "%.0f", stopTime * 1000))ms")
-        print("⏱️ [0] Audio: \(String(format: "%.1f", durationSec))s, \(capturedData.count) bytes raw")
-
-        guard capturedData.count > 0 else {
-            completion(nil)
-            return
+        let stopInterval = Signposts.poster.beginInterval("StopToAudioReady")
+        let completion: (Data?) -> Void = { data in
+            DispatchQueue.main.async {
+                Signposts.poster.endInterval("StopToAudioReady", stopInterval)
+                completion(data)
+            }
         }
+        engineQueue.async { [self] in
+            guard let audioEngine else {
+                DispatchQueue.main.async { onClosed?() }
+                return completion(nil)
+            }
+            let stopStart = Date()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.stop()
+            self.audioEngine = nil
+            // The callback is cleared under the queue because the tap reads it there. The buffer
+            // is released here too, so an idle app holds no copy of the last recording.
+            let capturedData = bufferQueue.sync {
+                vadCallback = nil
+                smoothedLevel = 0
+                let captured = _audioData
+                _audioData = Data()
+                return captured
+            }
+            DispatchQueue.main.async { [weak self] in
+                onClosed?()
+                self?.inputLevel = 0
+            }
+            let stopTime = Date().timeIntervalSince(stopStart)
+            let durationSec = Double(capturedData.count) / (16000.0 * 2.0)
+            print("⏱️ [0] Stop engine: \(String(format: "%.0f", stopTime * 1000))ms")
+            print("⏱️ [0] Audio: \(String(format: "%.1f", durationSec))s, \(capturedData.count) bytes raw")
+            guard capturedData.count > 0 else { return completion(nil) }
+            Self.encode(capturedData, completion: completion)
+        }
+    }
 
+    private static func encode(_ capturedData: Data, completion: @escaping (Data?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let trimStart = Date()
             let trimmed = Self.trimSilence(from: capturedData)
@@ -362,19 +411,13 @@ class AudioRecorder: ObservableObject {
             let reduction = (capturedData.count - trimmed.count) * 100 / capturedData.count
             print("⏱️ [0] Trim silence: \(String(format: "%.0f", trimTime * 1000))ms (\(reduction)% reduced)")
 
-            guard trimmed.count > 640 else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
+            guard trimmed.count > 640 else { return completion(nil) }
 
             let wavStart = Date()
-            guard let wavData = Self.wav(fromPCM: trimmed) else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
+            guard let wavData = Self.wav(fromPCM: trimmed) else { return completion(nil) }
             let wavTime = Date().timeIntervalSince(wavStart)
             print("⏱️ [0] WAV encode: \(String(format: "%.0f", wavTime * 1000))ms (\(wavData.count) bytes)")
-            DispatchQueue.main.async { completion(wavData) }
+            completion(wavData)
         }
     }
 

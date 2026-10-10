@@ -34,42 +34,67 @@ enum SentencePolish {
 
     /// Below this, there is nothing to fix: a handful of words has no clause
     /// structure to get wrong, and the round trip would only add latency.
-    private static let minimumWords = 8
+    static let minimumWords = 4
+
+    /// How long a dictation waits for polish after transcription ends before it is delivered
+    /// unpolished.
+    static let dictationDeadline: Duration = .milliseconds(900)
+
+    static var isAvailable: Bool {
+        UserData.shared.sentencePolishEnabled && LocalAIEngine.availability.isReady
+    }
+
+    /// Load the on-device model at key-down, so the polish after the turn starts warm.
+    static func prewarm() {
+        guard isAvailable else { return }
+        LocalAIEngine.prewarm(instructions: instructions(precedingText: "", tone: nil))
+    }
 
     /// Punctuate `text`, or return it unchanged.
     ///
-    /// `precedingText` is the sentence fragment the dictation continues, when
-    /// available - it decides whether the first word should be capitalised or is
-    /// mid-clause. `tone` is register guidance for the destination app. Both are
-    /// optional and additive: with neither, behaviour is exactly as before.
+    /// `context` supplies the fragment the dictation continues (it decides whether the first word
+    /// is capitalised) and register guidance for the destination app. It is read inside the
+    /// deadline, and only when the text will be polished. Past `deadline`, or on any failure, the
+    /// original is returned and the model call is cancelled.
     static func polish(
         _ text: String,
-        precedingText: String = "",
-        tone: String? = nil
+        context: @escaping () async -> (precedingText: String, tone: String?) = { ("", nil) },
+        deadline: Duration? = nil,
+        isAvailable: Bool = SentencePolish.isAvailable,
+        rewrite: @escaping (_ instructions: String, _ prompt: String) async throws -> String = LocalAIEngine.rewrite
     ) async -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard shouldPolish(trimmed) else { return text }
+        guard isAvailable, trimmed.split(whereSeparator: \.isWhitespace).count >= minimumWords else { return text }
 
-        do {
-            let result = try await LocalAIEngine.rewrite(
-                instructions: instructions(precedingText: precedingText, tone: tone),
-                prompt: trimmed
-            )
+        let attempt: () async -> String = {
+            let (precedingText, tone) = await context()
+            guard let result = try? await rewrite(instructions(precedingText: precedingText, tone: tone), trimmed)
+            else { return text }
             let cleaned = result.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard isPlausible(cleaned, original: trimmed) else { return text }
-            return cleaned
-        } catch {
-            // Unavailable, timed out, or refused - keep what the user said.
-            return text
+            return isPlausible(cleaned, original: trimmed) ? cleaned : text
         }
+        guard let deadline else { return await attempt() }
+        return await first(of: attempt, orAfter: deadline, fallback: text)
     }
 
-    /// Whether a transcript is worth sending to the model.
-    private static func shouldPolish(_ text: String) -> Bool {
-        guard UserData.shared.sentencePolishEnabled else { return false }
-        guard LocalAIEngine.availability.isReady else { return false }
-        let words = text.split(whereSeparator: { $0.isWhitespace })
-        return words.count >= minimumWords
+    /// `work`'s result, or `fallback` once `deadline` passes. Does not wait for a cancelled `work`
+    /// to wind down, so a model that ignores cancellation cannot hold the turn.
+    static func first(of work: @escaping () async -> String, orAfter deadline: Duration,
+                      fallback: String) async -> String {
+        let results = AsyncStream<String> { continuation in
+            let task = Task { continuation.yield(await work()); continuation.finish() }
+            let timer = Task {
+                try? await Task.sleep(for: deadline)
+                continuation.yield(fallback)
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+                timer.cancel()
+            }
+        }
+        for await result in results { return result }
+        return fallback
     }
 
     /// Reject output that looks like the model did something other than punctuate.

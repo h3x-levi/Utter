@@ -421,7 +421,7 @@ final class CompanionBehaviour: ObservableObject {
     /// what the app is doing.
     func apply(pillState: PillState) {
         switch pillState {
-        case .idle, .notice:
+        case .idle, .notice, .island:
             break
         case .preparing, .recording, .handsFree, .capturingNote, .capturingMemory,
              .processing, .error:
@@ -441,7 +441,7 @@ final class CompanionBehaviour: ObservableObject {
             }
         case .recording, .handsFree, .capturingNote, .capturingMemory:
             set(mood: .alert)
-        case .notice:
+        case .notice, .island:
             // A transient confirmation is not a mood: the character keeps whatever
             // it was doing rather than reacting to a message about note routing.
             break

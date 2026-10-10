@@ -1,3 +1,4 @@
+import AVFoundation
 import Testing
 import Foundation
 @testable import UtterKit
@@ -70,5 +71,47 @@ struct AudioRecorderConsumeTests {
         recorder.consume(10)
         #expect(recorder.audioData.isEmpty)
         #expect(recorder.audioData.startIndex == 0)
+    }
+}
+
+@Suite("AudioRecorder resampling")
+struct AudioRecorderConverterTests {
+
+    /// Each tap buffer must reach the resampler exactly once. A repeat, or the skip that follows
+    /// one, is a phase jump in a pure tone fed through tap-sized chunks.
+    @Test("A tap buffer is resampled once, with no repeated stretch")
+    func inputBlockDoesNotDuplicate() throws {
+        let rate = 48_000.0, tone = 440.0, chunk = 4096, chunks = 20
+        let input = try #require(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate,
+                                               channels: 1, interleaved: false))
+        let output = try #require(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000,
+                                                channels: 1, interleaved: true))
+        let converter = try #require(AVAudioConverter(from: input, to: output))
+
+        var samples: [Int16] = []
+        for index in 0..<chunks {
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: input, frameCapacity: AVAudioFrameCount(chunk)))
+            buffer.frameLength = AVAudioFrameCount(chunk)
+            let channel = try #require(buffer.floatChannelData)[0]
+            for frame in 0..<chunk {
+                let t = Double(index * chunk + frame) / rate
+                channel[frame] = Float(0.5 * sin(2 * .pi * tone * t))
+            }
+            let converted = try #require(AudioRecorder.convert(buffer, with: converter))
+            let pcm = try #require(converted.int16ChannelData)[0]
+            samples += (0..<Int(converted.frameLength)).map { pcm[$0] }
+        }
+
+        let expected = chunks * chunk / 3
+        #expect(abs(samples.count - expected) <= chunks)
+
+        // A pure tone obeys x[n+1] = 2cos(w)x[n] - x[n-1]; a repeated stretch is a phase jump.
+        let k = 2 * cos(2 * Double.pi * tone / 16_000)
+        let x = samples.map(Double.init)
+        var worst = 0.0
+        for n in 200..<(x.count - 1) {
+            worst = max(worst, abs(x[n + 1] - k * x[n] + x[n - 1]))
+        }
+        #expect(worst < 64, "largest continuity residual \(worst)")
     }
 }

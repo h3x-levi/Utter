@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var meetingOfferPanel: MeetingOfferPanel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AXReader.configure()
         AppDelegate.current = self
 
         // Preview generation is a rendering-only tool. Isolate all data stores in memory
@@ -140,7 +141,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             onLongPress: { [weak self] in self?.showMainWindow() },
             // The pointer route into hands-free, from the lock the pill reveals on hover.
             // The same entry point ⌃⌥Space uses, so the two cannot drift apart.
-            onStartHandsFree: { [weak self] in self?.toggleHandsFree() }
+            onStartHandsFree: { [weak self] in self?.capture.toggle(.handsFree) }
+        )
+        capture = CaptureSession(
+            recorder: audioRecorder,
+            transcriber: transcriptionService,
+            pill: pillWindow,
+            meetingIsActive: { [weak self] in self?.meetingIsRecording ?? false },
+            suppressRelease: { [weak self] in self?.keyMonitor?.suppressReleaseStop = $0 },
+            celebrate: { [weak self] in self?.companionWindow?.behaviour.celebrateGoal($0) }
         )
         applyPillVisibility()
 
@@ -160,14 +169,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Only now that the pill exists can it reflect load state. Observe first,
         // then kick off the load, so the initial `.preparing` emission lands.
-        observeModelLoad()
+        capture.observeModelLoad()
         transcriptionService.preload()
 
         keyMonitor = KeyMonitor(
-            onRecordStart: { [weak self] in self?.startRecording() },
-            onRecordStop: { [weak self] in self?.stopRecording() },
-            onHandsFreeToggle: { [weak self] in self?.toggleHandsFree() },
-            onNoteCaptureToggle: { [weak self] in self?.toggleNoteCapture() },
+            onRecordStart: { [weak self] in self?.capture.holdBegan() },
+            onRecordStop: { [weak self] in self?.capture.holdEnded() },
+            onHandsFreeToggle: { [weak self] in self?.capture.toggle(.handsFree) },
+            onNoteCaptureToggle: { [weak self] in self?.capture.toggle(.note) },
             onMemoryCaptureToggle: { [weak self] in self?.toggleMemoryCapture() }
         )
         keyMonitor.start()
@@ -313,12 +322,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         return false
     }
 
-    /// Release the speech context before AppKit calls `exit()`.
+    /// Release the speech context before AppKit calls `exit()`, without blocking main on it.
     ///
     /// Without this, whisper's Metal device was destroyed by a C++ static
     /// destructor during process teardown and aborted, so every normal quit was
-    /// logged as a SIGABRT crash. Freeing it here - while the runtime is still
-    /// fully alive - makes the shutdown ordinary.
+    /// logged as a SIGABRT crash.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let provider = transcriptionService?.localProvider else { return .terminateNow }
+        provider.shutdown { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // A meeting in progress holds un-transcribed audio. Nothing can be done
         // about that window at quit time, but everything already transcribed is in
@@ -328,7 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NoteStore.shared.writeToDisk()
         NoteStore.shared.flushPendingWrites()
         TranscriptionHistory.shared.flushPendingWrites()
-        transcriptionService.localProvider?.shutdown()
+        UserData.shared.flushNow()
     }
 
     private func setupMenuBar() {
@@ -699,9 +713,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         guard let pill = pillWindow else { return }
         if UserData.shared.alwaysShowPill {
             if !pill.isVisible { pill.orderFront(nil) }
-        } else if pill.isVisible, !pill.currentState.isRecordingLike {
-            // Never yank it away mid-recording - that's the one moment it is
-            // carrying live information.
+        } else if pill.isVisible, !pill.currentState.isRecordingLike, !pill.currentState.isIsland {
+            // Never yank it away mid-recording, or while it holds a transcript to copy.
             pill.orderOut(nil)
         }
     }
@@ -917,10 +930,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
             // And a transient confirmation on the pill, which has to be brought up first: with
             // "show at all times" off, `setState(.idle)` has already ordered it out and `.notice`
-            // does not bring it back, so both the success and the failure were invisible. Same
-            // reasoning as `startRecording` - this is exactly when its feedback matters.
+            // does not bring it back, so both the success and the failure were invisible.
             if !pillWindow.isVisible { pillWindow.orderFront(nil) }
-            showPillNotice("Recording the meeting")
+            capture.showNotice("Recording the meeting")
         }
     }
 
@@ -937,7 +949,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // The card is already gone: the call ended, or the preference was switched off, while the
         // start was in flight. The pill is all that is left, so it gets the short version.
         if !pillWindow.isVisible { pillWindow.orderFront(nil) }
-        showPillError("Couldn\u{2019}t start the meeting recording")
+        capture.showError("Couldn\u{2019}t start the meeting recording")
     }
 
     @MainActor
@@ -1248,153 +1260,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.makeKeyAndOrderFront(nil)
     }
 
-    private var isProcessing = false
-    private var capturedSelection = ""
-    private var isHandsFree = false
+    /// The dictation turn: state machine, mic, preview and delivery. Built once the pill exists.
+    private var capture: CaptureSession!
 
-    /// When true, the finished transcript goes into a Utter note instead of being
-    /// typed into the frontmost app.
-    ///
-    /// Two things set it, and they differ in lifetime:
-    ///
-    ///   * **⌃⌥N** sets it for the turn it starts, so an ordinary hotkey press
-    ///     afterwards still types where the user expects.
-    ///   * **"start a new note" / "continue the note"** *arm* it for the turn that
-    ///     follows, because the spoken phrase is the command and what comes next is
-    ///     the content. That arming has to outlive the turn it was spoken in, so
-    ///     `routeNextDictation` is called *after* `finishTurn()` - see the voice
-    ///     command branch in `stopRecording`.
-    ///
-    /// Cleared via `finishTurn()` rather than at each of the six places a turn can
-    /// end - the same reasoning `PillWindow.setState` uses for its hide-on-idle
-    /// rule: a new exit path must not be able to leave the flag stuck on, or every
-    /// later dictation would silently land in a note.
-    private var captureToNote = false
-    /// When true, the finished transcript becomes a private companion memory.
-    private var captureToMemory = false
+    /// Voice capture into the companion's private memory store, also offered on the Companion screen.
+    @MainActor func toggleMemoryCapture() { capture.toggle(.memory) }
 
-    private var recordingPillState: PillState {
-        if captureToNote { return .capturingNote }
-        if captureToMemory { return .capturingMemory }
-        return isHandsFree ? .handsFree : .recording
-    }
-
-    /// Reset per-turn state. Call from every path that ends a dictation turn,
-    /// success or failure.
-    private func finishTurn() {
-        isProcessing = false
-        captureToNote = false
-        captureToMemory = false
-        SurroundingContext.clearPrewarmed()
-    }
-
-    private func startRecording() {
-        guard !isProcessing else { return }
-        // Prewarm surrounding text context right as recording begins
-        SurroundingContext.prewarm()
-        // A meeting owns the microphone tap. Without this the dictation path would
-        // call `startRecording` (a silent no-op while the tap is live) and then, on
-        // release, `stopRecording` would hand back the ENTIRE meeting so far and
-        // type it into the frontmost app - while tearing down the engine the
-        // meeting was still recording through.
-        guard !meetingIsRecording else {
-            showPillError("Recording a meeting - stop it first")
-            return
-        }
-        // Something is already recording through this tap, so there is nothing to start.
-        //
-        // `KeyMonitor` delivers `onRecordStart` on every hotkey press regardless of state  - 
-        // `suppressReleaseStop` only suppresses the *release* - so brushing the dictation
-        // hotkey during a latched hands-free session or a note capture ran this whole path:
-        // `audioRecorder.startRecording` returns false while its engine is already up, so the
-        // user got "Couldn't start the microphone" over a capture that was in fact recording
-        // fine, with the elapsed timer, level meter and live preview all torn down for the
-        // rest of it. Deliberately *after* the meeting guard, which owns the same recorder and
-        // has a more specific thing to say about it.
-        guard !audioRecorder.isRecording else { return }
-        // If the pill is hidden ("show at all times" off), bring it up for the
-        // duration of the turn - this is exactly when its feedback matters.
-        if !pillWindow.isVisible { pillWindow.orderFront(nil) }
-
-        // Show the recording state **first**, before anything slow.
-        //
-        // This used to sit five statements further down, after `MediaControl.pauseIfPlaying()` and
-        // after `captureCurrentSelection()` - and the second of those is an Accessibility query into
-        // whatever app is frontmost, i.e. a synchronous cross-process round trip that can take
-        // hundreds of milliseconds and is at the mercy of how busy the other app is. The pill could
-        // not react until both had finished, which is the whole of "pressing the key to the pill
-        // reacting is very slow": the delay was never in the pill, it was queued behind work the
-        // pill does not depend on.
-        //
-        // Nothing below needs the state to be set late. `captureToNote` is already decided, and the
-        // failure path a few lines down re-sets the state anyway - `setState` coalesces repeats
-        // inside one runloop turn, which is exactly what `requestedState` exists for.
-        pillWindow.setState(recordingPillState)
-
-        // Pause other audio so music doesn't bleed into the microphone.
-        MediaControl.pauseIfPlaying()
-
-        // Rebuild the speech context now, if the 5-minute idle eviction released it, so the
-        // transcription that is about to happen does not pay for it.
-        //
-        // This is latency moved, not latency removed, and the move is the whole value: the user
-        // is about to speak for a couple of seconds, and the rebuild runs on the whisper queue
-        // during that time. The inference is queued behind it on the same serial queue, so it
-        // finds a warm context and no lock is needed.
-        //
-        // Measured on this machine against the shipped 190 MB model: **78-93 ms** to rebuild
-        // in-process after a `whisper_free` with the file still in the page cache, and
-        // **7,686 ms** for a first load with a cold one. Eviction is deliberately aggressive and
-        // a menu-bar app can sit idle for hours, so a long-idle rebuild is somewhere on that
-        // range rather than reliably at the low end - and the user cannot tell in advance which
-        // turn will be the slow one. This removes the variance, which is the part that is felt.
-        //
-        // Non-blocking, and deliberately silent: nothing about the engine's *capability* changed
-        // while it was unloaded, so it publishes no `loadState`. See `LocalWhisperProvider.warmUp`.
-        //
-        // Hopped to the main actor because `warmUp` reads the active tier from `ModelStore`, which
-        // lives there, and `startRecording` is nonisolated - the same reason the tier-change preload
-        // at `observeModelTier` is wrapped. One runloop turn of delay is irrelevant here: what this
-        // has to beat is the user finishing their sentence, not the next frame.
-        Task { @MainActor in self.transcriptionService.warmUp() }
-
-        if !modelReady {
-            // Recording is safe - audio capture doesn't need the model. The clip
-            // will transcribe as soon as the load finishes, so capture it rather
-            // than dropping what the user said.
-            print("⏳ Recording while the speech model finishes loading")
-        }
-
-        // Capture any selected text in the focused app BEFORE we start recording
-        // This is needed for AI commands like "make it professional" on selected text
-        capturedSelection = captureCurrentSelection()
-        if !capturedSelection.isEmpty {
-            // Log that a selection was captured, never its text (it comes from another app).
-            print("📎 Pre-captured selection: \(capturedSelection.count) chars")
-        }
-
-        SoundPlayer.playStart()
-        // The state was already shown above, before the slow work - see the note there. It named the
-        // destination rather than merely the fact of recording, and it still does: `captureToNote`
-        // may already be armed by a spoken "start a new note" from the previous turn, in which case
-        // this dictation lands in a note, and `.capturingNote` exists precisely because where the
-        // text is going is the one thing the user cannot otherwise see.
-        startPillTelemetry()
-        // No VAD callback in push-to-talk mode; release of hotkey ends recording.
-        guard audioRecorder.startRecording(onVoiceStopped: nil) else {
-            stopPillTelemetry()
-            MediaControl.resumeIfPaused()
-            showPillError("Couldn\u{2019}t start the microphone")
-            return
-        }
-    }
-
-    /// Whether meeting capture currently owns the microphone.
-    ///
-    /// Read through the delegate's lazy session without creating it: touching
-    /// `meetingSession` would instantiate it on the first hotkey press, which is
-    /// wasteful but harmless - the guard is about the *state*, so a session that
-    /// does not exist yet is by definition not recording.
     /// Whether a meeting still owns the shared recorder.
     ///
     /// `.finishing` counts. `MeetingSession.stop()` closes the tap, then awaits the tail
@@ -1405,789 +1276,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         MainActor.assumeIsolated {
             meetingSession.state == .recording || meetingSession.state == .finishing
         }
-    }
-
-    /// Toggle hands-free mode. Triggered by Control+Option+Space from any state.
-    ///
-    /// State machine:
-    ///   - idle              → start a fresh hands-free recording
-    ///   - push-to-talk      → upgrade in-flight recording to hands-free, ignore hotkey release
-    ///   - hands-free        → finalize and transcribe
-    /// ⌃⌥N: dictate into a Utter note rather than the frontmost app.
-    ///
-    /// Runs the same recording machinery as hands-free - the only difference is
-    /// `captureToNote`, which redirects the finished text at the end of the
-    /// pipeline. Deliberately hands-free rather than push-to-talk: notes tend to
-    /// be longer than a sentence typed into a field, and holding a chord for a
-    /// paragraph is uncomfortable.
-    private func toggleNoteCapture() {
-        // Already capturing → finish and file the note.
-        if isHandsFree, captureToNote {
-            print("📝 Note capture: manual stop")
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            stopRecording()
-            return
-        }
-
-        guard !isProcessing else {
-            print("⚠️ Note capture ignored: still processing previous transcription")
-            return
-        }
-
-        guard !meetingIsRecording else {
-            showPillError("Recording a meeting - stop it first")
-            return
-        }
-
-        // A plain hands-free session is already running: redirect it rather than
-        // refusing, so the user can decide mid-thought that this belongs in a note.
-        if isHandsFree {
-            captureToNote = true
-            captureToMemory = false
-            pillWindow.setState(.capturingNote)
-            // The card is about to appear over a recording that started without a preview.
-            startLivePreviewIfNeeded()
-            print("📝 Note capture: redirecting active hands-free session")
-            return
-        }
-
-        captureToNote = true
-        captureToMemory = false
-
-        // Same reasoning as `toggleHandsFree`: ask the recorder whether a tap is
-        // open rather than reading it off the pill's state.
-        if audioRecorder.isRecording {
-            print("📝 Note capture: upgrading active push-to-talk recording")
-            isHandsFree = true
-            keyMonitor.suppressReleaseStop = true
-            pillWindow.setState(.capturingNote)
-            startLivePreviewIfNeeded()
-            installHandsFreeVAD()
-            return
-        }
-
-        isHandsFree = true
-        keyMonitor.suppressReleaseStop = true
-        startRecording()
-        // `startRecording` reports failure through the pill, so treat "not
-        // recording" as the signal to unwind rather than duplicating its checks.
-        guard audioRecorder.isRecording else {
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            captureToNote = false
-            return
-        }
-        // No `setState(.capturingNote)` here. `startRecording` has already applied it from
-        // the `captureToNote` flag set above, and the second call was a real defect: both
-        // landed in one runloop turn, so the pill ran two morph transactions for one state
-        // change and the second one started inside the first's window resize. That is what
-        // made opening the note card look jittery while closing it looked correct.
-        installHandsFreeVAD()
-    }
-
-    /// Toggle voice capture into the companion's private memory store.
-    ///
-    /// This uses the same recorder and transcription service as dictation, but it
-    /// never injects text into another app and never enters transcription history.
-    func toggleMemoryCapture() {
-        if isHandsFree, captureToMemory {
-            print("🧠 Memory capture: manual stop")
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            stopRecording()
-            return
-        }
-
-        guard !isProcessing else {
-            print("⚠️ Memory capture ignored: still processing previous transcription")
-            return
-        }
-        guard !meetingIsRecording else {
-            showPillError("Recording a meeting - stop it first")
-            return
-        }
-
-        captureToNote = false
-        captureToMemory = true
-
-        if isHandsFree {
-            pillWindow.setState(.capturingMemory)
-            startLivePreviewIfNeeded()
-            return
-        }
-
-        if audioRecorder.isRecording {
-            isHandsFree = true
-            keyMonitor.suppressReleaseStop = true
-            pillWindow.setState(.capturingMemory)
-            startLivePreviewIfNeeded()
-            installHandsFreeVAD()
-            return
-        }
-
-        isHandsFree = true
-        keyMonitor.suppressReleaseStop = true
-        startRecording()
-        guard audioRecorder.isRecording else {
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            captureToMemory = false
-            return
-        }
-        installHandsFreeVAD()
-    }
-
-    /// Point the next dictation at a new or the currently open note.
-    ///
-    /// Spoken rather than typed, so a long thought can be split into separate notes
-    /// without reaching for the keyboard. Arming a mode rather than acting now: the
-    /// phrase itself is the command, and what follows it is the content.
-    ///
-    /// Must be called *after* `finishTurn()`, never before: `finishTurn` clears
-    /// `captureToNote`, so arming first and finishing second undid the arming in the
-    /// same statement list - the command created an empty note, said "keep talking",
-    /// and then the next dictation typed into the frontmost app anyway.
-    ///
-    /// Leaves the pill in `.notice` and does not return it to `.idle`; the notice
-    /// expires on its own. Setting `.idle` after this call would replace the
-    /// confirmation before a single frame had been drawn with it.
-    @MainActor
-    private func routeNextDictation(_ action: VoiceAction) {
-        captureToNote = true
-        switch action {
-        case .startNewNote:
-            // An empty note becomes the destination, so the next capture appends to
-            // it rather than creating a second one.
-            NoteStore.shared.create(body: "", source: .dictated)
-            UserData.shared.captureAppendsToOpenNote = true
-            showPillNotice("New note - keep talking")
-        case .continueNote:
-            UserData.shared.captureAppendsToOpenNote = true
-            showPillNotice(NoteStore.shared.selectedNote == nil
-                            ? "No note open - starting one"
-                            : "Adding to the open note")
-            if NoteStore.shared.selectedNote == nil {
-                NoteStore.shared.create(body: "", source: .dictated)
-            }
-        default:
-            break
-        }
-        UserData.shared.save()
-    }
-
-    /// Run a finished transcript through the correction pipeline and deliver it.
-    ///
-    /// Extracted so the two callers cannot drift: an ordinary dictation reaches it
-    /// after the AI-command pass declines the text, and a note capture reaches it
-    /// directly (that pass is skipped - see `stopRecording`). Every correction stage
-    /// runs identically either way, so a note never gets second-class text for
-    /// having skipped the dictionary or snippet pass; the destination at the end is
-    /// the only difference.
-    @MainActor
-    private func deliverTranscript(_ text: String, elapsed: TimeInterval) {
-        // Fix custom-dictionary near-misses (Whisper can't be biased at the
-        // endpoint, so we correct its output here).
-        var processed = DictionaryCorrector.correct(text, using: UserData.shared.dictionaryWords)
-        processed = UserData.shared.applySnippets(to: processed)
-
-        if captureToMemory {
-            saveSpokenMemory(processed, elapsed: elapsed)
-            return
-        } else if captureToNote {
-            deliverToNote(processed)
-        } else {
-            // Context formatting is destination formatting, so it only applies on the path
-            // that actually types into the destination. `AppContext.detect()` reads
-            // `NSWorkspace.frontmostApplication`, and a note capture never changes that  - 
-            // the pill and the note card are both `.nonactivatingPanel`, so whatever the
-            // user was looking at stays frontmost. A note dictated with a terminal in front
-            // was therefore filed under `.code` rules and had its full stop stripped; with
-            // Slack in front it was shortened as a chat message. None of those rules describe
-            // a note.
-            let context = AppContext.detect()
-            processed = AppContext.adjustFormatting(processed, context: context)
-            TextInjector.typeText(processed)
-        }
-        UserData.shared.lastTranscription = processed
-        if let celebration = UserData.shared.recordCompanionDictation(
-            words: processed.split(whereSeparator: \.isWhitespace).count
-        ) {
-            companionWindow?.behaviour.celebrateGoal(celebration)
-        }
-        // Recording the searchable log is opt-out (`keepHistory`, default on). Off
-        // → the transcript is typed but never written to `history.json`. The
-        // language detection only feeds the history entry, so it is skipped too.
-        if UserData.shared.keepHistory {
-            let detected = LanguageDetector.detect(processed)
-            TranscriptionHistory.shared.add(
-                text: processed,
-                language: detected?.displayName ?? ""
-            )
-        }
-        print("⚡ Total latency: \(String(format: "%.1f", elapsed))s")
-        SoundPlayer.playDone()
-        finishTurn()
-        pillWindow.setState(.idle)
-    }
-
-    @MainActor
-    private func saveSpokenMemory(_ text: String, elapsed: TimeInterval) {
-        pillWindow.setState(.processing(.rewriting))
-        Task {
-            do {
-                let proposal = try await CompanionMemoryParser.parse(text)
-                try await MainActor.run {
-                    _ = try CompanionMemoryStore.shared.add(
-                        proposal: proposal,
-                        source: .spoken
-                    )
-                    _ = UserData.shared.recordCompanionDictation(
-                        words: proposal.text.split(whereSeparator: \.isWhitespace).count
-                    )
-                    print("🧠 Saved spoken memory in \(String(format: "%.1f", elapsed))s")
-                    SoundPlayer.playDone()
-                    finishTurn()
-                    showPillNotice(
-                        proposal.remindAt == nil ? "Remembered" : "Reminder saved"
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    SoundPlayer.playError()
-                    finishTurn()
-                    showPillError(error.localizedDescription)
-                }
-            }
-        }
-    }
-
-    /// File a finished transcript into the notes store.
-    ///
-    /// Appends to the open note when the user asked for that and one is actually
-    /// open; otherwise starts a new note so dictation is never silently dropped
-    /// for want of a destination.
-    ///
-    /// The choice itself lives in `NoteCaptureDestination.resolve`, because the pill's
-    /// note box has to *name* the destination while the user is still speaking. Deciding
-    /// it here and describing it there would be two copies of one rule, and the pill
-    /// would eventually name a note the text does not land in.
-    @MainActor
-    private func deliverToNote(_ text: String) {
-        let store = NoteStore.shared
-        switch store.captureDestination(
-            appendsToOpenNote: UserData.shared.captureAppendsToOpenNote
-        ) {
-        case .appending(let id, _):
-            store.append(text, to: id)
-            print("📝 Appended \(text.split(separator: " ").count) words to the open note")
-        case .newNote:
-            store.create(body: text, source: .dictated)
-            print("📝 Created a note from dictation (\(text.split(separator: " ").count) words)")
-        }
-        // Write through rather than waiting on the debounce: this text exists
-        // nowhere else, and the user may quit straight after speaking.
-        store.writeToDisk()
-    }
-
-    private func toggleHandsFree() {
-        // Already hands-free → finalize.
-        if isHandsFree {
-            print("🔓 Hands-free: manual stop")
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            stopRecording()
-            return
-        }
-
-        // Currently processing a previous transcription → ignore.
-        guard !isProcessing else {
-            print("⚠️ Hands-free toggle ignored: still processing previous transcription")
-            return
-        }
-
-        guard !meetingIsRecording else {
-            showPillError("Recording a meeting - stop it first")
-            return
-        }
-
-        // Already recording (push-to-talk) → upgrade to hands-free.
-        //
-        // Asks the recorder, not the pill: an armed note capture shows
-        // `.capturingNote` while push-to-talk records, so a state comparison here
-        // missed it and fell through to "start fresh from idle" on top of a live tap.
-        if audioRecorder.isRecording {
-            print("🔒 Hands-free: upgrading active push-to-talk recording")
-            isHandsFree = true
-            keyMonitor.suppressReleaseStop = true
-            pillWindow.setState(recordingPillState)
-            installHandsFreeVAD()
-            return
-        }
-
-        // Idle → start a fresh hands-free recording.
-        print("🔒 Hands-free: starting from idle")
-        isHandsFree = true
-        keyMonitor.suppressReleaseStop = true
-        capturedSelection = captureCurrentSelection()
-        if !capturedSelection.isEmpty {
-            // Log that a selection was captured, never its text (it comes from another app).
-            print("📎 Pre-captured selection: \(capturedSelection.count) chars")
-        }
-        SoundPlayer.playStart()
-        pillWindow.setState(recordingPillState)
-        startPillTelemetry()
-        // Install the VAD callback at start time so we don't have to attach it later.
-        let started = audioRecorder.startRecording { [weak self] in
-            self?.handsFreeFinalize(reason: "VAD silence")
-        }
-        // Roll back on failure. Leaving `isHandsFree` and `suppressReleaseStop` set
-        // for a recording that never began was the worst of the state-machine bugs:
-        // no VAD callback exists to finalize the turn, and `suppressReleaseStop`
-        // makes KeyMonitor swallow every hotkey release, so push-to-talk stays dead
-        // until the user happens to press the chord a second time.
-        guard started else {
-            isHandsFree = false
-            keyMonitor.suppressReleaseStop = false
-            stopPillTelemetry()
-            MediaControl.resumeIfPaused()
-            showPillError("Couldn\u{2019}t start the microphone")
-            return
-        }
-    }
-
-    /// Attach a VAD silence callback to an in-flight recording.
-    private func installHandsFreeVAD() {
-        audioRecorder.installVoiceStoppedCallback { [weak self] in
-            self?.handsFreeFinalize(reason: "VAD silence")
-        }
-    }
-
-    /// Finalize a hands-free session triggered by VAD or another internal event.
-    private func handsFreeFinalize(reason: String) {
-        guard isHandsFree else { return }
-        print("🔇 Hands-free: \(reason) → finalize")
-        isHandsFree = false
-        keyMonitor.suppressReleaseStop = false
-        stopRecording()
-    }
-
-    /// Copy selected text from the focused app using Cmd+C.
-    /// Uses the pasteboard changeCount to detect whether Cmd+C actually copied
-    /// anything - if nothing was selected, the clipboard is never modified
-    /// (no clear/restore churn for clipboard-manager apps to record).
-    /// Read whatever is selected in the frontmost app, by copying it and putting the pasteboard back.
-    ///
-    /// **Waits for the copy to land rather than sleeping through it.** This used to be a flat
-    /// `usleep(80_000)` - 80ms of the main thread doing nothing, on *every* hotkey press, before the
-    /// pill could paint. That is the whole of "pressing the key to the pill reacting is very slow":
-    /// the app was asleep for it. Polling `changeCount` exits as soon as the target app has answered,
-    /// which is typically 10-20ms, and keeps the same 80ms as a *ceiling* rather than a cost.
-    ///
-    /// The ceiling still has to exist: an app that is busy or has nothing selected never bumps
-    /// `changeCount`, and there is no notification for "the copy you synthesised has completed".
-    /// 2ms between polls is fine - the wait is dominated by another process's response, not by this
-    /// loop.
-    private func captureCurrentSelection() -> String {
-        let pasteboard = NSPasteboard.general
-        let snapshot = PasteboardSnapshot(pasteboard)
-        let changeCountBefore = pasteboard.changeCount
-
-        TextInjector.simulateCopy()
-
-        // Wait for the **payload**, not for the change count.
-        //
-        // `changeCount` is bumped by `declareTypes(_:owner:)`, which a copying app calls *before* it
-        // writes the data. Polling the count alone therefore exits up to a whole write too early and
-        // reads nil - which silently becomes "nothing was selected", so a spoken "make it
-        // professional" would run against no text and say nothing about why. That is the trap the
-        // flat 80ms sleep this replaced did not have, because it always gave the other app the full
-        // window.
-        //
-        // So both conditions have to hold before we stop waiting: the count moved *and* a string is
-        // actually readable. The 80ms ceiling is unchanged, and the common case still exits in
-        // 10-20ms rather than always paying the full window.
-        var selected = ""
-        let deadline = Date().addingTimeInterval(0.080)
-        while Date() < deadline {
-            if pasteboard.changeCount != changeCountBefore,
-               let string = pasteboard.string(forType: .string) {
-                selected = string
-                break
-            }
-            usleep(2_000)
-        }
-
-        // Cmd+C with no selection leaves the pasteboard untouched.
-        guard pasteboard.changeCount != changeCountBefore else { return "" }
-
-        snapshot.restore(to: pasteboard)
-        return selected
-    }
-
-    private func stopRecording() {
-        guard !isProcessing else { return }
-        isProcessing = true
-        // Resume before transcription rather than after: the user has stopped
-        // talking, the mic is closed, and waiting several seconds for a long
-        // transcription would feel like the app forgot.
-        MediaControl.resumeIfPaused()
-        SoundPlayer.playStop()
-        stopPillTelemetry()
-        pillWindow.setState(.processing(.transcribing))
-        let sendTime = Date()
-        audioRecorder.stopRecording { [weak self] audioData in
-            guard let self = self else { return }
-            // No usable audio. `AudioRecorder.stopRecording` reports nil for four different
-            // reasons - nothing captured, the trim left under 640 bytes, the WAV encode
-            // failed, or it was not recording - and this collapsed all of them to a silent
-            // return to idle. With "show at all times" off that also orders the pill away, so
-            // a capture that filed nothing into the note looked exactly like one that worked.
-            // The empty-transcript branch below already treats this as an error; so does this.
-            guard let audioData else {
-                SoundPlayer.playError()
-                self.finishTurn()
-                self.showPillError("No speech detected")
-                return
-            }
-            Task {
-                do {
-                    let text = try await self.transcriptionService.transcribe(audioData: audioData)
-                    let elapsed = Date().timeIntervalSince(sendTime)
-                    await MainActor.run {
-                        if !text.isEmpty {
-                            // Check for voice commands first.
-                            //
-                            // While dictating into a note, only the *routing* commands
-                            // are honoured. The editing ones (`select all`, `copy`,
-                            // `new line`…) are keystrokes for the frontmost app's text
-                            // field, and the text is not going there - so obeying them
-                            // would type into an unrelated document. Nor are they
-                            // swallowed as rejected commands: `checkVoiceCommand`
-                            // matches on `hasSuffix`, so "the old config is stale so
-                            // I'll delete that" *is* the `undo` command by that test
-                            // (verified - see `VoiceCommandRoutingTests`), and dropping
-                            // it would delete a sentence from the only copy the user
-                            // has. Treating them as ordinary text puts them in the
-                            // note, which is where the user was speaking.
-                            if self.captureToMemory {
-                                self.deliverTranscript(text, elapsed: elapsed)
-                            } else if let action = UserData.shared.checkVoiceCommand(text),
-                               !self.captureToNote || action.isNoteRouting {
-                                // Log the matched action, not the spoken text it came from.
-                                print("🗣️ Voice command: \(action)")
-                                SoundPlayer.playDone()
-                                // Finish the turn *first*. `finishTurn` clears
-                                // `captureToNote`, and the note-routing commands set
-                                // it to arm the *next* dictation - so routing before
-                                // finishing wiped the arming one line later and the
-                                // commands did nothing at all.
-                                self.finishTurn()
-                                // Note routing is an app decision, not a keystroke,
-                                // so it is handled here rather than in TextInjector.
-                                switch action {
-                                case .startNewNote, .continueNote:
-                                    // No `setState(.idle)`: `routeNextDictation`
-                                    // leaves a `.notice` on the pill that expires by
-                                    // itself. Both calls hop through
-                                    // `DispatchQueue.main.async`, so an `.idle` here
-                                    // would be applied in the same runloop drain and
-                                    // the confirmation would never be seen.
-                                    self.routeNextDictation(action)
-                                default:
-                                    TextInjector.executeAction(action)
-                                    self.pillWindow.setState(.idle)
-                                }
-                            } else if self.captureToNote {
-                                // A note capture skips the AI-command pass entirely.
-                                //
-                                // `AICommands.process` matches its style patterns with
-                                // `hasSuffix`, so a note whose last words happen to be
-                                // "…make it shorter" was read as a command - and every
-                                // one of its outcomes acts on the *frontmost app*: the
-                                // rewrite is pasted there, and because
-                                // `sourceWasDictation` is `capturedSelection.isEmpty`
-                                // (true during a note capture) it first sent Cmd+Z to
-                                // "undo" text it had never typed, corrupting whatever
-                                // document happened to be in front. AI actions on note
-                                // bodies belong to the note editor, where the user can
-                                // see what is being rewritten.
-                                self.deliverTranscript(text, elapsed: elapsed)
-                            } else {
-                                // Check for AI commands (async)
-                                Task {
-                                    await MainActor.run { self.pillWindow.setState(.processing(.rewriting)) }
-                                    if let result = await AICommands.process(text, selectedText: self.capturedSelection) {
-                                        if let aiText = result.text {
-                                            // If we captured a live selection before recording, that
-                                            // selection is still highlighted - a plain paste replaces
-                                            // it. Issuing Cmd+Z here would wrongly undo the user's own
-                                            // last edit in their app. Only undo-then-paste when the
-                                            // source was our own just-dictated text (no selection).
-                                            let sourceWasDictation = self.capturedSelection.isEmpty
-                                            if result.replacesSelection && sourceWasDictation {
-                                                // Replace our own dictation: undo it, then paste.
-                                                await MainActor.run { TextInjector.undoLastTranscription() }
-                                                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms for undo to apply
-                                            }
-                                            await MainActor.run {
-                                                self.pillWindow.setState(.processing(.typing))
-                                                // Replace (selection still highlighted) or append  - 
-                                                // both are a paste at the current cursor/selection.
-                                                TextInjector.typeText(aiText)
-                                                // Same opt-out as ordinary dictation: an
-                                                // AI-rewritten result is history too, so it is
-                                                // only logged when the user keeps history.
-                                                if UserData.shared.keepHistory {
-                                                    TranscriptionHistory.shared.add(text: aiText)
-                                                }
-                                                print("🤖 AI result: \(aiText.count) chars")
-                                                SoundPlayer.playDone()
-                                                self.finishTurn()
-                                                self.pillWindow.setState(.idle)
-                                            }
-                                        } else {
-                                            // Command failed (e.g. nothing to transform). Surface it  - 
-                                            // don't play the success chime and silently return to idle.
-                                            await MainActor.run {
-                                                if let err = result.error { print("⚠️ AI command: \(err)") }
-                                                SoundPlayer.playError()
-                                                self.finishTurn()
-                                                self.showPillError(result.error ?? "Command failed")
-                                            }
-                                        }
-                                    } else {
-                                        // Normal transcription
-                                        await MainActor.run {
-                                            self.deliverTranscript(text, elapsed: elapsed)
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            SoundPlayer.playError()
-                            self.finishTurn()
-                            self.showPillError("No speech detected")
-                        }
-                    }
-                } catch {
-                    print("Transcription error: \(error)")
-                    await MainActor.run {
-                        SoundPlayer.playError()
-                        self.finishTurn()
-                        self.showPillError(Self.pillMessage(for: error))
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Model load state
-
-    private var loadObserver: AnyCancellable?
-
-    /// Mirror the engine's load state onto the pill, so the first launch reads
-    /// "Getting ready" instead of inviting a dictation that would just queue.
-    private func observeModelLoad() {
-        guard let local = transcriptionService.localProvider else { return }
-        loadObserver = local.$loadState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self else { return }
-                self.modelReady = (state == .ready)
-                // Share it with the main window's readiness panel.
-                Task { @MainActor in ReadinessMonitor.shared.modelLoad = state }
-                // Never override an in-flight recording or an error being shown.
-                switch self.pillWindow.currentState {
-                case .preparing, .idle:
-                    break
-                default:
-                    return
-                }
-                switch state {
-                case .loading, .idle:
-                    self.pillWindow.setState(.preparing)
-                case .ready:
-                    self.pillWindow.setState(.idle)
-                case .failed(let reason):
-                    self.showPillError(reason)
-                }
-            }
-    }
-
-    /// Whether the engine can transcribe right now.
-    private var modelReady = false
-
-    // MARK: - Pill telemetry
-
-    private var elapsedTimer: Timer?
-    /// The live-preview polling loop, cancelled when recording stops.
-    private var previewTask: Task<Void, Never>?
-    private var levelObserver: AnyCancellable?
-    private var recordingStart = Date()
-
-    /// Forward the recorder's real level and an elapsed-seconds counter to the pill.
-    ///
-    /// The hands-free silence countdown used to be forwarded here too, for the amber drain
-    /// along the pill's foot. That line is gone (see `PillContent`), so nothing consumes the
-    /// progress and the subscription went with it - `AudioRecorder` still measures it and
-    /// still auto-stops on it; it is simply no longer drawn.
-    private func startPillTelemetry() {
-        recordingStart = Date()
-        pillWindow.stateModel.elapsed = 0
-
-        levelObserver = audioRecorder.$inputLevel
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] level in self?.pillWindow.stateModel.level = level }
-
-        elapsedTimer?.invalidate()
-        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.pillWindow.stateModel.elapsed = Int(Date().timeIntervalSince(self.recordingStart))
-        }
-
-        startLivePreview()
-    }
-
-    private func stopPillTelemetry() {
-        elapsedTimer?.invalidate()
-        elapsedTimer = nil
-        levelObserver?.cancel()
-        levelObserver = nil
-        pillWindow.stateModel.level = 0
-        stopLivePreview()
-    }
-
-    // MARK: - Live preview
-
-    /// Poll partial audio and show a rough transcript while the user is still
-    /// talking.
-    ///
-    /// Sequential by construction: each pass starts only after the previous one
-    /// returns. A fixed-interval timer would pile up requests whenever inference
-    /// takes longer than the interval, which is exactly when the machine is already
-    /// busy. `previewTranscribe` also aborts superseded work itself, so the two
-    /// mechanisms together mean at most one preview is ever in flight.
-    /// Start the live preview for a recording that is already running.
-    ///
-    /// `startLivePreview` is only ever reached from `startPillTelemetry`, i.e. at the moment
-    /// recording begins - and its first guard is `livePreviewEnabled || captureToNote`. Both
-    /// note-capture *redirects* arm `captureToNote` on an already-live recording, long after
-    /// that guard was evaluated as false, so with the preference off (the default) the note
-    /// card sat reading "Listening…" for the whole capture: the one thing the card exists to
-    /// show never appeared.
-    ///
-    /// Guarded on the task rather than calling straight through, because `startLivePreview`
-    /// blanks `previewText` and cancels the running task - with the preference *on* a plain
-    /// call would throw away a transcript that was already accumulating and re-impose the
-    /// 900ms warm-up.
-    private func startLivePreviewIfNeeded() {
-        guard previewTask == nil else { return }
-        startLivePreview()
-    }
-
-    private func startLivePreview() {
-        // Note capture always previews, whatever the preference says.
-        //
-        // The note card exists to show the words landing in the note as they are heard
-        // - that is the whole reason the pill grows into it. With
-        // `livePreviewEnabled` off, which is the default, the card had room for three
-        // lines of transcript and drew a message asking the user to switch a setting on.
-        // Ordinary dictation keeps honouring the preference: there the preview is a
-        // nicety over text that is about to be typed anyway, so paying for inference
-        // twice is the user's call. Here it is the feature.
-        guard UserData.shared.livePreviewEnabled || captureToNote || captureToMemory else { return }
-        guard let local = transcriptionService.localProvider else { return }
-
-        pillWindow.stateModel.previewText = ""
-        previewTask?.cancel()
-        previewTask = Task { [weak self] in
-            // Let a little speech accumulate first: a preview of the first
-            // fraction of a second is noise, and would flash a wrong word.
-            try? await Task.sleep(nanoseconds: 900_000_000)
-
-            while !Task.isCancelled {
-                guard let self else { return }
-                // The tail only. An uncapped read re-transcribed the whole utterance from its
-                // first byte on every pass, so the work grew as the square of the utterance's
-                // length and a single pass eventually took longer than the interval between
-                // passes - previews then ran back to back on the serial whisper queue and
-                // delayed the final transcript they are supposed to stay out of the way of.
-                let snapshot = self.audioRecorder.audioSnapshot(
-                    lastBytes: AudioRecorder.previewWindowBytes
-                )
-
-                // Below ~0.6s of audio there is not enough signal to transcribe.
-                // 16 kHz mono 16-bit = 32,000 bytes per second.
-                if snapshot.count >= 19_200 {
-                    if let text = await local.previewTranscribe(pcm: snapshot),
-                       !Task.isCancelled {
-                        await MainActor.run {
-                            self.pillWindow.stateModel.previewText = text
-                        }
-                    }
-                }
-                // Yield between passes so previews never monopolise the whisper
-                // queue that the final transcription needs.
-                try? await Task.sleep(nanoseconds: 700_000_000)
-            }
-        }
-    }
-
-    private func stopLivePreview() {
-        previewTask?.cancel()
-        previewTask = nil
-        // Abandon in-flight inference too - cancelling the Task alone would leave
-        // a started pass running on the whisper queue, delaying the real one.
-        transcriptionService.localProvider?.cancelPreviews()
-        pillWindow.stateModel.previewText = ""
-    }
-
-    /// Show a named failure, then return to idle. An icon with no reason tells
-    /// the user something broke without telling them what.
-    private func showPillError(_ reason: String) {
-        stopPillTelemetry()
-        pillWindow.setState(.error(reason))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            guard let self else { return }
-            if case .error = self.pillWindow.currentState {
-                self.pillWindow.setState(.idle)
-            }
-        }
-    }
-
-    /// Show a neutral confirmation, then return to idle.
-    ///
-    /// Separate from `showPillError` because `.error` carries a warning glyph and a
-    /// danger tint: routing the next dictation into a note is the app doing exactly
-    /// what it was asked, and reporting it in red said the opposite. `.notice` was
-    /// added to `PillState` for this and had no caller until now.
-    ///
-    /// The return to `.idle` is guarded on the state still *being* the notice, so a
-    /// recording started inside the 2.5s window is not cancelled out from under the
-    /// user - the same guard `showPillError` uses.
-    private func showPillNotice(_ message: String) {
-        stopPillTelemetry()
-        pillWindow.setState(.notice(message))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            guard let self else { return }
-            if case .notice = self.pillWindow.currentState {
-                self.pillWindow.setState(.idle)
-            }
-        }
-    }
-
-    /// Map an internal error to something a user can act on.
-    private static func pillMessage(for error: Error) -> String {
-        if let transcription = error as? TranscriptionError {
-            switch transcription {
-            case .modelMissing: return "Speech model missing"
-            case .modelLoadFailed: return "Could not load model"
-            case .invalidAudio: return "Could not read audio"
-            default: return "Transcription failed"
-            }
-        }
-        return "Transcription failed"
     }
 
     /// Ask for Accessibility once, then stop asking.
