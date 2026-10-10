@@ -110,3 +110,26 @@ struct WhisperAbortStateTests {
         #expect(state.beginPreview() == nil)
     }
 }
+
+@Suite("Model download progress throttle")
+struct ModelDownloadProgressThrottleTests {
+
+    @Test("Updates closer than 100 ms apart are dropped, and 100% always gets through")
+    func dropsCloseUpdatesKeepsCompletion() {
+        var throttle = ModelStore.ProgressThrottle()
+        let sent = [
+            throttle.shouldSend(0.10, at: 5.00),
+            throttle.shouldSend(0.11, at: 5.05),
+            throttle.shouldSend(0.12, at: 5.15),
+            throttle.shouldSend(1.0, at: 5.16),
+        ]
+        #expect(sent == [true, false, true, true])
+    }
+
+    @Test("A thousand updates in one second deliver at most ten")
+    func capsAtTenPerSecond() {
+        var throttle = ModelStore.ProgressThrottle()
+        let sent = (0..<1000).filter { throttle.shouldSend(Double($0) / 2000, at: Double($0) / 1000) }.count
+        #expect(sent > 1 && sent <= 10)
+    }
+}
