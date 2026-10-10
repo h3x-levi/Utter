@@ -244,6 +244,53 @@ struct CaptureMachineTests {
     }
 }
 
+@Suite("Destination policy")
+struct DestinationPolicyTests {
+
+    @Test("A transcript is held only when the user moved to an app with no text focus, with Accessibility",
+          arguments: [
+              // trusted, turn app, front app, focus takes text, held
+              (true, 1, 1, false, false),   // same app: paste as today
+              (true, 1, 2, false, true),    // moved, nothing to type into: hold
+              (true, 1, 2, true, false),    // moved to a text field: paste
+              (false, 1, 2, false, false),  // no Accessibility: today's behaviour
+          ] as [(Bool, Int32, Int32, Bool, Bool)])
+    func policy(trusted: Bool, turnApp: Int32, frontApp: Int32, accepts: Bool, held: Bool) {
+        #expect(CaptureMachine.holdsTranscript(trusted: trusted, turnApp: turnApp, frontApp: frontApp,
+                                               focusAcceptsText: accepts) == held)
+    }
+
+    private func state(_ phase: CaptureState.Phase) -> CaptureState {
+        CaptureState(phase: phase, destination: .app, modelLoading: false)
+    }
+
+    @Test("A held transcript becomes the island and stays until closed")
+    func heldBecomesIsland() {
+        let (held, effects) = CaptureMachine.next(state(.processing(.typing)), .finished(.held("hello there")))
+        #expect(held.pill == .island("hello there"))
+        #expect(effects == [.playDone, .endTurn])
+        #expect(CaptureMachine.next(held, .messageExpired).0 == held)
+        #expect(CaptureMachine.next(held, .show(.notice("Recording the meeting"))).0 == held)
+        #expect(CaptureMachine.next(held, .islandClosed).0.phase == .idle)
+    }
+
+    @Test("A new turn replaces the island")
+    func newTurnReplacesIsland() {
+        let (recording, effects) = CaptureMachine.next(state(.holding("hello")), .holdBegan(meetingActive: false))
+        #expect(recording.pill == .recording)
+        #expect(effects.contains(.openMic(vad: false)))
+        #expect(CaptureMachine.next(state(.recording(handsFree: false)), .islandClosed).1.isEmpty)
+    }
+
+    @Test("The window grows for the island and only for it")
+    func islandWindow() {
+        #expect(PillMetrics.shellHeight(for: .island("x")) == PillMetrics.islandHeight)
+        #expect(PillMetrics.islandWindowHeight >= PillMetrics.islandHeight + PillMetrics.verticalInset * 2)
+        #expect(PillMetrics.islandWindowHeight > PillMetrics.windowHeight)
+        #expect(PillMetrics.shellWidth(for: .island("x")) == PillMetrics.shellWidth(for: .capturingNote))
+    }
+}
+
 @Suite("Sentence polish policy")
 struct SentencePolishPolicyTests {
     actor Probe {

@@ -79,7 +79,8 @@ enum PillMetrics {
     /// The shell's height for a state. The only state that is not a capsule is note
     /// capture, which is the whole point of the box.
     static func shellHeight(for state: PillState) -> CGFloat {
-        state == .capturingNote ? noteBoxHeight : capsuleHeight
+        if state.isIsland { return islandHeight }
+        return state == .capturingNote ? noteBoxHeight : capsuleHeight
     }
 
     /// The shell's width for a state, or `nil` when the state's *content* decides it.
@@ -120,7 +121,7 @@ enum PillMetrics {
     /// the whole shrink and then snap, and nothing else would catch it.
     static func shellWidth(for state: PillState) -> CGFloat? {
         switch state {
-        case .capturingNote: return noteContentWidth + horizontalPadding * 2
+        case .capturingNote, .island: return noteContentWidth + horizontalPadding * 2
         case .idle, .processing: return minimumCapsuleWidth
         case .preparing, .recording, .handsFree, .capturingMemory, .notice, .error: return nil
         }

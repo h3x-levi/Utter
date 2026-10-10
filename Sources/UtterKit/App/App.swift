@@ -713,9 +713,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         guard let pill = pillWindow else { return }
         if UserData.shared.alwaysShowPill {
             if !pill.isVisible { pill.orderFront(nil) }
-        } else if pill.isVisible, !pill.currentState.isRecordingLike {
-            // Never yank it away mid-recording - that's the one moment it is
-            // carrying live information.
+        } else if pill.isVisible, !pill.currentState.isRecordingLike, !pill.currentState.isIsland {
+            // Never yank it away mid-recording, or while it holds a transcript to copy.
             pill.orderOut(nil)
         }
     }

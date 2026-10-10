@@ -15,6 +15,8 @@ final class CaptureSession {
     private let celebrate: (String) -> Void
 
     private var expiry: DispatchWorkItem?
+    /// The frontmost app when the turn started, to notice the user moving away before delivery.
+    private var turnApp: pid_t?
     private var stoppedAt = Date()
     private var elapsedTimer: Timer?
     /// The live-preview polling loop, cancelled when recording stops.
@@ -33,6 +35,7 @@ final class CaptureSession {
         self.meetingIsActive = meetingIsActive
         self.suppressRelease = suppressRelease
         self.celebrate = celebrate
+        pill.onCloseIsland = { [weak self] in self?.handle(.islandClosed) }
     }
 
     func holdBegan() { handle(.holdBegan(meetingActive: meetingIsActive())) }
@@ -47,7 +50,7 @@ final class CaptureSession {
         let shown = state.pill
         state = next
         if next.pill != shown {
-            if next.pill.isRecordingLike, !pill.isVisible { pill.orderFront(nil) }
+            if next.pill.isRecordingLike || next.pill.isIsland, !pill.isVisible { pill.orderFront(nil) }
             pill.setState(next.pill)
         }
         effects.forEach(run)
@@ -68,6 +71,7 @@ final class CaptureSession {
     private func run(_ effect: CaptureEffect) {
         switch effect {
         case .startTurn:
+            turnApp = NSWorkspace.shared.frontmostApplication?.processIdentifier
             SurroundingContext.prewarm()
             // Pause other audio so music doesn't bleed into the microphone.
             MediaControl.pauseIfPlaying()
@@ -152,7 +156,7 @@ final class CaptureSession {
         // A note skips AI commands: they match suffixes, and every outcome acts on the frontmost
         // app, which is not where a note's text is going.
         if destination == .note {
-            return deliver(pipeline.prepare(text, for: .note), to: .note, pipeline)
+            return await deliver(pipeline.prepare(text, for: .note), to: .note, pipeline)
         }
         handle(.step(.rewriting))
         var selection: String?
@@ -160,7 +164,7 @@ final class CaptureSession {
             if selection == nil { selection = await readSelection() }
             return selection ?? ""
         }) else {
-            return deliver(pipeline.prepare(text, for: .app), to: .app, pipeline)
+            return await deliver(pipeline.prepare(text, for: .app), to: .app, pipeline)
         }
         guard let rewritten = result.text else {
             if let error = result.error { print("⚠️ AI command: \(error)") }
@@ -180,10 +184,15 @@ final class CaptureSession {
     }
 
     private func deliver(_ text: String, to destination: CaptureDestination,
-                         _ pipeline: DictationPipeline) -> CaptureOutcome {
+                         _ pipeline: DictationPipeline) async -> CaptureOutcome {
         let delivery = Signposts.poster.beginInterval("Delivery")
         defer { Signposts.poster.endInterval("Delivery", delivery) }
-        if destination == .note { deliverToNote(text) } else { TextInjector.typeText(text) }
+        let held = destination == .app ? await holdsTranscript() : false
+        if destination == .note {
+            deliverToNote(text)
+        } else if !held {
+            TextInjector.typeText(text)
+        }
         UserData.shared.lastTranscription = text
         if let celebration = UserData.shared.recordCompanionDictation(
             words: text.split(whereSeparator: \.isWhitespace).count
@@ -195,7 +204,16 @@ final class CaptureSession {
             TranscriptionHistory.shared.add(text: text, language: pipeline.detectLanguage(text) ?? "")
         }
         print("⚡ Total latency: \(String(format: "%.1f", Date().timeIntervalSince(stoppedAt)))s")
-        return .delivered
+        return held ? .held(text) : .delivered
+    }
+
+    /// The focus is read only when the user has actually moved to another app.
+    private func holdsTranscript() async -> Bool {
+        let trusted = AXIsProcessTrusted()
+        let frontApp = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let accepts = trusted && frontApp != turnApp ? await AXReader.focusAcceptsText() : true
+        return CaptureMachine.holdsTranscript(trusted: trusted, turnApp: turnApp, frontApp: frontApp,
+                                              focusAcceptsText: accepts)
     }
 
     private func saveMemory(_ text: String) async -> CaptureOutcome {

@@ -8,6 +8,8 @@ struct CaptureState: Equatable {
         case processing(PillState.Phase)
         case error(String)
         case notice(String)
+        /// A finished dictation with nowhere to type it, held for the user to copy.
+        case holding(String)
     }
 
     var phase: Phase = .idle
@@ -28,6 +30,7 @@ struct CaptureState: Equatable {
         case .processing(let step): return .processing(step)
         case .error(let message): return .error(message)
         case .notice(let message): return .notice(message)
+        case .holding(let transcript): return .island(transcript)
         }
     }
 }
@@ -41,6 +44,8 @@ enum CaptureOutcome: Equatable {
     case notice(String)
     /// A spoken note-routing command: the next turn goes into a note.
     case armedNote(String)
+    /// Not pasted, because the user moved to an app with nothing to type into.
+    case held(String)
 }
 
 enum CaptureEvent: Equatable {
@@ -57,6 +62,8 @@ enum CaptureEvent: Equatable {
     /// A message from outside the turn, such as the meeting offer.
     case show(CaptureState.Phase)
     case messageExpired
+    /// The held transcript was copied, closed, or dismissed with Escape.
+    case islandClosed
     case model(LocalWhisperProvider.LoadState)
 }
 
@@ -150,7 +157,7 @@ enum CaptureMachine {
         case (_, .audioReady), (_, .transcribed), (_, .transcriptionFailed), (_, .step), (_, .finished):
             return (s, [])
 
-        case (.recording, .show), (.processing, .show):
+        case (.recording, .show), (.processing, .show), (.holding, .show):
             return (s, [])
         case (_, .show(let message)):
             s.phase = message
@@ -161,6 +168,12 @@ enum CaptureMachine {
             s.phase = .idle
             return (s, [])
         case (_, .messageExpired):
+            return (s, [])
+
+        case (.holding, .islandClosed):
+            s.phase = .idle
+            return (s, [])
+        case (_, .islandClosed):
             return (s, [])
 
         case (_, .model(let load)):
@@ -228,6 +241,17 @@ enum CaptureMachine {
             s.phase = .notice(message)
             s.destination = .note
             return (s, [.playDone, .endTurn, .expireMessage])
+        case .held(let transcript):
+            s.phase = .holding(transcript)
+            return (s, [.playDone, .endTurn])
         }
+    }
+
+    /// Whether a finished dictation is held on the pill instead of pasted: only when the user is
+    /// now in a different app whose focus takes no text. Without Accessibility nothing is known
+    /// about the focus, so it pastes as it always has.
+    static func holdsTranscript(trusted: Bool, turnApp: pid_t?, frontApp: pid_t?,
+                                focusAcceptsText: Bool) -> Bool {
+        trusted && turnApp != frontApp && !focusAcceptsText
     }
 }
