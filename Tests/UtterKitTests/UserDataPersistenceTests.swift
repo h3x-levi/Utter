@@ -32,6 +32,7 @@ struct UserDataPersistenceTests {
         ]
         saved.doubleTapHotkeyForHandsFree = false
         saved.save()
+        saved.flushNow()
 
         let loaded = UserData(storageDir: directory)
         #expect(loaded.doubleTapHotkeyForHandsFree == false)
@@ -162,7 +163,10 @@ struct UserDataPersistenceTests {
         let original = try jsonObject(at: directory)
         #expect(Set(original.allKeys.compactMap { $0 as? String }) == Self.goldenKeys)
 
-        UserData(storageDir: directory).save()
+        let data = UserData(storageDir: directory)
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("userdata.json"))
+        data.save()
+        data.flushNow()
 
         #expect(try jsonObject(at: directory) == original)
     }
@@ -188,8 +192,67 @@ struct UserDataPersistenceTests {
         #expect(loaded.companionStretchMinutes == 480)
 
         loaded.save()
+        loaded.flushNow()
         let saved = try jsonObject(at: directory)
         #expect(saved["captureAppendsToOpenNote"] as? Bool == false)
         #expect(saved["scratchpadResumesLastNote"] == nil)
+    }
+
+    @Test("A burst of saves is debounced into one write holding the latest value")
+    func burstCoalesces() async throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let data = UserData(storageDir: directory, debounce: 0.1)
+
+        for index in 0..<20 {
+            data.scratchpad = "draft \(index)"
+            data.save()
+        }
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("userdata.json").path))
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        #expect(data.diskWriteCount == 1)
+        #expect(try jsonObject(at: directory)["scratchpad"] as? String == "draft 19")
+    }
+
+    @Test("flushNow writes the latest value synchronously and then has nothing left to write")
+    func flushWritesLatest() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let data = UserData(storageDir: directory, debounce: 60)
+
+        data.scratchpad = "first"
+        data.save()
+        data.scratchpad = "latest"
+        data.save()
+        data.flushNow()
+
+        #expect(try jsonObject(at: directory)["scratchpad"] as? String == "latest")
+        #expect(data.diskWriteCount == 1)
+        data.flushNow()
+        #expect(data.diskWriteCount == 1)
+    }
+
+    @Test("A failed write keeps the in-memory value and retries on the next flush")
+    func failedWriteKeepsValue() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = directory.appendingPathComponent("not-created", isDirectory: true)
+        let data = UserData(storageDir: missing, debounce: 60)
+
+        data.scratchpad = "keep me"
+        data.save()
+        data.flushNow()
+
+        #expect(data.scratchpad == "keep me")
+        #expect(data.diskWriteCount == 0)
+
+        try FileManager.default.createDirectory(at: missing, withIntermediateDirectories: true)
+        data.flushNow()
+
+        #expect(data.diskWriteCount == 1)
+        #expect(try jsonObject(at: missing)["scratchpad"] as? String == "keep me")
     }
 }
