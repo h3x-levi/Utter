@@ -506,6 +506,7 @@ class PillWindow: NSPanel {
         // AppKit's `NSGlassEffectView` driven by Core Animation, which is a different rendering
         // path - not another SwiftUI transaction.
         stateModel.state = target
+        if target.isRecordingLike { Signposts.endKeyDownToPill() }
 
         // Staged by one runloop turn during expansion: allows the shell frame to render
         // its first frame smoothly before the heavy companion APNG decoder and 30Hz ticker

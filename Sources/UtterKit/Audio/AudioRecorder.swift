@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os
 
 class AudioRecorder: ObservableObject {
     private var audioEngine: AVAudioEngine?
@@ -41,6 +42,7 @@ class AudioRecorder: ObservableObject {
     /// never drained or compacted - losing up to a window of the user's audio at
     /// stop() and growing without bound in the meantime.
     private var everDetectedVoice = false
+    private var engineStartInterval: OSSignpostIntervalState?
     private var vadCallback: (() -> Void)?
     /// `UInt16` to match `peakAmplitude`, which reports a magnitude - see the trap
     /// documented there.
@@ -118,6 +120,10 @@ class AudioRecorder: ObservableObject {
                 // queue and therefore drain every callback already submitted.
                 self.bufferQueue.async { [weak self, outputBuffer] in
                     guard let self, let queuedChannelData = outputBuffer.int16ChannelData else { return }
+                    if let interval = self.engineStartInterval {
+                        self.engineStartInterval = nil
+                        Signposts.poster.endInterval("EngineStartToFirstBuffer", interval)
+                    }
                     self._audioData.append(data)
                     self.checkVoiceActivity(channelData: queuedChannelData[0], frameLength: frameLength)
                     self.publishLevel(channelData: queuedChannelData[0], frameLength: frameLength)
@@ -125,6 +131,7 @@ class AudioRecorder: ObservableObject {
             }
         }
 
+        bufferQueue.sync { engineStartInterval = Signposts.poster.beginInterval("EngineStartToFirstBuffer") }
         do {
             try audioEngine.start()
             isRecording = true
@@ -132,6 +139,10 @@ class AudioRecorder: ObservableObject {
             return true
         } catch {
             print("❌ Failed to start audio engine: \(error)")
+            bufferQueue.sync {
+                if let interval = engineStartInterval { Signposts.poster.endInterval("EngineStartToFirstBuffer", interval) }
+                engineStartInterval = nil
+            }
             inputNode.removeTap(onBus: 0)
             self.audioEngine = nil
             return false
@@ -325,6 +336,11 @@ class AudioRecorder: ObservableObject {
             return
         }
 
+        let stopInterval = Signposts.poster.beginInterval("StopToAudioReady")
+        let completion: (Data?) -> Void = { data in
+            Signposts.poster.endInterval("StopToAudioReady", stopInterval)
+            completion(data)
+        }
         let stopStart = Date()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()

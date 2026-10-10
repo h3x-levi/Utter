@@ -30,7 +30,9 @@ class TranscriptionService {
 
     func transcribe(audioData: Data) async throws -> String {
         let requestStarted = DispatchTime.now().uptimeNanoseconds
-        let raw = try await provider.transcribe(audioData: audioData)
+        let raw = try await Signposts.interval("Transcription") {
+            try await provider.transcribe(audioData: audioData)
+        }
         guard TranscriptText.isUsable(raw) else {
             Self.performanceLog.info("dictation produced no usable speech text")
             return ""
@@ -54,9 +56,9 @@ class TranscriptionService {
         // unchanged if the language model is unavailable or its output looks
         // like anything other than a repunctuation.
         let polishStarted = DispatchTime.now().uptimeNanoseconds
-        let polished = await SentencePolish.polish(
-            formatted, precedingText: preceding, tone: tone
-        )
+        let polished = await Signposts.interval("Polish") {
+            await SentencePolish.polish(formatted, precedingText: preceding, tone: tone)
+        }
         let polishMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - polishStarted) / 1_000_000
         let totalMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - requestStarted) / 1_000_000
         Self.performanceLog.info(

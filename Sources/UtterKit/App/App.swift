@@ -1315,6 +1315,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // If the pill is hidden ("show at all times" off), bring it up for the
         // duration of the turn - this is exactly when its feedback matters.
         if !pillWindow.isVisible { pillWindow.orderFront(nil) }
+        Signposts.beginKeyDownToPill()
 
         // Show the recording state **first**, before anything slow.
         //
@@ -1588,6 +1589,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func deliverTranscript(_ text: String, elapsed: TimeInterval) {
         // Fix custom-dictionary near-misses (Whisper can't be biased at the
         // endpoint, so we correct its output here).
+        let delivery = Signposts.poster.beginInterval("Delivery")
+        defer { Signposts.poster.endInterval("Delivery", delivery) }
         var processed = DictionaryCorrector.correct(text, using: UserData.shared.dictionaryWords)
         processed = UserData.shared.applySnippets(to: processed)
 
@@ -1727,6 +1730,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Idle → start a fresh hands-free recording.
         print("🔒 Hands-free: starting from idle")
+        Signposts.beginKeyDownToPill()
         isHandsFree = true
         keyMonitor.suppressReleaseStop = true
         capturedSelection = captureCurrentSelection()
