@@ -356,8 +356,10 @@ class AudioRecorder: ObservableObject {
 
     /// Close the microphone off the main thread; `completion` runs on main with the trimmed WAV.
     /// Queued behind a start that is still in flight, so a quick tap still stops what it opened.
-    func stopRecording(completion: @escaping (Data?) -> Void) {
+    /// `onClosed` runs on main once the engine has stopped, for the stop chime.
+    func stopRecording(onClosed: (() -> Void)? = nil, completion: @escaping (Data?) -> Void) {
         guard isRecording else {
+            onClosed?()
             completion(nil)
             return
         }
@@ -371,7 +373,10 @@ class AudioRecorder: ObservableObject {
             }
         }
         engineQueue.async { [self] in
-            guard let audioEngine else { return completion(nil) }
+            guard let audioEngine else {
+                DispatchQueue.main.async { onClosed?() }
+                return completion(nil)
+            }
             let stopStart = Date()
             audioEngine.inputNode.removeTap(onBus: 0)
             audioEngine.stop()
@@ -386,6 +391,7 @@ class AudioRecorder: ObservableObject {
                 return captured
             }
             DispatchQueue.main.async { [weak self] in
+                onClosed?()
                 self?.inputLevel = 0
             }
             let stopTime = Date().timeIntervalSince(stopStart)

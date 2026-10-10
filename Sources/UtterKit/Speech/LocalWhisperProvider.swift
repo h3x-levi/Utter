@@ -391,13 +391,6 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
         }
     }
 
-    /// Blocking form for `applicationWillTerminate`: it waits for whisper to notice the abort,
-    /// not for a whole transcription. Delete once quit goes through `shutdown(then:)`.
-    func shutdown() {
-        abortLock.withLock { abortState.shutDown() }
-        queue.sync { releaseForShutdown() }
-    }
-
     private func releaseForShutdown() {
         evictionWork?.cancel()
         evictionWork = nil

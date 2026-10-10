@@ -68,6 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var meetingOfferPanel: MeetingOfferPanel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AXReader.configure()
         AppDelegate.current = self
 
         // Preview generation is a rendering-only tool. Isolate all data stores in memory
@@ -83,7 +84,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         NSApp.setActivationPolicy(.accessory)
-        AXReader.configure()
         UNUserNotificationCenter.current().delegate = self
         CompanionNotificationScheduler.shared.registerCategory()
         CompanionMemoryStore.shared.restoreScheduledNotifications()
@@ -314,12 +314,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         return false
     }
 
-    /// Release the speech context before AppKit calls `exit()`.
+    /// Release the speech context before AppKit calls `exit()`, without blocking main on it.
     ///
     /// Without this, whisper's Metal device was destroyed by a C++ static
     /// destructor during process teardown and aborted, so every normal quit was
-    /// logged as a SIGABRT crash. Freeing it here - while the runtime is still
-    /// fully alive - makes the shutdown ordinary.
+    /// logged as a SIGABRT crash.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let provider = transcriptionService?.localProvider else { return .terminateNow }
+        provider.shutdown { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // A meeting in progress holds un-transcribed audio. Nothing can be done
         // about that window at quit time, but everything already transcribed is in
@@ -329,7 +334,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NoteStore.shared.writeToDisk()
         NoteStore.shared.flushPendingWrites()
         TranscriptionHistory.shared.flushPendingWrites()
-        transcriptionService.localProvider?.shutdown()
+        UserData.shared.flushNow()
     }
 
     private func setupMenuBar() {
@@ -1317,7 +1322,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // First, and applied at once: everything after this is work the first frame must not wait on.
         pillWindow.setState(recordingPillState)
-        Task { await AXReader.read { SurroundingContext.prewarm() } }
+        SurroundingContext.prewarm()
 
         // Pause other audio so music doesn't bleed into the microphone.
         MediaControl.pauseIfPlaying()
@@ -1780,15 +1785,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func stopRecording() {
         guard !isProcessing else { return }
         isProcessing = true
-        // Resume before transcription rather than after: the user has stopped
-        // talking, the mic is closed, and waiting several seconds for a long
-        // transcription would feel like the app forgot.
-        MediaControl.resumeIfPaused()
-        SoundPlayer.playStop()
         stopPillTelemetry()
         pillWindow.setState(.processing(.transcribing))
+        if !captureToNote, !captureToMemory { TextInjector.prepareSnapshot() }
         let sendTime = Date()
-        audioRecorder.stopRecording { [weak self] audioData in
+        // Media resumes once the mic is closed, before transcription: waiting several seconds
+        // for it would feel like the app forgot. The stop chime waits for the close too.
+        audioRecorder.stopRecording(onClosed: {
+            MediaControl.resumeIfPaused()
+            SoundPlayer.playStop()
+        }) { [weak self] audioData in
             guard let self = self else { return }
             // No usable audio. `AudioRecorder.stopRecording` reports nil for four different
             // reasons - nothing captured, the trim left under 640 bytes, the WAV encode
@@ -2014,14 +2020,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     // MARK: - Live preview
 
-    /// Poll partial audio and show a rough transcript while the user is still
-    /// talking.
-    ///
-    /// Sequential by construction: each pass starts only after the previous one
-    /// returns. A fixed-interval timer would pile up requests whenever inference
-    /// takes longer than the interval, which is exactly when the machine is already
-    /// busy. `previewTranscribe` also aborts superseded work itself, so the two
-    /// mechanisms together mean at most one preview is ever in flight.
     /// Start the live preview for a recording that is already running.
     ///
     /// `startLivePreview` is only ever reached from `startPillTelemetry`, i.e. at the moment
