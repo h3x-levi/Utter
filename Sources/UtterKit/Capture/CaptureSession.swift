@@ -73,6 +73,7 @@ final class CaptureSession {
             MediaControl.pauseIfPlaying()
             // Rebuilds an evicted whisper context (78-93 ms warm, ~7.7 s cold) while the user speaks.
             transcriber.warmUp()
+            Task.detached(priority: .utility) { SentencePolish.prewarm() }
             if state.modelLoading { print("⏳ Recording while the speech model finishes loading") }
         case .playStart:
             SoundPlayer.playStart()

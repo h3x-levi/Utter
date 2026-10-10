@@ -243,3 +243,78 @@ struct CaptureMachineTests {
         #expect(next(state(.idle), .show(.notice("Recording the meeting"))).0.pill == .notice("Recording the meeting"))
     }
 }
+
+@Suite("Sentence polish policy")
+struct SentencePolishPolicyTests {
+    actor Probe {
+        var calls = 0
+        var cancelled = false
+        func called() { calls += 1 }
+        func markCancelled() { cancelled = true }
+    }
+
+    private let sentence = "it was closed so i came back later that evening"
+    private let polished = "It was closed, so I came back later that evening."
+
+    @Test("Dictation waits at most 900 ms for polish")
+    func deadline() {
+        #expect(SentencePolish.dictationDeadline == .milliseconds(900))
+    }
+
+    @Test("A slow polisher is abandoned at the deadline and cancelled; the text goes out unpolished")
+    func slowPolisher() async throws {
+        let probe = Probe()
+        let clock = ContinuousClock()
+        let started = clock.now
+        let result = await SentencePolish.polish(sentence, deadline: .milliseconds(100), isAvailable: true,
+                                                 rewrite: { _, _ in
+            do { try await Task.sleep(for: .seconds(10)) } catch {
+                await probe.markCancelled()
+                throw error
+            }
+            return "never"
+        })
+        #expect(result == sentence)
+        #expect(clock.now - started < .seconds(2))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(await probe.cancelled)
+    }
+
+    @Test("A slow context read is inside the deadline too")
+    func slowContext() async {
+        let result = await SentencePolish.polish(sentence, context: {
+            try? await Task.sleep(for: .seconds(10))
+            return ("", nil)
+        }, deadline: .milliseconds(100), isAvailable: true, rewrite: { _, _ in "never" })
+        #expect(result == sentence)
+    }
+
+    @Test("A failing polisher delivers the text unpolished")
+    func failingPolisher() async {
+        struct Refused: Error {}
+        let result = await SentencePolish.polish(sentence, deadline: SentencePolish.dictationDeadline,
+                                                 isAvailable: true, rewrite: { _, _ in throw Refused() })
+        #expect(result == sentence)
+    }
+
+    @Test("A polish that lands in time is used")
+    func timelyPolisher() async {
+        let result = await SentencePolish.polish(sentence, deadline: SentencePolish.dictationDeadline,
+                                                 isAvailable: true, rewrite: { [polished] _, _ in polished })
+        #expect(result == polished)
+    }
+
+    @Test("Under four words, or with polish unavailable, the model is never called")
+    func gates() async {
+        let probe = Probe()
+        let rewrite: (String, String) async throws -> String = { _, prompt in
+            await probe.called()
+            return prompt
+        }
+        _ = await SentencePolish.polish("three words here", isAvailable: true, rewrite: rewrite)
+        _ = await SentencePolish.polish(sentence, isAvailable: false, rewrite: rewrite)
+        #expect(await probe.calls == 0)
+        _ = await SentencePolish.polish("four words right here", isAvailable: true, rewrite: rewrite)
+        #expect(await probe.calls == 1)
+    }
+}

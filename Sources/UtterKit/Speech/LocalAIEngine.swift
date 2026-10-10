@@ -59,6 +59,20 @@ enum LocalAIEngine {
         #endif
     }
 
+    private static let warmLock = NSLock()
+    private static var warmSession: (instructions: String, session: AnyObject)?
+
+    /// Load the model and a session for `instructions` ahead of a `rewrite` that will want them.
+    static func prewarm(instructions: String) {
+        guard availability.isReady else { return }
+        #if canImport(FoundationModels)
+        guard #available(macOS 26, *) else { return }
+        let session = LanguageModelSession(instructions: instructions)
+        session.prewarm()
+        warmLock.withLock { warmSession = (instructions, session) }
+        #endif
+    }
+
     /// Run a single rewrite. `instructions` sets the model's role; `prompt`
     /// carries the task plus the user's text.
     ///
@@ -70,7 +84,12 @@ enum LocalAIEngine {
 
         #if canImport(FoundationModels)
         guard #available(macOS 26, *) else { throw AIEngineError.unavailable(.unsupportedOS) }
-        let session = LanguageModelSession(instructions: instructions)
+        let warm = warmLock.withLock { () -> AnyObject? in
+            defer { warmSession = nil }
+            return warmSession?.instructions == instructions ? warmSession?.session : nil
+        }
+        // A session keeps its transcript, so a prewarmed one serves exactly one call.
+        let session = warm as? LanguageModelSession ?? LanguageModelSession(instructions: instructions)
         let response = try await session.respond(to: prompt)
         let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw AIEngineError.emptyResponse }

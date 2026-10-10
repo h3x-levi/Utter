@@ -68,7 +68,7 @@ class TranscriptionService {
     ///   * **Polish runs per turn.** `SentencePolish` repunctuates one speaker's
     ///     run-on speech, which is exactly what a turn is; handing it a window
     ///     spanning several people's contributions gives it a harder problem than it
-    ///     was built for. Turns under eight words skip it outright
+    ///     was built for. Turns under four words skip it outright
     ///     (`SentencePolish.minimumWords`), and the whole thing is a no-op unless the
     ///     Mac has macOS 26 with Apple Intelligence on - so this is not the per-turn
     ///     round trip it looks like on most machines.

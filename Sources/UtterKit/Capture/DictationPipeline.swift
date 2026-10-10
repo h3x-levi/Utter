@@ -40,11 +40,13 @@ extension DictationPipeline {
         DictationPipeline(
             polish: { text in
                 await Signposts.interval("Polish") {
-                    let preceding = await SurroundingContext.capture().trailingFragment
-                    let tone = await MainActor.run {
-                        userData.perAppToneEnabled ? AppContext.tone(for: context()) : nil
-                    }
-                    return await SentencePolish.polish(text, precedingText: preceding, tone: tone)
+                    await SentencePolish.polish(text, context: {
+                        let preceding = await SurroundingContext.capture().trailingFragment
+                        let tone = await MainActor.run {
+                            userData.perAppToneEnabled ? AppContext.tone(for: context()) : nil
+                        }
+                        return (preceding, tone)
+                    }, deadline: SentencePolish.dictationDeadline)
                 }
             },
             voiceCommand: userData.checkVoiceCommand,
