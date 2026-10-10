@@ -294,19 +294,19 @@ final class MeetingSession: ObservableObject {
 
         if systemAudio.peakLevel > 0.01 { heardOthers = true }
 
-        let mic = recorder?.audioSnapshot() ?? Data()
-        let system = systemAudio.samples
-
         // Only wake the transcriber once a full window has accumulated on either
-        // side; otherwise this would fire every second.
+        // side; otherwise this would fire every second. Checked before copying: a
+        // snapshot shares the live buffer, so the next append has to copy all of it.
         //
         // Compared against the whole buffer, not against a read cursor: both buffers
         // are trimmed from the front by `consume`, so anything still in them is by
         // definition not yet transcribed.
         let window = windowSeconds * bytesPerSecond
-        guard mic.count >= window || system.count >= window else { return }
         guard !isDraining else { return }
+        guard (recorder?.audioByteCount ?? 0) >= window || systemAudio.sampleByteCount >= window else { return }
 
+        let mic = recorder?.audioSnapshot() ?? Data()
+        let system = systemAudio.samples
         isDraining = true
         drainTask = Task { @MainActor in
             await transcribeWindows(mic: mic, system: system, flushAll: false)

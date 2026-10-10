@@ -156,6 +156,8 @@ final class SystemAudioCapture {
         bufferQueue.sync { _samples }
     }
 
+    var sampleByteCount: Int { bufferQueue.sync { _samples.count } }
+
     /// Discard the first `count` bytes, which the caller has finished with.
     ///
     /// Without this the buffer only ever grows: at 32 kB/s a three-hour meeting
