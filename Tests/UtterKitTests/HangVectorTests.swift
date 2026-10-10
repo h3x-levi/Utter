@@ -78,3 +78,35 @@ struct PasteboardSnapshotReuseTests {
         }
     }
 }
+
+@Suite("Whisper abort decisions")
+struct WhisperAbortStateTests {
+
+    @Test("A preview tick is skipped while the previous preview is still running")
+    func previewSkippedWhileRunning() {
+        var state = LocalWhisperProvider.AbortState()
+        #expect(state.beginPreview() != nil)
+        #expect(state.beginPreview() == nil)
+        state.endPreview()
+        #expect(state.beginPreview() != nil)
+    }
+
+    @Test("A cancelled preview aborts; a final pass does not")
+    func cancelAbortsPreviewsOnly() {
+        var state = LocalWhisperProvider.AbortState()
+        let generation = state.beginPreview()
+        #expect(!state.shouldAbort(preview: generation))
+        state.cancelPreviews()
+        #expect(state.shouldAbort(preview: generation))
+        #expect(!state.shouldAbort(preview: nil))
+    }
+
+    @Test("Quitting aborts the final pass too, and starts no new preview")
+    func quitAbortsEverything() {
+        var state = LocalWhisperProvider.AbortState()
+        state.shutDown()
+        #expect(state.shouldAbort(preview: nil))
+        #expect(state.shouldAbort(preview: state.previewGeneration))
+        #expect(state.beginPreview() == nil)
+    }
+}

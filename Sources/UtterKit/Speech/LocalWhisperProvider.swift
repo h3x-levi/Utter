@@ -47,36 +47,50 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
 
     private let queue = DispatchQueue(label: "utter.dictation.whisper")
     private var context: OpaquePointer?
-    private var loadFailure: Error?
+    private var loadFailure: (error: Error, at: Date)?
 
-    /// Monotonic token identifying the newest preview request.
-    ///
-    /// Previews are speculative: each one transcribes a snapshot of audio that is
-    /// already stale by the time it finishes. When a newer snapshot arrives, or the
-    /// user stops talking, the in-flight pass is wasted work standing between the
-    /// user and their final text - so it is aborted rather than awaited. Guarded by
-    /// `previewLock` because the abort callback reads it from whisper's own compute
-    /// threads while the main actor writes it.
-    private var previewGeneration: Int = 0
-    private let previewLock = NSLock()
+    /// How long a failed load is rethrown before the next use tries it again.
+    static let loadRetryDelay: TimeInterval = 10
 
-    private func bumpPreviewGeneration() -> Int {
-        previewLock.lock()
-        defer { previewLock.unlock() }
-        previewGeneration += 1
-        return previewGeneration
+    /// Which whisper runs should stop. Previews are speculative, so a cancelled one is aborted
+    /// rather than awaited; a final pass is aborted only at quit.
+    struct AbortState {
+        private(set) var previewGeneration = 0
+        private(set) var previewRunning = false
+        private(set) var isShuttingDown = false
+
+        /// The new preview's generation, or nil to skip this tick while the last one still runs.
+        mutating func beginPreview() -> Int? {
+            guard !previewRunning, !isShuttingDown else { return nil }
+            previewRunning = true
+            previewGeneration += 1
+            return previewGeneration
+        }
+
+        mutating func endPreview() { previewRunning = false }
+        mutating func cancelPreviews() { previewGeneration += 1 }
+        mutating func shutDown() { isShuttingDown = true }
+
+        /// `preview` is a preview's generation, nil for a final transcription.
+        func shouldAbort(preview generation: Int?) -> Bool {
+            if isShuttingDown { return true }
+            guard let generation else { return false }
+            return generation != previewGeneration
+        }
     }
 
-    private func currentPreviewGeneration() -> Int {
-        previewLock.lock()
-        defer { previewLock.unlock() }
-        return previewGeneration
+    /// Guarded by `abortLock`: whisper's compute threads poll it while the main actor writes it.
+    private var abortState = AbortState()
+    private let abortLock = NSLock()
+
+    private func shouldAbort(preview generation: Int?) -> Bool {
+        abortLock.withLock { abortState.shouldAbort(preview: generation) }
     }
 
     /// Abandon any in-flight preview. Called when a real transcription starts, so
     /// the final pass isn't queued behind speculative work.
     func cancelPreviews() {
-        _ = bumpPreviewGeneration()
+        abortLock.withLock { abortState.cancelPreviews() }
     }
 
     init() {}
@@ -180,7 +194,10 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
                     let ctx = try context(forLanguage: language)
                     let contextMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - contextStarted) / 1_000_000
                     let inferenceStarted = DispatchTime.now().uptimeNanoseconds
-                    let segments = try Self.run(ctx, samples: samples, bias: bias)
+                    let segments = try Self.run(
+                        ctx, samples: samples, bias: bias, threads: Self.threads(upTo: 8),
+                        shouldAbort: { self.shouldAbort(preview: nil) }
+                    )
                     let inferenceMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - inferenceStarted) / 1_000_000
                     Self.performanceLog.info(
                         "speech prep_ms=\(preparationMilliseconds, format: .fixed(precision: 1)) queue_ms=\(queueWaitMilliseconds, format: .fixed(precision: 1)) context_ms=\(contextMilliseconds, format: .fixed(precision: 1)) inference_ms=\(inferenceMilliseconds, format: .fixed(precision: 1)) samples=\(samples.count) segments=\(segments.count)"
@@ -201,9 +218,11 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
     /// `TranscriptionProvider`: the result is deliberately lower quality and must
     /// never be typed into the user's document. Differences from the real path:
     ///
-    ///   * **Aborts when superseded.** whisper's `abort_callback` is polled during
+    ///   * **Aborts when cancelled.** whisper's `abort_callback` is polled during
     ///     compute, so a stale pass stops mid-inference instead of running to
     ///     completion and delaying the final transcript.
+    ///   * **Skipped while the previous preview still runs**, so slow passes never pile up.
+    ///   * **At most 4 threads at `.utility`**, so it does not take every core from the UI.
     ///   * **No dictionary biasing, no polish.** Both cost latency, and a preview
     ///     that lags the speaker is worse than a rough one.
     ///   * **Returns nil rather than throwing.** A failed preview is not an error
@@ -213,7 +232,8 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
     /// final pass by at most one already-started chunk - bounded by `previewSeconds`
     /// in `AudioRecorder`.
     func previewTranscribe(pcm: Data) async -> String? {
-        let generation = bumpPreviewGeneration()
+        guard let generation = abortLock.withLock({ abortState.beginPreview() }) else { return nil }
+        defer { abortLock.withLock { abortState.endPreview() } }
 
         guard let samples = try? Self.pcmSamples(fromRawPCM: pcm), !samples.isEmpty else {
             return nil
@@ -221,23 +241,15 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
         let language = await MainActor.run { UserData.shared.selectedLanguage }
 
         return await withCheckedContinuation { continuation in
-            queue.async { [self] in
-                // Superseded while queued: don't start at all.
-                guard currentPreviewGeneration() == generation else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                guard let ctx = try? context(forLanguage: language) else {
+            queue.async(qos: .utility) { [self] in
+                guard !shouldAbort(preview: generation),
+                      let ctx = try? context(forLanguage: language) else {
                     continuation.resume(returning: nil)
                     return
                 }
                 let segments = try? Self.run(
-                    ctx,
-                    samples: samples,
-                    isStale: { [weak self] in
-                        guard let self else { return true }
-                        return self.currentPreviewGeneration() != generation
-                    }
+                    ctx, samples: samples, threads: Self.threads(upTo: 4),
+                    shouldAbort: { [weak self] in self?.shouldAbort(preview: generation) ?? true }
                 )
                 // Aborted runs return partial or empty text; treat empty as nothing.
                 let trimmed = segments.map(Self.joined) ?? ""
@@ -368,50 +380,43 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
               + "it reloads on the next dictation")
     }
 
-    /// Free the context *synchronously*, for app termination only.
-    ///
-    /// `invalidate()` is `queue.async`, so at quit the process can reach `exit()`
-    /// before the work item runs. That left ggml's Metal device to be torn down
-    /// by a C++ static destructor during `__cxa_finalize_ranges`, by which point
-    /// its runtime is partly gone - it called `ggml_abort`, so every ordinary
-    /// quit was recorded as a SIGABRT crash (8 in a single day of testing).
-    ///
-    /// `queue.sync` blocks until the free completes, which is what makes this
-    /// safe: any in-flight transcription on the same serial queue finishes first,
-    /// so we never free a context that whisper is still reading.
-    ///
-    /// Deliberately does *not* call `publish` - we are shutting down, and
-    /// notifying observers whose views are being destroyed is pointless at best.
-    func shutdown() {
-        // Abort any in-flight preview *before* taking the queue.
-        //
-        // `queue.sync` waits for whatever is already running on the serial queue, and
-        // a preview pass over a large model can take seconds. Called from
-        // `applicationWillTerminate`, that blocks the main thread long enough for the
-        // system's quit watchdog to consider the app hung. `cancelPreviews` flips the
-        // abort flag whisper's `abort_callback` polls, so the running pass returns
-        // almost immediately and the free below is quick.
-        cancelPreviews()
-        queue.sync { [self] in
-            // A pending eviction would otherwise run against a torn-down context. It is a
-            // `[weak self]` work item so it could not use freed memory, but cancelling is the
-            // statement of intent and keeps the queue from being handed work during quit.
-            evictionWork?.cancel()
-            evictionWork = nil
-            if let context { whisper_free(context) }
-            context = nil
+    /// Abort every run, the final pass included, then free the context on `queue` and call
+    /// `done` on main. For `.terminateLater`: the process must not exit before `done`, or ggml's
+    /// Metal device is torn down by a static destructor and every quit is a SIGABRT.
+    func shutdown(then done: @escaping () -> Void) {
+        abortLock.withLock { abortState.shutDown() }
+        queue.async { [self] in
+            releaseForShutdown()
+            DispatchQueue.main.async(execute: done)
         }
     }
 
-    /// Build the context on first use, then reuse it. A previous failure is
-    /// cached and rethrown so a broken install doesn't retry a doomed ~190MB
-    /// load on every keystroke.
+    /// Blocking form for `applicationWillTerminate`: it waits for whisper to notice the abort,
+    /// not for a whole transcription. Delete once quit goes through `shutdown(then:)`.
+    func shutdown() {
+        abortLock.withLock { abortState.shutDown() }
+        queue.sync { releaseForShutdown() }
+    }
+
+    private func releaseForShutdown() {
+        evictionWork?.cancel()
+        evictionWork = nil
+        if let context { whisper_free(context) }
+        context = nil
+    }
+
+    /// Build the context on first use, then reuse it. A failure is rethrown for
+    /// `loadRetryDelay`, so preview ticks don't retry a doomed ~190MB load and the
+    /// next turn after that does.
     private func context(forLanguage language: String) throws -> OpaquePointer {
+        if abortLock.withLock({ abortState.isShuttingDown }) { throw CancellationError() }
         if let context {
             armIdleEviction()
             return context
         }
-        if let loadFailure { throw loadFailure }
+        if let loadFailure, Date().timeIntervalSince(loadFailure.at) < Self.loadRetryDelay {
+            throw loadFailure.error
+        }
 
         // `.loading` only for the *first* load, because only the first load is a change in what
         // this engine can do. A rebuild after `evictIdleContext` is not: the engine could serve a
@@ -462,12 +467,13 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
             print("🧠 Whisper model loaded in \(String(format: "%.2f", elapsed))s (\(url.lastPathComponent))")
 
             context = ctx
+            loadFailure = nil
             hasLoadedOnce = true
             publish(.ready)
             armIdleEviction()
             return ctx
         } catch {
-            loadFailure = error
+            loadFailure = (error, Date())
             publish(.failed((error as? LocalizedError)?.errorDescription ?? "Speech model failed to load"))
             throw error
         }
@@ -504,13 +510,19 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
         segments.map(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Run inference. `isStale`, when supplied, is polled during compute and
-    /// aborts the run as soon as it returns true (preview path only).
+    /// Cores minus two, capped at `limit`.
+    static func threads(upTo limit: Int) -> Int32 {
+        Int32(max(1, min(limit, ProcessInfo.processInfo.activeProcessorCount - 2)))
+    }
+
+    /// Run inference. `shouldAbort` is polled during compute and aborts the run
+    /// as soon as it returns true.
     private static func run(
         _ ctx: OpaquePointer,
         samples: [Float],
         bias: String = "",
-        isStale: (() -> Bool)? = nil
+        threads: Int32,
+        shouldAbort: @escaping () -> Bool
     ) throws -> [TimedSegment] {
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_realtime = false
@@ -525,22 +537,19 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
         // produce invented text.
         params.suppress_blank = true
         params.no_speech_thold = 0.6
-        params.n_threads = Int32(max(1, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
+        params.n_threads = threads
 
-        // Abort hook for previews. `abort_callback` is a C function pointer, so it
-        // cannot capture context - the Swift closure is passed through
-        // `user_data` and read back inside. The box is a local, and
-        // `whisper_full` is synchronous, so it outlives every invocation.
-        var abortBox: StaleCheck?
-        if let isStale {
-            abortBox = StaleCheck(isStale)
-            params.abort_callback = { userData in
-                guard let userData else { return false }
-                return Unmanaged<StaleCheck>.fromOpaque(userData)
-                    .takeUnretainedValue().check()
-            }
-            params.abort_callback_user_data = Unmanaged.passUnretained(abortBox!).toOpaque()
+        // `abort_callback` is a C function pointer, so it cannot capture context -
+        // the Swift closure is passed through `user_data` and read back inside. The
+        // box is a local, and `whisper_full` is synchronous, so it outlives every
+        // invocation.
+        let abortBox = StaleCheck(shouldAbort)
+        params.abort_callback = { userData in
+            guard let userData else { return false }
+            return Unmanaged<StaleCheck>.fromOpaque(userData)
+                .takeUnretainedValue().check()
         }
+        params.abort_callback_user_data = Unmanaged.passUnretained(abortBox).toOpaque()
 
         // Pin the language to English, for every tier.
         //
@@ -579,12 +588,10 @@ final class LocalWhisperProvider: TranscriptionProvider, @unchecked Sendable, Ob
                 return whisper_full(ctx, params, samples, Int32(samples.count))
             }
         }
-        // A deliberately aborted preview reports failure. That is the expected
-        // outcome for stale work, not an error worth surfacing - distinguish it
-        // from a genuine one so `previewTranscribe` stays quiet while real
-        // transcription still reports properly.
+        // A deliberately aborted run reports failure. That is the expected
+        // outcome for stale work or a quit, not an error worth surfacing.
         if status != 0 {
-            if abortBox?.check() == true { return [] }
+            if abortBox.check() { return [] }
             throw TranscriptionError.inferenceFailed(Int(status))
         }
         // Keep the box alive until after the call. Without this, ARC is free to
