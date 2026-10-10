@@ -17,6 +17,11 @@ public enum SnapshotPreviewMode {
     @MainActor
     public static func disable() {
         isActive = false
+        UserData.preview = nil
+        TranscriptionHistory.preview = nil
+        NoteStore.preview = nil
+        CompanionMemoryStore.preview = nil
+        CrashReporter.preview = nil
     }
 
     @MainActor
@@ -27,7 +32,8 @@ public enum SnapshotPreviewMode {
         print("🛡️ Enabling SnapshotPreviewMode sandbox (in-memory fixtures, zero disk I/O)...")
 
         // 1. Populate harmless UserData fixtures
-        let userData = UserData.shared
+        let userData = UserData(storageDir: nil)
+        UserData.preview = userData
         userData.dictionaryWords = ["Kubernetes", "GraphQL", "PostgreSQL", "Tailwind", "Whisper", "CoreAudio", "Metal"]
         userData.snippets = [
             ("meet", "https://meet.google.com/abc-defg-hij"),
@@ -58,7 +64,8 @@ public enum SnapshotPreviewMode {
         userData.companionProgress = progress
 
         // 2. Populate harmless TranscriptionHistory fixtures
-        let history = TranscriptionHistory.shared
+        let history = TranscriptionHistory(storageDir: nil)
+        TranscriptionHistory.preview = history
         let now = Date()
         let sampleEntries: [TranscriptionEntry] = [
             TranscriptionEntry(
@@ -87,7 +94,6 @@ public enum SnapshotPreviewMode {
         history.streakDays = 3
 
         // 3. Populate harmless NoteStore fixtures
-        let noteStore = NoteStore.shared
         let note1ID = UUID()
         let note2ID = UUID()
         let note3ID = UUID()
@@ -129,10 +135,9 @@ public enum SnapshotPreviewMode {
                 source: .typed
             )
         ]
-        noteStore.setPreviewNotes(sampleNotes, selectedID: note1ID)
+        NoteStore.preview = NoteStore(storageDir: nil, seed: sampleNotes, selectedID: note1ID)
 
         // 4. Populate harmless CompanionMemoryStore fixtures
-        let memoryStore = CompanionMemoryStore.shared
         let sampleMemories: [CompanionMemory] = [
             CompanionMemory(
                 id: UUID(),
@@ -149,7 +154,8 @@ public enum SnapshotPreviewMode {
                 completedAt: now.addingTimeInterval(-3600)
             )
         ]
-        memoryStore.setPreviewMemories(sampleMemories)
+        CompanionMemoryStore.preview = CompanionMemoryStore(storageDir: nil, seed: sampleMemories)
+        CrashReporter.preview = CrashReporter(crashDir: nil)
 
         // 5. Ensure navigation starts on Capture
         SidebarSelection.shared.item = .capture

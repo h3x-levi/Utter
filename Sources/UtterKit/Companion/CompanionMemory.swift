@@ -204,41 +204,40 @@ enum CompanionMemoryParser {
 
 @MainActor
 final class CompanionMemoryStore: ObservableObject {
-    static let shared = CompanionMemoryStore(
+    private static let live = CompanionMemoryStore(
         notifications: .shared,
         onCreated: { UserData.shared.recordCompanionMemoryCreated() },
         onCompleted: { UserData.shared.recordCompanionMemoryCompleted() }
     )
+    static var preview: CompanionMemoryStore?
+    static var shared: CompanionMemoryStore { preview ?? live }
 
     @Published private(set) var memories: [CompanionMemory] = []
     @Published private(set) var lastError: String?
 
-    private let storageDir: URL
+    private let storageDir: URL?
     private let notifications: CompanionNotificationScheduler?
     private let onCreated: () -> Void
     private let onCompleted: () -> Void
 
-    private var fileURL: URL { storageDir.appendingPathComponent("companion-memories.json") }
-    private var previousURL: URL {
-        storageDir.appendingPathComponent("companion-memories.previous.json")
+    private var fileURL: URL? { storageDir?.appendingPathComponent("companion-memories.json") }
+    private var previousURL: URL? {
+        storageDir?.appendingPathComponent("companion-memories.previous.json")
     }
 
     init(
-        storageDir: URL = AppDirectory.support,
+        storageDir: URL? = AppDirectory.support,
         notifications: CompanionNotificationScheduler? = nil,
         onCreated: @escaping () -> Void = {},
-        onCompleted: @escaping () -> Void = {}
+        onCompleted: @escaping () -> Void = {},
+        seed: [CompanionMemory] = []
     ) {
         self.storageDir = storageDir
         self.notifications = notifications
         self.onCreated = onCreated
         self.onCompleted = onCompleted
         load()
-    }
-
-    /// Replaces active memories with fixed preview fixtures for snapshots.
-    func setPreviewMemories(_ previewMemories: [CompanionMemory]) {
-        memories = previewMemories
+        if !seed.isEmpty { memories = seed }
     }
 
     var active: [CompanionMemory] {
@@ -414,7 +413,7 @@ final class CompanionMemoryStore: ObservableObject {
     }
 
     private func persist() throws {
-        guard !SnapshotPreviewMode.isActive || storageDir != AppDirectory.support else { return }
+        guard let fileURL, let previousURL else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         // Seconds are encoded as a JSON Double, which round-trips Date's stored
@@ -438,15 +437,14 @@ final class CompanionMemoryStore: ObservableObject {
     }
 
     private func load() {
-        guard !SnapshotPreviewMode.isActive || storageDir != AppDirectory.support else { return }
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+        guard let fileURL, let previousURL, let data = try? Data(contentsOf: fileURL) else { return }
         if let decoded = decode(data) {
             memories = decoded
             return
         }
 
         let recovered = (try? Data(contentsOf: previousURL)).flatMap(decode)
-        preserveUnreadablePrimary()
+        preserveUnreadablePrimary(fileURL)
         if let recovered {
             memories = recovered
             do {
@@ -476,8 +474,8 @@ final class CompanionMemoryStore: ObservableObject {
         return try encoder.encode(value)
     }
 
-    private func preserveUnreadablePrimary() {
-        let salvage = storageDir.appendingPathComponent(
+    private func preserveUnreadablePrimary(_ fileURL: URL) {
+        let salvage = fileURL.deletingLastPathComponent().appendingPathComponent(
             "companion-memories-unreadable-\(Int(Date().timeIntervalSince1970)).json"
         )
         do {

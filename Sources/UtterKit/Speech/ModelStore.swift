@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CryptoKit
+import os
 
 /// Downloads and tracks the optional speech models.
 ///
@@ -203,17 +204,34 @@ final class ModelStore: ObservableObject {
             }
         }
 
+        let throttle = OSAllocatedUnfairLock(initialState: ProgressThrottle())
         observers[tier] = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+            let fraction = progress.fractionCompleted
+            let now = ProcessInfo.processInfo.systemUptime
+            guard throttle.withLock({ $0.shouldSend(fraction, at: now) }) else { return }
             Task { @MainActor in
                 guard let self,
                       self.downloadIDs[tier] == downloadID,
                       case .downloading = self.state(for: tier) else { return }
-                self.states[tier] = .downloading(progress.fractionCompleted)
+                self.states[tier] = .downloading(fraction)
             }
         }
 
         tasks[tier] = task
         task.resume()
+    }
+
+    /// At most one progress update per `interval`; 100% always passes. Failures and completion
+    /// come through the download's completion handler, which is not throttled.
+    struct ProgressThrottle {
+        let interval: TimeInterval = 0.1
+        private var lastSent = -TimeInterval.infinity
+
+        mutating func shouldSend(_ fraction: Double, at now: TimeInterval) -> Bool {
+            guard fraction >= 1 || now - lastSent >= interval else { return false }
+            lastSent = now
+            return true
+        }
     }
 
     private nonisolated static func sha256(fileAt url: URL) throws -> String {

@@ -211,6 +211,7 @@ struct CompanionProgressionTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let data = UserData(storageDir: directory)
+        defer { data.flushNow() }
 
         _ = data.recordCompanionDictation(words: 999)
         #expect(data.companionRewardUnlocked(.ball))
@@ -232,6 +233,7 @@ struct CompanionProgressionTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let data = UserData(storageDir: directory)
+        defer { data.flushNow() }
 
         let first = data.syncCompanionLifetimeWords(10_000)
         let second = data.syncCompanionLifetimeWords(500)

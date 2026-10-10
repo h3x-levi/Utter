@@ -26,7 +26,9 @@ struct HistoryGroup: Identifiable {
 }
 
 class TranscriptionHistory: ObservableObject {
-    static let shared = TranscriptionHistory()
+    private static let live = TranscriptionHistory()
+    nonisolated(unsafe) static var preview: TranscriptionHistory?
+    static var shared: TranscriptionHistory { preview ?? live }
     private static let persistenceQueue = DispatchQueue(
         label: "utter.history.persistence",
         qos: .utility
@@ -54,13 +56,15 @@ class TranscriptionHistory: ObservableObject {
         return mean.formatted(.number.precision(.fractionLength(0)))
     }
 
-    private let storageDir: URL = AppDirectory.support
+    private let storageDir: URL?
 
-    private var historyURL: URL { storageDir.appendingPathComponent("history.json") }
-    private var streakURL: URL { storageDir.appendingPathComponent("streak.json") }
+    private var historyURL: URL? { storageDir?.appendingPathComponent("history.json") }
+    private var streakURL: URL? { storageDir?.appendingPathComponent("streak.json") }
 
-    init() {
+    init(storageDir: URL? = AppDirectory.support) {
+        self.storageDir = storageDir
         load()
+        activeDays = Self.readStreak(at: streakURL)
         calculateStreak()
     }
 
@@ -179,36 +183,33 @@ class TranscriptionHistory: ObservableObject {
 
     // MARK: - Streak
 
-    private var activeDays: Set<String> {
-        get {
-            guard !SnapshotPreviewMode.isActive else { return [] }
-            guard let data = try? Data(contentsOf: streakURL),
-                  let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
-            return Set(arr)
-        }
-        set {
-            guard !SnapshotPreviewMode.isActive else { return }
-            let arr = Array(newValue).sorted()
-            if let data = try? JSONSerialization.data(withJSONObject: arr) {
-                // `.atomic` for the same reason as `saveHistory` - a torn write here loses
-                // the whole streak rather than a day of it.
-                do { try data.write(to: streakURL, options: .atomic) }
-                catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
-            }
+    private var activeDays: Set<String> = [] {
+        didSet { saveStreak() }
+    }
+
+    private static func readStreak(at url: URL?) -> Set<String> {
+        guard let url, let data = try? Data(contentsOf: url),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
+        return Set(arr)
+    }
+
+    private func saveStreak() {
+        guard let destination = streakURL,
+              let data = try? JSONSerialization.data(withJSONObject: activeDays.sorted()) else { return }
+        Self.persistenceQueue.async {
+            do { try data.write(to: destination, options: .atomic) }
+            catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
         }
     }
 
     private func recordToday() {
-        guard !SnapshotPreviewMode.isActive else { return }
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
-        var days = activeDays
-        days.insert(fmt.string(from: Date()))
-        activeDays = days
+        let today = fmt.string(from: Date())
+        if !activeDays.contains(today) { activeDays.insert(today) }
     }
 
     private func calculateStreak() {
-        guard !SnapshotPreviewMode.isActive else { return }
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let days = activeDays
@@ -227,9 +228,8 @@ class TranscriptionHistory: ObservableObject {
     // MARK: - Persistence
 
     private func saveHistory() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard let destination = historyURL else { return }
         let snapshot = Array(entries.prefix(1000))
-        let destination = historyURL
         Self.persistenceQueue.async {
             let started = DispatchTime.now().uptimeNanoseconds
             let fmt = ISO8601DateFormatter()
@@ -256,10 +256,9 @@ class TranscriptionHistory: ObservableObject {
     }
 
     private func load() {
-        guard !SnapshotPreviewMode.isActive else { return }
         // Nothing on disk yet is the ordinary first-launch case, not a corruption - so it
         // must come before the salvage below, or every first launch renames a missing file.
-        guard let data = try? Data(contentsOf: historyURL) else { return }
+        guard let historyURL, let data = try? Data(contentsOf: historyURL) else { return }
         guard let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] else {
             // Unreadable: move it aside rather than leaving it to be overwritten by the next
             // save. Same reasoning, and the same shape, as `NoteStore.load`.

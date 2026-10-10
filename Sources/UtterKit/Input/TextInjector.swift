@@ -1,12 +1,16 @@
 import Cocoa
 import Carbon.HIToolbox
+import os
 
 /// Full-fidelity snapshot of the pasteboard: every item with every type it holds,
 /// so restoring preserves rich text, images, and files - not just the plain string.
 struct PasteboardSnapshot {
+    /// Read before the items, so a write during the snapshot makes it look stale rather than current.
+    let changeCount: Int
     private let items: [[NSPasteboard.PasteboardType: Data]]
 
     init(_ pasteboard: NSPasteboard = .general) {
+        changeCount = pasteboard.changeCount
         items = (pasteboard.pasteboardItems ?? []).map { item in
             item.types.reduce(into: [:]) { typedData, type in
                 typedData[type] = item.data(forType: type)
@@ -29,11 +33,36 @@ struct PasteboardSnapshot {
 /// Injects text or executes keyboard actions in the focused app.
 struct TextInjector {
 
+    static let snapshotQueue = DispatchQueue(label: "utter.pasteboard-snapshot", qos: .userInitiated)
+    private static let preparedLock = NSLock()
+    private static var prepared: PasteboardSnapshot?
+    private static let signposter = OSSignposter(subsystem: "utter.dictation.app", category: .pointsOfInterest)
+
+    /// Snapshots the clipboard off main while transcription runs, so `typeText` can skip it.
+    static func prepareSnapshot(_ pasteboard: NSPasteboard = .general) {
+        snapshotQueue.async {
+            let snapshot = PasteboardSnapshot(pasteboard)
+            preparedLock.withLock { prepared = snapshot }
+        }
+    }
+
+    /// The prepared snapshot if the clipboard has not changed since, otherwise a fresh one.
+    static func takeSnapshot(_ pasteboard: NSPasteboard = .general) -> PasteboardSnapshot {
+        let reusable = preparedLock.withLock { () -> PasteboardSnapshot? in
+            defer { prepared = nil }
+            return prepared
+        }
+        // A prepare still running lands after this; drop it rather than hold the clipboard until the next turn.
+        snapshotQueue.async { preparedLock.withLock { prepared = nil } }
+        if let reusable, reusable.changeCount == pasteboard.changeCount { return reusable }
+        return PasteboardSnapshot(pasteboard)
+    }
+
     static func typeText(_ text: String) {
         guard !text.isEmpty else { return }
 
         let pasteboard = NSPasteboard.general
-        let snapshot = PasteboardSnapshot(pasteboard)
+        let snapshot = signposter.withIntervalSignpost("PasteboardSnapshot") { takeSnapshot(pasteboard) }
 
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else {

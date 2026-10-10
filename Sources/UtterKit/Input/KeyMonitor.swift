@@ -46,6 +46,11 @@ struct HotkeyOption: Identifiable {
     static func find(id: String) -> HotkeyOption {
         options.first { $0.id == id } ?? options[0]
     }
+
+    /// Resolves a persisted value that is either an id or a legacy display label.
+    static func find(stored: String) -> HotkeyOption {
+        options.first { $0.id == stored || $0.name == stored } ?? options[0]
+    }
 }
 
 /// What a shortcut does, independent of how it is spelled.
@@ -480,8 +485,7 @@ class KeyMonitor {
     }
 
     private func handleFlagsChanged(_ event: NSEvent) {
-        let hotkeyId = UserData.shared.hotkeyName
-        let option = HotkeyOption.options.first { $0.name == hotkeyId } ?? HotkeyOption.options[0]
+        let option = HotkeyOption.find(id: UserData.shared.hotkeyId)
         let keyPressed = option.flagCheck(event)
         let now = CACurrentMediaTime()
 

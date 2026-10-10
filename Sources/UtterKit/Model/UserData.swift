@@ -1,9 +1,12 @@
 import Foundation
 import Carbon.HIToolbox
+import os
 
 /// Shared persistent store for all user preferences.
 class UserData: ObservableObject {
-    static let shared = UserData()
+    private static let live = UserData()
+    nonisolated(unsafe) static var preview: UserData?
+    static var shared: UserData { preview ?? live }
 
     @Published var dictionaryWords: [String] = []
     @Published var snippets: [(trigger: String, expansion: String)] = []
@@ -11,6 +14,7 @@ class UserData: ObservableObject {
     @Published var voiceCommandsEnabled: Bool = true
     @Published var spokenPunctuationEnabled: Bool = false // "period"/"comma" → symbols; off by default (words are ambiguous)
     @Published var hotkeyName: String = "Fn"
+    var hotkeyId: String { HotkeyOption.find(stored: hotkeyName).id }
     /// Double-tap the hotkey (e.g. Fn twice) to start or toggle hands-free dictation.
     @Published var doubleTapHotkeyForHandsFree: Bool = true
     @Published var lastTranscription: String = ""
@@ -273,10 +277,19 @@ class UserData: ObservableObject {
         ("continue note", "Add to the note already open", .continueNote),
     ]
 
-    private let storageDir: URL
+    private let storageDir: URL?
+    private static let log = Logger(subsystem: "utter.dictation.app", category: "persistence")
+    private let debounce: TimeInterval
+    private let writeQueue = DispatchQueue(label: "utter.userdata.persistence", qos: .utility)
+    private var pendingSnapshot: [String: Any]?
+    private var debounceItem: DispatchWorkItem?
+    private var diskWrites = 0
 
-    init(storageDir: URL = AppDirectory.support) {
+    var diskWriteCount: Int { writeQueue.sync { diskWrites } }
+
+    init(storageDir: URL? = AppDirectory.support, debounce: TimeInterval = 0.3) {
         self.storageDir = storageDir
+        self.debounce = debounce
         load()
     }
 
@@ -305,17 +318,53 @@ class UserData: ObservableObject {
         return nil
     }
 
+    /// Snapshots the values now, then encodes and writes on a serial queue after a quiet
+    /// period, so a burst of edits becomes one write.
     func save() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard storageDir != nil else { return }
+        let snapshot = settingsSnapshot()
+        writeQueue.async { [self] in
+            pendingSnapshot = snapshot
+            debounceItem?.cancel()
+            let item = DispatchWorkItem { [self] in writePendingSnapshot() }
+            debounceItem = item
+            writeQueue.asyncAfter(deadline: .now() + debounce, execute: item)
+        }
+    }
+
+    /// Completes any pending write before returning. Call at app termination.
+    func flushNow() {
+        writeQueue.sync {
+            debounceItem?.cancel()
+            debounceItem = nil
+            writePendingSnapshot()
+        }
+    }
+
+    private func writePendingSnapshot() {
+        guard let url = storageDir?.appendingPathComponent("userdata.json"),
+              let snapshot = pendingSnapshot else { return }
+        do {
+            let json = try JSONSerialization.data(withJSONObject: snapshot, options: .prettyPrinted)
+            try json.write(to: url, options: .atomic)
+            pendingSnapshot = nil
+            diskWrites += 1
+        } catch {
+            Self.log.error("Could not write settings: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func settingsSnapshot() -> [String: Any] {
         let snipData = snippets.map { ["trigger": $0.trigger, "expansion": $0.expansion] }
         let customCmdData = (try? JSONEncoder().encode(customAICommands))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] } ?? []
-        let data: [String: Any] = [
+        return [
             "words": dictionaryWords,
             "snippets": snipData,
             "language": selectedLanguage,
             "voiceCommands": voiceCommandsEnabled,
             "spokenPunctuation": spokenPunctuationEnabled,
+            "hotkeyId": hotkeyId,
             "hotkeyName": hotkeyName,
             "doubleTapHotkeyForHandsFree": doubleTapHotkeyForHandsFree,
             "appTheme": appTheme,
@@ -356,15 +405,10 @@ class UserData: ObservableObject {
             "companionDictationGoal": companionDictationGoal,
             "companionProgress": companionProgress.jsonObject,
         ]
-        let url = storageDir.appendingPathComponent("userdata.json")
-        if let json = try? JSONSerialization.data(withJSONObject: data, options: .prettyPrinted) {
-            do { try json.write(to: url, options: .atomic) }
-            catch { print("⚠️ Could not write settings: \(error.localizedDescription)") }
-        }
     }
 
     private func load() {
-        guard !SnapshotPreviewMode.isActive else { return }
+        guard let storageDir else { return }
         let url = storageDir.appendingPathComponent("userdata.json")
         guard let data = try? Data(contentsOf: url) else { return }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -391,7 +435,9 @@ class UserData: ObservableObject {
         if let lang = json["language"] as? String { selectedLanguage = lang }
         if let vc = json["voiceCommands"] as? Bool { voiceCommandsEnabled = vc }
         if let sp = json["spokenPunctuation"] as? Bool { spokenPunctuationEnabled = sp }
-        if let hn = json["hotkeyName"] as? String { hotkeyName = hn }
+        if let stored = (json["hotkeyId"] as? String) ?? (json["hotkeyName"] as? String) {
+            hotkeyName = HotkeyOption.find(stored: stored).name
+        }
         if let dth = json["doubleTapHotkeyForHandsFree"] as? Bool { doubleTapHotkeyForHandsFree = dth }
         if let theme = json["appTheme"] as? String {
             appTheme = (theme == "ember") ? ThemeManager.systemThemeID : theme

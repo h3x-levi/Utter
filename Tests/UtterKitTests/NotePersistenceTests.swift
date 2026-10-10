@@ -288,4 +288,88 @@ struct NotePersistenceTests {
         let decoded = try decoder().decode(Note.self, from: encoder().encode(note))
         #expect(decoded.body == nasty)
     }
+
+    static let fractionalFile = """
+    [{"id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F", "title": "Pinned title",
+      "body": "Shipped.", "created": "2023-11-14T22:13:20.125Z",
+      "modified": "2023-11-14T23:13:20.875Z", "tags": ["work"],
+      "source": "meeting", "titleIsCustom": true}]
+    """
+
+    static let wholeSecondFile = """
+    [{"id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F", "title": "Pinned title",
+      "body": "Shipped.", "created": "2023-11-14T22:13:20Z",
+      "modified": "2023-11-14T23:13:20Z", "tags": ["work"],
+      "source": "meeting", "titleIsCustom": true}]
+    """
+
+    @Test("Golden notes.json files in both date shapes decode")
+    func goldenFilesDecodeInBothDateShapes() throws {
+        let fractional = try decoder().decode([Note].self, from: Data(Self.fractionalFile.utf8))
+        let whole = try decoder().decode([Note].self, from: Data(Self.wholeSecondFile.utf8))
+
+        #expect(fractional.count == 1 && whole.count == 1)
+        #expect(fractional[0].created.timeIntervalSince1970 == 1_700_000_000.125)
+        #expect(whole[0].created.timeIntervalSince1970 == 1_700_000_000)
+        #expect(fractional[0].id == whole[0].id)
+        #expect(fractional[0].source == .meeting && whole[0].source == .meeting)
+        #expect(fractional[0].titleIsCustom && whole[0].titleIsCustom)
+        #expect(fractional[0].tags == ["work"] && whole[0].tags == ["work"])
+    }
+
+    @Test("The store loads the golden files in both date shapes")
+    @MainActor
+    func storeLoadsBothDateShapes() throws {
+        for (shape, expected) in [(Self.fractionalFile, 1_700_000_000.125),
+                                  (Self.wholeSecondFile, 1_700_000_000.0)] {
+            let directory = try temporaryDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            try Data(shape.utf8).write(to: directory.appendingPathComponent("notes.json"))
+
+            let store = NoteStore(storageDir: directory)
+
+            #expect(store.notes.count == 1)
+            #expect(store.notes[0].created.timeIntervalSince1970 == expected)
+            #expect(store.selectedNoteID == store.notes[0].id)
+        }
+    }
+
+    @Test("A written note loads in the next store, and a second write keeps the previous copy")
+    @MainActor
+    func writeThenReload() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NoteStore(storageDir: directory)
+        let note = store.create(body: "first")
+        store.writeToDisk()
+        store.flushPendingWrites()
+
+        #expect(NoteStore(storageDir: directory).notes.map(\.id) == [note.id])
+
+        _ = store.create(body: "second")
+        store.writeToDisk()
+        store.flushPendingWrites()
+        #expect(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("notes.previous.json").path))
+    }
+
+    @Test("An in-memory store holds its seed and never writes")
+    @MainActor
+    func inMemoryStore() {
+        let seeded = Note(body: "seed")
+        let store = NoteStore(storageDir: nil, seed: [seeded], selectedID: seeded.id)
+
+        store.writeToDisk()
+        store.flushPendingWrites()
+
+        #expect(store.notes == [seeded])
+        #expect(store.selectedNoteID == seeded.id)
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("utter-notes-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
 }

@@ -15,10 +15,8 @@ import Foundation
 ///     dictations under a "TODAY" heading until the next mutation. That is what
 ///     `nextMidnight(after:)` and the expiry check exist for.
 ///
-/// Constructing `TranscriptionHistory()` directly here rather than using `.shared` is
-/// deliberate but safe: `init` only *reads* `history.json` and `streak.json`, and
-/// nothing below calls `add`/`delete`/`deleteAll`, which are the only writers. Setting
-/// `entries` never touches the disk, so these tests cannot damage real history.
+/// These use an in-memory `TranscriptionHistory(storageDir: nil)`, so they never touch
+/// the real `history.json` or `streak.json`.
 @Suite("History date grouping")
 struct HistoryGroupingTests {
 
@@ -29,7 +27,7 @@ struct HistoryGroupingTests {
         // Proves `entries.didSet` actually fires through the `@Published` wrapper. If it
         // did not, the first read would be frozen in for the life of the process and the
         // History list would stop showing new dictations entirely.
-        let history = TranscriptionHistory()
+        let history = TranscriptionHistory(storageDir: nil)
         let today = Date()
 
         history.entries = [TranscriptionEntry(text: "first", timestamp: today)]
@@ -52,7 +50,7 @@ struct HistoryGroupingTests {
         // assigning a new array. Those go through the same setter, but only because
         // Swift's exclusive-access rules turn them into get-modify-set - worth pinning,
         // since a future switch to a non-`@Published` storage could silently break it.
-        let history = TranscriptionHistory()
+        let history = TranscriptionHistory(storageDir: nil)
         let now = Date()
         history.entries = [TranscriptionEntry(text: "keep", timestamp: now)]
         #expect(history.groupedByDate.first?.entries.count == 1)
@@ -67,7 +65,7 @@ struct HistoryGroupingTests {
 
     @Test("Entries from the same day land in one group, different days in separate ones")
     func groupsByCalendarDay() {
-        let history = TranscriptionHistory()
+        let history = TranscriptionHistory(storageDir: nil)
         let cal = Calendar.current
         let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
 
@@ -160,5 +158,100 @@ struct HistoryGroupingTests {
         // `Calendar.current`, which is the one the store actually uses.
         let now = Date()
         #expect(TranscriptionHistory.nextMidnight(after: now) > now)
+    }
+}
+
+@Suite("History persistence")
+struct HistoryPersistenceTests {
+    private static let goldenFile = """
+    [
+      {"id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F", "text": "Hello there world",
+       "ts": "2023-11-14T22:13:20Z", "lang": "English"},
+      {"id": "6C4E9D3F-2A5B-4C7D-8E9F-1B2C3D4E5F60", "text": "[BLANK_AUDIO]",
+       "ts": "2023-11-14T22:14:20Z", "lang": ""},
+      {"text": "No id or timestamp"}
+    ]
+    """
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("utter-history-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test("A golden history.json loads, drops no-speech rows, and keeps the row shape on rewrite")
+    func goldenFileLoads() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("history.json")
+        try Data(Self.goldenFile.utf8).write(to: file)
+
+        let history = TranscriptionHistory(storageDir: directory)
+        history.flushPendingWrites()
+
+        #expect(history.entries.count == 2)
+        #expect(history.entries[0].id == UUID(uuidString: "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F"))
+        #expect(history.entries[0].text == "Hello there world")
+        #expect(history.entries[0].timestamp.timeIntervalSince1970 == 1_700_000_000)
+        #expect(history.entries[0].language == "English")
+        #expect(history.totalWords == 3 + 4)
+
+        let rewritten = try JSONSerialization.jsonObject(with: Data(contentsOf: file))
+        let rows = try #require(rewritten as? [[String: String]])
+        #expect(rows.count == 2)
+        #expect(Set(rows[0].keys) == ["id", "text", "ts", "lang"])
+    }
+
+    @Test("An unreadable history.json is moved aside, not overwritten")
+    func corruptFileIsSalvaged() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data("{not json".utf8).write(to: directory.appendingPathComponent("history.json"))
+
+        _ = TranscriptionHistory(storageDir: directory)
+
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        #expect(names.contains { $0.hasPrefix("history-unreadable-") })
+        #expect(!names.contains("history.json"))
+    }
+
+    private func dayString(daysAgo: Int) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date())!)
+    }
+
+    @Test("The streak is read once at launch and kept in memory, not re-read on each dictation")
+    @MainActor
+    func streakIsCached() async throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let streakFile = directory.appendingPathComponent("streak.json")
+        let stored = [dayString(daysAgo: 2), dayString(daysAgo: 1)]
+        try JSONSerialization.data(withJSONObject: stored).write(to: streakFile)
+
+        let history = TranscriptionHistory(storageDir: directory)
+        #expect(history.streakDays == 0)
+        try FileManager.default.removeItem(at: streakFile)
+
+        history.add(text: "counts for today")
+        await MainActor.run {}
+        history.flushPendingWrites()
+
+        #expect(history.streakDays == 3)
+        let written = try JSONSerialization.jsonObject(with: Data(contentsOf: streakFile)) as? [String]
+        #expect(written == (stored + [dayString(daysAgo: 0)]).sorted())
+    }
+
+    @Test("Opening the history writes no streak file until a day is recorded")
+    func launchDoesNotWriteStreak() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let history = TranscriptionHistory(storageDir: directory)
+        history.flushPendingWrites()
+
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
     }
 }

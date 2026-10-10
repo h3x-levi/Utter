@@ -51,7 +51,7 @@ enum SpeechBias {
     /// Build the prompt for the next utterance. Empty when there is nothing
     /// useful to say, which correctly disables biasing.
     @MainActor
-    static func current() -> String {
+    static func current() async -> String {
         let data = UserData.shared
         guard data.speechBiasEnabled else { return "" }
 
@@ -62,7 +62,7 @@ enum SpeechBias {
         // Then proper nouns already on screen. These cover the case the dictionary
         // cannot - a colleague's name or project that the user never thought to add,
         // but which is sitting three lines above the cursor.
-        let context = SurroundingContext.capture()
+        let context = await SurroundingContext.capture()
         if !context.isEmpty {
             let known = Set(terms.map { $0.lowercased() })
             for noun in biasTerms(from: context.properNouns)

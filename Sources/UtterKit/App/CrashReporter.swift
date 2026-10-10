@@ -26,7 +26,9 @@ import Foundation
 /// crash reporter, which has symbolication this never will.
 final class CrashReporter {
 
-    static let shared = CrashReporter()
+    private static let live = CrashReporter()
+    nonisolated(unsafe) static var preview: CrashReporter?
+    static var shared: CrashReporter { preview ?? live }
 
     /// Guards against re-entering the handler if the reporter itself faults.
     /// `sig_atomic_t` because it is touched from a signal handler.
@@ -50,10 +52,11 @@ final class CrashReporter {
     private static var signalLogSlots: [[CChar]] = []
     private static var versionBytes: [UInt8] = []
 
-    private let crashDir: URL = {
-        let dir = AppDirectory.subdirectory("crashes")
-        return dir
-    }()
+    private let crashDir: URL?
+
+    init(crashDir: URL? = AppDirectory.subdirectory("crashes")) {
+        self.crashDir = crashDir
+    }
 
     /// Crash logs from previous runs, newest first. Read by the UI.
     ///
@@ -70,9 +73,8 @@ final class CrashReporter {
     /// happened minutes ago. This also matches `detectPreviousCrash` and
     /// `pruneOldLogs`, which already use mtime.
     var crashLogs: [(url: URL, date: Date, content: String)] {
-        guard !SnapshotPreviewMode.isActive else { return [] }
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(
+        guard let crashDir, let files = try? fm.contentsOfDirectory(
             at: crashDir, includingPropertiesForKeys: [.contentModificationDateKey]
         ) else { return [] }
 
@@ -93,20 +95,11 @@ final class CrashReporter {
     ///
     /// Exposed rather than merely printed: `print` goes to stdout, which nobody
     /// sees in a packaged app, so the old detection was dead code.
-    var previousRunCrashed: Bool {
-        get {
-            guard !SnapshotPreviewMode.isActive else { return false }
-            return _previousRunCrashed
-        }
-        set {
-            _previousRunCrashed = newValue
-        }
-    }
-    private var _previousRunCrashed = false
+    private(set) var previousRunCrashed = false
 
     func install() {
-        guard !SnapshotPreviewMode.isActive else { return }
-        prepareSignalState()
+        guard let crashDir else { return }
+        prepareSignalState(in: crashDir)
 
         NSSetUncaughtExceptionHandler { exception in
             // Safe to allocate here: this is an ordinary thread, not a signal
@@ -139,14 +132,14 @@ final class CrashReporter {
             }
         }
 
-        detectPreviousCrash()
-        pruneOldLogs()
+        detectPreviousCrash(in: crashDir)
+        pruneOldLogs(in: crashDir)
     }
 
     // MARK: - Signal path (async-signal-safe only)
 
     /// Build everything the signal handler will need, ahead of time.
-    private func prepareSignalState() {
+    private func prepareSignalState(in crashDir: URL) {
         // Ten slots to match `pruneOldLogs`'s retention. `%02d` keeps them sorting
         // lexically, which is how the pruner and the UI both order files.
         Self.signalLogSlots = (0..<10).map { index in
@@ -262,6 +255,7 @@ final class CrashReporter {
     // MARK: - Exception path (allocation is fine here)
 
     private func writeReport(type: String, name: String, reason: String, stack: String) {
+        guard let crashDir else { return }
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd_HH-mm-ss"
         let url = crashDir.appendingPathComponent("crash_\(fmt.string(from: Date())).log")
@@ -284,7 +278,7 @@ final class CrashReporter {
 
     // MARK: - Housekeeping
 
-    private func detectPreviousCrash() {
+    private func detectPreviousCrash(in crashDir: URL) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(
             at: crashDir, includingPropertiesForKeys: [.contentModificationDateKey]
@@ -303,7 +297,7 @@ final class CrashReporter {
     }
 
     /// Keep the ten most recent logs.
-    private func pruneOldLogs() {
+    private func pruneOldLogs(in crashDir: URL) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(
             at: crashDir, includingPropertiesForKeys: [.contentModificationDateKey]

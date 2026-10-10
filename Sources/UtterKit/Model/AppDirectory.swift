@@ -25,7 +25,7 @@ import Foundation
 enum AppDirectory {
 
     /// The folder name.
-    private static let name = "Utter"
+    static let name = "Utter"
 
     /// The names to migrate away from, **newest first**.
     ///
@@ -45,7 +45,7 @@ enum AppDirectory {
     ///
     /// Their twin is the same list in the permission-reset step of `scripts/build-app.sh`. Both
     /// stay until it is worth assuming nobody is upgrading from that era any more.
-    private static let legacyNames = ["Lumen", "AWSFlow"]
+    static let legacyNames = ["Lumen", "AWSFlow"]
 
     /// `~/Library/Application Support/Utter`, migrated, created, and owner-only.
     ///

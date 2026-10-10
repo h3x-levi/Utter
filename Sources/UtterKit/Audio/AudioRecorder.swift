@@ -205,6 +205,9 @@ class AudioRecorder: ObservableObject {
         }
     }
 
+    /// What `audioSnapshot().count` would be, without sharing the buffer.
+    var audioByteCount: Int { bufferQueue.sync { everDetectedVoice ? _audioData.count : 0 } }
+
     /// The last `cap` bytes of `data`, or all of it when it is already shorter.
     ///
     /// Split out from `audioSnapshot` so it can be tested without a microphone: the snapshot
