@@ -27,7 +27,7 @@ Nothing is sent with that request except the request itself.
 
 What is *not* in the app, verified by reading the linked libraries of the built
 binary: 42 libraries, all Apple system frameworks except `whisper.framework`. No
-cloud SDKs, no analytics or telemetry SDK, no Sentry, Crashlytics, Firebase,
+cloud SDK, no analytics or telemetry SDK, no Sentry, Crashlytics, Firebase,
 Amplitude, Segment, PostHog, and no Sparkle-style updater. The app also never
 shells out to another program: there is no `Process`, `posix_spawn` or `popen`
 anywhere in the source. There are no credentials of any kind, and the build fails

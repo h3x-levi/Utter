@@ -56,7 +56,7 @@ struct ZZOnboardingSnapshots {
         setUp(model)
         let window = OnboardingView.makeWindow(OnboardingView(model: model, onFinish: { _ in }))
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        window.center()
+        SnapshotCanvas.center(window)
         window.orderFrontRegardless()
         defer { window.orderOut(nil) }
         RunLoop.current.run(until: Date().addingTimeInterval(0.8))

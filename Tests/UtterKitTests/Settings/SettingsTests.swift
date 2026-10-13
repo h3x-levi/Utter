@@ -73,6 +73,53 @@ struct SettingsTests {
         #expect(model.report.contains("~/Library/Utter"))
     }
 
+    @MainActor
+    @Test("Tape length Off leaves no goal, and words dictated with Keep history off still count")
+    func tapeGoalAndUnkeptWords() {
+        let userData = UserData(storageDir: nil)
+        #expect(userData.tapeGoal == 500)
+        userData.companionDictationGoal = 0
+        #expect(userData.tapeGoal == nil)
+
+        userData.recordCompanionDictation(words: 12)
+        #expect(userData.unkeptWordsToday(onTape: 0) == 0, "history keeps them, so they're tracks already")
+        userData.keepHistory = false
+        #expect(userData.unkeptWordsToday(onTape: 5) == 7)
+        #expect(TapeSegment.unkept(7, id: 1).map(\.words) == [7])
+        #expect(TapeSegment<Int>.unkept(0, id: 1).isEmpty)
+    }
+
+    @MainActor
+    @Test("The daily tape counts today's tracks like the hub, oldest first, and opens on the Companion tab")
+    func dailyTape() {
+        let history = TranscriptionHistory(storageDir: nil)
+        let start = Calendar.current.startOfDay(for: Date())
+        let older = TranscriptionEntry(text: "one two three", timestamp: start.addingTimeInterval(1))
+        let newer = TranscriptionEntry(text: "four five", timestamp: start.addingTimeInterval(3))
+        let yesterday = TranscriptionEntry(text: "not on today's tape", timestamp: start.addingTimeInterval(-3_600))
+        history.entries = [newer, older, yesterday]
+        let note = Note(body: "Pack bags", modified: start.addingTimeInterval(2))
+        let notes = NoteStore(storageDir: nil, seed: [note, Note(body: "", modified: start.addingTimeInterval(4))])
+        let selection = CompanionSectionSelection()
+        let companion = CompanionSettingsModel(userData: UserData(storageDir: nil), memories: CompanionMemoryStore(storageDir: nil),
+                                               notifications: CompanionNotificationScheduler(center: nil),
+                                               selection: selection, history: history, notes: notes)
+
+        #expect(companion.todayTape.map(\.id) == [older.id, note.id, newer.id], "an empty note isn't a track")
+        #expect(companion.wordsToday == 7)
+        let hub = HubModel()
+        hub.reload(entries: history.entries, notes: notes.notes)
+        #expect(companion.todayTape.map(\.id) == hub.segments.map(\.id), "Settings and the hub show the same tape")
+
+        let model = SettingsModel(userData: companion.userData, theme: ThemeManager(userData: companion.userData),
+                                  meeting: MeetingSession(), history: history, notes: NoteStore(storageDir: nil),
+                                  dataFolders: [], crashReports: { ([], false) }, openIssue: { _, _ in }, launchAtLogin: false)
+        model.companion = companion
+        model.showCompanion(.remember)
+        #expect(model.group == .companion)
+        #expect(selection.section == .remember)
+    }
+
     @Test("What's New lists only user-facing notes")
     func whatsNewIsUserFacing() {
         let releases = WhatsNewView.releases

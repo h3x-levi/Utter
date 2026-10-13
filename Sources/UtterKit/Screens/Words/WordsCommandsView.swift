@@ -11,10 +11,10 @@ struct CommandsSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 0) {
             yourCommands
-            tryIt
-            builtIn
+            tryIt.padding(.top, 34)
+            builtIn.padding(.top, 34)
         }
         .sheet(item: $editing) { sheet in
             CommandEditor(command: sheet.command) { model.saveCommand($0, replacing: sheet.command) }
@@ -28,60 +28,68 @@ struct CommandsSection: View {
 
     private var yourCommands: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardHeader("Your commands", subtitle: "Rewrites you name yourself, like \u{201C}make it a commit message\u{201D}.") {
+            SideHeader("Your commands", detail: model.commands.isEmpty ? nil : "\(model.commands.count)")
+            HStack(alignment: .firstTextBaseline) {
+                WordsHint(text: "Rewrites you name yourself, like \u{201C}make it a commit message\u{201D}.")
+                Spacer(minLength: 12)
                 Button("New command") { editing = CommandSheet(command: nil) }
-                    .buttonStyle(Look.ActionStyle(prominent: true))
+                    .buttonStyle(.pen(.fill, .small))
+                    .padding(.top, 8)
             }
             if model.commands.isEmpty {
-                EmptyNote(title: "No commands yet", message: "Make your own voice command, then try it on some text below.")
-            }
-            ForEach(model.commands) { command in
-                if command.id != model.commands.first?.id { RowRule() }
-                let edit = { editing = CommandSheet(command: command) }
-                ActionRow(action: edit, removeLabel: "Delete \(command.trigger)", remove: { model.deleteCommand(command.id) }) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("\u{201C}\(command.trigger)\u{201D}")
-                            .fontWeight(.semibold)
-                            .lineLimit(1)
-                            .frame(width: 190, alignment: .leading)
-                        Text(command.systemPrompt)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                WordsHint(text: "No commands yet. Make your own voice command, then try it on some text below.", strong: true)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(model.commands) { command in
+                        let edit = { editing = CommandSheet(command: command) }
+                        ActionRow(action: edit, removeLabel: "Delete \(command.trigger)", remove: { model.deleteCommand(command.id) }) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text("\u{201C}\(command.trigger)\u{201D}")
+                                    .fontWeight(.semibold)
+                                    .frame(width: 190, alignment: .leading)
+                                Text(command.systemPrompt).foregroundStyle(Mixtape.ink2)
+                            }
+                        }
+                        .accessibilityHint("Edit")
+                        .contextMenu {
+                            Button("Edit", action: edit)
+                            Button("Delete", role: .destructive) { model.deleteCommand(command.id) }
+                        }
                     }
                 }
-                .accessibilityHint("Edit")
-                .contextMenu {
-                    Button("Edit", action: edit)
-                    Button("Delete", role: .destructive) { model.deleteCommand(command.id) }
-                }
+                .background(alignment: .top) { RuledBackground() }
+                .padding(.top, 8)
             }
         }
-        .contentCard()
     }
 
     private var tryIt: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardHeader("Try a command", subtitle: model.commands.isEmpty ? "Create a command above to try it on some text here." : nil)
-            if !model.commands.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("Command", selection: $model.tryCommandID) {
-                        ForEach(model.commands) { Text($0.trigger).tag(Optional($0.id)) }
+            SideHeader("Try a command")
+            if model.commands.isEmpty {
+                WordsHint(text: "Create a command above to try it on some text here.")
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsRow("Command") {
+                        SettingsPick("Command", value: model.tryCommand?.trigger ?? "") {
+                            Picker("Command", selection: $model.tryCommandID) {
+                                ForEach(model.commands) { Text($0.trigger).tag(Optional($0.id)) }
+                            }
+                            .pickerStyle(.inline)
+                            .labelsHidden()
+                        }
                     }
-                    .pickerStyle(.menu)
-                    .fixedSize()
                     TextField("Sample text", text: $model.trySample, axis: .vertical)
-                        .lineLimit(2...5)
+                        .lineLimit(1...5)
                         .accessibilityLabel("Sample text to run the command on")
-                        .fieldBox()
+                        .inkLine()
                     let availability = model.aiAvailability
-                    if !availability.isReady {
-                        Look.Status(text: availability.message, kind: .warn)
-                    }
+                    if !availability.isReady { InkNote(Text(availability.message)) }
                     HStack(spacing: 12) {
                         Button("Run") { model.runTry() }
-                            .buttonStyle(Look.ActionStyle(prominent: true))
+                            .buttonStyle(.pen(.fill, .small))
                             .disabled(!model.canRunTry)
-                        if model.tryResult == .running { ProgressView().controlSize(.small) }
+                        if model.tryResult == .running { SettingsStatus(text: "Running") }
                     }
                     switch model.tryResult {
                     case .output(let text): result(text, failed: false)
@@ -89,45 +97,50 @@ struct CommandsSection: View {
                     case .idle, .running: EmptyView()
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(.top, 12)
             }
         }
-        .contentCard()
     }
 
     private func result(_ text: String, failed: Bool) -> some View {
         Text(text)
-            .foregroundStyle(failed ? Color.red : Color.primary)
+            .font(Mixtape.body(15))
+            .foregroundStyle(failed ? Mixtape.red : Mixtape.penInk)
+            .lineSpacing(16)
             .textSelection(.enabled)
-            .padding(12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Look.Color.hover, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(alignment: .top) { RuledBackground() }
     }
 
     private var builtIn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardHeader("Built-in commands",
-                       subtitle: "Select text or dictate first, then hold \(model.hotkeyName) and say one of these.")
+            SideHeader("Built-in commands", detail: "hold \(model.hotkeyName) and say one")
+            WordsHint(text: "Select text or dictate first, then hold \(model.hotkeyName) and say one of these.")
             ForEach(BuiltInCommandGroup.all) { group in
-                if group.id != BuiltInCommandGroup.all.first?.id { RowRule() }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(group.title).font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+                Text(group.title)
+                    .mixtapeCaps(10, tracking: 0.2)
+                    .foregroundStyle(Mixtape.ink3)
+                    .padding(.top, 18)
+                    .padding(.bottom, 4)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 0) {
                     ForEach(group.commands) { command in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text("\u{201C}\(command.phrase)\u{201D}")
                                 .fontWeight(.medium)
                                 .frame(width: 230, alignment: .leading)
-                            Text(command.detail).foregroundStyle(.secondary)
+                            Text(command.detail).foregroundStyle(Mixtape.ink2)
                         }
+                        .font(Mixtape.body(13))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: Mixtape.ruleSpacing, maxHeight: Mixtape.ruleSpacing, alignment: .leading)
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .background(alignment: .top) { RuledBackground() }
             }
         }
-        .contentCard()
     }
 }
 
@@ -144,36 +157,47 @@ struct CommandEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(command == nil ? "New command" : "Edit command").font(.headline)
-            Form {
-                TextField("When I say", text: $draft.trigger, prompt: Text("make it a commit message"))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("What it should do")
-                    TextEditor(text: $draft.instruction)
-                        .font(.body)
-                        .frame(height: 90)
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.separator))
-                        .accessibilityLabel("What it should do")
-                }
-                Toggle("Replace the selected text", isOn: $draft.replacesSelection)
-                DisclosureGroup("Wrap the text (optional)") {
-                    TextField("Template", text: $draft.wrapper, prompt: Text("Rewrite this: {{text}}"))
-                    Text("Use {{text}} where your text should go.")
-                        .font(.callout)
-                        .foregroundStyle(Color.secondary)
+        VStack(alignment: .leading, spacing: 26) {
+            Text(command == nil ? "New command" : "Edit command")
+                .mixtapeCaps(24, tracking: 0.02)
+                .accessibilityAddTraits(.isHeader)
+            SettingsSection("The command") {
+                SettingsRow("When I say") {
+                    SettingsField("make it a commit message", label: "When I say", text: $draft.trigger)
+                        .frame(maxWidth: 240)
                 }
             }
-            .formStyle(.grouped)
-            HStack {
+            SettingsSection("What it should do") {
+                SettingsField("", label: "What it should do", text: $draft.instruction, axis: .vertical)
+                    .lineLimit(3...6)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
+                SettingsRow("Replace the selected text") {
+                    Toggle("Replace the selected text", isOn: $draft.replacesSelection).toggleStyle(.settingsSwitch)
+                }
+            }
+            SettingsSection("Wrap the text", detail: "optional", note: "Use {{text}} where your text should go.") {
+                SettingsRow("Template") {
+                    SettingsField("Rewrite this: {{text}}", label: "Template", text: $draft.wrapper)
+                        .frame(maxWidth: 240)
+                }
+            }
+            HStack(spacing: 8) {
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.pen(.ghost))
+                    .keyboardShortcut(.cancelAction)
                 Button("Save") { onSave(draft); dismiss() }
+                    .buttonStyle(.pen(.fill))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!draft.isValid)
             }
         }
-        .padding(20)
+        .padding(.horizontal, 34)
+        .padding(.vertical, 26)
         .frame(width: 480)
+        .background(Mixtape.paper)
+        .foregroundStyle(Mixtape.ink)
+        .tint(Mixtape.ink)
     }
 }

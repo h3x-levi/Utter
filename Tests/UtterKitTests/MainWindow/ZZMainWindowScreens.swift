@@ -44,6 +44,14 @@ enum SnapshotCanvas {
         try cache(host, to: file(name, dark: dark))
     }
 
+    /// Centres the window on the sharpest display, so captures come out at 2x when a Retina screen is attached.
+    @MainActor
+    static func center(_ window: NSWindow) {
+        guard let screen = NSScreen.screens.max(by: { $0.backingScaleFactor < $1.backingScaleFactor }) else { return window.center() }
+        let frame = screen.visibleFrame
+        window.setFrameOrigin(NSPoint(x: frame.midX - window.frame.width / 2, y: frame.midY - window.frame.height / 2))
+    }
+
     /// The window server's capture includes glass, which offscreen drawing drops; `view` is the fallback.
     @MainActor
     static func capture(_ window: NSWindow, view: NSView, _ name: String, dark: Bool) throws {
@@ -65,51 +73,61 @@ enum SnapshotCanvas {
     }
 }
 
-/// Renders Home and Library to `.build/screen-snapshots/` in both appearances.
+/// Renders Library to `.build/screen-snapshots/`, with the mock's sample day.
 @Suite("Main window screens", .serialized, .enabled(if: ProcessInfo.processInfo.environment["UTTER_SCREEN_SNAPSHOTS"] == "1"))
 @MainActor
 struct ZZMainWindowScreens {
-    private let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
-
-    @Test func home() throws {
-        let busier = ["On my way", "Can you pick up milk and something for dinner on the way home?",
-                      "train times from Edinburgh to Glasgow Saturday morning", "Thanks everyone, great work today. Talk tomorrow.",
-                      "Return early if the list is empty.", "Remind me to call the bank about the card before Friday."]
-            .enumerated().map { TranscriptionEntry(text: $1, timestamp: noon.addingTimeInterval(Double(-14_000 - 2_500 * $0))) }
-        let model = window(entries: sampleEntries + busier)
-        model.home.readiness = .init(mic: true, ax: true, modelPresent: true, modelLoad: .ready)
-        for dark in [false, true] { try render(model, "home", dark: dark) }
-
-        let firstRun = window(entries: [])
-        firstRun.home.readiness = .init(mic: false, ax: false, modelPresent: true, modelLoad: .ready)
-        try render(firstRun, "home-setup", dark: false)
+    private func today(_ hour: Int, _ minute: Int, days: Int = 0) -> Date {
+        let day = Calendar.current.date(byAdding: .day, value: -days, to: Date())!
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
     }
 
     @Test func library() throws {
-        let notes = sampleNotes
-        let model = window(entries: sampleEntries, notes: notes)
-        model.selection.item = .library
-        model.selection.libraryItemID = LibraryItem.noteID(notes[0].id)
+        let model = window()
+        let okafor = try #require(model.library.allItems.first { $0.title.hasPrefix("Dear Ms Okafor") })
+        model.library.selectedID = okafor.id
         for dark in [false, true] { try render(model, "library", dark: dark) }
+
+        model.library.search = "the"
+        try render(model, "library-search", dark: false)
+        model.library.search = ""
+
+        let meeting = try #require(model.library.allItems.first { $0.kind == .meeting })
+        model.library.selectedID = meeting.id
+        try render(model, "library-meeting", dark: true)
+
+        model.selection.libraryFilter = .notes
+        model.library.selectedID = try #require(model.library.allItems.first { $0.kind == .note }).id
+        try render(model, "library-notes", dark: false)
+
+        model.selection.libraryFilter = .all
+        model.library.selectedID = okafor.id
         try render(model, "library-narrow", dark: false, size: NSSize(width: Layout.windowMinWidth, height: Layout.windowMinHeight))
 
-        let empty = window(entries: [])
-        empty.selection.item = .library
+        let empty = window(entries: [], notes: [])
         empty.selection.libraryFilter = .meetings
         try render(empty, "library-empty", dark: false)
+
+        let firstRun = window(entries: [], notes: [], ready: false)
+        try render(firstRun, "library-setup", dark: false)
     }
 
     // MARK: Content
 
     private var sampleEntries: [TranscriptionEntry] {
         [
-            ("Running five minutes late, start without me and I'll catch up.", -1_200),
-            ("Shipped the fix for the login loop. Can someone double check it on the staging build before Thursday?", -2_400),
-            ("Lunch at the usual place? I can book for four.", -5_000),
-            ("Dear Ms Okafor, thank you for the quick reply. Tuesday works well for us, and I'll bring the revised plan.", -9_000),
-            ("best ramen near Union Square open late", -12_000),
-            ("Book the dentist for the week after next, mornings only.", -90_000),
-        ].map { TranscriptionEntry(text: $0.0, timestamp: noon.addingTimeInterval($0.1)) }
+            ("Hi Sam, the slides look great. One small thing: can we swap slides four and five before Thursday?", "Mail", today(21, 31)),
+            ("Thanks everyone, great work today. Talk tomorrow.", "Slack", today(21, 2)),
+            ("train times from Edinburgh to Glasgow Saturday morning", "Safari", today(18, 20)),
+            ("Can you pick up milk and something for dinner on the way home?", "Messages", today(16, 48)),
+            ("Shipped the fix for the login loop. Can someone double check it on the staging build?", "Slack", today(15, 12)),
+            ("Dear Ms Okafor, thank you for the quick reply. Tuesday works well for us, and I\u{2019}ll bring the revised plan.", "Mail", today(13, 2)),
+            ("Lunch at the usual place? I can book for four.", "Slack", today(12, 15)),
+            ("Running ten minutes late, save me a seat.", "Messages", today(10, 5)),
+            ("Morning all. I\u{2019}m in at nine thirty, starting with the review.", "Slack", today(8, 12)),
+            ("Send Ms Okafor the revised plan before Tuesday.", "Mail", today(17, 40, days: 1)),
+            ("Book the dentist for the week after next, mornings only.", "", today(9, 15, days: 1)),
+        ].map { TranscriptionEntry(text: $0.0, timestamp: $0.2, app: $0.1, duration: $0.0.hasPrefix("Dear") ? 8 : 0) }
     }
 
     private var sampleNotes: [Note] {
@@ -120,27 +138,27 @@ struct ZZMainWindowScreens {
             **Others:** Agreed. Could we keep one colour per state and drop the rest?
 
             **You:** Yes. Listening, hands-free, thinking, typed and error. Nothing else.
-            """, created: noon.addingTimeInterval(-4_920), modified: noon.addingTimeInterval(-3_000),
-                 source: .meeting, titleIsCustom: true),
-            Note(body: "Ideas for the review\nStart with what changed, then the numbers, then questions.",
-                 modified: noon.addingTimeInterval(-7_000)),
+
+            **Others:** And the error should stay small until someone looks at it.
+            """, created: today(11, 0), modified: today(11, 32), source: .meeting, titleIsCustom: true),
+            Note(title: "Book idea", body: "Book idea\nA story told only through voicemails.", modified: today(19, 55), titleIsCustom: true),
+            Note(title: "Ideas for the review", body: "Ideas for the review\nStart with what changed, then the numbers, then questions.",
+                 modified: today(9, 20), titleIsCustom: true),
         ]
     }
 
-    private func window(entries: [TranscriptionEntry], notes: [Note] = []) -> MainWindowModel {
+    private func window(entries: [TranscriptionEntry]? = nil, notes: [Note]? = nil, ready: Bool = true) -> MainWindowModel {
         let history = TranscriptionHistory(storageDir: nil)
-        history.entries = entries
-        return MainWindowModel(selection: SidebarSelection(arguments: []), status: CaptureStatus(),
-                               userData: UserData(storageDir: nil), history: history,
-                               notes: NoteStore(storageDir: nil, seed: notes), meeting: MeetingSession())
+        history.entries = entries ?? sampleEntries
+        let model = MainWindowModel(selection: SidebarSelection(arguments: []), status: CaptureStatus(),
+                                    userData: UserData(storageDir: nil), history: history,
+                                    notes: NoteStore(storageDir: nil, seed: notes ?? sampleNotes), meeting: MeetingSession())
+        model.setup.readiness = .init(mic: ready, ax: ready, modelPresent: true, modelLoad: .ready)
+        model.words.refreshSuggestions()
+        return model
     }
 
     // MARK: Rendering
-
-    private static func splitViews(in view: NSView?) -> [NSSplitView] {
-        guard let view else { return [] }
-        return [view as? NSSplitView].compactMap { $0 } + view.subviews.flatMap { splitViews(in: $0) }
-    }
 
     private func render(_ model: MainWindowModel, _ name: String, dark: Bool,
                         size: NSSize = NSSize(width: 1_180, height: 780)) throws {
@@ -154,39 +172,16 @@ struct ZZMainWindowScreens {
         window.toolbarStyle = .unified
         window.contentViewController = hosting
         window.setContentSize(size)
-        window.center()
+        SnapshotCanvas.center(window)
         window.orderFrontRegardless()
         defer { window.orderOut(nil) }
         RunLoop.current.run(until: Date().addingTimeInterval(1.2))
 
-        let columns = Self.splitViews(in: window.contentView).flatMap(\.arrangedSubviews).filter { !$0.isHidden }
-        #expect(!columns.isEmpty)
-        for column in columns {
-            let frame = column.convert(column.bounds, to: nil)
-            #expect(frame.minX >= -1 && frame.maxX <= size.width + 1, "\(name): a column spills out of the window at \(frame)")
-        }
+        let fitted = hosting.sizeThatFits(in: size)
+        #expect(fitted.width <= size.width + 1, "\(name): the columns need \(fitted.width) pt in a \(size.width) pt window")
+        #expect(window.titleVisibility == .hidden && window.titlebarAppearsTransparent, "\(name): the title bar should be clear")
 
         let view = try #require(window.contentView?.superview ?? window.contentView)
         try SnapshotCanvas.capture(window, view: view, name, dark: dark)
-    }
-
-    @Test func hero() throws {
-        let said = sampleEntries.map(\.text) + ["Yes", "Can you pick up milk and something for dinner on the way home?",
-                                                "train times from Edinburgh to Glasgow Saturday morning", "Thanks everyone, great work today. Talk tomorrow.",
-                                                "On my way", "Return early if the list is empty."]
-        var items = said.enumerated().map { LibraryItem(TranscriptionEntry(text: $1, timestamp: noon.addingTimeInterval(Double(-500 * $0)))) }
-        items.insert(LibraryItem(Note(body: "Book idea: a story told only through voicemails.", modified: noon.addingTimeInterval(-1_700))), at: 3)
-        items.insert(LibraryItem(sampleNotes[0]), at: 7)
-        for dark in [false, true] {
-            let sheet = VStack(alignment: .leading, spacing: 28) {
-                HomeHero(today: items, open: { _ in })
-                HomeHero(today: items, open: { _ in }, hovered: items[4].id)
-                HomeHero(today: [], open: { _ in })
-            }
-            .padding(.vertical, 28)
-            .frame(width: 900)
-            .background(.background)
-            try SnapshotCanvas.write(NSHostingView(rootView: sheet), "home-hero", dark: dark, settle: 0.6)
-        }
     }
 }

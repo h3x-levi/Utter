@@ -5,19 +5,20 @@ import Testing
 @testable import UtterKit
 @testable import UtterCore
 
-/// Renders the Companion section and the floating robot's bubbles to `.build/screen-snapshots/` in both appearances.
+/// Renders the Companion tab of Settings and the floating robot's bubbles to `.build/screen-snapshots/` in both appearances.
 @Suite("Companion screens", .serialized, .enabled(if: ProcessInfo.processInfo.environment["UTTER_SCREEN_SNAPSHOTS"] == "1"))
 struct ZZCompanionScreenSnapshots {
+    /// A companion with a name, a pinned note, reminders, two waiting memories, one done, and a morning on the tape.
     @MainActor
-    @Test func companionScreen() throws {
-        let userData = UserData(storageDir: nil)
+    static func seededCompanion(_ userData: UserData) -> CompanionSettingsModel {
         userData.companionEnabled = true
         userData.companionUserName = "Alex"
         userData.companionPinnedMessage = "Ship the release notes"
-        userData.companionWaterMinutes = 60
+        userData.companionStretchMinutes = 45
+        userData.companionWaterMinutes = 20
         userData.companionPomodoroFocusMinutes = 25
+        userData.companionPomodoroBreakMinutes = 5
         var progress = CompanionProgress.today()
-        progress.dictationWords = 320
         progress.hydration = 2
         progress.stretches = 1
         userData.companionProgress = progress
@@ -28,16 +29,38 @@ struct ZZCompanionScreenSnapshots {
             CompanionMemory(text: "Book the dentist", createdAt: now.addingTimeInterval(-86_400), source: .typed,
                             completedAt: now.addingTimeInterval(-3_600)),
         ])
-        let model = CompanionScreenModel(userData: userData, memories: memories,
-                                         notifications: CompanionNotificationScheduler(center: nil),
-                                         selection: CompanionSectionSelection())
-        for dark in [false, true] {
-            try render(CompanionScreen(model: model).background(MoonlightGround()), "companion", size: CGSize(width: 944, height: 1_420), dark: dark)
+        let history = TranscriptionHistory(storageDir: nil)
+        let start = Calendar.current.startOfDay(for: now)
+        history.entries = [11, 13, 8, 64, 10, 20, 16, 13, 8, 8, 7, 18].enumerated().reversed().map { index, words in
+            TranscriptionEntry(text: Array(repeating: "word", count: words).joined(separator: " "),
+                               timestamp: start.addingTimeInterval(Double(index + 1) * 60))
         }
-        let empty = CompanionScreenModel(userData: UserData(storageDir: nil), memories: CompanionMemoryStore(storageDir: nil),
-                                         notifications: CompanionNotificationScheduler(center: nil),
-                                         selection: CompanionSectionSelection())
-        try render(CompanionScreen(model: empty).background(MoonlightGround()), "companion-empty", size: CGSize(width: 700, height: 1_780), dark: false)
+        return CompanionSettingsModel(userData: userData, memories: memories,
+                                      notifications: CompanionNotificationScheduler(center: nil),
+                                      selection: CompanionSectionSelection(), history: history)
+    }
+
+    /// The whole Companion tab at full height, so every row is in one picture.
+    @MainActor
+    @Test func companionTab() throws {
+        for dark in [false, true] {
+            try render(tab(Self.seededCompanion(UserData(storageDir: nil))), "companion", size: CGSize(width: 760, height: 1_640), dark: dark)
+        }
+        let empty = CompanionSettingsModel(userData: UserData(storageDir: nil), memories: CompanionMemoryStore(storageDir: nil),
+                                           notifications: CompanionNotificationScheduler(center: nil),
+                                           selection: CompanionSectionSelection(), history: TranscriptionHistory(storageDir: nil))
+        try render(tab(empty), "companion-empty", size: CGSize(width: 760, height: 1_300), dark: false)
+    }
+
+    @MainActor
+    private func tab(_ companion: CompanionSettingsModel) -> some View {
+        let userData = companion.userData
+        let model = SettingsModel(userData: userData, theme: ThemeManager(userData: userData), meeting: MeetingSession(),
+                                  history: companion.history, notes: NoteStore(storageDir: nil), dataFolders: [],
+                                  crashReports: { ([], false) }, openIssue: { _, _ in }, launchAtLogin: false)
+        model.companion = companion
+        model.group = .companion
+        return SettingsWindowView(model: model)
     }
 
     @MainActor

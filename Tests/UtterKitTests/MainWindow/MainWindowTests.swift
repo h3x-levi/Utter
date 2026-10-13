@@ -7,14 +7,14 @@ import Testing
 @MainActor
 struct MainWindowTests {
     @Test("--screen opens the screen and the section inside it", arguments: [
-        ("dictation", SidebarItem.home, LibraryFilter.all),
+        ("dictation", SidebarItem.library, LibraryFilter.all),
         ("library", .library, .all),
         ("notes", .library, .notes),
         ("meetings", .library, .meetings),
         ("dictations", .library, .dictations),
         ("snippets", .words, .all),
         ("companion", .companion, .all),
-        ("nonsense", .home, .all),
+        ("nonsense", .library, .all),
     ])
     func deepLinks(screen: String, item: SidebarItem, filter: LibraryFilter) {
         let selection = SidebarSelection(arguments: ["Utter", "--screen", screen])
@@ -24,7 +24,19 @@ struct MainWindowTests {
 
     @Test func wordsDeepLinkSelectsTheSection() {
         #expect(SidebarSelection(arguments: ["Utter", "--screen", "commands"]).wordsSection == .commands)
-        #expect(SidebarSelection(arguments: ["Utter"]).item == .home)
+        #expect(SidebarSelection(arguments: ["Utter"]).item == .library)
+    }
+
+    @Test func companionRouteOpensSettingsAndLeavesLibrary() {
+        var opened: [SettingsGroup?] = []
+        let model = MainWindowModel(selection: SidebarSelection(arguments: ["Utter", "--screen", "companion"]),
+                                    userData: UserData(storageDir: nil), history: TranscriptionHistory(storageDir: nil),
+                                    notes: NoteStore(storageDir: nil), openSettings: { opened.append($0) })
+        model.followRoute()
+        #expect(opened == [.companion])
+        #expect(model.selection.item == .library)
+        model.followRoute()
+        #expect(opened.count == 1, "Library itself never opens Settings")
     }
 
     @Test func openingAnItemWidensAFilterThatWouldHideIt() {
@@ -69,34 +81,33 @@ struct MainWindowTests {
         #expect(CaptureStatus.line(for: .processing(.typing), micGranted: true, axGranted: true, hotkey: "Fn") == "Typing")
     }
 
-    @Test func homeShowsOnlyWhatIsMissing() {
-        typealias Home = HomeViewModel
-        let ready = Home.Readiness(mic: true, ax: true, modelPresent: true, modelLoad: .ready)
-        #expect(Home.needs(ready, modelState: .bundled).isEmpty)
-        #expect(Home.cardTitle(1) == "One thing left.")
+    @Test func setupShowsOnlyWhatIsMissing() {
+        typealias Setup = SetupNeeds
+        let ready = Setup.Readiness(mic: true, ax: true, modelPresent: true, modelLoad: .ready)
+        #expect(Setup.needs(ready, modelState: .bundled).isEmpty)
+        #expect(Setup.cardTitle(1) == "One thing left.")
 
         var missing = ready
         missing.mic = false
         missing.modelPresent = false
-        #expect(Home.needs(missing, modelState: .downloading(0.4)) == [.microphone, .model(downloading: 0.4)])
-        #expect(Home.cardTitle(Home.needs(missing, modelState: nil).count) == "2 things left.")
+        #expect(Setup.needs(missing, modelState: .downloading(0.4)) == [.microphone, .model(downloading: 0.4)])
+        #expect(Setup.cardTitle(Setup.needs(missing, modelState: nil).count) == "2 things left.")
 
         var failed = ready
         failed.modelLoad = .failed("Out of memory")
-        #expect(Home.needs(failed, modelState: .bundled) == [.modelFailed("Out of memory")])
+        #expect(Setup.needs(failed, modelState: .bundled) == [.modelFailed("Out of memory")])
     }
 
-    @Test func ribbonBeadsFollowWordsAndOnlyFillTheTroughWhenCrowded() {
-        let light = RibbonLayout.widths([1, 10, 20, 100], in: 800)
-        #expect(light == [12, 40, 80, 120], "a light day keeps bead-sized beads instead of stretching two across the trough")
-        #expect(RibbonLayout.starts(light) == [0, 16, 60, 144])
-
-        let crowded = RibbonLayout.widths(Array(repeating: 30, count: 40) + [1], in: 1_200)
-        #expect(abs(crowded.reduce(0, +) + RibbonLayout.spacing * 40 - 1_200) < 0.001)
-        #expect(crowded.allSatisfy { $0 >= 0 })
-        #expect(crowded[0] > crowded[40])
-
-        #expect(RibbonLayout.widths([], in: 100).isEmpty)
+    @Test func offersTheModelThisMacRunsBestWithoutRequiringIt() {
+        let m4 = Device(chipName: "Apple M4", ramGB: 16, performanceCores: 4, totalCores: 10, isAppleSilicon: true, freeDiskGB: 100)
+        let air = Device(chipName: "Apple M1", ramGB: 8, performanceCores: 4, totalCores: 8, isAppleSilicon: true, freeDiskGB: 100)
+        let nothing: (SpeechModel.Tier) -> Bool = { _ in false }
+        #expect(ModelStore.upgrade(recommended: m4.recommended, active: .small, onDisk: nothing)?.tier == .medium)
+        #expect(ModelStore.upgrade(recommended: m4.recommended, active: .small, onDisk: { $0 == .medium }) == nil,
+                "downloaded but not chosen: the user decided, so no offer")
+        #expect(ModelStore.upgrade(recommended: m4.recommended, active: .medium, onDisk: nothing) == nil)
+        #expect(ModelStore.upgrade(recommended: air.recommended, active: .small, onDisk: nothing) == nil, "8 GB stays on Small")
+        #expect(m4.recommendationReason.hasPrefix("Your Apple M4 with 16 GB runs Medium smoothly"))
     }
 }
 
@@ -105,7 +116,7 @@ struct MainWindowTests {
 struct LibraryModelTests {
     private let now = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
 
-    private func make() -> (LibraryViewModel, NoteStore, TranscriptionHistory) {
+    private func make(paste: @escaping @MainActor (String) -> Void = { _ in }) -> (LibraryViewModel, NoteStore, TranscriptionHistory) {
         let history = TranscriptionHistory(storageDir: nil)
         history.entries = [
             TranscriptionEntry(text: "Running five minutes late", timestamp: now.addingTimeInterval(-60)),
@@ -117,7 +128,7 @@ struct LibraryModelTests {
                  modified: now.addingTimeInterval(-20), source: .meeting, titleIsCustom: true),
         ])
         let model = LibraryViewModel(selection: SidebarSelection(arguments: []), history: history, store: store,
-                                     prepareMeeting: { nil })
+                                     prepareMeeting: { nil }, paste: paste)
         return (model, store, history)
     }
 
@@ -130,26 +141,95 @@ struct LibraryModelTests {
         model.filter = .all
         model.search = "lemons"
         #expect(model.visibleItems.map(\.title) == ["Groceries"])
+        #expect(model.days.map(\.items.count) == [1], "a search shows only the days it found something on")
+        model.search = "nowhere"
+        #expect(model.days.isEmpty)
         model.search = ""
-        #expect(model.days.map(\.title).first == "Today")
+        #expect(model.days.first?.id == Calendar.current.startOfDay(for: .now))
+        #expect(model.days.first?.items.map(\.title) == ["Groceries", "Running five minutes late", "Design sync"], "a day runs oldest first")
         #expect(model.days.count == 2)
+        model.filter = .meetings
+        model.search = ""
+        #expect(model.days.map(\.items.count) == [1])
     }
 
-    @Test func groupsByRecencyTheWayNotesDoes() throws {
+    @Test func todayLeadsEvenWithNothingOnItsTape() {
+        let history = TranscriptionHistory(storageDir: nil)
+        history.entries = [TranscriptionEntry(text: "Book the dentist", timestamp: now.addingTimeInterval(-90_000))]
+        let model = LibraryViewModel(selection: SidebarSelection(arguments: []), history: history,
+                                     store: NoteStore(storageDir: nil), prepareMeeting: { nil })
+        #expect(model.days.map(\.items.count) == [0, 1])
+        #expect(model.days.first?.id == Calendar.current.startOfDay(for: .now))
+    }
+
+    @Test func groupsByCalendarDayNewestDayFirst() throws {
         let calendar = Calendar.current
-        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 12)))
-        let ago = { (days: Int) in LibraryItem(TranscriptionEntry(text: "said", timestamp: calendar.date(byAdding: .day, value: -days, to: now)!)) }
-        let days = LibraryViewModel.days([ago(0), ago(1), ago(5), ago(30), ago(40), ago(400)], now: now, calendar: calendar)
-        let september = calendar.date(byAdding: .day, value: -40, to: now)!.formatted(.dateTime.month(.wide))
-        #expect(days.map(\.title) == ["Today", "Yesterday", "Previous 30 Days", september, "2025"])
-        #expect(days.map(\.items.count) == [1, 1, 2, 1, 1])
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 13, hour: 12)))
+        let at = { (days: Int, hour: Int) in
+            LibraryItem(TranscriptionEntry(text: "said \(days) \(hour)",
+                                           timestamp: calendar.date(byAdding: .day, value: -days, to: now)!.addingTimeInterval(Double(hour) * 3_600)))
+        }
+        let days = LibraryViewModel.days([at(0, 2), at(0, -3), at(1, 0), at(5, 0), at(5, 4)], calendar: calendar)
+        #expect(days.map(\.items.count) == [2, 1, 2])
+        #expect(days[0].items.map(\.title) == ["said 0 -3", "said 0 2"])
+        #expect(days[0].items.map(\.isMorning) == [true, false])
+
+        #expect(LibraryViewModel.dayTitle(calendar.date(byAdding: .day, value: -1, to: now)!, now: now, calendar: calendar) == "Yesterday")
+        let lastYear = calendar.date(byAdding: .year, value: -1, to: now)!
+        #expect(LibraryViewModel.dayTitle(lastYear, now: now, calendar: calendar).contains("2025"))
+        #expect(!LibraryViewModel.dayTitle(now, now: now, calendar: calendar).contains("2026"))
     }
 
-    @Test func meetingRowsPreviewEachSide() {
-        let note = Note(title: "Sync", body: "**You:** one\n\n**You:** two\n\n**Sam:** three", source: .meeting, titleIsCustom: true)
-        #expect(LibraryItem(note).previewTurns.map(\.text) == ["one", "three"])
-        #expect(LibraryViewModel.arrival(from: 3, to: 4) != nil)
-        #expect(LibraryViewModel.arrival(from: 0, to: 12) == nil, "a load or a filter swap never animates")
+    @Test func tracksCarryTheirAppAndTalkTime() {
+        let said = "Dear Ms Okafor, thank you for the quick reply. Tuesday works well for us, and I'll bring the revised plan."
+        let estimated = LibraryItem(TranscriptionEntry(text: said, app: "Mail"))
+        #expect(estimated.words == 20)
+        #expect(estimated.talkTime == 8, "20 words at about 2.4 a second")
+        #expect(estimated.destination == "Into Mail")
+        #expect(estimated.heading == "Dear Ms Okafor")
+        let recorded = LibraryItem(TranscriptionEntry(text: "Hi", duration: 3.25))
+        #expect(recorded.talkTime == 3.25)
+        #expect(recorded.destination == "Dictation")
+        #expect(LibraryItem(TranscriptionEntry(text: "On my way")).talkTime == 3, "never shorter than three seconds")
+
+        let meeting = LibraryItem(Note(title: "Sync", body: "**You:** hi", created: now, modified: now.addingTimeInterval(1_920),
+                                       source: .meeting, titleIsCustom: true))
+        #expect(LibraryViewModel.clock(meeting.talkTime) == "32:00")
+        #expect(LibraryViewModel.clock(3_723) == "1:02:03")
+        #expect(LibraryViewModel.clock(8) == "0:08")
+        #expect(LibraryViewModel.talk(40) == "40 s")
+        #expect(LibraryViewModel.talk(1_974) == "32 min 54 s")
+        #expect(LibraryViewModel.talk(3_720) == "1 h 2 min")
+        #expect(LibraryViewModel.summary([estimated, recorded]) == "2 tracks · 11 s of talk")
+        #expect(LibraryViewModel.summary([meeting]) == "1 track · 32 min 0 s of talk")
+    }
+
+    @Test func trackNumbersCountEveryKindOldestFirst() throws {
+        let (model, _, _) = make()
+        let tapes = model.tapes
+        let today = try #require(tapes[Calendar.current.startOfDay(for: .now)])
+        #expect(today.map(\.title) == ["Groceries", "Running five minutes late", "Design sync"])
+        let meeting = try #require(today.last)
+        #expect(LibraryViewModel.trackNumber(meeting, in: tapes) == 3)
+        model.filter = .meetings
+        #expect(LibraryViewModel.trackNumber(meeting, in: model.tapes) == 3, "a filter doesn't renumber the tape")
+    }
+
+    @Test func aNewDictationWritesItselfInButTheFirstLoadDoesNot() {
+        let (model, _, history) = make()
+        #expect(model.freshID == nil)
+        let fresh = TranscriptionEntry(text: "Just said this", timestamp: now.addingTimeInterval(30))
+        history.entries.insert(fresh, at: 0)
+        #expect(model.freshID == LibraryItem.dictationID(fresh.id))
+    }
+
+    @Test func pasteAgainTypesTheTextAndTicksTheTrack() throws {
+        var pasted: [String] = []
+        let (model, _, _) = make(paste: { pasted.append($0) })
+        let item = try #require(model.visibleItems.first { $0.kind == .dictation })
+        model.pasteAgain(item)
+        #expect(pasted == ["Running five minutes late"])
+        #expect(model.pastedIDs == [item.id])
     }
 
     @Test func deleteHidesAtOnceAndUndoBringsItBack() throws {
@@ -232,13 +312,6 @@ struct LibraryModelTests {
         #expect(turns.map(\.speaker) == ["You", "Sam"])
         #expect(turns.map(\.text) == ["Let's start.\nWith the pill.", "Agreed."])
         #expect(LibraryItem.turns(in: "No headings here").first?.speaker == nil)
-    }
-
-    @Test func homeSummaryCountsTodaysWords() throws {
-        let (model, _, _) = make()
-        let today = model.allItems.filter { Calendar.current.isDateInToday($0.date) }
-        #expect(HomeViewModel.summary(today, on: now).hasSuffix(" · 3 dictations and notes, 12 words"))
-        #expect(HomeViewModel.summary([], on: now) == now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
     }
 
     @Test func csvExportQuotesEveryTextCell() {

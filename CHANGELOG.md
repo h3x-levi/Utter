@@ -19,254 +19,6 @@ uses semantic-ish versioning (the build script auto-bumps the patch).
 - **Simple Apple-Designed SF Symbols**: Cleaned up sidebar navigation, settings options, and stat cards with native, unboxed vector SF Symbols (`mic`, `character.book.closed`, `text.quote`, `sparkles`, `note.text`, `pawprint`).
 - **Synchronized Assets & Website**: Refreshed AppKit window captures across documentation and website showcase.
 
-## [1.1.56] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.55] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.54] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.52] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.51] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.50] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.49] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.48] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.47] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.46] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.45] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.44] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.43] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.42] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.41] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.40] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.39] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.38] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.37] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.36] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.35] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.34] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.33] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.32] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.31] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.30] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.29] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.28] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.27] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.26] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.25] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.24] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.23] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.22] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.21] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.20] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.19] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.18] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.17] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.16] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.15] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.14] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.13] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.12] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.11] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.10] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.9] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.8] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.7] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.6] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.5] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [1.1.4] — September 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.50] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.49] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.48] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.47] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.46] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.45] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.44] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.43] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.42] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.41] — August 2026
-
-- Internal build — packaging and tooling updates
-
 ## [3.0.40] — August 2026
 
 - Organized Companion into native Today, Remember, Rewards, and Customize tabs.
@@ -306,84 +58,12 @@ uses semantic-ish versioning (the build script auto-bumps the patch).
 - Automatic offers now require active microphone and speaker use from Zoom, Microsoft Teams,
   FaceTime, Slack, or Discord. Browser meetings remain available through “Record a meeting” in Notes.
 
-## [3.0.34] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.33] — August 2026
-
-- Internal build — packaging and tooling updates
-
 ## [3.0.32] — August 2026
 
 - The companion is now a pixel cat. The two Mochi packs and the two code-drawn Persian cats were removed; the bundled characters are Golden Dog, Panda, Pixel Cat (Ginger) and Pixel Cat (Gray).
 - No character is drawn in code any more — a sprite pack is the only way one can exist, which is ~3,100 fewer lines to maintain.
 - An existing selection naming a removed character is migrated to the default pack on first launch and the correction saved, so nobody lands on an empty companion window.
 - Fixed: a pixel-art pack whose canvas is larger than the chosen character size was drawn at full canvas size, overflowing the panel that clips it, so the cat was sliced at the window edge while roaming. Only reproduced on a non-Retina display.
-
-## [3.0.31] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.30] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.29] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.28] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.27] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.26] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.25] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.24] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.23] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.22] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.21] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.20] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.19] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.18] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.17] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [3.0.16] — August 2026
-
-- Internal build — packaging and tooling updates
 
 ## [3.0.15] — August 2026
 
@@ -771,9 +451,6 @@ say.
   glass, so a band behind them would be glass on glass; What's New is content top to bottom with no
   controls; and what floats about a sheet is its window, which has no glass API to give it
 
-
-- Internal build — packaging and tooling updates
-
 ## [2.0.102] — August 2026
 
 **Liquid Glass, across the whole app rather than just the pill**
@@ -825,8 +502,8 @@ say.
   200pt panel collapse and every list insert that slid rather than faded
 - 22 system separators replaced with the warm hairline the design system exists to provide. One
   stays: inside a context menu it is the API for a native separator
-- What's New rendered 77 entries, 55 of them internal-build filler. Filtered by matching the filler
-  text, so future internal builds filter themselves, and the version chip now marks the version
+- What's New rendered 77 entries, 55 of them placeholder filler. Filtered by matching the filler
+  text, so future placeholder entries filter themselves, and the version chip now marks the version
   actually running rather than assuming the newest entry is it
 
 **Records that lied**
@@ -837,9 +514,6 @@ say.
 - Deleted dead code that misdescribed the system: an unused tab component whose doc claimed the app
   used it everywhere, two colour tables the pill no longer painted with, two orphaned layout
   constants, and the generic tint helpers whose last callers were those tables
-
-
-- Internal build — packaging and tooling updates
 
 ## [2.0.100] — August 2026
 
@@ -923,14 +597,6 @@ at all.**
   because the timing ran on the wall clock and inherited an interval that had accrued while the
   machine was asleep. It runs on a clock that does not advance during sleep and cannot go backwards
 
-## [2.0.99] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.98] — August 2026
-
-- Internal build — packaging and tooling updates
-
 ## [2.0.97] — August 2026
 
 - Onboarding's "Open System Settings" no longer puts a second dialog in your way. It was doing two
@@ -946,7 +612,8 @@ at all.**
 
 ## [2.0.96] — August 2026
 
-**Your data now lives in `Application Support/Utter`.** (Migrated from earlier folder names.)
+**Your data folder was renamed.** (The app was renamed to Utter later; `AppDirectory` migrates
+the old `Lumen` folder.)
 
 - Renamed, and migrated rather than orphaned: on first launch the old folder is moved to the new
   name. A rename on the same volume is what `FileManager.moveItem` performs, so it is atomic —
@@ -1124,7 +791,7 @@ confirmed against the code before being fixed.
 - The character stood 48pt above the pill it is meant to sit beside, because it read the capsule's position off the middle of the pill's window
 - Dragging the companion to a second display no longer sends it back to the primary one on relaunch, or whenever a display changes
 
-**Internal**
+**Under the hood**
 
 - Note captures are no longer reformatted for whichever app happens to be frontmost — that formatting belongs to text being typed into that app, not to a note
 - The companion's random behaviour is now seedable, so its tests are reproducible instead of failing about one run in a hundred
@@ -1170,14 +837,6 @@ confirmed against the code before being fixed.
 - Removing a downloaded speech model no longer edits the app itself, which could quietly reset your permissions
 - Utter now declares its minimum macOS version, so an unsupported system gets a clear message instead of failing silently
 
-## [2.0.82] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.81] — August 2026
-
-- Internal build — packaging and tooling updates
-
 ## [2.0.80] — August 2026
 
 - The companion is larger and easier to read — 52pt instead of 28, so its face and mood register at a glance
@@ -1208,31 +867,11 @@ confirmed against the code before being fixed.
 - No Dock icon flashes at launch any more
 - The countdown line along the foot of the pill is gone; hands-free still stops on its own when you stop talking
 
-## [2.0.74] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.73] — August 2026
-
-- Internal build — packaging and tooling updates
-
 ## [2.0.72] — August 2026
 
 - Panda and Dog companions now ship with the app — no setup, available on a fresh install
 - Companion art is no longer cropped: full body, including hair, tails and legs
 - Your own character packs still work, and override a shipped one of the same name
-
-## [2.0.71] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.70] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.69] — August 2026
-
-- Internal build — packaging and tooling updates
 
 ## [2.0.68] — August 2026
 
@@ -1242,10 +881,6 @@ confirmed against the code before being fixed.
 - Quitting during transcription no longer hangs
 - A meeting that produced no audio from others now says why instead of failing silently
 - The companion is fully released when switched off
-
-## [2.0.67] — August 2026
-
-- Internal build — packaging and tooling updates
 
 ## [2.0.66] — August 2026
 
@@ -1274,34 +909,6 @@ confirmed against the code before being fixed.
 ## [2.0.59–2.0.64] — August 2026
 
 - Development builds during the work released in 2.0.65
-
-## [2.0.58] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.57] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.56] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.55] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.54] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.53] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.52] — August 2026
-
-- Internal build — packaging and tooling updates
 
 ## [2.0.51] — August 2026
 
@@ -1334,114 +941,6 @@ confirmed against the code before being fixed.
   clean machine and the build silently shipped stale audio. It now uses only the
   standard library, and the build regenerates sounds when the script changes.
 
-## [2.0.43] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.42] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.41] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.40] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.39] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.38] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.37] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.36] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.35] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.34] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.33] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.32] — August 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.31] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.30] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.29] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.28] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.27] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.26] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.25] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.24] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.23] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.22] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.21] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.20] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.19] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.18] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.17] — July 2026
-
-- Internal build — packaging and tooling updates
-
 ## [2.0.16] — July 2026
 
 ### Changed
@@ -1458,28 +957,17 @@ confirmed against the code before being fixed.
   the hands-free silence countdown.
 
 ### Removed
-- All cloud services: cloud models, external API clients, and the signing layer.
-  Credentials are no longer stored, bundled, or required — and any credential
-  file left by an earlier version is deleted on first launch.
+- Every cloud service. Nothing is stored, bundled, or required to sign in.
 
 ### Fixed
 - Scratchpad notes were silently discarded when switching tabs.
-- "Clear All Data" left preferences, the streak, and custom commands behind
-  while deleting credentials without saying so.
+- "Clear All Data" left preferences, the streak, and custom commands behind.
 - History exports were coerced to `.txt` regardless of chosen format, and a
   failed write was silent.
 - Permission indicators in Settings never refreshed after access was granted.
 - A fresh install ignored the macOS appearance setting.
 - Fixed a data race reading voice-activity state across threads, and a dangling
   buffer pointer in silence trimming.
-
-## [2.0.15] — July 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.14] — July 2026
-
-- Internal build — packaging and tooling updates
 
 ## [2.0.13] — July 2026
 
@@ -1489,8 +977,8 @@ confirmed against the code before being fixed.
 ## [2.0.12] — July 2026
 
 ### Added
-- **Custom Dictionary now improves transcriptions.** Dictionary words are applied as a
-  post-transcription correction pass: exact terms get their canonical spelling
+- **Custom Dictionary now improves transcriptions.** Dictionary words are
+  applied as a post-transcription correction pass: exact terms get their canonical spelling
   and capitalization enforced (e.g. `kubernetes` → `Kubernetes`, `macos` →
   `macOS`), and close misspellings of long, distinctive words are fixed
   (`terrafrom` → `Terraform`). Short words are corrected for casing only, so
@@ -1498,7 +986,7 @@ confirmed against the code before being fixed.
 - **On-device language detection.** Each transcription's language is detected
   locally (Apple NaturalLanguage) and shown as a tag on the history entry.
 - **First-run onboarding.** A guided flow walks new users through Microphone
-  and Accessibility permissions with live status that updates as access is granted.
+  and Accessibility permissions, with live status that updates as access is granted.
 - **Re-inject from history.** Paste any past transcription into the app you were
   last using, straight from the Home history list.
 
@@ -1513,18 +1001,10 @@ confirmed against the code before being fixed.
 
 ### Changed
 - Removed a 100 ms main-thread stall in the AI-command paste path.
-- Corrected misleading "auto = English" language messaging: the endpoint
+- Corrected misleading "auto = English" language messaging: Utter
   auto-detects the spoken language; a forced language is sent as a strong hint.
 
-_(Consolidates internal builds 2.0.9–2.0.12.)_
-
-## [2.0.8] — May 2026
-
-- Internal build — packaging and tooling updates
-
-## [2.0.7] — May 2026
-
-- Internal build — packaging and tooling updates
+_(Consolidates builds 2.0.9–2.0.12.)_
 
 ## [2.0.4] — May 2026
 
@@ -1537,7 +1017,8 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 - **Hands-free pill state**: orange tint plus a lock icon make it obvious when
   the recorder is locked on.
 - **Custom AI commands**: users can now define their own voice triggers in the
-  AI Commands view. Each command pairs a trigger phrase with an AI prompt template,
+  AI Commands view. Each command pairs a trigger phrase with a
+  system prompt, an optional user-prompt template (`{{text}}` placeholder),
   and a replace-vs-append toggle.
 - **Custom commands override built-ins**: matching runs against user-defined
   commands first, so existing phrases can be customized without code changes.
@@ -1564,13 +1045,10 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 
 ---
 
-## [2.0.2] — April 2026
-- Internal release.
-
 ## [2.0.1] — April 2026
 - Major UI overhaul — two-column Home with feature cards and history.
 - 5 themes — Default, Midnight, Frost, Ocean, Ember.
-- AI Assistant — translate, fix grammar, reply, summarize via local AI.
+- AI Assistant — translate, fix grammar, reply, summarize.
 - Style commands — make it professional/concise/casual/formal on any text.
 - Works on selected text in any app, not just dictation.
 - What's New page with full version history.
@@ -1585,7 +1063,6 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 ## [1.1.2] — April 2026
 - AI Commands page replacing Style — full guide for voice commands.
 - Clear All Data confirmation dialog.
-- AI Assistant integration — translate, fix grammar, reply, summarize.
 
 ## [1.1.1] — March 2026
 - Context-aware formatting (code, chat, email, document detection).
@@ -1609,7 +1086,7 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 
 ## [1.0.0] — March 2026
 - Initial release.
-- Voice to text using Whisper speech models.
+- Voice to text with Whisper.
 - Floating pill UI with recording states.
 - Menu bar integration.
 - Transcription history with word count and streak.

@@ -15,22 +15,30 @@ struct WhatsNewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                (Text("You\u{2019}re running Utter ") + Text(verbatim: appVersion).font(.callout.monospaced()))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                LazyVStack(alignment: .leading, spacing: 32) {
+            VStack(alignment: .leading, spacing: 30) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("What\u{2019}s new")
+                        .mixtapeCaps(30, tracking: 0.02)
+                        .accessibilityAddTraits(.isHeader)
+                    (Text("You\u{2019}re running Utter ") + Text(verbatim: appVersion).font(Mixtape.mono(12.5, .semibold)))
+                        .font(Mixtape.body(13))
+                        .foregroundStyle(Mixtape.ink3)
+                }
+                LazyVStack(alignment: .leading, spacing: 30) {
                     ForEach(Self.releases) { release in
                         ReleaseNotes(release: release)
                     }
                 }
             }
             .frame(maxWidth: 640, alignment: .leading)
-            .padding(24)
+            .padding(.horizontal, 34)
+            .padding(.top, 26)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity)
         }
-        .background(.background)
-        .tint(Look.Color.tint)
+        .background(Mixtape.paper)
+        .foregroundStyle(Mixtape.ink)
+        .tint(Mixtape.ink)
     }
 
     static let releases: [Release] = [
@@ -246,7 +254,7 @@ struct WhatsNewView: View {
             "Hands-free auto-stops after 3 seconds of silence, or press ⌃⌥Space again to finalize manually",
             "New 'hands-free' pill state with orange tint and lock icon while locked on",
             "User-defined commands override built-ins so you can customize behavior",
-            "Optional {{text}} template placeholder for shaping the user prompt sent to Claude",
+            "Optional {{text}} template placeholder for shaping the prompt an AI command uses",
             "Replace-vs-append toggle controls whether AI output overwrites your selection or appends after the cursor",
             "Dynamic snippet placeholders - [date], [time], [datetime], [day], [clipboard]",
             "Click-to-insert chips in the Snippets editor for placeholder discovery",
@@ -290,7 +298,7 @@ struct WhatsNewView: View {
         ]),
         Release(version: "1.0.0", date: "March 2026", highlights: [
             "Initial release",
-            "Voice to text using Whisper speech models",
+            "Voice to text with Whisper",
             "Floating pill UI with recording states",
             "Menu bar integration",
             "Transcription history with word count and streak",
@@ -304,21 +312,16 @@ private struct ReleaseNotes: View {
     let release: WhatsNewView.Release
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(verbatim: release.version)
-                    .font(.headline.monospaced())
-                Text(release.date)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 0) {
+            SideHeader(release.version, detail: release.date)
             ForEach(release.highlights, id: \.self) { line in
                 Text(line)
-                    .font(.body)
+                    .font(Mixtape.body(13.5))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: Mixtape.ruleSpacing, alignment: .leading)
+                    .overlay(alignment: .bottom) { Rectangle().fill(Mixtape.rule).frame(height: 1) }
             }
         }
     }

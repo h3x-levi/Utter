@@ -21,7 +21,7 @@ BASE_SIZE = 18
 SUPERSAMPLE = 4
 
 def render_menubar_template(target_size):
-    """Render a dedicated, high-contrast Waveform-U template image for the menu bar."""
+    """Render the app icon's bars as a template image for the menu bar."""
     W = target_size * SUPERSAMPLE
     img = Image.new("RGBA", (W, W), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -32,13 +32,12 @@ def render_menubar_template(target_size):
     # Scale geometry based on target size
     scale = target_size / BASE_SIZE
     
-    # Waveform U bars: 5 bars forming the U
-    # Heights at 18pt: [13.5pt, 8.5pt, 4.5pt, 8.5pt, 13.5pt]
+    # The app icon's five small-size bars
     bar_w = int(2.0 * scale * SUPERSAMPLE)
     bar_gap = int(1.4 * scale * SUPERSAMPLE)
     num_bars = 5
     
-    raw_heights = [13.5, 8.5, 4.5, 8.5, 13.5]
+    raw_heights = [11, 14, 9, 14, 11]
     bar_heights = [int(h * scale * SUPERSAMPLE) for h in raw_heights]
     
     total_w = num_bars * bar_w + (num_bars - 1) * bar_gap
@@ -56,17 +55,6 @@ def render_menubar_template(target_size):
         draw.line([(bx, by_top + r_b), (bx, by_bot - r_b)], fill=INK, width=bar_w)
         draw.ellipse([bx - r_b, by_top, bx + r_b, by_top + bar_w], fill=INK)
         draw.ellipse([bx - r_b, by_bot - bar_w, bx + r_b, by_bot], fill=INK)
-
-    # Connecting bottom harmonic U-basin
-    basin_w = int(total_w - bar_w)
-    basin_h = int(6.0 * scale * SUPERSAMPLE)
-    basin_y = cy + int(4.2 * scale * SUPERSAMPLE)
-    basin_stroke = int(1.8 * scale * SUPERSAMPLE)
-    
-    draw.arc(
-        [cx - basin_w // 2, basin_y - basin_h, cx + basin_w // 2, basin_y + basin_h],
-        start=15, end=165, fill=INK, width=basin_stroke
-    )
 
     # Downsample with Lanczos for subpixel antialiasing
     final_img = img.resize((target_size, target_size), Image.Resampling.LANCZOS)

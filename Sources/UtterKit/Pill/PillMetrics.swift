@@ -48,11 +48,10 @@ enum PillLook: Equatable {
 
     var bars: PillBarMode {
         switch self {
-        case .rest, .dot, .island: return .hidden
+        case .rest, .dot, .island, .done, .message(_, .error): return .hidden
         case .hover: return .rest
         case .listening: return .voice
         case .thinking: return .thinking
-        case .done: return .dip
         case .message: return .flat
         }
     }
@@ -123,13 +122,16 @@ enum PillMetrics {
     static let islandLines = 6
     /// The island's words wait for the shape to lead, then cross-fade in.
     static let islandTextDelay: TimeInterval = 0.18
-    /// How long "Copied" shows before the island puts itself away.
+    /// How long "Copied" or "Saved" shows before the island puts itself away.
     static let copiedHold: TimeInterval = 0.7
     /// A pointer passing over the pill does not open it.
     static let hoverIntent: TimeInterval = 0.1
-    /// The done dip holds this long before the pill springs home.
+    /// The done tick holds this long before the pill springs home.
     static let doneHold: TimeInterval = 0.45
-    /// Room for the glass shadow and a spring's overshoot.
+    /// The tick starts drawing as the bars finish fading, and is whole well inside `doneHold`.
+    static let tickDelay: TimeInterval = 0.08
+    static let tickDraw: TimeInterval = 0.3
+    /// Room for the shadow and a spring's overshoot.
     static let margin: CGFloat = 14
     static let captionGap: CGFloat = 6
     static let captionMaxWidth: CGFloat = 300

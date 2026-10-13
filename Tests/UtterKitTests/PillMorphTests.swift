@@ -182,8 +182,9 @@ struct PillLookTests {
         #expect(PillLook.hover(handsFree: true).bars == .rest)
         #expect(PillLook.listening(nil).bars == .voice)
         #expect(PillLook.thinking.bars == .thinking)
-        #expect(PillLook.done.bars == .dip)
-        #expect(PillLook.message("x", .error).bars == .flat)
+        #expect(PillLook.done.bars == .hidden, "the tick takes their place")
+        #expect(PillLook.message("x", .error).bars == .hidden, "the exclamation takes their place")
+        #expect(PillLook.message("x", .notice).bars == .flat)
     }
 
     @Test("VoiceOver hears the message on the dot, not only the word error")
@@ -316,11 +317,10 @@ struct PillMotionTests {
         #expect(PillMetrics.islandTextDelay >= 0.12 && PillMetrics.islandTextDelay <= 0.18)
     }
 
-    @Test("Hover waits for intent, the done dip settles inside its hold, and Copied is readable")
+    @Test("Hover waits for intent, the done tick is whole inside its hold, and Copied is readable")
     func shortTimings() {
         #expect(PillMetrics.hoverIntent >= 0.08 && PillMetrics.hoverIntent <= 0.12)
-        let dip = CASpringAnimation(perceptualDuration: PillBarGeometry.dipResponse, bounce: PillBarGeometry.dipBounce)
-        #expect(dip.settlingDuration <= PillMetrics.doneHold)
+        #expect(PillMetrics.tickDelay + PillMetrics.tickDraw <= PillMetrics.doneHold)
         #expect(PillMetrics.copiedHold >= 0.5 && PillMetrics.copiedHold <= 1)
     }
 
@@ -509,7 +509,7 @@ struct PillBarTests {
         func springs(_ bar: CALayer) -> [CASpringAnimation] {
             (bar.animationKeys() ?? []).filter { $0.hasPrefix("h") }.compactMap { bar.animation(forKey: $0) as? CASpringAnimation }
         }
-        view.update(.voice, height: 20, color: .white, reduceMotion: false)
+        view.update(.voice, height: 20, reduceMotion: false)
         levels.value = 0.8
         levels.value = 0.2
         #expect(bars.allSatisfy { springs($0).count >= 2 }, "a new level adds to the spring in flight rather than replacing it")
@@ -520,13 +520,13 @@ struct PillBarTests {
         let still = PillBarGeometry.voice(level: 0.8, time: 0, height: 20, reduceMotion: true)
         #expect(still[0] > still[3], "outer bars reach highest")
 
-        view.update(.thinking, height: 20, color: .white, reduceMotion: false)
+        view.update(.thinking, height: 20, reduceMotion: false)
         let waves = bars.compactMap { $0.animation(forKey: "wave") as? CAKeyframeAnimation }
         #expect(waves.count == 7)
         #expect(Set(waves.map(\.beginTime)).count == 7)
         #expect(bars.allSatisfy { springs($0).count <= 1 }, "the voice springs are folded in before the wave starts")
 
-        view.update(.hidden, height: 6, color: .white, reduceMotion: false)
+        view.update(.hidden, height: 6, reduceMotion: false)
         let left = bars.flatMap { bar in (bar.animationKeys() ?? []).compactMap { bar.animation(forKey: $0) } }
         #expect(left.allSatisfy { $0.repeatCount == 0 && $0.duration <= 0.12 }, "only the fade-out, nothing that loops")
         #expect(bars.allSatisfy { $0.opacity == 0 && $0.animation(forKey: "wave") == nil })
@@ -587,6 +587,21 @@ struct PillNoteDestinationTests {
     }
 }
 
+@Suite("Pill island")
+@MainActor
+struct PillIslandTests {
+    @Test("Save as note files a new dictated note and leaves the open note, where note capture adds, alone")
+    func saveAsNote() {
+        let open = Note(id: UUID(), body: "Standup notes", source: .typed)
+        let store = NoteStore(storageDir: nil, seed: [open], selectedID: open.id)
+        PillIsland.saveAsNote("Thanks Priya, Thursday works.", in: store)
+        #expect(store.notes.count == 2)
+        #expect(store.notes.first?.body == "Thanks Priya, Thursday works.")
+        #expect(store.notes.first?.source == .dictated)
+        #expect(store.selectedNoteID == open.id)
+    }
+}
+
 @Suite("Pill live transcript")
 struct PillLiveTranscriptTests {
     @Test("Elapsed seconds read as m:ss")
@@ -636,7 +651,7 @@ struct PillLiveTranscriptTests {
 }
 
 /// Every look in light and dark, over a busy and a plain backdrop, captured by the window server so
-/// the real glass is in the picture.
+/// the shadow is in the picture.
 @Suite("Pill snapshots", .serialized, .enabled(if: ProcessInfo.processInfo.environment["UTTER_SCREEN_SNAPSHOTS"] == "1"))
 @MainActor
 struct ZZPillSnapshots {
@@ -674,20 +689,6 @@ struct ZZPillSnapshots {
         }
     }
 
-    /// Reduce Transparency swaps the glass for a solid fill; the shell must read the same.
-    @Test func solidPanels() throws {
-        let saved = MotionPreference.shared.reduceTransparency
-        MotionPreference.shared.reduceTransparency = true
-        defer { MotionPreference.shared.reduceTransparency = saved }
-        for (name, drive) in Self.scenarios where ["listening", "error", "island"].contains(name) {
-            let model = PillStateModel()
-            model.schedule = { _, _ in }
-            model.previewEnabled = { false }
-            drive(model)
-            try render(model, "pill-solid-\(name)", dark: false, busy: true)
-        }
-    }
-
     /// The island rising out of the listening capsule, a few frames in. Capture latency makes the
     /// times approximate; the strip shows one shape growing, not two crossing.
     @Test func islandRise() throws {
@@ -703,6 +704,20 @@ struct ZZPillSnapshots {
         for frame in 0..<5 {
             RunLoop.current.run(until: Date().addingTimeInterval(0.04))
             try SnapshotCanvas.capture(window, view: host, "pill-island-rise-\(frame)", dark: false)
+        }
+    }
+
+    /// The meeting offer card at the size its window is created with, plain and carrying a failure.
+    @Test func meetingOffer() throws {
+        for failure in [nil, SystemAudioCapture.PermissionState.denied.message] {
+            for dark in [false, true] {
+                let model = MeetingOfferModel()
+                model.contentVisible = true
+                model.failure = failure
+                try SnapshotCanvas.write(MeetingOfferView(title: MeetingOfferMetrics.defaultTitle, model: model, onAccept: {}, onDecline: {}),
+                                         failure == nil ? "meeting-offer" : "meeting-offer-failed",
+                                         size: MeetingOfferMetrics.size(message: failure), dark: dark)
+            }
         }
     }
 
@@ -740,7 +755,7 @@ struct ZZPillSnapshots {
         try SnapshotCanvas.capture(window, view: host, name, dark: dark)
     }
 
-    /// The pill in its own dark view over the backdrop, in one on-screen window so its glass samples it.
+    /// The pill in its own dark view over the backdrop, in one on-screen window, as the panel draws it.
     private func stage(_ model: PillStateModel, panel: CGSize, dark: Bool, busy: Bool) throws -> (NSWindow, NSView) {
         let canvas = CGRect(origin: .zero, size: Self.canvas)
         let host = NSView(frame: canvas)
@@ -755,7 +770,7 @@ struct ZZPillSnapshots {
         let window = NSWindow(contentRect: canvas, styleMask: [.borderless], backing: .buffered, defer: false)
         window.appearance = host.appearance
         window.contentView = host
-        window.center()
+        SnapshotCanvas.center(window)
         window.orderFrontRegardless()
         return (window, host)
     }

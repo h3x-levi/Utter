@@ -8,13 +8,20 @@ package struct TranscriptionEntry: Identifiable, Sendable {
     package let wordCount: Int
     /// Detected display language (e.g. "English", "日本語"). Empty when unknown.
     package let language: String
+    /// Display name of the app the text was delivered to. Empty when unknown.
+    package let app: String
+    /// Seconds of recorded speech. 0 when unknown.
+    package let duration: TimeInterval
 
-    init(text: String, timestamp: Date = Date(), id: UUID = UUID(), language: String = "") {
+    init(text: String, timestamp: Date = Date(), id: UUID = UUID(), language: String = "",
+         app: String = "", duration: TimeInterval = 0) {
         self.id = id
         self.text = text
         self.timestamp = timestamp
         self.wordCount = text.split(separator: " ").count
         self.language = language
+        self.app = app
+        self.duration = duration
     }
 }
 
@@ -48,8 +55,8 @@ package class TranscriptionHistory: ObservableObject {
     @Published package var totalWords: Int = 0
     @Published var streakDays: Int = 0
 
-    /// Average words per saved dictation. Audio duration is not persisted, so
-    /// reporting words per minute here would be fabricated precision.
+    /// Average words per saved dictation. Entries saved before durations were
+    /// recorded have none, so words per minute here would be fabricated precision.
     var averageWordsPerDictation: String {
         guard !entries.isEmpty else { return "\u{2014}" }
         let mean = Double(totalWords) / Double(entries.count)
@@ -70,9 +77,9 @@ package class TranscriptionHistory: ObservableObject {
 
     // MARK: - Public API
 
-    package func add(text: String, language: String = "") {
+    package func add(text: String, language: String = "", app: String = "", duration: TimeInterval = 0) {
         guard TranscriptText.isUsable(text) else { return }
-        let entry = TranscriptionEntry(text: text, language: language)
+        let entry = TranscriptionEntry(text: text, language: language, app: app, duration: duration)
         DispatchQueue.main.async {
             self.entries.insert(entry, at: 0)
             self.totalWords += entry.wordCount
@@ -233,8 +240,13 @@ package class TranscriptionHistory: ObservableObject {
         Self.persistenceQueue.async {
             let started = DispatchTime.now().uptimeNanoseconds
             let fmt = ISO8601DateFormatter()
-            let rows: [[String: String]] = snapshot.map {
-                ["id": $0.id.uuidString, "text": $0.text, "ts": fmt.string(from: $0.timestamp), "lang": $0.language]
+            // Strings, not numbers: older builds read rows as [String: String] and move anything else aside.
+            let rows: [[String: String]] = snapshot.map { entry in
+                var row = ["id": entry.id.uuidString, "text": entry.text,
+                           "ts": fmt.string(from: entry.timestamp), "lang": entry.language]
+                if !entry.app.isEmpty { row["app"] = entry.app }
+                if entry.duration > 0 { row["dur"] = String(entry.duration) }
+                return row
             }
             guard let json = try? JSONSerialization.data(withJSONObject: rows, options: .prettyPrinted) else {
                 print("⚠️ Could not encode transcription history")
@@ -280,7 +292,9 @@ package class TranscriptionHistory: ObservableObject {
             let ts = item["ts"].flatMap { fmt.date(from: $0) } ?? Date()
             let id = item["id"].flatMap { UUID(uuidString: $0) } ?? UUID()
             let lang = item["lang"] ?? ""
-            let entry = TranscriptionEntry(text: text, timestamp: ts, id: id, language: lang)
+            let duration = item["dur"].flatMap(Double.init) ?? 0
+            let entry = TranscriptionEntry(text: text, timestamp: ts, id: id, language: lang,
+                                           app: item["app"] ?? "", duration: duration)
             entries.append(entry)
             totalWords += entry.wordCount
         }

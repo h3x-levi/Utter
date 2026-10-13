@@ -10,13 +10,12 @@ package final class ConfigManager {
     package static let shared = ConfigManager()
 
     /// Marketing version, read from the bundle at launch.
-    package private(set) var appVersion: String = "1.0.0"
+    package private(set) var appVersion: String = "1.2.0"
 
     private init() {}
 
     package func load() {
         loadVersion()
-        purgeLegacyCredentialStore()
         print("📋 Utter \(appVersion) - fully on-device, no network services configured")
     }
 
@@ -43,32 +42,6 @@ package final class ConfigManager {
                 appVersion = version
                 return
             }
-        }
-    }
-
-    /// Remove the credential store written by earlier versions of Utter, which
-    /// kept cloud keys in plaintext. Runs once at launch so users upgrading from
-    /// older versions stop carrying a secret the app no longer has any use for.
-    ///
-    /// Only the user-writable Application Support copy is deleted. Builds up to
-    /// 2.0.14 also shipped a `.env` *inside the app bundle*, but the app must never
-    /// write to (or delete from) its own bundle: any change to `Contents/` breaks
-    /// the code signature and can silently revoke the app's TCC grants. That stale
-    /// in-bundle `.env` is harmless - it holds nothing the current app reads - and
-    /// it disappears on its own when the user replaces the old app with this one.
-    private func purgeLegacyCredentialStore() {
-        let fm = FileManager.default
-        // Looked for under the *current* name, because `AppDirectory` renames the whole folder on
-        // first launch - so a credential file that was in legacy folders has already moved into
-        // `Utter/` by the time this runs.
-        let legacy = AppDirectory.file("config.json")
-        guard fm.fileExists(atPath: legacy.path) else { return }
-        do {
-            try fm.removeItem(at: legacy)
-            print("🧹 Removed legacy credential file: \(legacy.lastPathComponent)")
-        } catch {
-            // Non-fatal: report rather than failing launch.
-            print("⚠️ Could not remove \(legacy.lastPathComponent): \(error.localizedDescription)")
         }
     }
 }

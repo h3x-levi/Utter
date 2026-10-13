@@ -121,6 +121,7 @@ final class WordsViewModel {
 
     private(set) var words: [String] = []
     private(set) var suggestions: [String] = []
+    private(set) var declinedNames: Set<String> = []
     var newWord = ""
     var wordQuery = ""
 
@@ -211,6 +212,14 @@ final class WordsViewModel {
         let texts = history.entries.prefix(100).map(\.text)
         suggestions = Self.suggestions(from: texts, excluding: words)
     }
+
+    /// The first suggestion this text says, for Library's "Utter heard a new name" note.
+    func heardName(in text: String) -> String? {
+        let said = Set(text.split { !$0.isLetter && !$0.isNumber }.map(String.init))
+        return suggestions.first { said.contains($0) && !declinedNames.contains($0) }
+    }
+
+    func decline(_ name: String) { declinedNames.insert(name) }
 
     private func commitWords() {
         userData.dictionaryWords = words

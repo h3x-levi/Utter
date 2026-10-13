@@ -5,8 +5,8 @@ import FoundationModels
 #endif
 
 /// On-device text rewriting via Apple's system language model.
-/// Runs on-device via Apple's system language model. Nothing leaves the machine
-/// and there is no cloud account behind it, which also means the capability is
+///
+/// Nothing leaves the machine and there is no cloud account behind it, which also means the capability is
 /// not guaranteed to exist: the model requires macOS 26 with Apple Intelligence
 /// switched on. Rather than silently degrading, `availability` reports exactly
 /// why it can't run so the UI can tell the user what to do about it.

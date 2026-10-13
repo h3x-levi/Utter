@@ -27,10 +27,10 @@ package enum AppDirectory {
     /// The folder name.
     static let name = "Utter"
 
-    /// The names to migrate away from, **newest first**.
-    ///
-    /// Neither old name is branding any more: it is the on-disk name of a real folder on the Mac
-    /// of anyone who ran a build from that era, and they are the only things that find their notes.
+    /// Earlier names of the data folder, **newest first**: `resolve()` migrates the first one that
+    /// exists. Utter was called `Lumen` before, and this is the only thing that finds those users'
+    /// notes, so it must survive any future rename. Its twin is the permission-reset step of
+    /// `scripts/build-app.sh`.
     static let legacyNames = ["Lumen"]
 
     /// `~/Library/Application Support/Utter`, migrated, created, and owner-only.

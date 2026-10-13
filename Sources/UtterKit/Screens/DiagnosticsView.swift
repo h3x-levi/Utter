@@ -62,6 +62,7 @@ struct CrashLogSummary: Identifiable {
 
 // MARK: - Help
 
+/// Help, crash reports and About, at the foot of General.
 struct HelpSettingsContent: View {
     let model: SettingsModel
     @ObservedObject private var userData: UserData
@@ -75,57 +76,51 @@ struct HelpSettingsContent: View {
     }
 
     var body: some View {
-        let device = model.device
-        let speech = SpeechModel.model(for: models.active)
-        PaneGroup("This Mac") {
-            PaneRow("Processor") { value(device.chipName) }
-            PaneRow("Memory") { value("\(device.ramGB) GB") }
-            PaneRow("macOS") { value(ProcessInfo.processInfo.operatingSystemVersionString) }
-            PaneRow("Speech model") { value("\(speech.displayName)  \(speech.sizeMB) MB") }
-        }
-
-        PaneGroup("Microphone test") {
+        SettingsSection("Help", detail: "something not working?") {
+            SettingsRow("Report an issue", "Opens a short form that fills in a GitHub issue for you.") {
+                Button("Report an Issue\u{2026}") { model.reportIssue() }
+                    .buttonStyle(.pen(.outline, .small))
+            }
             MicTestRow(model: model, hotkey: userData.hotkeyName)
         }
 
-        PaneGroup("Crash reports", note: "Utter keeps its ten most recent reports.") {
+        SettingsSection("Crash reports", detail: "the ten most recent") {
             if model.lastRunCrashed {
-                PaneRow("Utter\u{2019}s last run ended in a crash", "The newest report below is from that run.") {
-                    PaneStatus(text: "Crashed", kind: .warn)
+                SettingsRow("Utter\u{2019}s last run ended in a crash", "The newest report below is from that run.") {
+                    SettingsStatus(text: "Crashed", kind: .warn)
                 }
             }
             if model.crashLogs.isEmpty {
-                PaneRow("Utter hasn\u{2019}t crashed on this Mac.", "If it ever does, the report appears here.") {
-                    PaneStatus(text: "None", kind: .ok)
+                SettingsRow("Utter hasn\u{2019}t crashed on this Mac.", "If it ever does, the report appears here.") {
+                    SettingsStatus(text: "None", kind: .ok)
                 }
             }
             ForEach(model.crashLogs) { log in
                 CrashReportRow(log: log, model: model)
             }
             if let problem = model.revealProblem {
-                PaneRow(problem)
-                    .foregroundStyle(Color.red)
+                SettingsRow(problem)
+                    .foregroundStyle(Mixtape.red)
             }
-            PaneRow("macOS crash reports", "macOS keeps a fuller report of the same crash. Attach it when you can.") {
+            SettingsRow("macOS crash reports", "macOS keeps a fuller report of the same crash. Attach it when you can.") {
                 Button("Show in Finder") { model.reveal(SettingsModel.systemReportsFolder, isDirectory: true) }
-                    .buttonStyle(.pane())
+                    .buttonStyle(.pen(.ghost, .small))
                     .accessibilityLabel("Show macOS crash reports in Finder")
             }
         }
 
-        PaneGroup("Report an issue") {
-            PaneRow("Something not working?", "Opens a short form that fills in a GitHub issue for you.") {
-                Button("Report an Issue\u{2026}") { model.reportIssue() }
-                    .buttonStyle(.pane())
-            }
-        }
-
-        PaneGroup("About") {
-            PaneRow("Version") {
+        let device = model.device
+        let speech = SpeechModel.model(for: models.active)
+        SettingsSection("About", detail: "this Mac") {
+            SettingsRow("Version") {
                 value(model.appVersion).textSelection(.enabled)
             }
-            PaneRow("Acknowledgements",
-                    "Utter is built on whisper.cpp and OpenAI\u{2019}s Whisper speech model. Their licences are listed in THIRD_PARTY_NOTICES.md, which ships with the source code.")
+            SettingsRow("Processor") { value(device.chipName) }
+            SettingsRow("Memory") { value("\(device.ramGB) GB") }
+            SettingsRow("macOS") { value(ProcessInfo.processInfo.operatingSystemVersionString) }
+            SettingsRow("Speech model") { value("\(speech.displayName)  \(speech.sizeMB) MB") }
+            SettingsRow("Acknowledgements",
+                        "Utter is built on whisper.cpp and OpenAI\u{2019}s Whisper speech model. Their licences are listed in THIRD_PARTY_NOTICES.md, which ships with the source code.")
         }
         .onAppear {
             model.loadCrashReports()
@@ -136,8 +131,8 @@ struct HelpSettingsContent: View {
 
     private func value(_ text: String) -> some View {
         Text(verbatim: text)
-            .font(.callout.monospacedDigit())
-            .foregroundStyle(Pane.ink2)
+            .font(Mixtape.mono(12))
+            .foregroundStyle(Mixtape.ink2)
     }
 }
 
@@ -148,14 +143,13 @@ private struct MicTestRow: View {
 
     var body: some View {
         let level = model.micLevel
-        PaneRow("Input level", "Hold \(hotkey) and speak. The bar moves while Utter hears you.") {
+        SettingsRow("Microphone test", "Hold \(hotkey) and speak. The line moves while Utter hears you.") {
             HStack(spacing: 8) {
-                Look.LiveDot(isLive: level > 0)
-                PaneMeter(value: Double(level), width: 140)
+                SettingsMeter(value: Double(level), width: 140)
                 Text(verbatim: level > 0 ? "\(Int((level * 45 - 50).rounded())) dB" : "-- dB")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(Pane.ink2)
-                    .frame(width: 44, alignment: .trailing)
+                    .font(Mixtape.mono(12))
+                    .foregroundStyle(Mixtape.ink2)
+                    .frame(width: 48, alignment: .trailing)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Microphone level")
@@ -170,21 +164,23 @@ private struct CrashReportRow: View {
 
     var body: some View {
         let when = log.date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
-        PaneRow {
+        SettingsRow(minHeight: 68) {
             Text(log.cause.isEmpty ? "Crash" : log.cause)
             Text(verbatim: [when, log.version.map { "version \($0)" }].compactMap { $0 }.joined(separator: "  "))
-                .font(Pane.subtitle.monospacedDigit())
-                .foregroundStyle(Pane.ink3)
+                .font(Mixtape.mono(11.5))
+                .foregroundStyle(Mixtape.ink3)
         } trailing: {
             HStack(spacing: 6) {
                 Button("Report") { model.reportIssue(crashLog: log.content) }
+                    .buttonStyle(.pen(.fill, .small))
                     .accessibilityLabel("Report the crash from \(when)")
-                Button("Show in Finder") { model.reveal(log.url) }
+                Button("Show") { model.reveal(log.url) }
+                    .buttonStyle(.pen(.ghost, .small))
                     .accessibilityLabel("Show the crash report from \(when) in Finder")
                 Button("Copy") { model.copy(log) }
+                    .buttonStyle(.pen(.ghost, .small))
                     .accessibilityLabel("Copy the crash report from \(when)")
             }
-            .buttonStyle(.pane())
         }
     }
 }

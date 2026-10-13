@@ -15,7 +15,7 @@ struct AppIdentityTests {
         )
     }
 
-    @Test("The data folder name and its legacy names, in order, are pinned")
+    @Test("The data folder name and its legacy name are pinned")
     func appDirectoryNames() {
         #expect(AppDirectory.name == "Utter")
         #expect(AppDirectory.legacyNames == ["Lumen"])

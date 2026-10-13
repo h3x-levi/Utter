@@ -15,10 +15,10 @@ struct PrivacySettingsContent: View {
     }
 
     var body: some View {
-        PaneNote(title: "Everything stays on this Mac.",
-                 text: "Utter turns your voice into text here. Your audio and your words are not sent anywhere. There is no account and no usage tracking. Utter goes online only to download a speech model you choose, and for app updates.")
+        SettingsProse(title: "Everything stays on this Mac.",
+                      text: "Utter turns your voice into text here. Your audio and your words are not sent anywhere. There is no account and no usage tracking. Utter goes online only to download a speech model you choose, and for app updates.")
 
-        PaneGroup("Permissions") {
+        SettingsSection("Permissions", detail: "System Settings") {
             PermissionRow(name: "Microphone", purpose: "So Utter can hear you.",
                           need: .core(granted: readiness.micGranted)) {
                 model.openSystemSettings("Privacy_Microphone")
@@ -35,28 +35,30 @@ struct PrivacySettingsContent: View {
             }
         }
 
-        PaneGroup("Apple Intelligence") {
-            PaneRow("Writing fixes and commands", readiness.aiState.message) {
+        SettingsSection("Apple Intelligence", detail: "on device") {
+            SettingsRow("Writing fixes and commands", readiness.aiState.message) {
                 HStack(spacing: 10) {
                     aiStatus
                     if readiness.aiState == .appleIntelligenceOff {
                         Button("Open Settings") { model.openSystemSettings("AppleIntelligence") }
-                            .buttonStyle(.pane())
+                            .buttonStyle(.pen(.outline, .small))
                             .accessibilityLabel("Open Apple Intelligence settings")
                     }
                 }
             }
         }
 
-        PaneNote(title: "Only the words are kept.",
-                 text: "While you dictate, the audio is held in memory and thrown away once the words are typed. Meeting recordings save the words to your note, not the audio. The microphone is on only while you dictate or record a meeting.")
+        SettingsProse(title: "Only the words are kept.",
+                      text: "While you dictate, the audio is held in memory and thrown away once the words are typed. Meeting recordings save the words to your note, not the audio. The microphone is on only while you dictate or record a meeting.")
 
-        PaneGroup {
-            PaneRow("Erase everything", model.resetDone
-                    ? "Everything was erased."
-                    : "History, notes, installed characters, dictionary words, snippets, custom commands and settings.") {
-                Button("Reset Utter\u{2026}", role: .destructive) { model.confirmingReset = true }
-                    .buttonStyle(.pane())
+        SettingsSection("Erase") {
+            SettingsRow("Erase everything", model.resetDone
+                        ? "Everything was erased."
+                        : "History, notes, installed characters, dictionary words, snippets, custom commands and settings.") {
+                Button(role: .destructive) { model.confirmingReset = true } label: {
+                    Text("Reset Utter\u{2026}").foregroundStyle(Mixtape.red)
+                }
+                .buttonStyle(.pen(.ghost, .small))
             }
         }
         .alert("Reset Utter?", isPresented: $model.confirmingReset) {
@@ -71,10 +73,10 @@ struct PrivacySettingsContent: View {
 
     private var aiStatus: some View {
         switch readiness.aiState {
-        case .ready: PaneStatus(text: "Ready", kind: .ok)
-        case .appleIntelligenceOff: PaneStatus(text: "Off", kind: .warn)
-        case .modelNotReady: PaneStatus(text: "Not ready", kind: .warn)
-        case .unsupportedOS: PaneStatus(text: "Not supported")
+        case .ready: SettingsStatus(text: "Ready", kind: .ok)
+        case .appleIntelligenceOff: SettingsStatus(text: "Off", kind: .warn)
+        case .modelNotReady: SettingsStatus(text: "Not ready", kind: .warn)
+        case .unsupportedOS: SettingsStatus(text: "Not supported")
         }
     }
 }

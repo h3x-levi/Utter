@@ -29,19 +29,22 @@ struct ZZSettingsScreens {
             },
             levels: Just(0.62).eraseToAnyPublisher(), openIssue: { _, _ in },
             appVersion: "1.1.58", launchAtLogin: true)
+        model.companion = ZZCompanionScreenSnapshots.seededCompanion(userData)
 
         for group in SettingsGroup.allCases {
             model.group = group
             for dark in [false, true] {
                 let window = SettingsWindowView.makeWindow(model: model)
                 window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-                window.center()
+                SnapshotCanvas.center(window)
                 window.orderFrontRegardless()
                 defer { window.orderOut(nil) }
                 RunLoop.current.run(until: Date().addingTimeInterval(0.8))
                 let view = try #require(window.contentView?.superview ?? window.contentView)
                 try SnapshotCanvas.capture(window, view: view, "settings-\(group.rawValue)", dark: dark)
             }
+            try SnapshotCanvas.write(SettingsWindowView(model: model), "settings-\(group.rawValue)-full",
+                                     size: CGSize(width: 760, height: 1_700), dark: false)
         }
     }
 
@@ -53,7 +56,7 @@ struct ZZSettingsScreens {
         model.title = "Dictation stops after the Mac wakes up"
         model.details = "After sleep the pill shows listening but no words arrive."
         for dark in [false, true] {
-            try render(ReportIssueSheet(model: model), "report-issue", size: CGSize(width: 520, height: 420), dark: dark)
+            try render(ReportIssueSheet(model: model), "report-issue", size: CGSize(width: 660, height: 620), dark: dark)
         }
     }
 

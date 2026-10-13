@@ -245,8 +245,6 @@ package class TranscriptionService {
 
 package enum TranscriptionError: LocalizedError {
     case invalidResponse
-    case invalidURL
-    case apiError(statusCode: Int, message: String)
     case invalidAudio
     case modelMissing(String)
     case modelLoadFailed(String)
@@ -255,8 +253,6 @@ package enum TranscriptionError: LocalizedError {
     package var errorDescription: String? {
         switch self {
         case .invalidResponse: return "Could not parse Whisper response"
-        case .invalidURL: return "Invalid endpoint URL"
-        case .apiError(let code, let msg): return "API error \(code): \(msg)"
         case .invalidAudio: return "Could not read the recorded audio"
         case .modelMissing(let name):
             return "Speech model \(name) is missing from the app bundle - reinstall Utter"

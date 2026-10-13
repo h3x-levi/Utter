@@ -541,6 +541,18 @@ package class UserData: ObservableObject {
         }
     }
 
+    /// The word goal the daily tape fills toward, or nil when Tape length is Off.
+    package var tapeGoal: Int? { companionDictationGoal > 0 ? companionDictationGoal : nil }
+
+    /// Today's dictated words that left no track behind because Keep history is off.
+    // ponytail: words dictated into a note also count in that note's track while history is off.
+    package func unkeptWordsToday(onTape: Int, now: Date = Date()) -> Int {
+        guard !keepHistory else { return 0 }
+        let progress = companionProgress
+        let dictated = progress.day == CompanionProgress.dayStamp(now) ? progress.dictationWords : 0
+        return max(0, dictated - onTape)
+    }
+
     @discardableResult
     package func recordCompanionDictation(words: Int, at date: Date = Date()) -> String? {
         guard words > 0 else { return nil }
