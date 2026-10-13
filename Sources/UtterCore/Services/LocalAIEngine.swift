@@ -5,8 +5,7 @@ import FoundationModels
 #endif
 
 /// On-device text rewriting via Apple's system language model.
-///
-/// This replaces the previous Bedrock/Claude path. Nothing leaves the machine
+/// Runs on-device via Apple's system language model. Nothing leaves the machine
 /// and there is no cloud account behind it, which also means the capability is
 /// not guaranteed to exist: the model requires macOS 26 with Apple Intelligence
 /// switched on. Rather than silently degrading, `availability` reports exactly

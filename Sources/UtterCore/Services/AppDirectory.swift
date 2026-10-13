@@ -29,23 +29,9 @@ package enum AppDirectory {
 
     /// The names to migrate away from, **newest first**.
     ///
-    /// **These literals are deliberate historical data and must survive any future de-brand.**
-    /// The app has been renamed twice - `AWSFlow` was the original working title, `Lumen` came
-    /// next, and `Utter` is current. Neither old name is branding any more: each is the on-disk
-    /// name of a real folder on the Mac of anyone who ran a build from that era, and they are the
-    /// only things that find their notes, dictation history and crash logs. A future sweep for an
-    /// old name will find these and want to "finish the job"; removing them orphans that user's
-    /// data silently, with no error and nothing to recover from.
-    ///
-    /// Order is load-bearing. `resolve()` takes the **first** name that exists on disk, so the
-    /// newest wins: someone who ran an `AWSFlow` build and then a `Lumen` build has both folders,
-    /// and `Lumen` is the one holding the notes they can actually remember writing. Appending a
-    /// future name to the end of this array would migrate the *oldest* data and abandon the rest  - 
-    /// new names go at the **front**.
-    ///
-    /// Their twin is the same list in the permission-reset step of `scripts/build-app.sh`. Both
-    /// stay until it is worth assuming nobody is upgrading from that era any more.
-    static let legacyNames = ["Lumen", "AWSFlow"]
+    /// Neither old name is branding any more: it is the on-disk name of a real folder on the Mac
+    /// of anyone who ran a build from that era, and they are the only things that find their notes.
+    static let legacyNames = ["Lumen"]
 
     /// `~/Library/Application Support/Utter`, migrated, created, and owner-only.
     ///

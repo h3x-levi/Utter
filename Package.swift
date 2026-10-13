@@ -3,19 +3,13 @@ import PackageDescription
 
 // Naming: everything is **Utter**, inside and out.
 //
-// The app has been renamed twice: `AWSFlow` while it was an internal tool, then `Lumen`,
-// now `Utter`. The package, the executable, the bundle identifier and the log subsystem
+// The package, the executable, the bundle identifier and the log subsystem
 // are all `Utter` / `utter.dictation.app`; `scripts/build-app.sh` derives the executable
 // name and `CFBundleExecutable` from one variable so the bundle cannot point at a
 // binary that is not there.
 //
-// **Four old-name literals survive on purpose and must not be swept up.** Both old names
-// appear twice: in `AppDirectory.legacyNames` (`Sources/UtterCore/Services/AppDirectory.swift`),
-// which migrates `Application Support/Lumen` and `.../AWSFlow` into `Utter`, and in the
-// permission-reset step of `build-app.sh`, which backs those folders up before a fresh-install
-// test. They are the on-disk names of real folders and the only thing that finds an upgrading
-// user's notes. `legacyNames` is ordered newest-first and a future rename adds to the FRONT —
-// appending would migrate the oldest data and abandon the rest.
+// `AppDirectory.legacyNames` (`Sources/UtterCore/Services/AppDirectory.swift`)
+// migrates `Application Support/Lumen` into `Utter`.
 let sdkStamp = LinkerSetting.unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos",
                                            "-Xlinker", "14.0", "-Xlinker", "26.0"])
 

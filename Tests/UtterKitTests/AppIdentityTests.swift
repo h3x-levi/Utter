@@ -18,8 +18,8 @@ struct AppIdentityTests {
     @Test("The data folder name and its legacy names, in order, are pinned")
     func appDirectoryNames() {
         #expect(AppDirectory.name == "Utter")
-        #expect(AppDirectory.legacyNames == ["Lumen", "AWSFlow"])
-        #expect(AppDirectory.legacySupportDirectories.map(\.lastPathComponent) == ["Lumen", "AWSFlow"])
+        #expect(AppDirectory.legacyNames == ["Lumen"])
+        #expect(AppDirectory.legacySupportDirectories.map(\.lastPathComponent) == ["Lumen"])
     }
 
     @Test("Info.plist keeps the bundle id and the keys the permission flows depend on")

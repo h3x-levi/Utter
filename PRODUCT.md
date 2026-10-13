@@ -30,7 +30,7 @@ Free, open-source and fully on device: whisper.cpp runs in-process with Metal ac
 ## Capabilities and Constraints
 
 - Every current feature stays available, but the owner allows cutting or merging weak features after showing the plan (2026-10-10).
-- Must not change: the `utter.dictation.app` bundle identifier, the `AppDirectory.legacyNames` migration of old `Lumen` and `AWSFlow` data folders, permission flows, the text-injection behaviour, and the bundled model.
+- Must not change: the `utter.dictation.app` bundle identifier, the `AppDirectory.legacyNames` migration of old `Lumen` data folders, permission flows, the text-injection behaviour, and the bundled model.
 - Hard performance bar from the owner: no resource leaks, no hangs or freezes, smooth 60fps everywhere.
 - Swift Testing suite in `Tests/UtterKitTests` must keep passing.
 

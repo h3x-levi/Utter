@@ -74,8 +74,6 @@ extension CallSource {
         ("com.ringcentral.glip", "RingCentral"),
         ("com.logmein.GoToMeeting", "GoTo Meeting"),
         ("com.goto.GoTo", "GoTo"),
-        ("com.amazon.Amazon-Chime", "Amazon Chime"),
-        ("com.amazon.Chime", "Amazon Chime"),
         ("org.jitsi.jitsi-meet", "Jitsi Meet"),
         ("jp.naver.line.mac", "LINE"),
         ("com.tencent.xinWeChat", "WeChat"),

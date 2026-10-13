@@ -57,7 +57,7 @@ struct WhatsNewView: View {
             "Settings are now written atomically, failures are reported, and an unreadable settings file is preserved for recovery instead of being overwritten.",
         ]),
         Release(version: "3.0.37", date: "August 2026", highlights: [
-            "Expanded local automatic call detection beyond Zoom and Teams to Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Amazon Chime, Jitsi Meet, LINE, WeChat, and KakaoTalk.",
+            "Expanded local automatic call detection beyond Zoom and Teams to Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Jitsi Meet, LINE, WeChat, and KakaoTalk.",
         ]),
         Release(version: "3.0.36", date: "August 2026", highlights: [
             "The resting pill’s microphone is now solid black in light themes and solid white in dark themes.",
@@ -290,7 +290,7 @@ struct WhatsNewView: View {
         ]),
         Release(version: "1.0.0", date: "March 2026", highlights: [
             "Initial release",
-            "Voice to text using Whisper Large V3 on SageMaker",
+            "Voice to text using Whisper speech models",
             "Floating pill UI with recording states",
             "Menu bar integration",
             "Transcription history with word count and streak",

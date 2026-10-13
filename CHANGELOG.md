@@ -293,7 +293,7 @@ uses semantic-ish versioning (the build script auto-bumps the patch).
 ## [3.0.37] — August 2026
 
 - Expanded local automatic call detection beyond Zoom and Teams to major dedicated calling apps,
-  including Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo, Amazon Chime,
+  including Webex, Skype, WhatsApp, Signal, Telegram, Viber, RingCentral, GoTo,
   Jitsi Meet, LINE, WeChat, and KakaoTalk.
 
 ## [3.0.36] — August 2026
@@ -946,8 +946,7 @@ at all.**
 
 ## [2.0.96] — August 2026
 
-**Your data now lives in `Application Support/Lumen`, not `AWSFlow`.** (The app was renamed to
-Utter later; `AppDirectory` migrates both old folder names.)
+**Your data now lives in `Application Support/Utter`.** (Migrated from earlier folder names.)
 
 - Renamed, and migrated rather than orphaned: on first launch the old folder is moved to the new
   name. A rename on the same volume is what `FileManager.moveItem` performs, so it is atomic —
@@ -1459,9 +1458,9 @@ confirmed against the code before being fixed.
   the hands-free silence countdown.
 
 ### Removed
-- All AWS integration: SageMaker Whisper, Bedrock Claude, the SigV4 signer, and
-  the API client. Credentials are no longer stored, bundled, or required — and
-  any credential file left by an earlier version is deleted on first launch.
+- All cloud services: cloud models, external API clients, and the signing layer.
+  Credentials are no longer stored, bundled, or required — and any credential
+  file left by an earlier version is deleted on first launch.
 
 ### Fixed
 - Scratchpad notes were silently discarded when switching tabs.
@@ -1490,8 +1489,7 @@ confirmed against the code before being fixed.
 ## [2.0.12] — July 2026
 
 ### Added
-- **Custom Dictionary now improves transcriptions.** The SageMaker Whisper
-  container cannot be prompt-biased, so dictionary words are applied as a
+- **Custom Dictionary now improves transcriptions.** Dictionary words are applied as a
   post-transcription correction pass: exact terms get their canonical spelling
   and capitalization enforced (e.g. `kubernetes` → `Kubernetes`, `macos` →
   `macOS`), and close misspellings of long, distinctive words are fixed
@@ -1500,8 +1498,7 @@ confirmed against the code before being fixed.
 - **On-device language detection.** Each transcription's language is detected
   locally (Apple NaturalLanguage) and shown as a tag on the history entry.
 - **First-run onboarding.** A guided flow walks new users through Microphone
-  and Accessibility permissions and confirms AWS credentials are configured,
-  with live status that updates as access is granted.
+  and Accessibility permissions with live status that updates as access is granted.
 - **Re-inject from history.** Paste any past transcription into the app you were
   last using, straight from the Home history list.
 
@@ -1513,8 +1510,6 @@ confirmed against the code before being fixed.
   transforming Utter's own just-dictated text.
 - **Failed AI commands surface an error** (error sound + error pill) instead of
   silently playing the success chime and doing nothing.
-- `BEDROCK_REGION` from `.env` is now applied to the Bedrock client instead of
-  being dropped.
 
 ### Changed
 - Removed a 100 ms main-thread stall in the AI-command paste path.
@@ -1542,8 +1537,7 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 - **Hands-free pill state**: orange tint plus a lock icon make it obvious when
   the recorder is locked on.
 - **Custom AI commands**: users can now define their own voice triggers in the
-  AI Commands view. Each command pairs a trigger phrase with a Bedrock Claude
-  system prompt, an optional user-prompt template (`{{text}}` placeholder),
+  AI Commands view. Each command pairs a trigger phrase with an AI prompt template,
   and a replace-vs-append toggle.
 - **Custom commands override built-ins**: matching runs against user-defined
   commands first, so existing phrases can be customized without code changes.
@@ -1576,7 +1570,7 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 ## [2.0.1] — April 2026
 - Major UI overhaul — two-column Home with feature cards and history.
 - 5 themes — Default, Midnight, Frost, Ocean, Ember.
-- AI Assistant — translate, fix grammar, reply, summarize via Bedrock Claude.
+- AI Assistant — translate, fix grammar, reply, summarize via local AI.
 - Style commands — make it professional/concise/casual/formal on any text.
 - Works on selected text in any app, not just dictation.
 - What's New page with full version history.
@@ -1590,9 +1584,8 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 
 ## [1.1.2] — April 2026
 - AI Commands page replacing Style — full guide for voice commands.
-- AWS Settings locked by default with edit confirmation guardrail.
 - Clear All Data confirmation dialog.
-- Bedrock Claude integration — translate, fix grammar, reply, summarize.
+- AI Assistant integration — translate, fix grammar, reply, summarize.
 
 ## [1.1.1] — March 2026
 - Context-aware formatting (code, chat, email, document detection).
@@ -1616,10 +1609,9 @@ _(Consolidates internal builds 2.0.9–2.0.12.)_
 
 ## [1.0.0] — March 2026
 - Initial release.
-- Voice to text using Whisper Large V3 on SageMaker.
+- Voice to text using Whisper speech models.
 - Floating pill UI with recording states.
 - Menu bar integration.
 - Transcription history with word count and streak.
 - Dictionary, Snippets, Scratchpad.
-- Settings with AWS credential management.
 - DMG installer with build script.

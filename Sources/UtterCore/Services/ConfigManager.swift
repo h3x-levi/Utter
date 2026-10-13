@@ -47,8 +47,8 @@ package final class ConfigManager {
     }
 
     /// Remove the credential store written by earlier versions of Utter, which
-    /// kept AWS keys in plaintext. Runs once at launch so users upgrading from
-    /// 2.0.14 or earlier stop carrying a secret the app no longer has any use for.
+    /// kept cloud keys in plaintext. Runs once at launch so users upgrading from
+    /// older versions stop carrying a secret the app no longer has any use for.
     ///
     /// Only the user-writable Application Support copy is deleted. Builds up to
     /// 2.0.14 also shipped a `.env` *inside the app bundle*, but the app must never
@@ -59,7 +59,7 @@ package final class ConfigManager {
     private func purgeLegacyCredentialStore() {
         let fm = FileManager.default
         // Looked for under the *current* name, because `AppDirectory` renames the whole folder on
-        // first launch - so a credential file that was in `AWSFlow/` has already moved into
+        // first launch - so a credential file that was in legacy folders has already moved into
         // `Utter/` by the time this runs.
         let legacy = AppDirectory.file("config.json")
         guard fm.fileExists(atPath: legacy.path) else { return }
