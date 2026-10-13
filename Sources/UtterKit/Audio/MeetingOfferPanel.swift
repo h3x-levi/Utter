@@ -65,13 +65,8 @@ enum MeetingOfferMetrics {
         return configured?.size.width ?? 20
     }
 
-    /// Height of the button row.
-    ///
-    /// `NSButton(bezelStyle: .rounded, controlSize: .large).fittingSize` measured (92, 28) on this
-    /// machine, which is where the number comes from - a large macOS control.
-    ///
-    /// The card uses large native macOS buttons, whose measured height is 28pt.
-    static let buttonRowHeight: CGFloat = 28
+    /// Height of the button row: `PenButtonStyle` frames a regular pen button to exactly 30pt.
+    static let buttonRowHeight: CGFloat = 30
 
     /// Head-room over the derived content height.
     ///
@@ -327,9 +322,7 @@ final class MeetingOfferPanel: NSPanel {
     /// shadow would be clipped at its edge. Off where macOS 26 glass supplies its own. The Reduce
     /// Transparency preference is read when the card appears, not observed.
     private func refreshShadow() {
-        hasShadow = !GlassSupport.active(
-            reduceTransparency: MotionPreference.shared.reduceTransparency
-        )
+        hasShadow = true
         invalidateShadow()
     }
 
@@ -350,13 +343,13 @@ final class MeetingOfferPanel: NSPanel {
 
 /// The card's mutable content. Only the failure line changes after the panel is built.
 @MainActor
-private final class MeetingOfferModel: ObservableObject {
+final class MeetingOfferModel: ObservableObject {
     @Published var failure: String?
     @Published var contentVisible = false
 }
 
 /// The offer's contents.
-private struct MeetingOfferView: View {
+struct MeetingOfferView: View {
     let title: String
     @ObservedObject var model: MeetingOfferModel
     let onAccept: () -> Void
@@ -373,24 +366,25 @@ private struct MeetingOfferView: View {
                 HStack(spacing: Space.x2) {
                     Image(systemName: "person.wave.2.fill")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Mixtape.ink3)
                 // Incompressible, like the caption below, so what it wraps to is what
                 // `MeetingOfferMetrics.titleHeight` measured. Left free to truncate, an app with a
                 // long name would draw one line where the window allowed two - harmless - but a
                 // future width change would silently put the difference the other way round.
                     Text(title)
-                        .font(.headline)
+                        .font(Mixtape.body(15, .medium))
+                        .foregroundStyle(Mixtape.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(MeetingOfferMetrics.caption)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Mixtape.body(12))
+                    .foregroundStyle(Mixtape.ink3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let failure = model.failure {
                     Text(failure)
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                        .font(Mixtape.body(12))
+                        .foregroundStyle(Mixtape.red)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -398,12 +392,10 @@ private struct MeetingOfferView: View {
                     Button(action: onAccept) {
                         Label("Transcribe", systemImage: "record.circle")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(.pen(.fill))
 
                     Button("Not now", action: onDecline)
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
+                        .buttonStyle(.pen(.ghost))
                 }
             }
             .padding(MeetingOfferMetrics.padding)
@@ -411,13 +403,9 @@ private struct MeetingOfferView: View {
             .scaleEffect(model.contentVisible ? 1 : 0.97, anchor: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
+        .background(Mixtape.paper, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Mixtape.edge)
         }
     }
 }

@@ -13,11 +13,11 @@ enum Layout {
     static let windowIdealWidth: CGFloat = 1380
     static let windowIdealHeight: CGFloat = 960
 
-    /// Settings is the v2 760 pt column; only its height follows the user.
-    static let settingsMinWidth: CGFloat = 760
+    /// Settings is the mock's 780 pt column; only its height follows the user.
+    static let settingsMinWidth: CGFloat = 780
     static let settingsMinHeight: CGFloat = 420
-    static let settingsIdealWidth: CGFloat = 760
-    static let settingsIdealHeight: CGFloat = 560
+    static let settingsIdealWidth: CGFloat = 780
+    static let settingsIdealHeight: CGFloat = 700
 
     /// Onboarding is a fixed 700 x 520 window, so no step can resize it mid-flow.
     static let onboardingMinWidth: CGFloat = 700

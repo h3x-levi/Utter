@@ -54,8 +54,6 @@ final class PillStateModel: ObservableObject {
     @Published private(set) var presentation = PillPresentation()
     @Published var previewText = ""
     @Published private var elapsedSeconds = 0
-    /// Moonlight, the owner's pick; assign another palette to switch.
-    @Published var palette = PillPalette.moonlight
 
     let levels = PillLevelSignal()
     var offersHandsFree = false { didSet { refresh() } }
@@ -265,7 +263,7 @@ final class PillWindow: NSPanel {
 
     /// Visible gap between the bottom of the pill and the top of the Dock.
     private static let dockGap: CGFloat = 10
-    /// Dark whatever the system, so the white bars read: glass takes its look from the view's appearance.
+    /// Dark whatever the system, so the island's scroller and text selection suit its near-black body.
     static let darkAppearance = NSAppearance(named: .darkAqua)
 
     /// Only the island takes keys (⌘C, Escape), and only once the user clicks it.
@@ -543,21 +541,16 @@ struct PillRootView: View {
     @ObservedObject var model: PillStateModel
     var onStartHandsFree: (() -> Void)?
     var onCloseIsland: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @Namespace private var glass
-
-    private var style: PillLiquidStyle { model.palette.style(dark: colorScheme == .dark) }
-    private var ink: Color { colorScheme == .dark ? Color(white: 0.97) : Color(red: 0.05, green: 0.07, blue: 0.13) }
 
     var body: some View {
         let look = model.look
         VStack(spacing: PillMetrics.captionGap) {
             if model.presentation.caption {
-                PillCaption(text: model.previewText, tint: style.tint, ink: ink)
+                PillCaption(text: model.previewText)
                     .frame(height: PillMetrics.captionHeight, alignment: .bottom)
                     .transition(.opacity.animation(.easeOut(duration: 0.2)))
             }
-            shell(look)
+            PillCapsule(look: look, levels: model.levels, onLock: onStartHandsFree, onCloseIsland: onCloseIsland)
                 .accessibilityElement(children: look.isIsland ? .contain : .ignore)
                 .accessibilityLabel(model.accessibilityLabel)
                 .accessibilityValue(model.accessibilityValue)
@@ -569,82 +562,60 @@ struct PillRootView: View {
         .padding(.bottom, PillMetrics.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
-
-    /// One glass shape for every look, so the island rises out of the capsule rather than replacing it.
-    @ViewBuilder
-    private func shell(_ look: PillLook) -> some View {
-        let capsule = PillCapsule(look: look, levels: model.levels, palette: model.palette, namespace: glass,
-                                  onLock: onStartHandsFree, onCloseIsland: onCloseIsland)
-        if #available(macOS 26, *) {
-            GlassEffectContainer { capsule }
-        } else {
-            capsule
-        }
-    }
 }
 
-/// The shell: dark glass with the icon's white bars, a trailing lock or glyph, a message, a dot, or
-/// the island. Also the onboarding demo's pill, driven there by `level` instead of the microphone.
+/// One shell for every look, so the island rises out of the capsule rather than replacing it: the brand
+/// stripe at rest, red while it listens or thinks, navy on hover and when done, gold for an error, and
+/// chrome tape for the island. Also the onboarding demo's pill, driven there by `level`.
 struct PillCapsule: View {
     let look: PillLook
     var levels: PillLevelSignal?
     var level: Float = 0
-    var palette = PillPalette.moonlight
-    let namespace: Namespace.ID
     var onLock: (() -> Void)?
     var onCloseIsland: () -> Void = {}
     @ObservedObject private var motion = MotionPreference.shared
 
-    private let ink = Color(white: 0.97)
-
     var body: some View {
         let size = PillMetrics.shellSize(for: look)
-        let style = palette.dark
         ZStack {
-            if case .dot(let tone) = look {
-                Circle().fill(tone.color(style))
-                    .frame(width: size.width, height: size.height)
-                    .transition(.opacity)
-            }
-            PillBars(mode: look.bars, height: size.height, color: barColor(style), levels: levels, level: level,
+            PillBars(mode: look.bars, height: size.height, levels: levels, level: level,
                      reduceMotion: motion.reduceMotion)
                 .frame(width: PillBarGeometry.span, height: PillMetrics.capsuleHeight)
                 .offset(x: PillMetrics.barsOffset(for: look))
                 .allowsHitTesting(false)
-            content(size: size, style: style)
+            content(size: size)
         }
         .frame(width: size.width, height: size.height)
-        // Dark glass still reads mid-grey over white; this keeps the white bars and the error ink legible,
-        // and the rim keeps the sliver findable on a dark desktop.
-        .background(PillShape().fill(Color.black.opacity(0.32)))
-        .overlay(PillShape().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
-        .pillGlass(PillShape(), tint: Color(nsColor: style.tint.color), interactive: !look.isIsland, id: "shell",
-                   in: namespace)
-        .opacity(look == .rest ? 0.78 : 1)
+        .background(PillShape().fill(PillColor.restStripe).opacity(look == .rest ? 1 : 0))
+        .pillSurface(PillShape(), fill: look.fill, ring: look.isIsland ? PillColor.tapeRing : PillColor.ring)
         .environment(\.colorScheme, .dark)
-    }
-
-    private func barColor(_ style: PillLiquidStyle) -> NSColor {
-        if case .message(_, .error) = look { return style.error.color }
-        return .white
     }
 
     /// Laid out at the target size from the first frame, so a morph moves the shape, never reflows text.
     @ViewBuilder
-    private func content(size: CGSize, style: PillLiquidStyle) -> some View {
+    private func content(size: CGSize) -> some View {
         switch look {
         case .hover(handsFree: true):
-            glyphSquare(PillLockButton(stops: false, ink: ink) { onLock?() }, side: size.height)
+            glyphSquare(PillLockButton(stops: false, ink: .white) { onLock?() }, side: size.height)
         case .listening(.lock):
-            glyphSquare(PillLockButton(stops: true, ink: ink) { onLock?() }, side: size.height)
+            glyphSquare(PillLockButton(stops: true, ink: .white) { onLock?() }, side: size.height)
         case .listening(.note):
             glyphSquare(glyph("note.text"), side: size.height)
         case .listening(.memory):
             glyphSquare(glyph("brain"), side: size.height)
+        case .done:
+            PillTick(reduceMotion: motion.reduceMotion)
         case .message(let text, let tone):
+            if tone == .error {
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(look.ink)
+                    .offset(x: PillMetrics.barsOffset(for: look))
+                    .transition(.following(after: 0.1))
+            }
             Text(text)
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(tone == .error ? Color(nsColor: style.error.color) : ink)
+                .foregroundStyle(look.ink)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .padding(.leading, PillMetrics.messagePadding + PillBarGeometry.span + PillMetrics.messageGap)
@@ -654,7 +625,7 @@ struct PillCapsule: View {
                 .id(text)
                 .transition(.following(after: 0.1))
         case .island(let transcript):
-            PillIsland(transcript: transcript, ink: ink, onClose: onCloseIsland)
+            PillIsland(transcript: transcript, onClose: onCloseIsland)
                 .frame(width: size.width, height: size.height)
                 .id(transcript)
                 .transition(.following(after: PillMetrics.islandTextDelay))
@@ -673,7 +644,27 @@ struct PillCapsule: View {
     private func glyph(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 8, weight: .semibold))
-            .foregroundStyle(ink.opacity(0.9))
+            .foregroundStyle(Color.white.opacity(0.92))
+    }
+}
+
+/// The done tick, drawn in one stroke once the bars have gone.
+private struct PillTick: View {
+    let reduceMotion: Bool
+    @State private var drawn = false
+
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 1.4, y: 4.8))
+            path.addLine(to: CGPoint(x: 4.2, y: 7.4))
+            path.addLine(to: CGPoint(x: 9.6, y: 1.6))
+        }
+        .trim(from: 0, to: drawn || reduceMotion ? 1 : 0)
+        .stroke(Color.white, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+        .frame(width: 11, height: 9)
+        .onAppear {
+            withAnimation(.easeOut(duration: PillMetrics.tickDraw).delay(PillMetrics.tickDelay)) { drawn = true }
+        }
     }
 }
 
@@ -690,11 +681,51 @@ private extension PillLook {
         if case .island = self { return true }
         return false
     }
+
+    var fill: Color {
+        switch self {
+        case .rest, .listening, .thinking: return PillColor.red
+        case .hover, .done, .message(_, .notice), .dot(.notice): return PillColor.navy
+        case .message(_, .error), .dot(.error): return PillColor.gold
+        case .island: return PillColor.tape
+        }
+    }
+
+    /// White on red and navy, navy on gold.
+    var ink: Color {
+        switch self {
+        case .message(_, .error), .dot(.error): return PillColor.goldInk
+        default: return .white
+        }
+    }
 }
 
-extension PillTone {
-    func color(_ style: PillLiquidStyle) -> Color {
-        Color(nsColor: (self == .error ? style.error : style.thinking).color)
+/// The pill's inks, always resolved dark because its window is.
+enum PillColor {
+    static let red = ink(Mixtape.Palette.pillRed)
+    static let gold = Mixtape.gold
+    static let navy = ink(Mixtape.Palette.pillNavy)
+    static let goldInk = ink(Mixtape.Palette.pillGoldInk)
+    static let tape = ink(Mixtape.Palette.pillTape)
+    static let tapeInk = ink(Mixtape.Palette.pillTapeInk)
+    static let transcript = ink(Mixtape.Palette.pillTranscript)
+    static let tapeRule = ink(Mixtape.Palette.pillTapeRule)
+    static let ring = Color.black.opacity(0.1)
+    static let tapeRing = Mixtape.edge
+    static let restStripe = stripe([(red, 0.6), (gold, 0.8), (ink(Mixtape.Palette.pillStripeNavy), 1)])
+    static let islandStripe = stripe([(Mixtape.red, 0.7), (gold, 0.85), (ink(Mixtape.Palette.pillStripeBlue), 1)])
+
+    private static func ink(_ swatch: Mixtape.Palette.Swatch) -> Color {
+        Color(nsColor: swatch.nsColor)
+    }
+
+    /// Hard-edged bands, each colour running from the last one's end to its own.
+    private static func stripe(_ bands: [(Color, CGFloat)]) -> LinearGradient {
+        let starts: [CGFloat] = [0] + bands.dropLast().map(\.1)
+        let stops = zip(bands, starts).flatMap { band, start in
+            [Gradient.Stop(color: band.0, location: start), Gradient.Stop(color: band.0, location: band.1)]
+        }
+        return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
 }
 
@@ -705,65 +736,49 @@ struct PillShape: Shape {
     }
 }
 
-/// The shell's material: tinted Liquid Glass on macOS 26, a material below it, solid under Reduce
-/// Transparency, and an outline under Increase Contrast.
-struct PillGlass<S: Shape>: ViewModifier {
+/// An opaque fill with a neutral shadow and a 1 pt ring just outside the edge. Increase Contrast firms
+/// the ring and adds a light inner edge, so the shape reads on any desktop.
+struct PillSurface<S: Shape>: ViewModifier {
     let shape: S
-    let tint: Color
-    var interactive = true
-    let id: String?
-    let namespace: Namespace.ID
-    @ObservedObject private var motion = MotionPreference.shared
+    let fill: Color
+    let ring: Color
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
-        let edged = content.overlay {
-            if contrast == .increased { shape.stroke(Color.primary.opacity(0.7), lineWidth: 1) }
-        }
-        if #available(macOS 26, *), GlassSupport.active(reduceTransparency: motion.reduceTransparency) {
-            let glass = Glass.regular.tint(tint.opacity(0.5)).interactive(interactive)
-            if let id {
-                edged.glassEffect(glass, in: shape).glassEffectID(id, in: namespace)
-            } else {
-                edged.glassEffect(glass, in: shape)
+        let firm = contrast == .increased
+        content
+            .background {
+                shape.fill(fill).shadow(color: .black.opacity(0.25), radius: 5, y: 3)
+                shape.stroke(firm ? Color.black.opacity(0.6) : ring, lineWidth: 1).padding(-0.5)
             }
-        } else {
-            edged.background {
-                ZStack {
-                    if !motion.reduceTransparency { shape.fill(.ultraThinMaterial) }
-                    shape.fill(tint.opacity(motion.reduceTransparency ? 1 : 0.7))
-                    shape.stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
+            .overlay {
+                if firm {
+                    shape.stroke(Color.white.opacity(0.7), lineWidth: 1).padding(0.5).allowsHitTesting(false)
                 }
-                .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
             }
-        }
     }
 }
 
 extension View {
-    func pillGlass<S: Shape>(_ shape: S, tint: Color, interactive: Bool = true, id: String? = nil,
-                             in namespace: Namespace.ID) -> some View {
-        modifier(PillGlass(shape: shape, tint: tint, interactive: interactive, id: id, namespace: namespace))
+    func pillSurface<S: Shape>(_ shape: S, fill: Color, ring: Color) -> some View {
+        modifier(PillSurface(shape: shape, fill: fill, ring: ring))
     }
 }
 
-/// The live words above the pill, when "Show words as you speak" is on.
+/// The live words above the pill, when "Show words as you speak" is on, on the island's chrome tape.
 struct PillCaption: View {
     let text: String
-    let tint: SIMD3<Float>
-    let ink: Color
-    @Namespace private var glass
 
     var body: some View {
         Text(LiveTranscript.tail(of: text))
             .font(.callout)
-            .foregroundStyle(ink)
+            .foregroundStyle(PillColor.transcript)
             .lineLimit(2)
             .truncationMode(.head)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .pillGlass(RoundedRectangle(cornerRadius: 12, style: .continuous), tint: Color(nsColor: tint.color),
-                       interactive: false, in: glass)
+            .pillSurface(RoundedRectangle(cornerRadius: 12, style: .continuous), fill: PillColor.tape,
+                         ring: PillColor.tapeRing)
             .frame(maxWidth: PillMetrics.captionMaxWidth)
             .opacity(text.isEmpty ? 0 : 1)
             .allowsHitTesting(false)
@@ -771,46 +786,47 @@ struct PillCaption: View {
     }
 }
 
-/// A transcript held because there was nowhere to type it: six lines, then it scrolls. Copy says so,
-/// then puts the island away.
+/// A transcript held because there was nowhere to type it, on a chrome-tape label: six ruled lines,
+/// then it scrolls. Copy or Save as note says so, then puts the island away.
 struct PillIsland: View {
     let transcript: String
-    let ink: Color
     let onClose: () -> Void
-    @State private var copied = false
+    @State private var done: Done?
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private enum Done { case copied, saved }
 
     var body: some View {
+        let quiet = PillColor.tapeInk.opacity(contrast == .increased ? 0.85 : 0.6)
         VStack(alignment: .leading, spacing: PillMetrics.islandSpacing) {
-            Text("No text box was focused, so your words are here")
+            Text("No text box selected, so your words are here")
                 .font(.caption)
-                .foregroundStyle(ink.opacity(0.62))
+                .foregroundStyle(quiet)
             ScrollView {
                 Text(transcript)
                     .font(.body)
-                    .foregroundStyle(ink)
+                    .foregroundStyle(PillColor.transcript)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(PillRules())
             }
             .frame(height: PillMetrics.islandTextHeight(for: transcript))
             HStack(spacing: 8) {
-                Button(action: copy) {
-                    Label {
-                        Text(copied ? "Copied" : "Copy")
-                    } icon: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                }
-                .buttonStyle(PillIslandButtonStyle(ink: ink))
-                .keyboardShortcut("c", modifiers: .command)
-                .accessibilityLabel(copied ? "Copied" : "Copy transcript")
+                Button(done == .copied ? "Copied" : "Copy", action: copy)
+                    .buttonStyle(PillIslandButtonStyle(filled: true))
+                    .keyboardShortcut("c", modifiers: .command)
+                    .accessibilityLabel(done == .copied ? "Copied" : "Copy transcript")
+                Button(done == .saved ? "Saved" : "Save as note", action: save)
+                    .buttonStyle(PillIslandButtonStyle(filled: false))
+                    .keyboardShortcut("s", modifiers: .command)
+                    .accessibilityLabel(done == .saved ? "Saved as a note" : "Save as note")
                 Spacer(minLength: 0)
                 Button(action: onClose) {
                     HStack(spacing: 6) {
-                        PillKeycap(text: "Esc", ink: ink)
+                        PillKeycap(text: "Esc")
                         Text("to close").font(.caption)
                     }
-                    .foregroundStyle(ink.opacity(0.62))
+                    .foregroundStyle(quiet)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -821,66 +837,96 @@ struct PillIsland: View {
             .frame(height: PillMetrics.islandFooterHeight)
         }
         .padding(PillMetrics.islandPadding)
-        .task(id: copied) {
-            guard copied else { return }
+        .overlay(alignment: .top) { Rectangle().fill(PillColor.islandStripe).frame(height: 5) }
+        .clipShape(PillShape())
+        .task(id: done) {
+            guard done != nil else { return }
             try? await Task.sleep(for: .seconds(PillMetrics.copiedHold))
             if !Task.isCancelled { onClose() }
         }
     }
 
     private func copy() {
-        guard !copied else { return }
+        guard done == nil else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(transcript, forType: .string)
-        withAnimation(.snappy(duration: 0.25)) { copied = true }
-        AccessibilityNotification.Announcement("Copied").post()
+        finish(.copied, announcing: "Copied")
+    }
+
+    private func save() {
+        guard done == nil else { return }
+        Self.saveAsNote(transcript, in: .shared)
+        finish(.saved, announcing: "Saved as a note")
+    }
+
+    private func finish(_ result: Done, announcing announcement: String) {
+        withAnimation(.snappy(duration: 0.25)) { done = result }
+        AccessibilityNotification.Announcement(announcement).post()
+    }
+
+    /// A new note that leaves the Library's open note, and so where ⌃⌥N adds, alone. Written through,
+    /// because the island is the transcript's only other copy.
+    @MainActor static func saveAsNote(_ transcript: String, in store: NoteStore) {
+        store.create(body: transcript, source: .dictated, select: false)
+        store.writeToDisk()
+    }
+}
+
+/// The tape's faint rules, one under each line of the transcript.
+private struct PillRules: View {
+    var body: some View {
+        Canvas { context, size in
+            let font = NSFont.preferredFont(forTextStyle: .body)
+            let pitch = font.ascender - font.descender + font.leading
+            for y in stride(from: pitch, through: size.height, by: pitch) {
+                context.fill(Path(CGRect(x: 0, y: y - 1, width: size.width, height: 1)),
+                             with: .color(PillColor.tapeRule))
+            }
+        }
     }
 }
 
 private struct PillKeycap: View {
     let text: String
-    let ink: Color
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
         Text(text)
             .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(ink)
+            .foregroundStyle(PillColor.tapeInk)
             .padding(.horizontal, 5)
             .frame(minWidth: 20, minHeight: 18)
-            .background(Color.white.opacity(0.07), in: shape)
-            .overlay(shape.strokeBorder(Color.white.opacity(0.1)))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(PillColor.tapeInk.opacity(0.3)))
     }
 }
 
-/// A content-layer button on the island: no glass on the glass, a fill that brightens on hover and a
-/// press that springs. Its corners are the island's less its padding.
+/// The island's pen buttons: Copy filled in the tape's ink, Save as note outlined in it. Hover
+/// brightens, a press springs.
 private struct PillIslandButtonStyle: ButtonStyle {
-    let ink: Color
+    let filled: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        PillIslandButton(configuration: configuration, ink: ink)
+        PillIslandButton(configuration: configuration, filled: filled)
     }
 }
 
 private struct PillIslandButton: View {
     let configuration: ButtonStyleConfiguration
-    let ink: Color
+    let filled: Bool
     @State private var hovering = false
     @ObservedObject private var motion = MotionPreference.shared
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: PillMetrics.islandCornerRadius - PillMetrics.islandPadding,
-                                     style: .continuous)
         let pressed = configuration.isPressed
         configuration.label
-            .labelStyle(.titleAndIcon)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(ink)
-            .padding(.horizontal, 10)
+            .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+            .tracking(0.84)
+            .textCase(.uppercase)
+            .foregroundStyle(filled ? PillColor.tape : PillColor.tapeInk)
+            .padding(.horizontal, 11)
             .frame(height: PillMetrics.islandFooterHeight)
-            .background(Color.white.opacity(pressed ? 0.04 : hovering ? 0.11 : 0.07), in: shape)
-            .overlay(shape.strokeBorder(Color.white.opacity(0.1)))
+            .background(Capsule().fill(filled ? hovering ? Color.white : PillColor.tapeInk
+                                              : Color.white.opacity(hovering ? 0.08 : 0)))
+            .overlay { if !filled { Capsule().strokeBorder(PillColor.tapeInk.opacity(0.7), lineWidth: 1.5) } }
             .scaleEffect(pressed && !motion.reduceMotion ? 0.94 : 1)
             .animation(motion.reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.22, dampingFraction: 0.62),
                        value: pressed)

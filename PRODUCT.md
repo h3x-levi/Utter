@@ -30,7 +30,7 @@ Free, open-source and fully on device: whisper.cpp runs in-process with Metal ac
 ## Capabilities and Constraints
 
 - Every current feature stays available, but the owner allows cutting or merging weak features after showing the plan (2026-10-10).
-- Must not change: the `utter.dictation.app` bundle identifier, the `AppDirectory.legacyNames` migration of old `Lumen` data folders, permission flows, the text-injection behaviour, and the bundled model.
+- Must not change: the `utter.dictation.app` bundle identifier, the `AppDirectory.legacyNames` migration of the old `Lumen` data folder, permission flows, the text-injection behaviour, and the bundled model.
 - Hard performance bar from the owner: no resource leaks, no hangs or freezes, smooth 60fps everywhere.
 - Swift Testing suite in `Tests/UtterKitTests` must keep passing.
 
@@ -38,15 +38,18 @@ Free, open-source and fully on device: whisper.cpp runs in-process with Metal ac
 
 - Name: Utter. Existing app icon (`AppIcon.icns`, `Assets/AppIconSource.png`) and menu-bar mark (`MenuBarIcon/`).
 - Companion: the CX-ArtLab agent-robot-avatar robot (MIT code; the character's name and identity belong to CX ArtLab, credited in THIRD_PARTY_NOTICES.md), ported natively to Core Animation.
-- The owner has handed full creative authority for the redesign (visual world, motion, information architecture), with three pinned decisions (2026-10-10):
-  - The main app follows Apple's design system: native sidebar, toolbar, lists, forms, SF Pro, SF Symbols, Liquid Glass on macOS 26 and system materials on 14 and 15. No custom-painted window.
-  - The pill is as minimal and unobtrusive as Wispr Flow's: a 32x6 pt glass capsule at rest and about 64x20 pt while listening, showing the icon's 7 tiny bars moving with the voice, with no live words by default. On 2026-10-11 the owner removed the liquid from the pill and made it smaller. The window keeps the liquid direction and the Moonlight palette (silver light on the icon's midnight navy). Only the transcript island is large.
+- The owner has handed full creative authority for the redesign (visual world, motion, information architecture). Pinned decisions (2026-10-13, replacing the 2026-10-10 Apple-native and Moonlight direction):
+  - The visual world is Mixtape, a cassette J-card: white ruled card stock, navy ballpoint ink, a red stripe for today's tape, Side A and Side B tracklists with running times, a hand-drawn circle for the chosen track and a tick for a pasted one. Dark mode is chrome tape. The window is custom-painted.
+  - Daily use lives in a menu-bar hub; one Library window holds Everything, Dictations, Notes, Meetings and Words, with Settings at its foot and the companion as a Settings tab.
+  - The pill is the REC stripe: a red, gold and navy 32x6 pt stripe at rest, red with seven white bars while listening, navy once typed, gold when something needs the user. It only shows live feedback. Only the transcript island is large.
+  - The app icon is seven red, gold and blue bars on black tape.
   - The companion is the CX-ArtLab robot, which replaces the cats, dog, panda and sprite packs.
 
 ## Evidence on Hand
 
-- Static product previews in `Assets/screenshots/` (rendered from SwiftUI, not live captures) and Product Hunt material in `ProductHuntAssets/`, `PRODUCT_HUNT_LAUNCH.md`.
-- Prior design and architecture thinking: `docs/PRODUCT_DESIGN_REBUILD.md`, `docs/ARCHITECTURE_RESEARCH_AND_REDESIGN.md`.
+- README previews in `Assets/screenshots/` (rendered from the SwiftUI snapshot suites with sample data, 2026-10-13) and Product Hunt material in `ProductHuntAssets/`, `PRODUCT_HUNT_LAUNCH.md`.
+- A 23 s social video in `promo/` (rendered by `promo/render/`).
+- The shipped design system: `DESIGN.md`.
 - Absent, do not fabricate: user counts, ratings, testimonials, benchmark numbers that were not measured on this Mac.
 
 ## Product Principles

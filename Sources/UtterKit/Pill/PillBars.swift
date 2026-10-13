@@ -5,7 +5,7 @@ import SwiftUI
 
 /// What the seven bars are doing. Each pill look picks one.
 enum PillBarMode: Equatable {
-    case hidden, rest, voice, thinking, dip, flat
+    case hidden, rest, voice, thinking, flat
 }
 
 /// The icon's seven bars at pill size, in points. Proportions come from `MarkGeometry`. Width and
@@ -66,19 +66,15 @@ enum PillBarGeometry {
     /// The voice spring per bar: the centre quickest, the heavier outer bars a touch slower.
     static func voiceResponse(_ index: Int) -> Double { 0.18 + 0.08 * edge(index) }
     static let voiceBounce = 0.2
-    /// The done dip: quick, barely any bounce.
-    static let dipResponse = 0.21
-    static let dipBounce = 0.1
 }
 
-/// Seven `CALayer` bars. Each change hands the render server one additive spring per bar, so a
+/// Seven white `CALayer` bars. Each change hands the render server one additive spring per bar, so a
 /// spring still in flight keeps its velocity, main does nothing between mic updates, and nothing
 /// runs at rest.
 final class PillBarsView: NSView {
     private let bars: [CALayer] = (0..<PillBarGeometry.count).map { _ in CALayer() }
     private var mode = PillBarMode.hidden
     private var height: CGFloat = PillMetrics.capsuleHeight
-    private var color = NSColor.white
     private var reduceMotion = false
     private var serial = 0
     private let levels: PillLevelSignal?
@@ -93,7 +89,7 @@ final class PillBarsView: NSView {
             bar.opacity = 0
             bar.bounds.size = CGSize(width: side, height: side)
             bar.cornerRadius = side / 2
-            bar.backgroundColor = color.cgColor
+            bar.backgroundColor = NSColor.white.cgColor
             layer?.addSublayer(bar)
         }
         levelWatch = levels?.$value.sink { [weak self] in self?.voice($0) }
@@ -114,10 +110,9 @@ final class PillBarsView: NSView {
     }
 
     /// `height` is the capsule's, which sets how tall the bars may stand.
-    func update(_ next: PillBarMode, height nextHeight: CGFloat, color nextColor: NSColor, reduceMotion: Bool,
-                level: Float = 0) {
+    func update(_ next: PillBarMode, height nextHeight: CGFloat, reduceMotion: Bool, level: Float = 0) {
         self.reduceMotion = reduceMotion
-        guard next != mode || nextColor != color || nextHeight != height else {
+        guard next != mode || nextHeight != height else {
             if next == .voice, levels == nil { voice(level) }
             return
         }
@@ -126,7 +121,6 @@ final class PillBarsView: NSView {
         height = nextHeight
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if nextColor != color { tint(nextColor) }
         if previous == .thinking || next == .thinking || next == .hidden { freeze() }
         if next == .hidden {
             fade(to: 0, delay: 0, duration: 0.1)
@@ -139,9 +133,6 @@ final class PillBarsView: NSView {
         case .rest: spring(to: PillBarGeometry.rest(height: height), response: { _ in 0.3 }, bounce: 0.15)
         case .voice: voice(levels?.value ?? level, force: true)
         case .thinking: think()
-        case .dip:
-            spring(to: PillBarGeometry.flat(height: height), response: { _ in PillBarGeometry.dipResponse },
-                   bounce: PillBarGeometry.dipBounce)
         case .flat: spring(to: PillBarGeometry.flat(height: height), response: { _ in 0.26 }, bounce: 0)
         }
     }
@@ -240,25 +231,12 @@ final class PillBarsView: NSView {
             bar.add(fade, forKey: "fade")
         }
     }
-
-    private func tint(_ next: NSColor) {
-        color = next
-        for bar in bars {
-            let fade = CABasicAnimation(keyPath: "backgroundColor")
-            fade.fromValue = bar.presentation()?.backgroundColor ?? bar.backgroundColor
-            fade.toValue = next.cgColor
-            fade.duration = 0.2
-            bar.backgroundColor = next.cgColor
-            bar.add(fade, forKey: "tint")
-        }
-    }
 }
 
 /// The bars in SwiftUI. Live mic levels arrive through `levels`; the onboarding demo passes `level`.
 struct PillBars: NSViewRepresentable {
     let mode: PillBarMode
     let height: CGFloat
-    let color: NSColor
     var levels: PillLevelSignal?
     var level: Float = 0
     let reduceMotion: Bool
@@ -266,6 +244,6 @@ struct PillBars: NSViewRepresentable {
     func makeNSView(context: Context) -> PillBarsView { PillBarsView(levels: levels) }
 
     func updateNSView(_ view: PillBarsView, context: Context) {
-        view.update(mode, height: height, color: color, reduceMotion: reduceMotion, level: level)
+        view.update(mode, height: height, reduceMotion: reduceMotion, level: level)
     }
 }

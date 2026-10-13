@@ -1,32 +1,23 @@
+import AVFoundation
+import AppKit
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 import UtterCore
 
 // MARK: - Navigation
 
-enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
-    case home = "Home"
+enum SidebarItem: String, Hashable {
     case library = "Library"
     case words = "Words"
+    /// Companion lives in Settings; `MainWindowModel.followRoute` hands this route to its tab.
     case companion = "Companion"
 
-    var id: String { rawValue }
     var title: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .home: "house"
-        case .library: "books.vertical"
-        case .words: "textformat"
-        case .companion: "face.smiling"
-        }
-    }
-
-    var shortcut: KeyEquivalent { KeyEquivalent(Character(String(Self.allCases.firstIndex(of: self)! + 1))) }
 }
 
 enum LibraryFilter: String, CaseIterable, Identifiable {
-    case all = "All"
+    case all = "Everything"
     case dictations = "Dictations"
     case notes = "Notes"
     case meetings = "Meetings"
@@ -49,7 +40,7 @@ enum LibraryFilter: String, CaseIterable, Identifiable {
 final class SidebarSelection {
     static let shared = SidebarSelection()
 
-    var item: SidebarItem = .home
+    var item: SidebarItem = .library
     var libraryFilter: LibraryFilter = .all
     var libraryItemID: String?
     var wordsSection: WordsViewModel.Section = .dictionary
@@ -61,7 +52,6 @@ final class SidebarSelection {
 
     func open(screen: String) {
         switch screen.lowercased() {
-        case "library", "memory", "history", "transcripts", "all": openLibrary(.all)
         case "dictations": openLibrary(.dictations)
         case "notes": openLibrary(.notes)
         case "meetings": openLibrary(.meetings)
@@ -69,7 +59,7 @@ final class SidebarSelection {
         case "snippets": openWords(.snippets)
         case "commands", "transforms", "tools", "engine", "voiceengine": openWords(.commands)
         case "companion": item = .companion
-        default: item = .home
+        default: openLibrary(.all)
         }
     }
 
@@ -83,7 +73,7 @@ final class SidebarSelection {
 
     func openNote(_ id: UUID) { open(libraryItem: LibraryItem.noteID(id)) }
 
-    private func openLibrary(_ filter: LibraryFilter) {
+    func openLibrary(_ filter: LibraryFilter) {
         libraryFilter = filter
         item = .library
     }
@@ -148,6 +138,144 @@ final class CaptureStatus {
     }
 }
 
+// MARK: - Setup
+
+/// What Utter still needs before dictation works, shown as a note at the top of Library.
+@MainActor @Observable
+final class SetupNeeds {
+    enum Need: Equatable, Identifiable {
+        case microphone
+        case accessibility
+        case model(downloading: Double?)
+        case modelFailed(String)
+
+        var id: String {
+            switch self {
+            case .microphone: "microphone"
+            case .accessibility: "accessibility"
+            case .model: "model"
+            case .modelFailed: "modelFailed"
+            }
+        }
+
+        var sentence: String {
+            switch self {
+            case .microphone: "Allow the microphone so Utter can hear you."
+            case .accessibility: "Allow Accessibility so Utter can type into other apps."
+            case .model(nil): "Download the speech model so Utter can turn speech into text."
+            case .model: "Downloading the speech model."
+            case .modelFailed(let reason): "The speech model didn't load. \(reason)"
+            }
+        }
+
+        var actionTitle: String {
+            switch self {
+            case .microphone, .accessibility: "Allow"
+            case .model: "Download"
+            case .modelFailed: "Speech Settings"
+            }
+        }
+    }
+
+    struct Readiness: Equatable {
+        var mic = false
+        var ax = false
+        var modelPresent = true
+        var modelLoad: LocalWhisperProvider.LoadState = .idle
+    }
+
+    var readiness = Readiness()
+    private(set) var modelState: ModelStore.State?
+    /// A better model this Mac runs well, offered once until the user says Not now.
+    private(set) var upgrade: SpeechModel?
+    private(set) var upgradeState: ModelStore.State?
+    let device: Device
+
+    @ObservationIgnored private let models: ModelStore
+    @ObservationIgnored private let openSettings: (SettingsGroup?) -> Void
+    @ObservationIgnored private var watches: Set<AnyCancellable> = []
+
+    @ObservationIgnored private let defaults: UserDefaults
+    private static let declinedKey = "declinedModelUpgrade"
+
+    init(readiness: ReadinessMonitor, models: ModelStore, device: Device = .current(), defaults: UserDefaults = .standard,
+         openSettings: @escaping (SettingsGroup?) -> Void) {
+        self.models = models
+        self.device = device
+        self.defaults = defaults
+        self.openSettings = openSettings
+        Publishers.CombineLatest4(readiness.$micGranted, readiness.$axGranted, readiness.$modelPresent, readiness.$modelLoad)
+            .sink { [weak self] mic, ax, present, load in
+                MainActor.assumeIsolated { self?.readiness = Readiness(mic: mic, ax: ax, modelPresent: present, modelLoad: load) }
+            }.store(in: &watches)
+        models.$states.combineLatest(models.$active).sink { [weak self] states, active in
+            MainActor.assumeIsolated {
+                self?.modelState = states[active]
+                self?.refreshUpgrade(states)
+            }
+        }.store(in: &watches)
+    }
+
+    private func refreshUpgrade(_ states: [SpeechModel.Tier: ModelStore.State]? = nil) {
+        let offer = models.suggestedUpgrade(for: device)
+        upgrade = offer?.tier.rawValue == defaults.string(forKey: Self.declinedKey) ? nil : offer
+        upgradeState = upgrade.flatMap { (states ?? models.states)[$0.tier] }
+    }
+
+    /// Downloads the offered model; Utter switches to it once it's verified on disk.
+    func downloadUpgrade() {
+        if let upgrade { models.select(upgrade.tier) }
+    }
+
+    func declineUpgrade() {
+        defaults.set(upgrade?.tier.rawValue, forKey: Self.declinedKey)
+        refreshUpgrade()
+    }
+
+    var needs: [Need] { Self.needs(readiness, modelState: modelState) }
+
+    static func needs(_ readiness: Readiness, modelState: ModelStore.State?) -> [Need] {
+        var needs: [Need] = []
+        if !readiness.mic { needs.append(.microphone) }
+        if !readiness.ax { needs.append(.accessibility) }
+        if !readiness.modelPresent {
+            if case .downloading(let fraction) = modelState {
+                needs.append(.model(downloading: fraction))
+            } else {
+                needs.append(.model(downloading: nil))
+            }
+        } else if case .failed(let reason) = readiness.modelLoad {
+            needs.append(.modelFailed(reason))
+        }
+        return needs
+    }
+
+    static func cardTitle(_ count: Int) -> String {
+        count == 1 ? "One thing left." : "\(count) things left."
+    }
+
+    func grant(_ need: Need) {
+        switch need {
+        case .microphone:
+            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+                AVCaptureDevice.requestAccess(for: .audio) { _ in }
+            } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        case .accessibility:
+            AccessibilityPermission.openSettingsPane()
+        case .model:
+            if SpeechModel.isBundled(models.active) {
+                openSettings(.speech)
+            } else {
+                models.download(models.active)
+            }
+        case .modelFailed:
+            openSettings(.speech)
+        }
+    }
+}
+
 // MARK: - Composition root
 
 /// The main window's screens and the services they share, built once per window.
@@ -155,13 +283,11 @@ final class CaptureStatus {
 final class MainWindowModel {
     let selection: SidebarSelection
     let status: CaptureStatus
-    let readiness: ReadinessMonitor
+    let setup: SetupNeeds
     let userData: UserData
-    let home: HomeViewModel
     let library: LibraryViewModel
     let words: WordsViewModel
     let openSettings: (SettingsGroup?) -> Void
-    let openSetup: () -> Void
     let toggleHandsFree: () -> Void
 
     init(selection: SidebarSelection? = nil,
@@ -174,308 +300,255 @@ final class MainWindowModel {
          meeting: MeetingSession? = nil,
          startMeeting: @escaping () async -> UUID? = { nil },
          openSettings: @escaping (SettingsGroup?) -> Void = { _ in },
-         openSetup: @escaping () -> Void = {},
          toggleHandsFree: @escaping () -> Void = {}) {
         let selection = selection ?? .shared
-        let status = status ?? CaptureStatus()
-        let readiness = readiness ?? .shared
         let userData = userData ?? .shared
         let history = history ?? .shared
-        let notes = notes ?? .shared
-        let models = models ?? .shared
         self.selection = selection
-        self.status = status
-        self.readiness = readiness
+        self.status = status ?? CaptureStatus()
         self.userData = userData
         self.openSettings = openSettings
-        self.openSetup = openSetup
         self.toggleHandsFree = toggleHandsFree
-        library = LibraryViewModel(selection: selection, history: history, store: notes,
+        setup = SetupNeeds(readiness: readiness ?? .shared, models: models ?? .shared, openSettings: openSettings)
+        library = LibraryViewModel(selection: selection, history: history, store: notes ?? .shared,
                                    meeting: meeting, startMeetingCapture: startMeeting)
-        home = HomeViewModel(status: status, selection: selection, library: library, readiness: readiness,
-                             userData: userData, models: models, openSettings: openSettings)
         words = WordsViewModel(userData: userData, history: history)
         words.section = selection.wordsSection
+    }
+
+    /// Companion lives in Settings: its route opens that tab and leaves the window on Library.
+    func followRoute() {
+        guard selection.item == .companion else { return }
+        selection.item = .library
+        openSettings(.companion)
     }
 }
 
 // MARK: - Window
 
+/// One J-card: the spine, the main column, and on Library the fold.
 struct MainWindowView: View {
+    let model: MainWindowModel
+
+    var body: some View {
+        HStack(spacing: 0) {
+            FlowSidebar(model: model)
+            FlowContent(model: model)
+        }
+        .foregroundStyle(Mixtape.ink)
+        .tint(Mixtape.pen)
+        .background(Mixtape.paper)
+        .ignoresSafeArea()
+        .background(WindowChrome())
+        .navigationTitle(model.selection.item.title)
+        .onChange(of: model.selection.item, initial: true) { model.followRoute() }
+    }
+}
+
+/// The spine: Library's filters, Words, and Settings at the foot, with the brand stripe down its edge.
+struct FlowSidebar: View {
+    let model: MainWindowModel
+
+    var body: some View {
+        let selection = model.selection
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(LibraryFilter.allCases.enumerated()), id: \.element) { index, filter in
+                SpineRow(title: filter.title, count: model.library.count(filter),
+                         current: selection.item != .words && selection.libraryFilter == filter) {
+                    selection.openLibrary(filter)
+                }
+                .keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+            }
+            Text("Vocabulary")
+                .mixtapeCaps(10, tracking: 0.2)
+                .foregroundStyle(Mixtape.ink3)
+                .padding(EdgeInsets(top: 14, leading: 10, bottom: 4, trailing: 10))
+                .accessibilityAddTraits(.isHeader)
+            SpineRow(title: "Words", count: model.words.words.count, current: selection.item == .words) {
+                selection.item = .words
+            }
+            .keyboardShortcut("5")
+            Spacer(minLength: 16)
+            SpineRow(title: "Settings") { model.openSettings(nil) }
+        }
+        .padding(EdgeInsets(top: 56, leading: 10, bottom: 10, trailing: 16))
+        .frame(width: 214)
+        .frame(maxHeight: .infinity)
+        .background(Mixtape.spine)
+        .overlay(alignment: .bottomLeading) { label }
+        .overlay(alignment: .trailing) {
+            VStack(spacing: 0) {
+                Mixtape.red
+                Mixtape.gold
+                Mixtape.navy
+            }
+            .frame(width: 6)
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Utter sections")
+    }
+
+    /// The spine's printed label, read bottom to top.
+    private var label: some View {
+        Text("Utter · \(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))")
+            .mixtapeCaps(10.5, tracking: 0.34)
+            .foregroundStyle(Mixtape.ink3)
+            .lineLimit(1)
+            .fixedSize()
+            .rotationEffect(.degrees(-90), anchor: .topLeading)
+            .offset(x: 22, y: -70)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct SpineRow: View {
+    let title: String
+    var count: Int?
+    var current = false
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(title)
+                    .fontWeight(current ? .semibold : .regular)
+                    .padding(.horizontal, 1)
+                    .background {
+                        if current {
+                            LinearGradient(stops: [.init(color: .clear, location: 0.6), .init(color: Mixtape.mark, location: 0.6)],
+                                           startPoint: .top, endPoint: .bottom)
+                        }
+                    }
+                Spacer(minLength: 0)
+                if let count {
+                    Text(count, format: .number).font(Mixtape.mono(11)).foregroundStyle(Mixtape.ink3)
+                }
+            }
+            .font(Mixtape.body(13.5))
+            .foregroundStyle(current || hovering ? Mixtape.ink : Mixtape.ink2)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(current ? .isSelected : [])
+    }
+}
+
+/// The main column under its toolbar row; Library adds the fold on the right.
+struct FlowContent: View {
     let model: MainWindowModel
 
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        @Bindable var library = model.library
-        NavigationSplitView {
-            FlowSidebar(model: model)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 236, max: 300)
-        } detail: {
-            FlowContent(model: model, searchFocused: $searchFocused)
-        }
-        .tint(Look.Color.tint)
-        .searchable(text: $library.search, placement: .toolbar, prompt: "Search what you said")
-        .modifier(SearchFocus(focused: $searchFocused))
-        .onChange(of: library.search) {
-            if !library.search.isEmpty, model.selection.item != .library { model.selection.item = .library }
-        }
-        .background { shortcuts }
-    }
-
-    // Keyboard switches never animate.
-    private var shortcuts: some View {
-        ForEach(SidebarItem.allCases) { item in
-            Button(item.title) {
-                withTransaction(\.disablesAnimations, true) { model.selection.item = item }
-            }
-            .keyboardShortcut(item.shortcut)
-        }
-        .frame(width: 0, height: 0)
-        .opacity(0)
-        .accessibilityHidden(true)
-    }
-}
-
-struct FlowSidebar: View {
-    let model: MainWindowModel
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var lens
-
-    var body: some View {
-        let current = model.selection.item
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(SidebarItem.allCases) { item in
-                SidebarRow(title: item.title, icon: item.icon, selected: item == current) {
-                    withAnimation(Look.Motion.pane.animation(reduceMotion: reduceMotion)) { model.selection.item = item }
+        let onWords = model.selection.item == .words
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                ShellToolbar(model: model, searchFocused: $searchFocused)
+                    .padding(EdgeInsets(top: 16, leading: 34, bottom: 0, trailing: 30))
+                Group {
+                    if onWords { WordsScreen(model: model.words) } else { LibraryScreen(window: model) }
                 }
-                .background { if item == current { selectionLens } }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            Spacer(minLength: 16)
-            SidebarRow(title: "Set up Utter", icon: "checklist", action: model.openSetup)
-            SidebarRow(title: "Settings", icon: "gearshape") { model.openSettings(nil) }
+            .frame(minWidth: 400, maxWidth: .infinity)
+            if !onWords { LibraryFold(window: model).frame(width: 360) }
         }
-        .animation(Look.Motion.lens.animation(reduceMotion: reduceMotion), value: current)
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Utter sections")
-    }
-
-    @ViewBuilder
-    private var selectionLens: some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        let drawn = shape.fill(Look.Color.lens)
-            .overlay {
-                shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.22), Look.Color.edge],
-                                                  startPoint: .top, endPoint: .center))
-            }
-        if reduceMotion {
-            drawn.transition(.opacity)
-        } else {
-            drawn.matchedGeometryEffect(id: "lens", in: lens)
+        .onChange(of: model.library.search) {
+            if !model.library.search.isEmpty, model.selection.item != .library { model.selection.item = .library }
         }
     }
 }
 
-private struct SidebarRow: View {
-    let title: String
-    let icon: String
-    var selected = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label {
-                Text(title)
-            } icon: {
-                Image(systemName: icon).frame(width: 18)
-            }
-            .font(.body)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-        }
-        .buttonStyle(Look.RowStyle(radius: 10, scale: Look.Press.nav, quiet: true, selected: selected))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// The detail column: the screen for the current route over one continuous Moonlight ground.
-struct FlowContent: View {
+/// New note, Hands-free, Library's actions and the search line, as ghost pens on the page.
+private struct ShellToolbar: View {
     let model: MainWindowModel
     let searchFocused: FocusState<Bool>.Binding
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
+        @Bindable var library = model.library
         // Words binds its own ⌘N, and ⌘F where it has a search field.
         let onWords = model.selection.item == .words
-        screen
-            .id(model.selection.item)
-            .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 4)))
-            .navigationTitle(model.selection.item.title)
-            .frame(minWidth: 420, idealWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
-            .background { MoonlightGround().ignoresSafeArea() }
-            .modifier(ShellChrome(onHome: model.selection.item == .home))
-            .modifier(ShellToolbar(newNote: newNote, newNoteShortcut: !onWords, toggleHandsFree: model.toggleHandsFree))
-            .background {
-                Button("Find") { searchFocused.wrappedValue = true }
-                    .keyboardShortcut(onWords && model.words.section != .commands ? nil : KeyboardShortcut("f"))
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-                    .accessibilityHidden(true)
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            Button("New note") {
+                model.library.newNote()
+                model.selection.item = .library
             }
-    }
-
-    private func newNote() {
-        model.library.newNote()
-        model.selection.item = .library
-    }
-
-    @ViewBuilder
-    private var screen: some View {
-        switch model.selection.item {
-        case .home: HomeScreen(model: model.home)
-        case .library: LibraryScreen(model: model.library)
-        case .words: VoiceEngineView(model: model.words)
-        case .companion: CompanionScreen()
+            .keyboardShortcut(onWords ? nil : KeyboardShortcut("n"))
+            Button("Hands-free", action: model.toggleHandsFree)
+                .help("Talk without holding the key. Press again to stop.")
+            if !onWords { LibraryActions(model: model.library) }
+            LineField("Search what you said", text: $library.search)
+                .focused(searchFocused)
+                .frame(minWidth: 120, idealWidth: 210, maxWidth: 210)
+                .padding(.leading, 8)
+        }
+        .buttonStyle(.pen(.ghost, .small))
+        .frame(height: 30)
+        .background {
+            Button("Find") { searchFocused.wrappedValue = true }
+                .keyboardShortcut(onWords && model.words.section != .commands ? nil : KeyboardShortcut("f"))
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
         }
     }
 }
 
-/// Two pieces of toolbar glass: New Note, then Hands-free.
-private struct ShellToolbar: ViewModifier {
-    let newNote: () -> Void
-    let newNoteShortcut: Bool
-    let toggleHandsFree: () -> Void
+/// Recording a meeting and exporting what's shown.
+private struct LibraryActions: View {
+    let model: LibraryViewModel
 
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content.toolbar {
-                ToolbarSpacer(.flexible)
-                ToolbarItem(placement: .primaryAction) { newNoteButton }
-                ToolbarSpacer(.fixed, placement: .primaryAction)
-                ToolbarItem(placement: .primaryAction) { handsFreeButton }
-            }
-        } else {
-            content.toolbar {
-                ToolbarItem(placement: .primaryAction) { newNoteButton }
-                ToolbarItem(placement: .primaryAction) { handsFreeButton }
-            }
-        }
-    }
-
-    private var newNoteButton: some View {
-        Button(action: newNote) { Label("New Note", systemImage: "square.and.pencil").labelStyle(.titleAndIcon) }
-            .keyboardShortcut(newNoteShortcut ? KeyboardShortcut("n") : nil)
-            .help("New Note")
-    }
-
-    private var handsFreeButton: some View {
-        Button(action: toggleHandsFree) { Label("Hands-free", systemImage: "lock.fill").labelStyle(.titleAndIcon) }
-            .help("Talk without holding the key. Press again to stop.")
-    }
-}
-
-/// Home carries its title in the content; every screen gets the hard scroll edge instead of a hairline.
-private struct ShellChrome: ViewModifier {
-    let onHome: Bool
-
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content.toolbar(removing: onHome ? .title : nil).scrollEdgeEffectStyle(.hard, for: .top)
-        } else {
-            content
-        }
-    }
-}
-
-/// The window's one ground, v2's Moonlight gradient; it runs under the floating sidebar and the toolbar.
-struct MoonlightGround: View {
     var body: some View {
-        LinearGradient(colors: [Look.Color.groundTop, Look.Color.groundBottom], startPoint: .top, endPoint: .bottom)
-    }
-}
-
-private struct SearchFocus: ViewModifier {
-    let focused: FocusState<Bool>.Binding
-
-    func body(content: Content) -> some View {
-        if #available(macOS 15, *) { content.searchFocused(focused) } else { content }
-    }
-}
-
-// MARK: - Shared pieces
-
-private struct LibraryTransitionKey: EnvironmentKey {
-    static let defaultValue: Namespace.ID? = nil
-}
-
-extension EnvironmentValues {
-    /// Pairs a Home row with the Library detail it opens, so the words appear to travel.
-    var libraryTransition: Namespace.ID? {
-        get { self[LibraryTransitionKey.self] }
-        set { self[LibraryTransitionKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Content-layer action buttons in Moonlight: a fill and a hairline, since glass is for navigation only.
-    func glassButton(prominent: Bool = false) -> some View {
-        buttonStyle(Look.ActionStyle(prominent: prominent))
-    }
-
-    /// A content card: v2's fill and hairline at radius 18. Mid-window cards sit far from the window's
-    /// corners, so a concentric shape would resolve to its minimum anyway.
-    func panel() -> some View {
-        background {
-            let shape = RoundedRectangle(cornerRadius: Look.Card.radius, style: .continuous)
-            shape.fill(Look.Color.fill)
-                .overlay {
-                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.15), Look.Color.edge],
-                                                      startPoint: .top, endPoint: .init(x: 0.5, y: 0.12)))
+        Menu {
+            Button("Record a Meeting", action: model.startMeeting).disabled(!model.canStartMeeting)
+            Menu("Export What\u{2019}s Shown") {
+                ForEach(LibraryViewModel.ExportFormat.allCases) { format in
+                    Button(format.rawValue) { export(format) }
                 }
-        }
-    }
-
-    func sharedWords(_ id: String, in namespace: Namespace.ID?, isSource: Bool) -> some View {
-        modifier(SharedWords(id: id, namespace: namespace, isSource: isSource))
-    }
-}
-
-private struct SharedWords: ViewModifier {
-    let id: String
-    let namespace: Namespace.ID?
-    let isSource: Bool
-
-    func body(content: Content) -> some View {
-        if let namespace {
-            content.matchedGeometryEffect(id: id, in: namespace, properties: .frame, isSource: isSource)
-        } else {
-            content
-        }
-    }
-}
-
-/// The small mark over an empty list, with one next step.
-struct EmptyMark<Actions: View>: View {
-    let title: String
-    let message: String
-    @ViewBuilder var actions: Actions
-
-    var body: some View {
-        ContentUnavailableView {
-            Label {
-                Text(title)
-            } icon: {
-                LivingMark(tint: .secondary).frame(height: 40)
             }
-        } description: {
-            Text(message)
-        } actions: {
-            actions
+            .disabled(model.visibleItems.isEmpty)
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.inkIcon)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("Library actions")
+        .help("Record a meeting or export")
+    }
+
+    private func export(_ format: LibraryViewModel.ExportFormat) {
+        let text = model.exportText(format)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Utter \(model.filter.title).\(format.fileExtension)"
+        panel.allowedContentTypes = [UTType(filenameExtension: format.fileExtension) ?? .plainText]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            model.save(text, to: url)
+        }
+    }
+}
+
+/// Hides the window title and clears the title bar, so the J-card runs to the top and the traffic lights sit on the spine.
+private struct WindowChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.titleVisibility = .hidden
+            window?.titlebarAppearsTransparent = true
         }
     }
 }

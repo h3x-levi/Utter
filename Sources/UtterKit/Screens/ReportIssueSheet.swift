@@ -143,66 +143,80 @@ public struct ReportIssueSheet: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Form {
-                Section {
-                    Picker("Kind", selection: $model.category) {
-                        ForEach(IssueCategory.allCases) { Text($0.label).tag($0) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Report an issue")
+                            .mixtapeCaps(24, tracking: 0.02)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Tell us what went wrong or what you would like. You check the report in your browser before anything is sent.")
+                            .font(Mixtape.body(13))
+                            .foregroundStyle(Mixtape.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    TextField("Summary", text: $model.title,
-                              prompt: Text("Dictation stops after the Mac wakes up"))
-                } header: {
-                    Text("Tell us what went wrong or what you would like. You check the report in your browser before anything is sent.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textCase(nil)
-                }
-
-                Section("What happened") {
-                    prose("What happened", $model.details, prompt: "A few sentences are plenty")
-                }
-
-                if model.category != .feature {
-                    Section("Steps to reproduce") {
-                        prose("Steps to reproduce", $model.steps, prompt: "1. Hold fn in Mail\n2. Speak\n3. Release")
+                    SettingsSection("The issue") {
+                        SettingsChoice(title: "Kind", selection: $model.category,
+                                       options: IssueCategory.allCases.map { ($0, $0.label) })
+                            .frame(maxWidth: .infinity, minHeight: 51, alignment: .leading)
+                            .overlay(alignment: .bottom) { Rectangle().fill(Mixtape.rule).frame(height: 1) }
+                        field("Summary", $model.title, prompt: "Dictation stops after the Mac wakes up")
                     }
-                    Section {
-                        TextField("You expected", text: $model.expected, prompt: Text("The words appear in Mail"))
-                        TextField("Instead", text: $model.actual, prompt: Text("The pill stayed on transcribing"))
+                    SettingsSection("What happened") {
+                        prose("What happened", $model.details, prompt: "A few sentences are plenty")
                     }
-                }
-
-                Section {
-                    DisclosureGroup("What gets attached") {
+                    if model.category != .feature {
+                        SettingsSection("Steps to reproduce") {
+                            prose("Steps to reproduce", $model.steps, prompt: "1. Hold fn in Mail\n2. Speak\n3. Release")
+                            field("You expected", $model.expected, prompt: "The words appear in Mail")
+                            field("Instead", $model.actual, prompt: "The pill stayed on transcribing")
+                        }
+                    }
+                    SettingsSection("What gets attached", detail: "no dictation text or audio") {
                         Text(model.diagnostics)
-                            .font(.callout.monospaced())
-                            .foregroundStyle(.secondary)
+                            .font(Mixtape.mono(11.5))
+                            .foregroundStyle(Mixtape.ink3)
+                            .lineSpacing(3)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 12)
                     }
-                } footer: {
-                    Text("Version, Mac and settings only. No dictation text or audio.")
                 }
+                .padding(.horizontal, 34)
+                .padding(.top, 26)
+                .padding(.bottom, 24)
             }
-            .formStyle(.grouped)
 
-            Divider()
-
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Button(model.copied ? "Copied" : "Copy Report") { model.copyReport() }
+                    .buttonStyle(.pen(.ghost))
                 Spacer()
                 Button("Cancel", role: .cancel) { model.cancel() }
+                    .buttonStyle(.pen(.outline))
                     .keyboardShortcut(.cancelAction)
                 Button("Open in Browser") { model.openInBrowser() }
+                    .buttonStyle(.pen(.fill))
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(.horizontal, 34)
+            .frame(height: 64)
+            .overlay(alignment: .top) { Rectangle().fill(Mixtape.rule).frame(height: 1) }
         }
-        .tint(Look.Color.tint)
+        .background(Mixtape.paper)
+        .foregroundStyle(Mixtape.ink)
+        .tint(Mixtape.ink)
+    }
+
+    private func field(_ label: String, _ text: Binding<String>, prompt: String) -> some View {
+        SettingsRow(label) {
+            SettingsField(prompt, label: label, text: text)
+                .frame(maxWidth: 360)
+        }
     }
 
     private func prose(_ label: String, _ text: Binding<String>, prompt: String) -> some View {
-        TextField(label, text: text, prompt: Text(prompt), axis: .vertical)
+        SettingsField(prompt, label: label, text: text, axis: .vertical)
             .lineLimit(3...10)
-            .labelsHidden()
+            .padding(.top, 12)
+            .padding(.bottom, 4)
     }
 }

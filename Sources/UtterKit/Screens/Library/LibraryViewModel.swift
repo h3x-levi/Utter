@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 import UtterCore
 
-/// One dictation, note or meeting, as Home and Library list it.
+/// One dictation, note or meeting: a track on Library's tape.
 struct LibraryItem: Identifiable, Hashable {
     enum Kind { case dictation, note, meeting }
 
@@ -25,8 +25,10 @@ struct LibraryItem: Identifiable, Hashable {
     let title: String
     let body: String
     let words: Int
-    /// How long a meeting ran: from the note's creation to its last appended turn.
+    /// Seconds of recorded speech, or how long a meeting ran; 0 when unknown.
     let duration: TimeInterval
+    /// The app a dictation was typed into; empty when unknown.
+    let app: String
     /// A meeting's label for the user's own microphone.
     let you: String?
 
@@ -38,7 +40,8 @@ struct LibraryItem: Identifiable, Hashable {
         title = entry.text
         body = entry.text
         words = entry.wordCount
-        duration = 0
+        duration = entry.duration
+        app = entry.app
         you = nil
     }
 
@@ -50,7 +53,8 @@ struct LibraryItem: Identifiable, Hashable {
         title = note.displayTitle
         body = note.body
         words = note.wordCount
-        duration = note.modified.timeIntervalSince(note.created)
+        duration = note.source == .meeting ? note.modified.timeIntervalSince(note.created) : 0
+        app = ""
         you = note.source == .meeting ? note.speakerLabels.you : nil
     }
 
@@ -62,29 +66,24 @@ struct LibraryItem: Identifiable, Hashable {
         }
     }
 
-    var symbol: String {
-        switch kind {
-        case .dictation: "waveform"
-        case .note: "note.text"
-        case .meeting: "person.2"
-        }
+    /// Where the words went, for the fold's meta line.
+    var destination: String {
+        kind == .dictation && !app.isEmpty ? "Into \(app)" : kindName
     }
 
-    /// The first line that isn't the title, so a note's row doesn't show its title twice.
-    var preview: String? {
-        guard kind == .note else { return nil }
-        return body.split(separator: "\n", omittingEmptySubsequences: true)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { !$0.isEmpty && $0 != title && !$0.hasPrefix("#") }
+    /// Seconds of talk: the recorded length, or about 2.4 words a second when none was recorded.
+    var talkTime: TimeInterval { duration > 0 ? duration : max(3, (Double(words) / 2.4).rounded()) }
+
+    /// A note's title, or a dictation's first clause.
+    var heading: String {
+        guard kind == .dictation else { return title }
+        let clause = title.split(whereSeparator: { ",.?!;:".contains($0) }).first?.trimmingCharacters(in: .whitespaces)
+        return clause.flatMap { $0.isEmpty ? nil : $0 } ?? title
     }
+
+    var isMorning: Bool { Calendar.current.component(.hour, from: date) < 12 }
 
     var turns: [Turn] { Self.turns(in: body) }
-
-    /// The first turn from each side, so a meeting's row previews You and Others.
-    var previewTurns: [Turn] {
-        let turns = turns
-        return [turns.first { $0.speaker == you }, turns.first { $0.speaker != you }].compactMap { $0 }
-    }
 
     /// A meeting body split at its `**Speaker:**` headings; lines without one join the turn above.
     static func turns(in body: String) -> [Turn] {
@@ -108,9 +107,9 @@ struct LibraryItem: Identifiable, Hashable {
 final class LibraryViewModel {
     typealias Item = LibraryItem
 
+    /// One day of tracks; `id` is the day's start and `items` run oldest first.
     struct Day: Identifiable {
         let id: Date
-        let title: String
         var items: [Item]
     }
 
@@ -129,7 +128,17 @@ final class LibraryViewModel {
         }
     }
 
-    private(set) var entries: [TranscriptionEntry] = [] { didSet { rebuild() } }
+    private(set) var entries: [TranscriptionEntry] = [] {
+        didSet {
+            if !oldValue.isEmpty, let newest = entries.max(by: { $0.timestamp < $1.timestamp }),
+               !oldValue.contains(where: { $0.id == newest.id }) {
+                freshID = Item.dictationID(newest.id)
+            }
+            rebuild()
+        }
+    }
+    /// The dictation that just arrived; its row writes itself in once.
+    private(set) var freshID: String?
     private(set) var notes: [Note] = [] {
         didSet {
             guard let patched = Self.replacingEditedNote(in: allItems, old: oldValue, new: notes) else { return rebuild() }
@@ -148,6 +157,8 @@ final class LibraryViewModel {
     private(set) var actionFailed = false
     private(set) var meetingMessage: String?
     private(set) var copiedID: String?
+    /// Tracks pasted again this session; they carry a drawn tick.
+    private(set) var pastedIDs: Set<String> = []
     private(set) var meetingState: MeetingSession.State = .idle
     var problem: String?
 
@@ -158,6 +169,7 @@ final class LibraryViewModel {
     @ObservationIgnored private let prepareMeeting: () -> String?
     @ObservationIgnored private let startMeetingCapture: () async -> UUID?
     @ObservationIgnored private let runAction: (NoteAction, UUID) async -> NoteActionResult
+    @ObservationIgnored private let paste: @MainActor (String) -> Void
     @ObservationIgnored private var draftNoteID: UUID?
     @ObservationIgnored private var watches: Set<AnyCancellable> = []
     @ObservationIgnored private var deleteTask: Task<Void, Never>?
@@ -169,7 +181,8 @@ final class LibraryViewModel {
          meeting: MeetingSession? = nil,
          prepareMeeting: (() -> String?)? = nil,
          startMeetingCapture: @escaping () async -> UUID? = { nil },
-         runAction: ((NoteAction, UUID) async -> NoteActionResult)? = nil) {
+         runAction: ((NoteAction, UUID) async -> NoteActionResult)? = nil,
+         paste: @escaping @MainActor (String) -> Void = LibraryViewModel.pasteIntoPreviousApp) {
         self.selection = selection
         self.history = history
         self.store = store
@@ -177,6 +190,7 @@ final class LibraryViewModel {
         self.prepareMeeting = prepareMeeting ?? { MeetingSession.prepare() }
         self.startMeetingCapture = startMeetingCapture
         self.runAction = runAction ?? { await NoteActionRunner.run($0, noteID: $1, store: store) }
+        self.paste = paste
 
         history.$entries.sink { [weak self] entries in
             MainActor.assumeIsolated {
@@ -225,13 +239,10 @@ final class LibraryViewModel {
         set { selection.libraryItemID = newValue }
     }
 
-    var isInspecting: Bool { selectedItem != nil }
-    var inspectorWidth: CGFloat = 440
-
     // MARK: Derived
 
     var visibleItems: [Item] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = self.query
         return allItems.filter { item in
             filter.includes(item.kind) && item.id != pendingDelete?.id
                 && (query.isEmpty || item.title.localizedCaseInsensitiveContains(query)
@@ -239,7 +250,25 @@ final class LibraryViewModel {
         }
     }
 
-    var days: [Day] { Self.days(visibleItems) }
+    private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The days on screen, newest first. Without a search today always leads, so its date heads the page.
+    var days: [Day] {
+        var days = Self.days(visibleItems)
+        let today = Calendar.current.startOfDay(for: .now)
+        if query.isEmpty, days.first?.id != today { days.insert(Day(id: today, items: []), at: 0) }
+        return days
+    }
+
+    /// Every live item by day, oldest first: the tape, the track numbers and each day's summary count all of them.
+    var tapes: [Date: [Item]] {
+        let calendar = Calendar.current
+        return Dictionary(grouping: allItems.reversed().filter { $0.id != pendingDelete?.id }) { calendar.startOfDay(for: $0.date) }
+    }
+
+    static func trackNumber(_ item: Item, in tapes: [Date: [Item]]) -> Int {
+        (tapes[Calendar.current.startOfDay(for: item.date)]?.firstIndex { $0.id == item.id } ?? 0) + 1
+    }
 
     func count(_ filter: LibraryFilter) -> Int {
         allItems.reduce(0) { $0 + (filter.includes($1.kind) && $1.id != pendingDelete?.id ? 1 : 0) }
@@ -267,47 +296,46 @@ final class LibraryViewModel {
     /// False for the note a meeting is still writing into, whose later turns would have nowhere to go.
     func canDelete(_ item: Item) -> Bool { !meetingIsLive || item.uuid != meeting?.noteID }
 
-    /// Newest-first items in the groups Notes uses: Today, Yesterday, Previous 30 Days, then months, then years.
-    static func days(_ items: [Item], now: Date = Date(), calendar: Calendar = .current) -> [Day] {
+    /// Items by calendar day, newest day first, each day's items oldest first.
+    static func days(_ items: [Item], calendar: Calendar = .current) -> [Day] {
         var days: [Day] = []
-        for item in items {
-            let (start, title) = group(item.date, now: now, calendar: calendar)
+        for item in items.sorted(by: { $0.date > $1.date }) {
+            let start = calendar.startOfDay(for: item.date)
             if days.last?.id == start {
-                days[days.count - 1].items.append(item)
+                days[days.count - 1].items.insert(item, at: 0)
             } else {
-                days.append(Day(id: start, title: title, items: [item]))
+                days.append(Day(id: start, items: [item]))
             }
         }
         return days
     }
 
-    static func group(_ date: Date, now: Date, calendar: Calendar) -> (start: Date, title: String) {
-        let today = calendar.startOfDay(for: now)
-        let day = calendar.startOfDay(for: date)
-        let style = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone)
-        switch calendar.dateComponents([.day], from: day, to: today).day ?? 0 {
-        case ...0: return (today, "Today")
-        case 1: return (day, "Yesterday")
-        case 2...30: return (calendar.date(byAdding: .day, value: -30, to: today) ?? day, "Previous 30 Days")
-        default:
-            if calendar.isDate(date, equalTo: now, toGranularity: .year) {
-                let month = calendar.dateInterval(of: .month, for: date)?.start ?? day
-                return (month, month.formatted(style.month(.wide)))
-            }
-            let year = calendar.dateInterval(of: .year, for: date)?.start ?? day
-            return (year, year.formatted(style.year()))
-        }
+    /// "Tuesday 13 October" for today and older dates, "Yesterday" for yesterday; a year only when it isn't this one.
+    static func dayTitle(_ day: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if calendar.isDate(day, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) { return "Yesterday" }
+        let style = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).weekday(.wide).day().month(.wide)
+        return day.formatted(calendar.isDate(day, equalTo: now, toGranularity: .year) ? style : style.year())
     }
 
-    /// "Today, 11:00 AM".
-    static func stamp(_ date: Date) -> String {
-        "\(dayTitle(date)), \(date.formatted(date: .omitted, time: .shortened))"
+    /// "12 tracks · 32 min 54 s of talk".
+    static func summary(_ items: [Item]) -> String {
+        let tracks = items.count == 1 ? "1 track" : "\(items.count) tracks"
+        return "\(tracks) · \(talk(items.reduce(0) { $0 + $1.talkTime })) of talk"
     }
 
-    static func dayTitle(_ day: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
-        return day.formatted(.dateTime.weekday(.wide).day().month(.wide))
+    /// A running time: "0:08", "32:00", "1:02:03".
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        let (h, m, s) = (total / 3600, total / 60 % 60, total % 60)
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+    }
+
+    /// A length of talk: "40 s", "32 min 54 s", "1 h 2 min".
+    static func talk(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        if total < 60 { return "\(total) s" }
+        if total < 3600 { return "\(total / 60) min \(total % 60) s" }
+        return "\(total / 3600) h \(total / 60 % 60) min"
     }
 
     // MARK: Notes
@@ -371,7 +399,18 @@ final class LibraryViewModel {
         }
     }
 
-    // MARK: Copy, delete, undo
+    // MARK: Paste, copy, delete, undo
+
+    func pasteAgain(_ item: Item) {
+        paste(item.body)
+        pastedIDs.insert(item.id)
+    }
+
+    /// Hiding Utter hands focus back to the app underneath; the paste waits for it to come to the front.
+    static func pasteIntoPreviousApp(_ text: String) {
+        NSApp.hide(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { TextInjector.typeText(text) }
+    }
 
     func copy(_ item: Item) {
         NSPasteboard.general.clearContents()

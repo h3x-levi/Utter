@@ -37,9 +37,12 @@ package final class ModelStore: ObservableObject {
     }
 
     private init() {
-        // On first run pick what suits this Mac. Both `small` and `medium` are
-        // bundled, so the recommendation is usually available immediately - fall
-        // back only if it somehow isn't on disk.
+        // A hidden bundled model must not leave Utter with nothing to transcribe with,
+        // e.g. after Reset Utter erased the downloaded one it was hidden in favour of.
+        if SpeechModel.all.allSatisfy({ Self.url(for: $0.tier) == nil }) {
+            UserDefaults.standard.set(Array(Self.purgedBundledTiers.subtracting([SpeechModel.fallback.rawValue])), forKey: Self.purgedKey)
+        }
+        // Use the stored choice, else what suits this Mac if it's on disk, else the bundled model.
         if let stored = UserDefaults.standard.string(forKey: Self.activeKey),
            let tier = SpeechModel.Tier(rawValue: stored),
            Self.url(for: tier) != nil {
@@ -112,6 +115,17 @@ package final class ModelStore: ObservableObject {
         UserDefaults.standard.set(tier.rawValue, forKey: Self.activeKey)
         // The engine caches a loaded context, so it has to be rebuilt.
         NotificationCenter.default.post(name: .speechModelChanged, object: nil)
+    }
+
+    /// The model this Mac runs well, when it isn't the one in use and isn't downloaded yet.
+    /// Offered, never required: the bundled model always works.
+    package func suggestedUpgrade(for device: Device = .current()) -> SpeechModel? {
+        Self.upgrade(recommended: device.recommended, active: active) { Self.url(for: $0) != nil }
+    }
+
+    static func upgrade(recommended: SpeechModel, active: SpeechModel.Tier,
+                        onDisk: (SpeechModel.Tier) -> Bool) -> SpeechModel? {
+        recommended.tier != active && !onDisk(recommended.tier) ? recommended : nil
     }
 
     /// A model the user picked that still had to download first.
@@ -296,8 +310,7 @@ package final class ModelStore: ObservableObject {
     /// signature and can silently revoke the app's TCC grants (Accessibility, mic,
     /// Screen Recording). So "removing" a bundled model is recorded purely as a
     /// preference (`purgedKey`) that hides it - the ~181 MB stays on disk but no
-    /// longer loads or lists. A reinstall or update clears the preference so the
-    /// user isn't left with a model they can't see.
+    /// longer loads or lists. Launch brings it back if every other model is gone.
     package func remove(_ tier: SpeechModel.Tier) {
         guard canRemove(tier) else { return }
         let model = SpeechModel.model(for: tier)

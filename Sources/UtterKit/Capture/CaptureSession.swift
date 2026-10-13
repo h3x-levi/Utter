@@ -221,7 +221,11 @@ final class CaptureSession {
             handle(.step(.typing), from: turn)
             TextInjector.typeText(rewritten)
         }
-        if UserData.shared.keepHistory { TranscriptionHistory.shared.add(text: rewritten) }
+        if UserData.shared.keepHistory {
+            TranscriptionHistory.shared.add(text: rewritten,
+                                            app: held ? "" : NSWorkspace.shared.frontmostApplication?.localizedName ?? "",
+                                            duration: stoppedAt.timeIntervalSince(recordingStart))
+        }
         Self.log.info("AI result: \(rewritten.count) chars")
         return held ? .held(rewritten) : .delivered
     }
@@ -244,7 +248,9 @@ final class CaptureSession {
         }
         // History is opt-out; language detection only feeds it.
         if UserData.shared.keepHistory {
-            TranscriptionHistory.shared.add(text: text, language: pipeline.detectLanguage(text) ?? "")
+            let app = destination == .app && !held ? NSWorkspace.shared.frontmostApplication?.localizedName ?? "" : ""
+            TranscriptionHistory.shared.add(text: text, language: pipeline.detectLanguage(text) ?? "",
+                                            app: app, duration: stoppedAt.timeIntervalSince(recordingStart))
         }
         Self.log.info("Total latency: \(Date().timeIntervalSince(self.stoppedAt), format: .fixed(precision: 1))s")
         return held ? .held(text) : .delivered

@@ -173,15 +173,14 @@ package struct Device {
     }
 
     /// Why we recommend it, in the user's terms.
-    var recommendationReason: String {
+    package var recommendationReason: String {
         guard isAppleSilicon else {
-            return "\(chipName) has no Metal-accelerated path, so the smallest model keeps dictation responsive."
+            return "Base keeps dictation quick on this Mac, which has no Apple silicon to speed up the larger models."
         }
         let rec = recommended
         if rec.tier == .medium {
-            return "\(chipName) with \(ramGB) GB can run Medium - the most accurate English model - and still "
-                + "transcribe far faster than you speak. Small is included and works now; "
-                + "download Medium when you want the extra accuracy."
+            return "Your \(chipName) with \(ramGB) GB runs Medium smoothly, and it's the most accurate English model. "
+                + "Small is built in and works now."
         }
         if ramGB <= 8 {
             return "\(ramGB) GB of memory suits the included Small model best - larger ones would compete "

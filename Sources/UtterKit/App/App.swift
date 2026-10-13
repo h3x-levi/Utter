@@ -34,12 +34,13 @@ public struct UtterApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// The running delegate, for the few views that need app-owned services
     /// (meeting capture needs the single shared recorder and transcriber).
     static private(set) var current: AppDelegate?
 
     var statusItem: NSStatusItem!
+    private var hub: HubController?
     var pillWindow: PillWindow!
     /// The desktop companion. Created lazily the first time it is switched on, so a
     /// user who never enables it pays nothing - no panel, no ticker, no sprite scan.
@@ -118,8 +119,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         audioRecorder = AudioRecorder()
         SoundPlayer.preload()
 
-        setupMenuBar()
-
         pillWindow = PillWindow(
             onLongPress: { [weak self] in self?.showMainWindow() },
             // The pointer route into hands-free, from the lock the pill reveals on hover.
@@ -135,6 +134,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             celebrate: { [weak self] in self?.companionWindow?.behaviour.celebrateGoal($0) }
         )
         applyPillVisibility()
+        setupMenuBar()
 
         // All of these are user preferences that change app-wide behaviour, so they are applied at
         // launch and re-applied whenever the preference changes.
@@ -202,6 +202,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         if CommandLine.arguments.contains("--open-settings") { showSettingsWindow() }
         if CommandLine.arguments.contains("--open-onboarding") { showOnboarding() }
+        if CommandLine.arguments.contains("--open-hub") { DispatchQueue.main.async { [weak self] in self?.hub?.open() } }
 
         // Suppress any spurious windows automatically opened by SwiftUI's default scene resolution
         DispatchQueue.main.async { [weak self] in
@@ -288,6 +289,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UserData.shared.flushNow()
     }
 
+    @MainActor
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
@@ -314,33 +316,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
-        let menu = NSMenu()
-        let version = NSMenuItem(title: "Utter \(ConfigManager.shared.appVersion)", action: nil, keyEquivalent: "")
-        version.isEnabled = false
-        menu.addItem(version)
-        let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        status.tag = Self.statusMenuTag
-        menu.addItem(status)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Open Utter", action: #selector(showMainWindowAction), keyEquivalent: "o"))
-        menu.addItem(NSMenuItem(title: "Settings\u{2026}", action: #selector(showSettingsWindow), keyEquivalent: ","))
-        menu.addItem(NSMenuItem(title: "What\u{2019}s New", action: #selector(showWhatsNew), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Report an Issue\u{2026}", action: #selector(showReportIssue), keyEquivalent: "i"))
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Utter", action: #selector(quit), keyEquivalent: "q"))
-        menu.delegate = self
-        statusItem.menu = menu
-    }
-
-    private static let statusMenuTag = 1001
-
-    @MainActor func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.item(withTag: Self.statusMenuTag)?.title = CaptureStatus.line(
-            for: pillWindow?.stateModel.state ?? .idle,
-            micGranted: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
-            axGranted: AccessibilityPermission.isTrusted,
-            hotkey: UserData.shared.hotkeyName)
+        hub = HubController(
+            statusItem: statusItem,
+            pill: pillWindow.stateModel,
+            meeting: meetingSession,
+            startMeeting: { [weak self] in
+                guard let self else { return nil }
+                return await self.meetingSession.start(recorder: self.audioRecorder, transcriber: self.transcriptionService)
+            },
+            notify: { [weak self] message in
+                guard let self else { return }
+                if !self.pillWindow.isVisible { self.pillWindow.orderFront(nil) }
+                self.capture.showNotice(message)
+            },
+            command: { [weak self] action in
+                guard let self else { return }
+                switch action {
+                case .handsFree: self.capture.toggle(.handsFree)
+                case .newNote: self.capture.toggle(.note)
+                case .openLibrary: self.showMainWindow()
+                case .settings: self.showSettingsWindow()
+                case .whatsNew: self.showWhatsNew()
+                case .reportIssue: self.showReportIssue()
+                case .quit: self.quit()
+                case .recordMeeting, .open, .paste, .grant: break
+                }
+            }
+        )
     }
 
     /// Load the menu-bar template from the bundle, or from the project root when
@@ -360,8 +362,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         return NSImage(contentsOf: root
             .appendingPathComponent("MenuBarIcon/menubar-icon.png"))
     }
-
-    @MainActor @objc func showMainWindowAction() { showMainWindow() }
 
     @MainActor
     func showMainWindow() {
@@ -384,7 +384,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 if let group { SettingsModel.shared.group = group }
                 self?.showSettingsWindow()
             },
-            openSetup: { [weak self] in self?.showOnboarding() },
             toggleHandsFree: { [weak self] in self?.capture.toggle(.handsFree) }
         )
         // SwiftUI owns the split view, toolbar and title; the window keeps AppKit's lifecycle.
@@ -436,9 +435,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     @MainActor
     func showCompanion(section: CompanionSection) {
-        SidebarSelection.shared.item = .companion
-        CompanionSectionSelection.shared.section = section
-        showMainWindow()
+        SettingsModel.shared.showCompanion(section)
+        showSettingsWindow()
     }
 
     /// Show or hide the Dock icon.
@@ -720,7 +718,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// Autosave key for the Settings window's frame, suffixed with the default size so a new default
     /// is not shadowed by a frame saved at the old one. Distinct from "UtterMain": AppKit refuses a
     /// duplicate autosave name and then stops remembering either window.
-    private static let settingsFrameName = "UtterSettings.760x560"
+    private static let settingsFrameName = "UtterSettings.780x700"
 
     /// Open Settings in its own window.
     @objc func showSettingsWindow() {

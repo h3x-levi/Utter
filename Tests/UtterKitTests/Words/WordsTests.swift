@@ -96,6 +96,21 @@ struct WordsTests {
         #expect(!model.dictionaryIsEmpty)
     }
 
+    @Test func libraryOffersANameItHeardUntilAddedOrDeclined() {
+        let history = TranscriptionHistory(storageDir: nil)
+        history.entries = [TranscriptionEntry(text: "Dear Ms Okafor, thank you for the quick reply."),
+                           TranscriptionEntry(text: "Send Ms Okafor's plan tonight.")]
+        let model = WordsViewModel(userData: UserData(storageDir: nil), history: history)
+        #expect(model.heardName(in: "Dear Ms Okafor, thank you for the quick reply.") == "Okafor")
+        #expect(model.heardName(in: "Okaforish is not a name") == nil, "whole words only")
+        model.decline("Okafor")
+        #expect(model.heardName(in: "Dear Ms Okafor") == nil)
+
+        let fresh = WordsViewModel(userData: UserData(storageDir: nil), history: history)
+        fresh.addWord("Okafor")
+        #expect(fresh.heardName(in: "Dear Ms Okafor") == nil)
+    }
+
     @Test func flowStackWrapsAndClampsToTheWidth() {
         let sizes = [CGSize(width: 40, height: 26), CGSize(width: 50, height: 26), CGSize(width: 30, height: 26),
                      CGSize(width: 200, height: 26)]

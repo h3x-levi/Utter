@@ -43,13 +43,13 @@ EXEC_NAME="Utter"
 # still reads as one namespace. Every macOS use of it (TCC, `defaults`, saved state,
 # caches) treats it as an opaque unique string.
 #
-# It has changed with each rename: `lumen.dictation.app`, now this. Changing it abandons
+# It was `lumen.dictation.app` before the rename to Utter. Changing it abandons
 # everything macOS keys on it: Microphone, Accessibility, Screen Recording and system
 # Audio Capture must be granted again, and all `UserDefaults` (onboarding, saved pill
 # and companion positions, selected model tier, purged-model list) resets. Notes,
 # dictation history and crash logs are unaffected — they live in
 # `Application Support/Utter`, which is found by folder name, not by bundle id — and
-# `AppDirectory` migrates older folder names into it.
+# `AppDirectory` migrates the older `Lumen` folder into it.
 # A deliberate `--reset-dev-state` affects the app-specific state only.
 BUNDLE_ID="utter.dictation.app"
 # ─── Signing identity ──────────────────────────────────────────────────────────
