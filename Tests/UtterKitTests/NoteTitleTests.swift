@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// Titling a note from its body.
 ///
@@ -119,5 +120,6 @@ struct NoteTitleTests {
         #expect(Note(body: "one     two").wordCount == 2)
         #expect(Note(body: "").wordCount == 0)
         #expect(Note(body: "  \n\t ").wordCount == 0)
+        #expect(Note(body: "# Meeting, Oct 12 at 7:21 PM\n\n**You:** Let's start.\n**Priya K:** Agreed").wordCount == 3)
     }
 }

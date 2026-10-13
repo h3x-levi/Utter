@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// The WAV header meeting capture wraps each window in.
 ///

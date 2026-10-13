@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// The guard that stops a misbehaving model from destroying a note.
 ///

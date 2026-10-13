@@ -44,69 +44,30 @@ enum WCAG {
 struct LookPaletteTests {
     typealias P = Look.Palette
 
-    private static let contentGrounds: [(String, Look.Swatch)] = [("ground", P.ground), ("well", P.well), ("wellRaised", P.wellRaised)]
-    private static let contentInks: [(String, Look.Swatch)] = [("ink", P.ink), ("inkSecondary", P.inkSecondary),
-                                                               ("inkTertiary", P.inkTertiary), ("ok", P.ok), ("warn", P.warn)]
-    private static let plateInks: [(String, Look.Swatch)] = [("plateInk", P.plateInk),
-                                                             ("plateInkSecondary", P.plateInkSecondary), ("live", P.live)]
+    private static let grounds: [(dark: Bool, increased: Bool, hex: UInt32)] = [
+        (false, false, 0xFFFFFF), (false, false, 0xECECEC), (true, false, 0x1E1E1E), (true, false, 0x323232),
+    ]
 
-    private func ratio(_ ink: Look.Swatch, on ground: NSColor, _ mode: LookMode) -> Double {
-        WCAG.contrast(WCAG.over(ink.resolved(dark: mode.dark, increasedContrast: mode.increased), ground), ground)
-    }
-
-    private func plate(over ground: Look.Swatch, _ mode: LookMode) -> NSColor {
-        WCAG.over(P.plate.resolved(dark: mode.dark, increasedContrast: mode.increased),
-                  ground.resolved(dark: mode.dark, increasedContrast: mode.increased))
-    }
-
-    @Test("Every content ink clears 4.5:1 on every content ground", arguments: LookMode.all)
-    func contentInks(mode: LookMode) {
-        for (groundName, ground) in Self.contentGrounds {
-            let base = ground.resolved(dark: mode.dark, increasedContrast: mode.increased)
-            for (inkName, ink) in Self.contentInks {
-                let value = ratio(ink, on: base, mode)
-                #expect(value >= 4.5, "\(inkName) on \(groundName): \(value)")
-            }
+    @Test("The brand tint reads as text on the system window grounds", arguments: LookMode.all)
+    func tintText(mode: LookMode) {
+        for ground in Self.grounds where ground.dark == mode.dark {
+            let value = WCAG.contrast(P.tint.resolved(dark: mode.dark, increasedContrast: mode.increased), .hex(ground.hex))
+            #expect(value >= 4.5, "tint on \(String(ground.hex, radix: 16)): \(value)")
         }
     }
 
-    @Test("Every plate ink clears 4.5:1 on the plate, over both grounds", arguments: LookMode.all)
-    func plateInks(mode: LookMode) {
-        for ground in [P.ground, P.well] {
-            let surface = plate(over: ground, mode)
-            for (inkName, ink) in Self.plateInks {
-                let value = ratio(ink, on: surface, mode)
-                #expect(value >= 4.5, "\(inkName) on plate: \(value)")
-            }
-        }
-    }
-
-    @Test("The mic dot clears the 3:1 non-text floor wherever it sits", arguments: LookMode.all)
+    @Test("The mic colour clears the 3:1 non-text floor on the system window grounds", arguments: LookMode.all)
     func micDot(mode: LookMode) {
-        let surfaces = [P.ground.resolved(dark: mode.dark, increasedContrast: mode.increased),
-                        P.well.resolved(dark: mode.dark, increasedContrast: mode.increased),
-                        plate(over: P.ground, mode)]
-        for surface in surfaces {
-            let value = ratio(P.mic, on: surface, mode)
-            #expect(value >= 3, "mic: \(value)")
+        for ground in Self.grounds where ground.dark == mode.dark {
+            let value = WCAG.contrast(P.mic.resolved(dark: mode.dark, increasedContrast: mode.increased), .hex(ground.hex))
+            #expect(value >= 3, "mic on \(String(ground.hex, radix: 16)): \(value)")
         }
-    }
-
-    @Test("The three inks stay a hierarchy, not one grey", arguments: LookMode.all)
-    func inkOrder(mode: LookMode) {
-        let well = P.well.resolved(dark: mode.dark, increasedContrast: mode.increased)
-        let levels = [P.ink, P.inkSecondary, P.inkTertiary].map { ratio($0, on: well, mode) }
-        #expect(levels[0] > levels[1] && levels[1] > levels[2], "\(levels)")
     }
 
     @Test("The SwiftUI tokens resolve through the dynamic provider")
     func bridged() {
         let increased = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-        let pairs: [(SwiftUI.Color, Look.Swatch)] = [
-            (Look.Color.ground, P.ground), (Look.Color.well, P.well), (Look.Color.ink, P.ink),
-            (Look.Color.inkTertiary, P.inkTertiary), (Look.Color.hairline, P.hairline), (Look.Color.plate, P.plate),
-            (Look.Color.live, P.live), (Look.Color.mic, P.mic), (Look.Color.warn, P.warn),
-        ]
+        let pairs: [(SwiftUI.Color, Look.Swatch)] = [(Look.Color.tint, P.tint), (Look.Color.mic, P.mic)]
         for dark in [false, true] {
             let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
             for (color, swatch) in pairs {
@@ -116,70 +77,87 @@ struct LookPaletteTests {
             }
         }
     }
-}
 
-@Suite("Look caption and cues")
-struct LookCaptionTests {
-    @Test("A new word adds one cell and cools the old live one, keeping every id")
-    func wordIdentity() {
-        let text = (1...100).map { "w\($0)" }.joined(separator: " ")
-        let before = Look.CaptionWords(text: text, liveWord: "go")
-        let after = Look.CaptionWords(text: text + " go", liveWord: "through")
-
-        #expect(before.items.count == Look.CaptionWords.tail)
-        #expect(before.liveID == 100 && before.items.last?.word == "go")
-        #expect(after.liveID == 101 && after.items.last?.word == "through")
-        let shared = Set(before.items.map(\.id)).intersection(after.items.map(\.id))
-        for id in shared {
-            #expect(before.items.first { $0.id == id }?.word == after.items.first { $0.id == id }?.word)
+    @Test("Secondary ink reads as text on the Moonlight ground; tertiary clears the 3:1 meta floor", arguments: LookMode.all)
+    func inkLadder(mode: LookMode) {
+        for ground in [P.groundTop, P.groundBottom] {
+            let base = ground.resolved(dark: mode.dark, increasedContrast: mode.increased)
+            let card = WCAG.over(P.fill.resolved(dark: mode.dark, increasedContrast: mode.increased), base)
+            for under in [base, card] {
+                let ink2 = WCAG.contrast(WCAG.over(P.ink2.resolved(dark: mode.dark, increasedContrast: mode.increased), under), under)
+                let ink3 = WCAG.contrast(WCAG.over(P.ink3.resolved(dark: mode.dark, increasedContrast: mode.increased), under), under)
+                #expect(ink2 >= 4.5, "ink2: \(ink2)")
+                #expect(ink3 >= 3, "ink3: \(ink3)")
+            }
         }
-        #expect(after.spoken.hasSuffix("w100 go through"))
-    }
-
-    @Test("Idle text has no live word")
-    func idle() {
-        let words = Look.CaptionWords(text: "Hold fn and talk.", liveWord: nil)
-        #expect(words.liveID == nil && words.items.map(\.word) == ["Hold", "fn", "and", "talk."])
-        #expect(Look.CaptionWords(text: "", liveWord: " hi ").spoken == "hi")
-    }
-
-    @Test("Lines break greedily and an over-long word gets its own line")
-    func lineBreaks() {
-        #expect(Look.CaptionFlow.lines(widths: [50, 50, 50, 50], maxWidth: 160, spacing: 10) == [0..<2, 2..<4])
-        #expect(Look.CaptionFlow.lines(widths: [40, 300, 40], maxWidth: 100, spacing: 10) == [0..<1, 1..<2, 2..<3])
-        #expect(Look.CaptionFlow.lines(widths: [], maxWidth: 100, spacing: 10).isEmpty)
-    }
-
-    @MainActor
-    @Test("The plate is the same size with one word and with forty")
-    func fixedPlate() {
-        func size(_ text: String, _ plateSize: Look.PlateSize) -> CGSize? {
-            ImageRenderer(content: Look.CaptionPlate(text: text, liveWord: "go", caret: true, size: plateSize)
-                .frame(width: 520)).nsImage?.size
-        }
-        let long = Array(repeating: "Thursday", count: 40).joined(separator: " ")
-        for plateSize in [Look.PlateSize.hero, .pill] {
-            let short = size("I", plateSize)
-            #expect(short != nil && short == size(long, plateSize))
-        }
-    }
-
-    @Test("Cue lines keep their columns whatever the app is called")
-    func cueColumns() {
-        let time = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 10, hour: 9, minute: 31, second: 4))!
-        let line = Look.CueRow.cueLine(number: 214, time: time, app: "Mail", words: 38)
-        #expect(line == "214   09:31:04  Mail      38 words")
-        let lengths = ["Mail", "Safari", "Messages", "Visual Studio Code"].map {
-            Look.CueRow.cueLine(number: 214, time: time, app: $0, words: 38).count
-        }
-        #expect(Set(lengths).count == 1, "\(lengths)")
-        #expect(Look.CueRow.cueLine(number: 9, time: time, app: "Notes", words: 1).hasSuffix("  1 word"))
     }
 
     @Test("Reduce Motion turns every motion into the same short cross-fade")
     func reducedMotion() {
         let reduced = Look.Motion.reduced.animation(reduceMotion: false)
         #expect(Look.Motion.allCases.allSatisfy { $0.animation(reduceMotion: true) == reduced })
-        #expect(Look.Motion.plate.animation(reduceMotion: false) != reduced)
+        #expect(Look.Motion.settle.animation(reduceMotion: false) != reduced)
+    }
+}
+
+@Suite("Living mark")
+struct LivingMarkTests {
+    typealias G = MarkGeometry
+
+    @Test("Rest is the icon: tall outer bars stepping down to the centre")
+    func restShape() {
+        let heights = G.heights(phase: .rest, level: 1, dipped: false, reduceMotion: false, time: 3)
+        #expect(heights == G.rest)
+        #expect(heights == heights.reversed())
+        #expect(heights[0] > heights[1] && heights[1] > heights[2] && heights[2] > heights[3])
+    }
+
+    @Test("Listening follows the level, and silence leaves dots")
+    func listening() {
+        let silent = G.heights(phase: .listening, level: 0, dipped: false, reduceMotion: false, time: 1)
+        #expect(silent.allSatisfy { $0 == G.dot })
+        let loud = G.heights(phase: .listening, level: 1, dipped: false, reduceMotion: false, time: 1)
+        let quiet = G.heights(phase: .listening, level: 0.3, dipped: false, reduceMotion: false, time: 1)
+        #expect(zip(loud, quiet).allSatisfy { $0 >= $1 })
+        #expect(loud[0] > loud[3])
+    }
+
+    @Test("Thinking travels: bars are out of step with their neighbours")
+    func thinking() {
+        let frame = G.heights(phase: .thinking, level: 0, dipped: false, reduceMotion: false, time: 0.4)
+        #expect(Set(frame).count > 1)
+        #expect(frame.allSatisfy { $0 >= G.dot && $0 <= G.dot + 2.5 })
+    }
+
+    @Test("Smile dips the bars, flat is a row of dots, Reduce Motion holds still")
+    func otherPhases() {
+        #expect(G.heights(phase: .smile, level: 0, dipped: true, reduceMotion: false, time: 0).allSatisfy { $0 == G.dot })
+        #expect(G.heights(phase: .smile, level: 0, dipped: false, reduceMotion: false, time: 0) == G.rest)
+        #expect(G.heights(phase: .flat, level: 1, dipped: false, reduceMotion: false, time: 9).allSatisfy { $0 == G.dot })
+        let a = G.heights(phase: .thinking, level: 0, dipped: false, reduceMotion: true, time: 0)
+        let b = G.heights(phase: .thinking, level: 0, dipped: false, reduceMotion: true, time: 7)
+        #expect(a == b)
+    }
+
+    @Test("The mark keeps its proportions from 24 to 240 points")
+    func scaling() {
+        for height in [24.0, 240.0] {
+            let rect = CGRect(x: 0, y: 0, width: height * G.width / G.height, height: height)
+            let u = G.scale(in: rect)
+            #expect(abs(u * G.height - height) < 0.001)
+            let left = G.point(-G.width / 2, 0, in: rect), right = G.point(G.width / 2, 0, in: rect)
+            #expect(abs(left.x) < 0.001 && abs(right.x - rect.width) < 0.001)
+        }
+    }
+
+    @MainActor
+    @Test("The mark renders at both ends of its size range")
+    func renders() {
+        for height in [24.0, 240.0] {
+            for phase in [LivingMark.Phase.rest, .listening, .thinking, .smile, .flat] {
+                let image = ImageRenderer(content: LivingMark(phase: phase, level: 0.6).frame(height: height)).nsImage
+                #expect(image != nil)
+            }
+        }
     }
 }

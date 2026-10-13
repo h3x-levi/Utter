@@ -1,6 +1,7 @@
 import Testing
 import AppKit
 @testable import UtterKit
+@testable import UtterCore
 
 /// The offer card's size, which is the window's size.
 ///
@@ -29,7 +30,7 @@ struct MeetingOfferMetricsTests {
     /// in a call in.
     private func measuredContentHeight(title: String = MeetingOfferMetrics.defaultTitle) -> CGFloat {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = Typo.caption.lineSpacing
+        paragraph.lineSpacing = MeetingOfferMetrics.captionLineSpacing
         paragraph.lineBreakMode = .byWordWrapping
 
         func wrapped(_ text: String, font: NSFont, width: CGFloat) -> CGFloat {

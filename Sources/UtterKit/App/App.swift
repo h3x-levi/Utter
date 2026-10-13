@@ -3,6 +3,7 @@ import Cocoa
 import AVFoundation
 import Combine
 import UserNotifications
+import UtterCore
 
 /// The SwiftUI app.
 ///
@@ -21,12 +22,7 @@ public struct UtterApp: App {
     public init() {}
 
     public var body: some Scene {
-        Settings {
-            HStack(spacing: 0) {
-                SettingsSidebar()
-                SettingsDetail()
-            }
-        }
+        Settings { EmptyView() }
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings\u{2026}") {
@@ -38,7 +34,7 @@ public struct UtterApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSMenuDelegate {
     /// The running delegate, for the few views that need app-owned services
     /// (meeting capture needs the single shared recorder and transcriber).
     static private(set) var current: AppDelegate?
@@ -71,18 +67,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AXReader.configure()
         AppDelegate.current = self
 
-        // Preview generation is a rendering-only tool. Isolate all data stores in memory
-        // and keep it ahead of notification restoration, crash reporting, credential
-        // migration, and audio/model service startup.
-        if CommandLine.arguments.contains("--render-snapshots") {
-            SnapshotPreviewMode.enable()
-            NSApp.setActivationPolicy(.accessory)
-            ConfigManager.shared.load()
-            ThemeManager.shared.applyAppearance()
-            SnapshotRenderer.renderAll()
-            exit(0)
-        }
-
         NSApp.setActivationPolicy(.accessory)
         UNUserNotificationCenter.current().delegate = self
         CompanionNotificationScheduler.shared.registerCategory()
@@ -109,9 +93,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Build the history store now, off the window-open path.
         //
-        // `showMainWindow` constructs `FlowContent()` synchronously, and `FlowContent` carries
-        // `@ObservedObject private var history = TranscriptionHistory.shared` - a *property
-        // initialiser*, so the singleton is created at `FlowContent()`, before the window exists.
+        // `showMainWindow` builds `MainWindowModel` synchronously, and its view models subscribe to
+        // `TranscriptionHistory.shared`, so the singleton is created there, before the window exists.
         // Its `init` reads history.json and streak.json and parses every entry.
         //
         // Measured, on a verbatim replica of `TranscriptionHistory.load()` against synthetic
@@ -177,17 +160,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             onRecordStop: { [weak self] in self?.capture.holdEnded() },
             onHandsFreeToggle: { [weak self] in self?.capture.toggle(.handsFree) },
             onNoteCaptureToggle: { [weak self] in self?.capture.toggle(.note) },
-            onMemoryCaptureToggle: { [weak self] in self?.toggleMemoryCapture() }
+            onMemoryCaptureToggle: { [weak self] in self?.toggleMemoryCapture() },
+            onOpenWindow: { [weak self] in self?.showMainWindow() },
+            onCancel: { [weak self] in self?.capture.cancel() }
         )
         keyMonitor.start()
-        // The menu was built before the monitor existed, so its hands-free hint was
-        // written without knowing whether hold-then-tap got an event tap. Now it does.
-        refreshMenuHint()
 
         // Listen for hotkey changes from Settings
         NotificationCenter.default.addObserver(forName: .hotkeyChanged, object: nil, queue: .main) { [weak self] _ in
             self?.keyMonitor.restart()
-            self?.refreshMenuHint()
         }
 
         // Switching speech models means the cached whisper context is stale.
@@ -219,6 +200,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if CommandLine.arguments.contains("--open-window") {
             showMainWindow()
         }
+        if CommandLine.arguments.contains("--open-settings") { showSettingsWindow() }
+        if CommandLine.arguments.contains("--open-onboarding") { showOnboarding() }
 
         // Suppress any spurious windows automatically opened by SwiftUI's default scene resolution
         DispatchQueue.main.async { [weak self] in
@@ -241,11 +224,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private var onboardingWindow: NSWindow?
 
-    private func showOnboarding() {
-        // Re-openable from the status menu now, so a second press must raise the window
-        // that is already on screen. Without this the old `NSWindow` was overwritten in
-        // the slot and left visible with nothing holding it, and the user got two
-        // welcome screens.
+    func showOnboarding() {
+        // A second press must raise the window already on screen, not leave it orphaned beside a new one.
         if let existing = onboardingWindow {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
@@ -253,8 +233,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Onboarding is the first-run product flow; Utter has no account step.
-        let hosting = NSHostingView(rootView: ThemedRoot {
+        let window = OnboardingView.makeWindow(ThemedRoot {
             OnboardingView(onFinish: { [weak self] skipped in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
@@ -264,45 +243,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 self?.requestMicrophonePermission()
             })
         })
-        // Never let the hosting view size the window. `OnboardingView` is flexible
-        // now - it has to be, to resize - and an NSHostingView that publishes an
-        // intrinsic size drives the window's dimensions instead of the reverse,
-        // which is the collapse documented in `showMainWindow`.
-        if #available(macOS 13.0, *) { hosting.sizingOptions = [] }
-        hosting.autoresizingMask = [.width, .height]
-        // Its own view supplies the glass background so the material and the warm
-        // veil match the main window exactly.
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0,
-                                width: Layout.onboardingIdealWidth,
-                                height: Layout.onboardingIdealHeight),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
         window.delegate = self
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        // Translucent surfaces need the desktop behind them to sample.
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        // Opt out of macOS window restoration, for the reason `showMainWindow`
-        // gives: it keeps its own copy of the geometry and re-creates the window
-        // from it, which now that this window is resizable would override the size
-        // set here. A comment claimed this was already the case; it wasn't.
-        window.isRestorable = false
-        window.contentView = hosting
-        // Resizable with a floor, rather than the previous fixed 620x600: the
-        // tallest step still fits at this height, and below it the step content
-        // scrolls (see the GeometryReader in `OnboardingView`) instead of pushing
-        // the nav row off the bottom edge. No frame autosave - this window is shown
-        // once, on first run, so there is no size worth remembering and no chance
-        // for a stale tiny frame to greet a new user.
-        window.contentMinSize = NSSize(width: Layout.onboardingMinWidth,
-                                       height: Layout.onboardingMinHeight)
         window.center()
-        window.isReleasedWhenClosed = false
         onboardingWindow = window
 
         // The one window that does escalate, whatever "Show in Dock" says.
@@ -373,62 +315,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         let menu = NSMenu()
-
-        let titleItem = NSMenuItem(title: "Utter v\(ConfigManager.shared.appVersion)", action: nil, keyEquivalent: "")
-        titleItem.isEnabled = false
-        menu.addItem(titleItem)
-
-        let hintItem = NSMenuItem(
-            title: "Hold \(UserData.shared.hotkeyName) to dictate",
-            action: nil, keyEquivalent: ""
-        )
-        hintItem.isEnabled = false
-        hintItem.tag = MenuHintTag.hotkey
-        menu.addItem(hintItem)
-
-        // Hands-free, spelled whichever way will actually fire - see
-        // `handsFreeHintTitle`. Both spellings name the hotkey or the chord from the
-        // values `KeyMonitor` matches on, so this line cannot get out of step with it.
-        let handsFreeHint = NSMenuItem(title: handsFreeHintTitle, action: nil, keyEquivalent: "")
-        handsFreeHint.isEnabled = false
-        handsFreeHint.tag = MenuHintTag.handsFree
-        menu.addItem(handsFreeHint)
-
-        // Note capture is a chord, not a held key, so nothing on screen reveals it.
-        // The chord is read from `KeyChord`, the same value `KeyMonitor` matches on,
-        // so this line cannot advertise a shortcut that no longer fires.
-        let noteHint = NSMenuItem(
-            title: "\(KeyChord.noteCapture.symbols) to dictate into a note",
-            action: nil, keyEquivalent: ""
-        )
-        noteHint.isEnabled = false
-        menu.addItem(noteHint)
-
-        let memoryHint = NSMenuItem(
-            title: "\(KeyChord.memoryCapture.symbols) to remember something",
-            action: nil, keyEquivalent: ""
-        )
-        memoryHint.isEnabled = false
-        menu.addItem(memoryHint)
-
-        menu.addItem(NSMenuItem.separator())
+        let version = NSMenuItem(title: "Utter \(ConfigManager.shared.appVersion)", action: nil, keyEquivalent: "")
+        version.isEnabled = false
+        menu.addItem(version)
+        let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        status.isEnabled = false
+        status.tag = Self.statusMenuTag
+        menu.addItem(status)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Open Utter", action: #selector(showMainWindowAction), keyEquivalent: "o"))
-        menu.addItem(NSMenuItem(title: "Show Pill", action: #selector(showPill), keyEquivalent: "p"))
         menu.addItem(NSMenuItem(title: "Settings\u{2026}", action: #selector(showSettingsWindow), keyEquivalent: ","))
-        menu.addItem(NSMenuItem.separator())
-        // Setup, reachable again. Onboarding is where microphone, Accessibility, Screen
-        // Recording and the model choice are all explained in one place, and it was
-        // presented exactly once, on first launch - a user who pressed Skip, or who
-        // denied a permission and wanted the walkthrough back, had no route to it short
-        // of deleting a UserDefaults key. Every other window in this menu is reopenable;
-        // this was the one that was not.
-        menu.addItem(NSMenuItem(title: "Setup\u{2026}", action: #selector(showSetup), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "What\u{2019}s New in Utter", action: #selector(showWhatsNew), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Report an Issue / Feedback\u{2026}", action: #selector(showReportIssue), keyEquivalent: "i"))
-        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "What\u{2019}s New", action: #selector(showWhatsNew), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Report an Issue\u{2026}", action: #selector(showReportIssue), keyEquivalent: "i"))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Utter", action: #selector(quit), keyEquivalent: "q"))
-
+        menu.delegate = self
         statusItem.menu = menu
+    }
+
+    private static let statusMenuTag = 1001
+
+    @MainActor func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.item(withTag: Self.statusMenuTag)?.title = CaptureStatus.line(
+            for: pillWindow?.stateModel.state ?? .idle,
+            micGranted: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+            axGranted: AccessibilityPermission.isTrusted,
+            hotkey: UserData.shared.hotkeyName)
     }
 
     /// Load the menu-bar template from the bundle, or from the project root when
@@ -449,158 +361,53 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             .appendingPathComponent("MenuBarIcon/menubar-icon.png"))
     }
 
-    private func makeSidebarToolbar(identifier: NSToolbar.Identifier) -> NSToolbar {
-        let toolbar = NSToolbar(identifier: identifier)
-        toolbar.delegate = self
-        toolbar.displayMode = .iconOnly
-        toolbar.allowsUserCustomization = false
-        return toolbar
-    }
+    @MainActor @objc func showMainWindowAction() { showMainWindow() }
 
-    @objc func showMainWindowAction() { showMainWindow() }
-
+    @MainActor
     func showMainWindow() {
         if let w = mainWindow {
+            if !w.isVisible, !w.isMiniaturized { ReadinessMonitor.shared.startPolling() }
             w.makeKeyAndOrderFront(nil)
             // Activation alone, no policy change: see `applyDockVisibility`.
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        // The window's chrome is AppKit's, not SwiftUI's.
-        //
-        //     NSWindow  .titled + .fullSizeContentView, NSToolbar attached
-        //       └─ NSSplitViewController
-        //            ├─ NSSplitViewItem.sidebar(with: NSHostingController(FlowSidebar))
-        //            └─ NSSplitViewItem(viewController: NSHostingController(FlowContent))
-        //
-        // It used to be one `NSHostingController(rootView: FlowMainView)`, and `FlowMainView` was an
-        // `HStack { sidebar; content }` with a hand-written `glassEffect` on the sidebar column and
-        // 30pt of padding standing in for a titlebar. The reason for the change is that macOS only
-        // attaches automatic Liquid Glass, automatic scroll-edge treatment and automatic
-        // accessibility adaptation to chrome *structures* - a titlebar, an `NSToolbar`, an
-        // `NSSplitViewItem` sidebar - and an `HStack` is not one, so that layout could not inherit
-        // any of it however the glass was applied inside it. `FlowMainView.swift`'s file note
-        // carries the full before/after and the probe measurements; the AppKit half is here.
-        //
-        // Three things had to be true for this to be safe, and each was measured offscreen against
-        // exactly this structure on macOS 26.5 rather than assumed:
-        //
-        //   1. Nothing publishes a size. `sizingOptions = []` on both hosting controllers leaves
-        //      `intrinsicContentSize` at (-1, -1), `fittingSize` at (0, 0) and `preferredContentSize`
-        //      at (0, 0) for both, and the window held 1180x820 through a 1.2s runloop. That is the
-        //      ~133x142 collapse this method has a re-assert loop for: an `NSHostingView` publishing
-        //      its SwiftUI content's intrinsic size up through the content-view relationship, which
-        //      no `contentMinSize`, `minSize`, constraint or `windowWillResize` veto could reject
-        //      because it does not arrive as a resize request. Two hosting views now instead of one,
-        //      so both are muzzled. The loop below stays regardless - the collapse was intermittent
-        //      (2 of 5 launches) and a measurement is not a guarantee.
-        //   2. The sidebar cannot vanish. `minimumThickness == maximumThickness == 168` held exactly
-        //      at 1180, 1000 and 640pt wide, and `canCollapseFromWindowResize = false` kept
-        //      `isCollapsed` false at 640x480 - below the window's own minimum. Without that a narrow
-        //      window would auto-collapse the sidebar, and this app has no toggle to bring it back.
-        //   3. The toolbar does not cross the sidebar. This was the recorded objection to ever adding
-        //      one: a toolbar spans the window and would land on the wordmark. It does not. The
-        //      titlebar comes back as *two* sections - `NSTitlebarBackgroundView` at
-        //      (0, 0, 1180, 66) for the content pane and a second one at (0, 0, 176, 66) inside the
-        //      sidebar's own wrapper, with the sidebar's glass drawn over it - because a `.sidebar`
-        //      split item on a `.fullSizeContentView` window gets `allowsFullHeightLayout` for free.
-        //      The wordmark lands at y=74 and the close button ends at y=33. (Rects here and below
-        //      are top-down window points, converted from AppKit's bottom-left origin.)
-        let sidebarController = NSHostingController(rootView: FlowSidebar())
-        sidebarController.sizingOptions = []
-        let contentController = NSHostingController(rootView: FlowContent())
-        contentController.sizingOptions = []
-
-        // `sidebar(with:)` is what buys the material: per its header it gives the item a
-        // "translucent material background", which on macOS 26 is a real
-        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view - Liquid Glass that
-        // is concentric with the window's corner radius, which a `glassEffect(_:in: Rectangle())`
-        // cannot be. Whether it *also* substitutes for itself under Reduce Transparency is the
-        // documented promise for standard components and is **not verified here** - no way to check
-        // it without the accessibility switch and a screen - so `FlowSidebar` keeps drawing its own
-        // opaque fill on that path rather than trusting it.
-        //
-        // `FlowSidebar`'s rows are a `List(selection:).listStyle(.sidebar)` inside this, i.e. an
-        // `NSTableView` inside the glass wrapper, which is where the rows' hover, selection, focus
-        // ring and keyboard traversal come from. The one thing that arrangement needs from the
-        // SwiftUI side is `.scrollContentBackground(.hidden)`: a list would otherwise draw its own
-        // `.sidebar` material *inside* the material this item already supplies.
-        //
-        // Let AppKit size, collapse, and restore the sidebar through the standard toolbar control.
-        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = 150
-        sidebarItem.maximumThickness = 260
-        sidebarItem.preferredThicknessFraction = 0.16
-        sidebarItem.canCollapse = true
-        // Setting `canCollapse` resets this, per the header, so it has to come second.
-        sidebarItem.canCollapseFromWindowResize = true
-
-        let contentItem = NSSplitViewItem(viewController: contentController)
-        if #available(macOS 26.0, *) {
-            // The one line that makes content run *under* the sidebar, which was structurally
-            // impossible with the `HStack` and is why nothing in this window could refract app
-            // content - the glass had only the desktop to sample. Its header: "other items such as
-            // sidebars or inspectors may appear overlaid on top of this item's viewController and
-            // this item's safeAreaInsets will be adjusted with respect to overlaid content."
-            //
-            // Measured, at 1180x820: on → the content view is (0, 0, 1180, 820) with a 176pt leading
-            // safe-area inset. Off → (176, 0, 1004, 820) with no leading inset, i.e. exactly the old
-            // `HStack` geometry. `FlowContent` puts its surface behind the safe area and its text
-            // inside it, so the plane reaches the window's edges (measured 1180x820) while the first
-            // line of text lands at x=200.
-            contentItem.automaticallyAdjustsSafeAreaInsets = true
-        }
-
-        let splitController = NSSplitViewController()
-        splitController.splitView.isVertical = true
-        splitController.addSplitViewItem(sidebarItem)
-        splitController.addSplitViewItem(contentItem)
+        let model = MainWindowModel(
+            status: CaptureStatus(source: pillWindow?.stateModel),
+            meeting: meetingSession,
+            startMeeting: { [weak self] in
+                guard let self else { return nil }
+                return await self.meetingSession.start(recorder: self.audioRecorder, transcriber: self.transcriptionService)
+            },
+            openSettings: { [weak self] group in
+                if let group { SettingsModel.shared.group = group }
+                self?.showSettingsWindow()
+            },
+            openSetup: { [weak self] in self?.showOnboarding() },
+            toggleHandsFree: { [weak self] in self?.capture.toggle(.handsFree) }
+        )
+        // SwiftUI owns the split view, toolbar and title; the window keeps AppKit's lifecycle.
+        let hosting = NSHostingController(rootView: MainWindowView(model: model))
+        hosting.sizingOptions = []
+        hosting.sceneBridgingOptions = .all
 
         let window = NSWindow(
-            contentRect: NSRect(
-                x: 0, y: 0,
-                width: Layout.windowIdealWidth,
-                height: Layout.windowIdealHeight
-            ),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable,
-                        .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: Layout.windowIdealWidth, height: Layout.windowIdealHeight),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Utter"
-        // Opt out of macOS window restoration: it writes its own copy of the
-        // geometry to ~/Library/Saved Application State/ and re-creates the window
-        // from it, overriding everything set here.
+        // Opt out of macOS window restoration: it would re-create the window from its own copy of the geometry.
         window.isRestorable = false
-        // Use standard unified window chrome so title, traffic lights, and toolbar adapt with macOS.
-        window.titlebarAppearsTransparent = false
-        window.titleVisibility = .visible
-        // Translucent surfaces need the desktop behind them to sample. Kept: `FlowContent`'s content
-        // layer is still a `.behindWindow` `NSVisualEffectView`.
-        window.isOpaque = false
-        window.backgroundColor = .clear
         window.toolbarStyle = .unified
-        window.titlebarSeparatorStyle = .automatic
-        window.toolbar = makeSidebarToolbar(identifier: .utterMain)
-        window.contentViewController = splitController
-        window.setContentSize(NSSize(width: Layout.windowIdealWidth,
-                                     height: Layout.windowIdealHeight))
-        window.contentMinSize = NSSize(width: Layout.windowMinWidth,
-                                       height: Layout.windowMinHeight)
-        window.minSize = NSSize(width: Layout.windowMinWidth,
-                                height: Layout.windowMinHeight)
-        // Restore any frame the user has chosen, then start autosaving. Order
-        // matters: `setFrameAutosaveName` *writes* the current frame when no
-        // stored one exists, so registering first would persist the default.
-        //
-        // The name carries a size suffix (`.1380x960`) so that enlarging the default *takes
-        // effect*. `setFrameUsingName` restores the last saved frame, and every prior build wrote
-        // the old 1180x820 - so without changing the key, the bigger default would be shadowed by
-        // the stored small frame on every machine that ran an older build, and only a truly fresh
-        // install would ever see it. Bumping the key once abandons that stale frame; the user's
-        // own later resizes are saved under the new key and respected as before. Bump the suffix
-        // again if the default size changes again.
+        window.contentViewController = hosting
+        window.setContentSize(NSSize(width: Layout.windowIdealWidth, height: Layout.windowIdealHeight))
+        window.contentMinSize = NSSize(width: Layout.windowMinWidth, height: Layout.windowMinHeight)
+        window.minSize = NSSize(width: Layout.windowMinWidth, height: Layout.windowMinHeight)
+        // Restore before registering: `setFrameAutosaveName` writes the current frame when none is stored.
+        // The size suffix abandons frames saved at an older default size.
         let mainFrameName = "UtterMain.1380x960"
         if !window.setFrameUsingName(mainFrameName) {
             window.center()
@@ -608,28 +415,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.setFrameAutosaveName(mainFrameName)
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
-        // Re-assert the size across the first few runloop turns.
-        //
-        // The collapse is a race: measured 2 of 5 launches on Dictation and 3 of 3
-        // on Scratchpad, the window shrinks to ~133x142 shortly after being shown.
-        // Everything tried to prevent SwiftUI publishing that size failed
-        // (sizingOptions, root .frame, constraints, contentViewController,
-        // windowWillResize), because the size is applied through the content-view
-        // relationship rather than a resize request.
-        //
-        // So instead of preventing it, this corrects it: if the frame is below the
-        // designed minimum on any of the next few turns, restore it. The user's own
-        // resizes are untouched, because anything at or above the minimum is left
-        // alone.
-        // Capture the INTENDED size, not the current one.
-        //
-        // Reading `window.frame` here was subtly wrong: on a fresh install the
-        // collapse happens before this line runs, so it captured the *collapsed*
-        // frame and every later correction faithfully restored 133x117. The size
-        // the window is supposed to be is known independently, so use that.
-        // Validate window dimensions on the next runloop turn.
-        let intended = NSSize(width: Layout.windowIdealWidth,
-                              height: Layout.windowIdealHeight)
+        // The hosting view has collapsed the window to ~133x142 on some launches; restore the intended size.
+        let intended = NSSize(width: Layout.windowIdealWidth, height: Layout.windowIdealHeight)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak window] in
             guard let window else { return }
             guard window.frame.width < Layout.windowMinWidth
@@ -641,6 +428,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
+        ReadinessMonitor.shared.startPolling()
         // Activation alone, no policy change: see `applyDockVisibility`.
         NSApp.activate(ignoringOtherApps: true)
         mainWindow = window
@@ -651,16 +439,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         SidebarSelection.shared.item = .companion
         CompanionSectionSelection.shared.section = section
         showMainWindow()
-    }
-
-    @objc private func showPill() {
-        // Explicitly asking for the pill also turns the preference back on  - 
-        // otherwise the menu item would appear to do nothing.
-        if !UserData.shared.alwaysShowPill {
-            UserData.shared.alwaysShowPill = true
-            UserData.shared.save()
-        }
-        pillWindow.orderFront(nil)
     }
 
     /// Show or hide the Dock icon.
@@ -741,10 +519,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             companionStateObserver?.cancel()
             companionStateObserver = nil
             companionWindow?.hide()
-            // And take the engine off the pill, which is what stops the note card drawing a
-            // character: with this nil the card lays out exactly as it did before the
-            // companion could appear in it.
-            pillWindow?.stateModel.companionBehaviour = nil
             // Release the window as well, so `deinit` actually runs and the panel,
             // its hosting view, its observations and the behaviour engine are freed
             // rather than kept for the process lifetime. Nothing else holds a
@@ -756,18 +530,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         guard let pill = pillWindow else { return }
 
         if companionWindow == nil {
-            let companion = CompanionWindow(pill: pill) { [weak self] in
-                self?.showSettingsWindow()
+            companionWindow = CompanionWindow(pill: pill) { [weak self] in
+                self?.showCompanion(section: .companion)
             }
-            companionWindow = companion
-            // Scan for installed packs the first time the companion appears, so a
-            // pack the user added is available without a relaunch.
-            SpritePackStore.shared.reload()
-            // Only now is it known what is installed, so this is the first moment a
-            // selection naming a pack that is gone can be corrected and written back.
-            UserData.shared.resolveCompanionCharacter(
-                against: SpritePackStore.shared.packs.map(\.id)
-            )
         }
 
         // Wire (or re-wire) the signals every time the companion is enabled. The
@@ -777,40 +542,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             wireCompanionSignals()
         }
 
-        // Hand the pill the live engine, so the note card can draw the character itself
-        // while it is open and this panel steps aside for the duration. The *same*
-        // instance, deliberately - that is what carries mood, pose and frame timing across
-        // the handover instead of restarting them. Set every time, not just on creation: a
-        // disable clears it.
-        pill.stateModel.companionBehaviour = companionWindow?.behaviour
-
         // The companion is an independent window with its own saved position, so this
         // is the whole of its visibility: on screen while the preference is on. It used
         // to be a child window of the pill, which meant AppKit ordered it in and out
         // with the pill and the character came and went with each dictation turn when
         // "always show the pill" was off - the companion has its own toggle, and that
         // is the one it should follow.
-        //
-        // It declines to appear at all if the selection resolves to no installed pack,
-        // and nothing here configures the character beyond that: a pack carries its own
-        // per-frame timing (`CompanionAnimation.delays`), which is why APNG is the
-        // recommended format, and the behaviour engine needs nothing from the choice.
         companionWindow?.show()
     }
 
-    /// Feed the companion the two real signals it reacts to: dictation state and
-    /// microphone level.
-    ///
-    /// The state arrives by observing the pill's published state rather than by
-    /// calling the companion from each `setState` site. There are more than twenty of
-    /// those, and the same reasoning `PillWindow.setState` gives for its hide-on-idle
-    /// rule applies here: a new exit path must not be able to leave the character
-    /// stuck mid-thought.
-    ///
-    /// The level is *pulled* instead, once per animation frame - see
-    /// `CompanionBehaviour.levelSource`. `PillStateModel.level` is already the
-    /// smoothed signal the pill's meter draws, so the character bounces to the same
-    /// real audio the pill does, never to a timer.
     // MARK: - Call detection
 
     /// Start or stop watching for calls, to match the preference.
@@ -916,7 +656,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             dismissMeetingOffer()
 
             // Recording a call captures other people's voices, so the running state has to be
-            // obvious for the whole of it - `NotesView.meetingBar` states that invariant, and it is
+            // obvious for the whole of it - the note screen's meeting bar states that invariant, and it is
             // the app's one recording banner: a red dot, the elapsed time, a Stop button, and the
             // warning that nothing has been heard from the other side yet. Opening the screen it
             // lives on reuses all of that; a new persistent `PillState` would be a second indicator
@@ -925,8 +665,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // It costs an activation, which pulls focus from the call for a moment. That is the
             // deliberate trade: the alternative is recording other people with nothing on screen
             // saying so.
-            WorkspaceSectionSelection.shared.library = .notes
-            SidebarSelection.shared.item = .library
+            SidebarSelection.shared.openNote(id)
             showMainWindow()
 
             // And a transient confirmation on the pill, which has to be brought up first: with
@@ -957,8 +696,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func wireCompanionSignals() {
         guard let companion = companionWindow, let pill = pillWindow else { return }
 
-        companion.behaviour.levelSource = { [weak pill] in pill?.stateModel.level ?? 0 }
-
         companionStateObserver = pill.stateModel.$state
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -969,12 +706,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 // through a `Task` and delivering the mood a frame late.
                 MainActor.assumeIsolated {
                     companion.behaviour.apply(pillState: state)
-                    // The note card draws the character itself while it is open, so the
-                    // panel steps aside - and comes back however the turn ends, which is
-                    // why this rides the same single observation the mood does rather than
-                    // the twenty-odd `setState` sites. Idempotent: it orders a window out
-                    // or in and touches no frame.
-                    companion.applyCardHandover()
                 }
             }
     }
@@ -986,19 +717,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private var settingsWindow: NSWindow?
 
-    /// Autosave key for the Settings window's frame. Distinct from the main
-    /// window's "UtterMain" - AppKit refuses a duplicate autosave name and then
-    /// silently stops remembering either window's geometry.
-    /// Suffixed with the size so enlarging the default is not shadowed by a frame saved at the
-    /// old size - see the note on the main window's autosave name.
-    private static let settingsFrameName = "UtterSettings.864x600"
+    /// Autosave key for the Settings window's frame, suffixed with the default size so a new default
+    /// is not shadowed by a frame saved at the old one. Distinct from "UtterMain": AppKit refuses a
+    /// duplicate autosave name and then stops remembering either window.
+    private static let settingsFrameName = "UtterSettings.760x560"
 
     /// Open Settings in its own window.
-    ///
-    /// Settings used to be a page inside the main window's sidebar. It is a
-    /// different *kind* of thing from the feature screens - you visit it, change
-    /// something, and leave - so it gets its own window, which is also what the
-    /// reference design does and what Cmd-, already implies on macOS.
     @objc func showSettingsWindow() {
         if let existing = settingsWindow {
             existing.makeKeyAndOrderFront(nil)
@@ -1006,123 +730,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // The same structure as `showMainWindow`, for the same reason - this was the same shape of
-        // window carrying the same hand-written substitutes:
-        //
-        //     NSWindow  .titled + .fullSizeContentView, NSToolbar attached
-        //       └─ NSSplitViewController
-        //            ├─ NSSplitViewItem.sidebar(with: NSHostingController(SettingsSidebar))
-        //            └─ NSSplitViewItem(viewController: NSHostingController(SettingsDetail))
-        //
-        // It used to be one `NSHostingView(rootView: ThemedRoot { SettingsWindowView() })` whose
-        // root was an `HStack { groupList; 1pt rule; detail }`, with `flushChromeGlass` on the
-        // column and `Layout.toolbarBand + Space.x3` of padding in both panes standing in for a
-        // titlebar. macOS only attaches automatic Liquid Glass, automatic scroll-edge treatment and
-        // automatic accessibility adaptation to chrome *structures*, and an `HStack` is not one.
-        // `SettingsWindowView.swift`'s file note carries the full before/after table and the probe
-        // measurements; the AppKit half is here. Everything below was measured offscreen against
-        // exactly this structure on macOS 26.6.1 at the 720x500 opening size, never on a window
-        // ordered front.
-        //
-        // `sizingOptions = []` on both controllers: `NSHostingView.sizingOptions` defaults to
-        // `.standardBounds`, which includes `intrinsicContentSize`, and that is the ~133x142
-        // collapse `showMainWindow` carries a re-assert loop for - a size applied through the
-        // content-view relationship rather than as a resize request, which no `contentMinSize` or
-        // `windowWillResize` veto can refuse. Measured here: `intrinsicContentSize` (-1, -1),
-        // `fittingSize` (0, 0) and `preferredContentSize` (0, 0) on both, and the window held
-        // 720x500 across a 1.2s runloop. Two hosting views instead of one, so both are muzzled.
-        // Settings has never carried the loop and one is not added here - the collapse was only
-        // ever observed with the hosting view as the window's own `contentView`, which is what this
-        // change moves away from - but the failure was intermittent (2 of 5 launches), so if it
-        // ever appears in this window the fix is the loop in `showMainWindow`, verbatim.
-        let sidebarController = NSHostingController(rootView: SettingsSidebar())
-        sidebarController.sizingOptions = []
-        let detailController = NSHostingController(rootView: SettingsDetail())
-        detailController.sizingOptions = []
-
-        // `sidebar(with:)` is what buys the material: per its header it gives the item a
-        // "translucent material background", which on macOS 26 is a real
-        // `NSContainerConcentricGlassEffectView` wrapped around the hosting view - Liquid Glass
-        // concentric with the window's corner radius, which a `glassEffect(_:in: Rectangle())`
-        // cannot be. Measured at x 8-160, y 8-492, with the SwiftUI content as its *subview*, so
-        // the rows' white selection lift still composites on top of the material.
-        //
-        // Let AppKit size, collapse, and restore the sidebar through the standard toolbar control.
-        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = 145
-        sidebarItem.maximumThickness = 230
-        sidebarItem.preferredThicknessFraction = 0.22
-        sidebarItem.canCollapse = true
-        // Setting `canCollapse` resets this, per the header, so it has to come second.
-        sidebarItem.canCollapseFromWindowResize = true
-
-        let detailItem = NSSplitViewItem(viewController: detailController)
-        if #available(macOS 26.0, *) {
-            // The one line that makes the detail pane run *under* the group list, which was
-            // structurally impossible with the `HStack` and is why nothing in this window could
-            // refract app content - the glass had only the desktop to sample. Measured, at
-            // 720x500: on → the detail view is (0, 0, 720, 500) with a 160pt leading safe-area
-            // inset (152pt column plus the glass's 8pt outset). Off → (160, 0, 560, 500) with no
-            // leading inset, i.e. exactly the old `HStack` geometry.
-            detailItem.automaticallyAdjustsSafeAreaInsets = true
-        }
-
-        let splitController = NSSplitViewController()
-        splitController.splitView.isVertical = true
-        splitController.addSplitViewItem(sidebarItem)
-        splitController.addSplitViewItem(detailItem)
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0,
-                                width: Layout.settingsIdealWidth,
-                                height: Layout.settingsIdealHeight),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Settings"
-        // Use standard unified window chrome so title, traffic lights, and toolbar adapt with macOS.
-        window.titlebarAppearsTransparent = false
-        window.titleVisibility = .visible
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.isRestorable = false
-        window.isMovableByWindowBackground = true
-        window.toolbarStyle = .unified
-        window.titlebarSeparatorStyle = .automatic
-        window.toolbar = makeSidebarToolbar(identifier: .utterSettingsWindow)
-        window.contentViewController = splitController
-        window.setContentSize(NSSize(width: Layout.settingsIdealWidth,
-                                     height: Layout.settingsIdealHeight))
-        // A floor the two-pane layout survives with either sidebar width.
-        window.contentMinSize = NSSize(width: Layout.settingsMinWidth,
-                                       height: Layout.settingsMinHeight)
-        // Remember the size the user picks, and refuse to reopen at a size they
-        // cannot work in: `setFrameUsingName` replays the stored frame verbatim and
-        // never consults `contentMinSize`, so a frame saved while the window was
-        // collapsed would come back collapsed. Register the autosave name *after*
-        // restoring - registering writes the current frame when nothing is stored
-        // yet, the same ordering `showMainWindow` depends on.
+        let window = SettingsWindowView.makeWindow()
+        // `setFrameUsingName` replays the stored frame without consulting `contentMinSize`, and a frame
+        // stored on a display that is gone reopens out of reach. Restore before registering the name.
         if window.setFrameUsingName(Self.settingsFrameName) {
-            window.setContentSize(Layout.size(
-                window.contentRect(forFrameRect: window.frame).size,
-                atLeast: window.contentMinSize
-            ))
-            // And on screen: a frame stored on a display that is no longer attached
-            // reopens where the window cannot be reached to move it.
-            // `showMainWindow` guards the same way.
-            if let screen = window.screen ?? NSScreen.main,
-               !screen.visibleFrame.intersects(window.frame) {
+            window.setContentSize(Layout.size(window.contentRect(forFrameRect: window.frame).size,
+                                              atLeast: window.contentMinSize))
+            if let screen = window.screen ?? NSScreen.main, !screen.visibleFrame.intersects(window.frame) {
                 window.center()
             }
         } else {
             window.center()
         }
         window.setFrameAutosaveName(Self.settingsFrameName)
-        window.isReleasedWhenClosed = false
-        // Only for `windowWillClose`, so the Dock preference is reasserted once this
-        // window is gone. `windowShouldClose` deliberately excludes it - this is an
-        // ordinary closable window, unlike the main one.
+        // Only for `windowWillClose`, so the Dock preference is reasserted once this window is gone.
         window.delegate = self
         settingsWindow = window
 
@@ -1150,38 +771,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             )
         )
     }
-
-    /// The hint line names the user's configured hotkey, so it must be rebuilt
-    /// when that changes rather than hardcoding "Fn".
-    /// Tags for the hint items the hotkey preference rewrites. Tagged rather than found
-    /// by index - this used `menu.items[1]`, which silently retitles the wrong row the
-    /// first time an item is inserted above it, and there are two of them now.
-    private enum MenuHintTag {
-        static let hotkey = 1001
-        static let handsFree = 1002
-    }
-
-    /// The hands-free spelling that will actually fire: hold-then-tap when `KeyMonitor`
-    /// has an event tap to swallow the tapped key, the chord otherwise. Same test
-    /// Settings applies, so the menu and the card never disagree.
-    private var handsFreeHintTitle: String {
-        if HoldTap.isAvailable, let holdTap = HoldTap.binding(for: .handsFree) {
-            return "Hold \(UserData.shared.hotkeyName), tap \(holdTap.keyLabel) for hands-free"
-        }
-        return "\(KeyChord.handsFree.symbols) for hands-free"
-    }
-
-    private func refreshMenuHint() {
-        guard let menu = statusItem?.menu else { return }
-        menu.item(withTag: MenuHintTag.hotkey)?.title = "Hold \(UserData.shared.hotkeyName) to dictate"
-        // `.hotkeyChanged` also fires the moment Accessibility is granted (see
-        // `ReadinessMonitor`), which is exactly when hold-then-tap becomes available  - 
-        // so this line has to be re-read here too, not only on a hotkey change.
-        menu.item(withTag: MenuHintTag.handsFree)?.title = handsFreeHintTitle
-    }
-
-    /// Replay onboarding from the status menu.
-    @objc private func showSetup() { showOnboarding() }
 
     @objc private func showWhatsNew() {
         presentAuxWindow(
@@ -1330,6 +919,7 @@ extension AppDelegate: NSWindowDelegate {
 
         // Don't actually close - just hide the window and go back to pill mode
         sender.orderOut(nil)
+        ReadinessMonitor.shared.stopPolling()
         // Keep `mainWindow` pointing at it.
         //
         // This used to nil the reference while also returning false, so the window
@@ -1360,58 +950,18 @@ extension AppDelegate: NSWindowDelegate {
     /// window would leave Utter in the Dock until the next launch. Never fires for the
     /// main window, which vetoes its own close - that path calls back directly above.
     func windowWillClose(_ notification: Notification) {
-        if let closing = notification.object as? NSWindow, closing === onboardingWindow {
-            OnboardingState.markCompleted()
-            onboardingWindow = nil
+        if let closing = notification.object as? NSWindow {
+            if closing === onboardingWindow {
+                OnboardingState.markCompleted()
+                onboardingWindow = nil
+            }
+            if closing === reportIssueWindow { reportIssueWindow = nil }
+            if closing === whatsNewWindow { whatsNewWindow = nil }
         }
         DispatchQueue.main.async { [weak self] in self?.applyDockVisibility() }
     }
 }
 
-extension AppDelegate: NSToolbarDelegate {
-    func toolbar(
-        _ toolbar: NSToolbar,
-        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        if itemIdentifier == .utterSettings {
-            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-            item.label = "Settings"
-            item.paletteLabel = item.label
-            item.toolTip = item.label
-            item.image = NSImage(
-                systemSymbolName: "gearshape",
-                accessibilityDescription: item.label
-            )
-            item.target = self
-            item.action = #selector(showSettingsWindow)
-            return item
-        }
-
-        guard itemIdentifier == .toggleSidebar else { return nil }
-
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        item.label = "Toggle Sidebar"
-        item.paletteLabel = item.label
-        item.toolTip = item.label
-        item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: item.label)
-        item.target = nil
-        item.action = #selector(NSSplitViewController.toggleSidebar(_:))
-        return item
-    }
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        var items: [NSToolbarItem.Identifier] = [
-            .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace,
-        ]
-        if toolbar.identifier == .utterMain { items.append(.utterSettings) }
-        return items
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-}
 
 extension AppDelegate {
     private static func memoryID(from response: UNNotificationResponse) -> UUID? {
@@ -1433,7 +983,7 @@ extension AppDelegate {
            let id = UUID(uuidString: raw) {
             Task { @MainActor in
                 _ = CompanionMemoryStore.shared.markDelivered(id: id)
-                SoundPlayer.playTrill()
+                SoundPlayer.playReminder()
             }
         }
         // The system banner is the native Apple notification surface and remains
@@ -1464,13 +1014,4 @@ extension AppDelegate {
             completionHandler()
         }
     }
-}
-
-private extension NSToolbar.Identifier {
-    static let utterMain = NSToolbar.Identifier("UtterMainToolbar")
-    static let utterSettingsWindow = NSToolbar.Identifier("UtterSettingsToolbar")
-}
-
-private extension NSToolbarItem.Identifier {
-    static let utterSettings = NSToolbarItem.Identifier("UtterSettings")
 }

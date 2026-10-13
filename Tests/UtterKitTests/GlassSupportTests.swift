@@ -41,21 +41,8 @@ struct GlassSupportTests {
         #expect(GlassSupport.active(reduceTransparency: false) == GlassSupport.available)
     }
 
-    @Test("The Settings pane divider is present exactly when the glass is not")
-    func dividerAndGlassAreMutuallyExclusive() {
-        // `SettingsWindowView.paneDivider` draws when `!GlassSupport.active(...)`.
-        // Restated here as the invariant rather than the expression: on every
-        // configuration the two panes are separated by *something* - a live glass
-        // edge or a hairline - and never by both, which would read as a seam
-        // through the glass.
-        for reduceTransparency in [true, false] {
-            let glass = GlassSupport.active(reduceTransparency: reduceTransparency)
-            let divider = !glass
-            #expect(glass != divider, "one separator, always exactly one")
-        }
-        // And the accessibility end of it, stated on its own: the path that has no
-        // glass is the path that must have the hairline.
-        #expect(GlassSupport.active(reduceTransparency: true) == false,
-                "Reduce Transparency must fall to the hairline, not to nothing")
+    @Test("Reduce Transparency falls to the hairline divider, not to nothing")
+    func reduceTransparencyDisablesGlass() {
+        #expect(GlassSupport.active(reduceTransparency: true) == false)
     }
 }

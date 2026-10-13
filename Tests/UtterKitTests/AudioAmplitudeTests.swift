@@ -1,5 +1,6 @@
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 /// The peak-amplitude scan the microphone tap runs on every buffer.
 ///

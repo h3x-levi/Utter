@@ -1,6 +1,7 @@
 import AudioToolbox
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 @Suite("Call audio evidence")
 struct CallAudioEvidenceTests {

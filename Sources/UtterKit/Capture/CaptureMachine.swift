@@ -1,4 +1,5 @@
 import Foundation
+import UtterCore
 
 /// Everything a dictation turn is doing, in one value. The pill is derived from it.
 struct CaptureState: Equatable {
@@ -16,6 +17,11 @@ struct CaptureState: Equatable {
     /// This turn's destination. While idle it is where the next turn goes, which is how a spoken
     /// "start a new note" arms the turn after it.
     var destination: CaptureDestination = .app
+    /// Armed by a spoken "start a new note" or "continue the note": that one turn appends to the open note.
+    var appendsToOpenNote = false
+    /// A push-to-talk turn has stopped and its audio is not back yet, so a double tap's second press
+    /// can still start hands-free.
+    var awaitingAudio = false
     var modelLoading = true
 
     var pill: PillState {
@@ -42,7 +48,7 @@ enum CaptureOutcome: Equatable {
     case delivered
     case failed(String)
     case notice(String)
-    /// A spoken note-routing command: the next turn goes into a note.
+    /// A spoken note-routing command: the next turn appends to the open note.
     case armedNote(String)
     /// Not pasted, because the user moved to an app with nothing to type into.
     case held(String)
@@ -65,6 +71,8 @@ enum CaptureEvent: Equatable {
     /// The held transcript was copied, closed, or dismissed with Escape.
     case islandClosed
     case model(LocalWhisperProvider.LoadState)
+    /// Escape: drop the turn, deliver nothing.
+    case cancel
 }
 
 enum CaptureEffect: Equatable {
@@ -79,6 +87,8 @@ enum CaptureEffect: Equatable {
     case startPreview
     /// Media resumes and the stop chime plays once the mic is closed.
     case closeMic
+    /// Close the mic and drop what it heard.
+    case discardMic
     case resumeMedia
     case transcribe(Data)
     /// Polish, commands and delivery for the turn's destination.
@@ -87,6 +97,7 @@ enum CaptureEffect: Equatable {
     case playError
     case endTurn
     case expireMessage
+    case expireMessageSoon
 }
 
 /// The turn's rules as a pure function. `CaptureSession` runs the effects.
@@ -94,6 +105,8 @@ enum CaptureMachine {
     static let meetingMessage = "Recording a meeting - stop it first"
     static let micMessage = "Couldn\u{2019}t start the microphone"
     static let noSpeechMessage = "No speech detected"
+    static let cancelledMessage = "Cancelled"
+    static let commandSkippedMessage = "Command skipped: no text box"
 
     static func next(_ state: CaptureState, _ event: CaptureEvent) -> (CaptureState, [CaptureEffect]) {
         var s = state
@@ -107,6 +120,7 @@ enum CaptureMachine {
             return start(s, handsFree: false, to: s.destination)
 
         case (.recording(handsFree: false), .holdEnded):
+            s.awaitingAudio = true
             return stop(s)
         case (_, .holdEnded):
             return (s, [])
@@ -121,6 +135,9 @@ enum CaptureMachine {
             s.phase = .recording(handsFree: true)
             s.destination = target
             return (s, [.suppressRelease(true)] + (target == .app ? [] : [.startPreview]) + [.installVAD])
+        // A slow mic start still holds the first tap's audio; it is dropped when it lands.
+        case (.processing, .toggle(.handsFree, meetingActive: false)) where state.awaitingAudio:
+            return start(s, handsFree: true, to: s.destination)
         case (.processing, .toggle):
             // A double tap sets the release suppression itself; a refused toggle must clear it.
             return (s, [.suppressRelease(false)])
@@ -143,6 +160,7 @@ enum CaptureMachine {
             return (s, [])
 
         case (.processing, .audioReady(let audio)):
+            s.awaitingAudio = false
             guard let audio else { return fail(s, noSpeechMessage) }
             return (s, [.transcribe(audio)])
         case (.processing, .transcribed(let text)):
@@ -176,6 +194,13 @@ enum CaptureMachine {
         case (_, .islandClosed):
             return (s, [])
 
+        case (.recording, .cancel):
+            return cancel(s, [.suppressRelease(false), .stopTelemetry, .discardMic])
+        case (.processing, .cancel):
+            return cancel(s, [])
+        case (_, .cancel):
+            return (s, [])
+
         case (_, .model(let load)):
             s.modelLoading = load == .loading || load == .idle
             guard case .failed(let reason) = load, state.phase == .idle else { return (s, []) }
@@ -198,6 +223,7 @@ enum CaptureMachine {
         var s = state
         s.phase = .recording(handsFree: handsFree)
         s.destination = destination
+        s.awaitingAudio = false
         // The chime is queued before the mic opens, so it stays out of the recording.
         return (s, (handsFree ? [.suppressRelease(true)] : [])
                    + [.startTurn, .playStart, .startTelemetry, .openMic(vad: handsFree)])
@@ -216,18 +242,20 @@ enum CaptureMachine {
         return (s, [.expireMessage])
     }
 
-    /// Every way a turn ends goes through here or `finish`, so none can leave a note armed.
+    /// Every way a turn ends goes through here, `finish` or `cancel`, so none can leave a note armed.
     private static func fail(_ state: CaptureState, _ message: String, sound: Bool = true,
                              extra: [CaptureEffect] = []) -> (CaptureState, [CaptureEffect]) {
         var s = state
         s.phase = .error(message)
         s.destination = .app
+        s.appendsToOpenNote = false
         return (s, extra + [.stopTelemetry] + (sound ? [.playError] : []) + [.endTurn, .expireMessage])
     }
 
     private static func finish(_ state: CaptureState, _ outcome: CaptureOutcome) -> (CaptureState, [CaptureEffect]) {
         var s = state
         s.destination = .app
+        s.appendsToOpenNote = false
         switch outcome {
         case .delivered:
             s.phase = .idle
@@ -240,11 +268,21 @@ enum CaptureMachine {
         case .armedNote(let message):
             s.phase = .notice(message)
             s.destination = .note
+            s.appendsToOpenNote = true
             return (s, [.playDone, .endTurn, .expireMessage])
         case .held(let transcript):
             s.phase = .holding(transcript)
             return (s, [.playDone, .endTurn])
         }
+    }
+
+    /// Escape: nothing from the turn is delivered or kept.
+    private static func cancel(_ state: CaptureState, _ effects: [CaptureEffect]) -> (CaptureState, [CaptureEffect]) {
+        var s = state
+        s.phase = .notice(cancelledMessage)
+        s.destination = .app
+        s.appendsToOpenNote = false
+        return (s, effects + [.endTurn, .expireMessageSoon])
     }
 
     /// Whether a finished dictation is held on the pill instead of pasted: only when the user is

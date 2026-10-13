@@ -21,3 +21,6 @@ website/node_modules/
 website/dist/
 
 /build/
+
+# Local editor and tooling configurations
+.claude/

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 @Suite("Companion memory", .serialized)
 @MainActor
@@ -177,28 +178,6 @@ struct CompanionMemoryTests {
         #expect(!CompanionNotificationScheduler.supportsSystemNotifications(
             bundleURL: URL(fileURLWithPath: "/tmp/UtterPackageTests.xctest")
         ))
-    }
-}
-
-@Suite("Companion sound rewards")
-struct CompanionSoundRewardTests {
-    @Test("Locked sound rewards fall back and unlocked rewards select their asset")
-    func rewardAssets() {
-        #expect(SoundPlayer.doubleMeowAsset(unlocked: false) == "cat-meow")
-        #expect(SoundPlayer.doubleMeowAsset(unlocked: true) == "cat-meow-double")
-        #expect(SoundPlayer.purrAsset(unlocked: false) == "cat-purr")
-        #expect(SoundPlayer.purrAsset(unlocked: true) == "cat-purr-warm")
-        #expect(SoundPlayer.trillAsset(unlocked: false) == "cat-meow")
-        #expect(SoundPlayer.trillAsset(unlocked: true) == "cat-trill")
-        #expect(SoundPlayer.tapAsset(characterID: "pixel-cat-orange") == "cat-meow-natural")
-        #expect(SoundPlayer.tapAsset(characterID: "dog") == "dog-bark")
-        #expect(SoundPlayer.comfortAsset(characterID: "dog", warmUnlocked: true) == "dog-pant")
-        #expect(SoundPlayer.comfortAsset(
-            characterID: "pixel-cat-gray", warmUnlocked: true
-        ) == "cat-purr-natural")
-        #expect(SoundPlayer.reminderAsset(
-            characterID: "panda", trillUnlocked: true
-        ) == "cat-trill")
     }
 }
 

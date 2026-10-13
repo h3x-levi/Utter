@@ -2,21 +2,17 @@
 #
 # The Swift app has no Python in it at all. These scripts generate assets the
 # build then copies in — the app icon, the menu-bar template image, the DMG
-# background, the companion sprite packs — and `scripts/build-app.sh` runs them
+# background — and `scripts/build-app.sh` runs them
 # only when their output is missing or older than its source.
 #
 #   python3 -m pip install --user -r requirements.txt
 #
-# Pillow is the one third-party dependency, imported by seven scripts:
-#   scripts/generate_icon.py          scripts/animate_pack.py
-#   scripts/generate_menubar_icon.py  scripts/build_pack.py
+# Pillow is the one third-party dependency, imported by six scripts:
+#   scripts/generate_icon.py          scripts/generate_menubar_icon.py
 #   scripts/generate_dmg_background.py  scripts/dechecker.py
-#   tools/newcat/generate_cat.py
+#   scripts/generate_mark.py          tools/build_product_hunt_assets.py
 #
-# Lower bound 10: `PngImagePlugin.Disposal` / `Blend` (the APNG enums
-# tools/newcat/generate_cat.py saves frames with) arrived when Pillow moved its
-# module constants to enums in 9.1, and 10 is the first major release safely past
-# that. Pillow 10 also removed `Image.ANTIALIAS` while keeping the
+# Lower bound 10: Pillow 10 removed `Image.ANTIALIAS` while keeping the
 # `Image.LANCZOS` / `Image.NEAREST` aliases these scripts use, so >=10 is the
 # floor at which every API here is present under the name it is called by.
 #

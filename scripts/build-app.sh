@@ -292,7 +292,7 @@ mkdir -p "$ARCH_STAGE"
 
 for arch in arm64 x86_64; do
     echo "   • Compiling $arch..."
-    swift build -c release --triple "$arch-apple-macosx13.3"
+    swift build -c release --skip-update --triple "$arch-apple-macosx14.0"
     if [ ! -f ".build/release/$EXEC_NAME" ]; then
         echo "❌ $arch build failed: .build/release/$EXEC_NAME is missing"
         exit 1
@@ -348,26 +348,6 @@ fi
 if [ "$MENUBAR_STALE" -eq 1 ]; then
     python3 scripts/generate_menubar_icon.py >/dev/null
 fi
-# User-authored companion packs. The four built-ins are rendered in Swift and must not
-# be copied as PNG packs; SpritePackStore reserves those ids and always uses the code path.
-if [ -d "Companions" ]; then
-    # Copy the pack folders only. `Companions/README.md` documents how the packs are
-    # regenerated, which belongs in the repository and not inside a shipped app — the
-    # loader skips non-directories so it did no harm, but it referenced local source
-    # paths and read as an oversight in the bundle.
-    mkdir -p "$RESOURCES/Companions"
-    find Companions -mindepth 1 -maxdepth 1 -type d \
-        ! -name dog \
-        ! -name panda \
-        ! -name pixel-cat-gray \
-        ! -name pixel-cat-orange \
-        ! -name 'Dog sound' \
-        ! -name 'Cat Sound effects' \
-        -exec cp -R {} "$RESOURCES/Companions/" \;
-    PACK_COUNT=$(find "$RESOURCES/Companions" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-    echo "   ✓ Code-rendered companions: 4; optional image packs bundled: $PACK_COUNT"
-fi
-
 if find "$RESOURCES" -type f -iname '*.mp3' -print -quit | grep -q .; then
     echo "❌ Raw MP3 source audio reached the app bundle"
     exit 1
@@ -411,6 +391,28 @@ for WM in "${WHISPER_MODELS[@]}"; do
         echo "   ⚠️  Optional model missing, will be offered as a download: $WM"
     fi
 done
+
+# Whistle, the optional Fast engine on Apple silicon. The model and the engine linked into the binary are both
+# pinned by Vendor/Needle/CHECKSUMS.
+WHISTLE_SHA256=$(awk '/whistle\.cact$/ {print $1}' Vendor/Needle/CHECKSUMS)
+if [ "$(shasum -a 256 Models/whistle.cact 2>/dev/null | awk '{print $1}')" != "$WHISTLE_SHA256" ]; then
+    echo "❌ Models/whistle.cact is missing or failed its SHA-256 integrity check (expected $WHISTLE_SHA256)."
+    echo "   Fetch it with:"
+    echo "     curl --fail --location -o Models/whistle.cact \\"
+    echo "       https://huggingface.co/Cactus-Compute/whistle/resolve/ca5287601bef25af26dcf2e1b2bdc0843a7c19e5/whistle.cact"
+    exit 1
+fi
+NEEDLE_SHA256=$(awk '/ libneedle\.a$/ {print $1}' Vendor/Needle/CHECKSUMS)
+NEEDLE_SLICE=".build/needle-arm64-$$.a"
+lipo -thin arm64 Vendor/Needle/Needle.xcframework/macos-arm64_x86_64/libneedle.a -output "$NEEDLE_SLICE"
+NEEDLE_SLICE_SHA256=$(shasum -a 256 "$NEEDLE_SLICE" | awk '{print $1}')
+rm -f "$NEEDLE_SLICE"
+if [ "$NEEDLE_SLICE_SHA256" != "$NEEDLE_SHA256" ]; then
+    echo "❌ The arm64 libneedle in Needle.xcframework does not match Vendor/Needle/CHECKSUMS; run Vendor/Needle/build-xcframework.sh."
+    exit 1
+fi
+cp Models/whistle.cact "$RESOURCES/Models/whistle.cact"
+echo "   ✓ Whistle model bundled: whistle.cact ($(du -h Models/whistle.cact | cut -f1 | tr -d ' '))"
 
 # whisper.cpp dylib — SwiftPM links the prebuilt xcframework, so the built
 # binary needs the framework alongside it inside the bundle.
@@ -464,7 +466,7 @@ cat > "$CONTENTS/Info.plist" << EOF
          framework (whisper runs locally), so advertising that capability would be
          a usage string for a permission the app never requests. -->
     <key>LSMinimumSystemVersion</key>
-    <string>13.3</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <!-- Launch as a menu-bar app, with no Dock icon and no menu bar.

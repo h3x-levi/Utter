@@ -1,12 +1,14 @@
 import Foundation
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 @Suite("App identity and data directory")
 struct AppIdentityTests {
+    private let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
     private func plist(_ relativePath: String) throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let data = try Data(contentsOf: root.appendingPathComponent(relativePath))
         return try #require(
             try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
@@ -35,5 +37,18 @@ struct AppIdentityTests {
     func entitlements() throws {
         let entitlements = try plist("Utter/Utter.entitlements")
         #expect(entitlements["com.apple.security.device.audio-input"] as? Bool == true)
+    }
+
+    @Test("UtterCore never imports SwiftUI")
+    func coreHasNoSwiftUI() throws {
+        let core = root.appendingPathComponent("Sources/UtterCore")
+        let files = try #require(FileManager.default.enumerator(at: core, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        #expect(!files.isEmpty)
+        for file in files {
+            let imports = try String(contentsOf: file, encoding: .utf8).split(separator: "\n")
+                .filter { $0.contains("import ") && $0.contains("SwiftUI") }
+            #expect(imports.isEmpty, "\(file.lastPathComponent) imports SwiftUI")
+        }
     }
 }

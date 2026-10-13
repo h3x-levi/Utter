@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UtterCore
 
 struct SnippetItem: Identifiable, Equatable {
     let id: UUID
@@ -170,7 +171,8 @@ final class WordsViewModel {
 
     // MARK: Dictionary
 
-    var trimmedNewWord: String { newWord.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Suggestions are the next step, so the empty note shows only when there are none either.
+    var dictionaryIsEmpty: Bool { words.isEmpty && suggestions.isEmpty }
 
     var filteredWords: [String] {
         let query = wordQuery.trimmingCharacters(in: .whitespaces)
@@ -369,10 +371,5 @@ final class WordsViewModel {
                 tryResult = .failed(error.localizedDescription)
             }
         }
-    }
-
-    func resetTry() {
-        tryTask?.cancel()
-        tryResult = .idle
     }
 }

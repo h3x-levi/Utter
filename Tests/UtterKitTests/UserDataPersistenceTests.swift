@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 @Suite("User settings persistence")
 struct UserDataPersistenceTests {
@@ -80,7 +81,7 @@ struct UserDataPersistenceTests {
         "words", "snippets", "language", "voiceCommands", "spokenPunctuation", "hotkeyId", "hotkeyName",
         "doubleTapHotkeyForHandsFree", "appTheme", "scratchpad", "customAICommands",
         "alwaysShowPill", "showInDock", "soundsEnabled", "muteMusicWhileDictating",
-        "captureAppendsToOpenNote", "sentencePolishEnabled", "speechBiasEnabled",
+        "captureAppendsToOpenNote", "sentencePolishEnabled", "speechBiasEnabled", "speechEngine",
         "useSurroundingContext", "perAppToneEnabled", "livePreviewEnabled",
         "offerToTranscribeCalls", "keepHistory", "companionEnabled", "companionCharacter",
         "companionSize", "companionPetBehaviours", "companionUserName",
@@ -116,6 +117,7 @@ struct UserDataPersistenceTests {
       "captureAppendsToOpenNote": false,
       "sentencePolishEnabled": false,
       "speechBiasEnabled": false,
+      "speechEngine": "whistle",
       "useSurroundingContext": true,
       "perAppToneEnabled": true,
       "livePreviewEnabled": true,
@@ -186,7 +188,7 @@ struct UserDataPersistenceTests {
         let loaded = UserData(storageDir: directory)
 
         #expect(loaded.captureAppendsToOpenNote == false)
-        #expect(loaded.appTheme == ThemeManager.systemThemeID)
+        #expect(AppTheme.find(loaded.appTheme) == .dark)
         #expect(loaded.companionCharacter == "pixel-dog-brown")
         #expect(loaded.companionSize == UserData.defaultCompanionSize)
         #expect(loaded.companionObject == .none)

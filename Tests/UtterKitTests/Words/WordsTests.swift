@@ -4,6 +4,7 @@ import SwiftUI
 import Testing
 
 @testable import UtterKit
+@testable import UtterCore
 
 @MainActor
 struct WordsTests {
@@ -84,48 +85,72 @@ struct WordsTests {
         off.saveCommand(draft, replacing: nil)
         #expect(!off.canRunTry)
     }
+
+    @Test func emptyDictionaryNoteGivesWayToSuggestions() {
+        let history = TranscriptionHistory(storageDir: nil)
+        let model = WordsViewModel(userData: UserData(storageDir: nil), history: history)
+        #expect(model.dictionaryIsEmpty)
+        history.entries = [TranscriptionEntry(text: "Ask about the GraphQL schema.")]
+        model.refreshSuggestions()
+        #expect(model.suggestions == ["GraphQL"])
+        #expect(!model.dictionaryIsEmpty)
+    }
+
+    @Test func flowStackWrapsAndClampsToTheWidth() {
+        let sizes = [CGSize(width: 40, height: 26), CGSize(width: 50, height: 26), CGSize(width: 30, height: 26),
+                     CGSize(width: 200, height: 26)]
+        let (frames, size) = FlowStack.arrange(sizes, width: 100, spacing: 6)
+        #expect(frames.map(\.origin) == [CGPoint(x: 0, y: 0), CGPoint(x: 46, y: 0), CGPoint(x: 0, y: 32), CGPoint(x: 0, y: 64)])
+        #expect(frames[3].width == 100)
+        #expect(size == CGSize(width: 100, height: 90))
+    }
 }
 
 @MainActor
 @Suite("Words screen snapshots", .serialized, .enabled(if: ProcessInfo.processInfo.environment["UTTER_SCREEN_SNAPSHOTS"] == "1"))
 struct WordsSnapshots {
-    private static let output = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent(".build/screen-snapshots", isDirectory: true)
-
-    private func fixture() -> WordsViewModel {
+    private func window(words: [String]) -> MainWindowModel {
         let data = UserData(storageDir: nil)
-        data.dictionaryWords = ["Kubernetes", "GraphQL", "Priya", "CoreAudio", "Tahoe", "Whisper"]
-        data.snippets = [("my email", "priya@example.com"), ("insert date", "[date] [time]"),
-                         ("meeting template", "## Meeting Notes\n- Attendees:\n- Action Items:")]
+        data.dictionaryWords = words
+        data.snippets = [("my address", "14 Harbour Row, Leith"), ("sign off", "Best, Sam"),
+                         ("meeting link", "meet.example.com/sam"), ("insert date", "[date] [time]")]
         data.customAICommands = [CustomAICommand(trigger: "make it a commit", systemPrompt: "Turn this into a conventional commit message under 72 characters.")]
         let history = TranscriptionHistory(storageDir: nil)
         history.entries = [TranscriptionEntry(text: "Ask Marcus to review the Terraform plan before Friday."),
-                           TranscriptionEntry(text: "I told Marcus the Terraform module is ready.")]
-        return WordsViewModel(userData: data, history: history, rewrite: { $1 }, availability: { .appleIntelligenceOff })
+                           TranscriptionEntry(text: "I told Marcus the Terraform module is ready for DynamoDB.")]
+        let model = MainWindowModel(selection: SidebarSelection(arguments: []), status: CaptureStatus(), userData: data,
+                                    history: history, notes: NoteStore(storageDir: nil), meeting: MeetingSession())
+        model.selection.item = .words
+        return model
     }
 
     @Test func render() throws {
-        try FileManager.default.createDirectory(at: Self.output, withIntermediateDirectories: true)
-        for (name, section) in [("words-dictionary", WordsViewModel.Section.dictionary),
-                                ("words-snippets", .snippets), ("words-commands", .commands)] {
+        let words = ["Priya Raman", "Okafor", "Union Square", "Leith", "staging build", "release notes", "whisper.cpp",
+                     "Thursday review", "Glasgow", "Tom Ashworth", "UTC"]
+        for section in WordsViewModel.Section.allCases {
             for dark in [false, true] {
-                let model = fixture()
-                model.section = section
-                let host = NSHostingView(rootView: VoiceEngineView(model: model)
-                    .padding(24).background(Look.Color.ground)
-                    .environment(\.colorScheme, dark ? .dark : .light))
-                host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-                host.frame = CGRect(x: 0, y: 0, width: 820, height: 720)
-                let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: true)
-                window.contentView = host
-                host.layoutSubtreeIfNeeded()
-                RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-                let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-                host.cacheDisplay(in: host.bounds, to: rep)
-                let png = try #require(rep.representation(using: .png, properties: [:]))
-                try png.write(to: Self.output.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
+                let model = window(words: words)
+                model.words.section = section
+                try capture(model, "words-\(section == .commands ? "commands" : section.rawValue.lowercased())", dark: dark)
             }
         }
+        try capture(window(words: []), "words-first-run", dark: true)
+    }
+
+    private func capture(_ model: MainWindowModel, _ name: String, dark: Bool) throws {
+        let hosting = NSHostingController(rootView: MainWindowView(model: model))
+        hosting.sizingOptions = []
+        let size = NSSize(width: 1_180, height: 780)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.toolbarStyle = .unified
+        window.contentViewController = hosting
+        window.setContentSize(size)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        RunLoop.current.run(until: Date().addingTimeInterval(1.2))
+        try SnapshotCanvas.capture(window, view: try #require(window.contentView), name, dark: dark)
     }
 }

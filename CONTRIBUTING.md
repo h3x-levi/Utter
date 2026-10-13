@@ -11,7 +11,9 @@ Thanks for considering a contribution. Utter is a native macOS app built with Sw
 
 ## Build and validate
 
-Requirements: macOS 13.3 or later and Swift 6.0 or later from Xcode 16+ or the Command Line Tools. The test-only Swift Testing dependency requires SwiftPM tools 6.0 even though the app manifest itself uses tools version 5.9. The whisper.cpp binary target is pinned in `Package.swift`.
+Requirements: macOS 26 with Xcode 26 or its Command Line Tools, for the macOS 26 SDK. The app itself runs on macOS 14 and later. The whisper.cpp binary target is pinned in `Package.swift`.
+
+Set `UTTER_DATA_DIR` to a scratch folder to run a build without touching your own notes and history: `open --env UTTER_DATA_DIR=/tmp/utter-dev build/Utter.app --args --open-window`.
 
 ```sh
 swift build

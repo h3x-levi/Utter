@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import UtterKit
+@testable import UtterCore
 
 /// The reminder clocks.
 ///

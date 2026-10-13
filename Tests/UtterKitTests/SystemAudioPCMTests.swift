@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// The conversion both meeting-capture routes share.
 ///

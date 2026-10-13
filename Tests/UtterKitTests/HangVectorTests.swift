@@ -1,6 +1,7 @@
 import Testing
 import AppKit
 @testable import UtterKit
+@testable import UtterCore
 
 /// `typeText` restores the user's clipboard from a snapshot taken while transcription ran,
 /// which is only safe while nothing has written to the clipboard since.

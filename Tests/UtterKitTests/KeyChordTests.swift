@@ -2,6 +2,7 @@ import Testing
 import AppKit
 import Carbon.HIToolbox
 @testable import UtterKit
+@testable import UtterCore
 
 /// The two global chords, and the text Settings prints for them.
 ///
@@ -59,24 +60,25 @@ struct KeyChordTests {
         #expect(KeyChord.noteCapture.keyLabel == "N")
         #expect(KeyChord.memoryCapture.keyCode == UInt16(kVK_ANSI_R))
         #expect(KeyChord.memoryCapture.keyLabel == "R")
+        #expect(KeyChord.openWindow.keyCode == UInt16(kVK_ANSI_U))
+        #expect(KeyChord.openWindow.spelled == "Control-Option-U")
     }
 
-    @Test("Both chords require Control and Option and nothing else")
+    @Test("Every chord requires Control and Option and nothing else")
     func sharedModifiers() {
         // `KeyMonitor.handleKeyDown` rejects an event carrying Command or Shift, so a
         // chord that declared either could never fire.
-        for chord in [KeyChord.handsFree, KeyChord.noteCapture, KeyChord.memoryCapture] {
+        for chord in [KeyChord.handsFree, KeyChord.noteCapture, KeyChord.memoryCapture, KeyChord.openWindow] {
             #expect(chord.flags == [.control, .option])
         }
     }
 
-    @Test("The two chords are distinguishable by key code")
+    @Test("Every chord has its own key code")
     func chordsAreDistinct() {
         // They share their modifiers, so the key code is the only thing separating
         // "start hands-free" from "dictate into a note".
-        #expect(KeyChord.handsFree.keyCode != KeyChord.noteCapture.keyCode)
-        #expect(KeyChord.memoryCapture.keyCode != KeyChord.handsFree.keyCode)
-        #expect(KeyChord.memoryCapture.keyCode != KeyChord.noteCapture.keyCode)
+        let codes = [KeyChord.handsFree, .noteCapture, .memoryCapture, .openWindow].map(\.keyCode)
+        #expect(Set(codes).count == codes.count)
     }
 }
 

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 @Suite("Dictation pipeline")
 struct DictationPipelineTests {
@@ -166,15 +167,19 @@ struct CaptureMachineTests {
         let (rested, _) = next(noticed, .messageExpired)
         let (recording, _) = next(rested, .holdBegan(meetingActive: false))
         #expect(recording.pill == .capturingNote)
+        #expect(recording.appendsToOpenNote)
     }
 
     @Test("Every way a note turn ends clears the destination")
     func exitsClearDestination() {
-        let processing = state(.processing(.transcribing), .note)
+        var processing = state(.processing(.transcribing), .note)
+        processing.appendsToOpenNote = true
         let endings: [CaptureEvent] = [.finished(.delivered), .finished(.failed("x")), .finished(.notice("x")),
-                                       .audioReady(nil), .transcribed(""), .transcriptionFailed("x"), .micFailed]
+                                       .audioReady(nil), .transcribed(""), .transcriptionFailed("x"), .micFailed,
+                                       .cancel]
         for ending in endings {
-            #expect(next(processing, ending).0.destination == .app, "\(ending)")
+            let after = next(processing, ending).0
+            #expect(after.destination == .app && !after.appendsToOpenNote, "\(ending)")
         }
     }
 
@@ -206,6 +211,48 @@ struct CaptureMachineTests {
         #expect(after == processing)
         #expect(effects == [.suppressRelease(false)])
         #expect(next(state(.idle), .toggle(.handsFree, meetingActive: true)).1.contains(.suppressRelease(false)))
+    }
+
+    @Test("Escape cancels recording, hands-free and processing; nothing is delivered and the pill rests")
+    func escapeCancels() {
+        let closesMic: [CaptureEffect] = [.suppressRelease(false), .stopTelemetry, .discardMic, .endTurn, .expireMessageSoon]
+        let rows: [(CaptureState, [CaptureEffect])] = [
+            (state(.recording(handsFree: false)), closesMic),
+            (state(.recording(handsFree: true)), closesMic),
+            (state(.recording(handsFree: true), .note), closesMic),
+            (state(.processing(.transcribing)), [.endTurn, .expireMessageSoon]),
+            (state(.processing(.rewriting)), [.endTurn, .expireMessageSoon]),
+        ]
+        for (before, expected) in rows {
+            let (cancelled, effects) = next(before, .cancel)
+            #expect(cancelled.pill == .notice(CaptureMachine.cancelledMessage), "\(before)")
+            #expect(effects == expected, "\(before)")
+            for late in [CaptureEvent.audioReady(Data([1])), .transcribed("hello"), .finished(.delivered)] {
+                #expect(next(cancelled, late).1.isEmpty, "\(before) \(late)")
+            }
+            #expect(next(cancelled, .messageExpired).0.phase == .idle)
+        }
+        for resting in [state(.idle), state(.holding("hello")), state(.error("x"))] {
+            #expect(next(resting, .cancel).1.isEmpty, "\(resting)")
+        }
+    }
+
+    @Test("A double tap starts hands-free only while a slow mic still owes the first tap's audio")
+    func doubleTapOnSlowMicStart() {
+        let (released, _) = next(state(.recording(handsFree: false)), .holdEnded)
+        let (transcribing, _) = next(released, .audioReady(Data([1])))
+        let (latchedStop, _) = next(state(.recording(handsFree: true)), .voiceStopped)
+        let rows: [(CaptureState, PillState)] = [
+            (released, .handsFree),
+            (transcribing, .processing(.transcribing)),
+            (latchedStop, .processing(.transcribing)),
+        ]
+        for (before, pill) in rows {
+            #expect(next(before, .toggle(.handsFree, meetingActive: false)).0.pill == pill, "\(before)")
+        }
+        let (handsFree, effects) = next(released, .toggle(.handsFree, meetingActive: false))
+        #expect(effects == [.suppressRelease(true), .startTurn, .playStart, .startTelemetry, .openMic(vad: true)])
+        #expect(next(handsFree, .audioReady(nil)).0 == handsFree)
     }
 
     @Test("Key-down and release while processing are ignored")
@@ -284,10 +331,10 @@ struct DestinationPolicyTests {
 
     @Test("The window grows for the island and only for it")
     func islandWindow() {
-        #expect(PillMetrics.shellHeight(for: .island("x")) == PillMetrics.islandHeight)
-        #expect(PillMetrics.islandWindowHeight >= PillMetrics.islandHeight + PillMetrics.verticalInset * 2)
-        #expect(PillMetrics.islandWindowHeight > PillMetrics.windowHeight)
-        #expect(PillMetrics.shellWidth(for: .island("x")) == PillMetrics.shellWidth(for: .capturingNote))
+        let island = PillMetrics.panelSize(for: .island("x"), caption: false)
+        let listening = PillMetrics.panelSize(for: .listening(nil), caption: false)
+        #expect(island.width > listening.width && island.height > listening.height)
+        #expect(island.height == ceil(PillMetrics.shellSize(for: .island("x")).height + PillMetrics.margin * 2))
     }
 }
 

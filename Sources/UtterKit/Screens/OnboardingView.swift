@@ -2,8 +2,9 @@ import AVFoundation
 import AppKit
 import Combine
 import SwiftUI
+import UtterCore
 
-/// First run in three steps: watch a sentence appear, allow the two permissions, dictate one
+/// First run in three steps: watch the pill hear a sentence, allow the two permissions, dictate one
 /// sentence. The step is stored on every move, so a trip to System Settings or a quit mid-way
 /// reopens where the user left.
 @Observable
@@ -28,7 +29,6 @@ final class OnboardingViewModel {
     var micGranted = false
     var axGranted = false
     var demoFrame = OnboardingDemo.restFrame
-    private(set) var demoRun = 0
     var typed = "" {
         didSet { if OnboardingState.looksDictated(old: oldValue, new: typed) { dictated = true } }
     }
@@ -75,8 +75,6 @@ final class OnboardingViewModel {
         readiness.stopPolling()
     }
 
-    func aim(forward: Bool) { movingForward = forward }
-
     func move(by delta: Int) {
         guard let next = Step(rawValue: step.rawValue + delta) else { return }
         movingForward = delta > 0
@@ -95,8 +93,6 @@ final class OnboardingViewModel {
                   (try? await Task.sleep(for: OnboardingDemo.hold(frame))) != nil else { return }
         }
     }
-
-    func replayDemo() { demoRun += 1 }
 
     func requestMic() {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -143,46 +139,59 @@ struct HotkeyLabel: Equatable {
     }
 }
 
-/// The welcome step's synthetic dictation: an empty plate while the key goes down, a word at a
-/// time while speaking, the finished line once the key is let go, then rest.
+/// The welcome step's synthetic dictation: the key goes down, the pill listens for one beat per
+/// spoken word, thinks once the key is let go, then rests as the icon.
 enum OnboardingDemo {
-    enum Phase: CaseIterable {
+    enum Phase {
         case hold, speak, release
     }
 
-    static let words = "Thanks Priya, Thursday at two works for me.".split(separator: " ").map(String.init)
-    static var restFrame: Int { words.count + 2 }
+    static let beats = 8
+    static var restFrame: Int { beats + 2 }
 
     static func phase(_ frame: Int) -> Phase? {
         switch frame {
         case 0: .hold
-        case 1...words.count: .speak
-        case words.count + 1: .release
+        case 1...beats: .speak
+        case beats + 1: .release
         default: nil
         }
     }
 
-    static func caption(_ frame: Int) -> (text: String, live: String?) {
-        let shown = min(max(frame, 0), words.count)
-        guard phase(frame) == .speak else { return (words.prefix(shown).joined(separator: " "), nil) }
-        return (words.prefix(shown - 1).joined(separator: " "), words[shown - 1])
+    static func look(_ frame: Int) -> PillLook {
+        switch phase(frame) {
+        case .hold, .speak: .listening(nil)
+        case .release: .thinking
+        case nil: .hover(handsFree: false)
+        }
+    }
+
+    static func level(_ frame: Int) -> Double {
+        switch phase(frame) {
+        case .hold: 0.12
+        case .speak: [0.55, 0.8, 0.45, 0.7][frame % 4]
+        default: 0
+        }
     }
 
     static func hold(_ frame: Int) -> Duration {
         switch phase(frame) {
         case .hold: .milliseconds(800)
-        case .speak: frame == words.count ? .milliseconds(600) : .milliseconds(300)
+        case .speak: frame == beats ? .milliseconds(600) : .milliseconds(300)
         default: .milliseconds(1400)
         }
     }
 }
 
+/// The v2 setup window: steps centred in the top 440 pt, a fixed 80 pt bar under them.
 struct OnboardingView: View {
     var onFinish: (_ skipped: Bool) -> Void
 
     @State private var model: OnboardingViewModel
     @FocusState private var fieldFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pillGlass
+    @Namespace private var progress
 
     init(onFinish: @escaping (_ skipped: Bool) -> Void, previewStep: Int? = nil) {
         self.init(model: OnboardingViewModel(stepOverride: previewStep), onFinish: onFinish)
@@ -195,27 +204,21 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                ZStack(alignment: .top) {
-                    stepView
-                        .id(model.step)
-                        .transition(stepTransition)
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, Look.Space.x8)
-                .padding(.top, Look.Space.x6)
-                .padding(.bottom, Look.Space.x4)
+            ZStack {
+                stepView
+                    .id(model.step)
+                    .transition(stepTransition)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            navBar
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 40)
+            .padding(.horizontal, 70)
+            bar
         }
-        .frame(minWidth: Layout.onboardingMinWidth,
-               idealWidth: Layout.onboardingIdealWidth,
-               maxWidth: .infinity,
-               minHeight: Layout.onboardingMinHeight,
-               idealHeight: Layout.onboardingIdealHeight,
-               maxHeight: .infinity)
-        .background(Look.Color.ground.ignoresSafeArea())
+        .ignoresSafeArea(.container, edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { PaneGround().ignoresSafeArea() }
+        .foregroundStyle(Pane.ink)
+        .tint(Look.Color.tint)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
         .onChange(of: model.step) { _, step in announce(stepLabel(step)) }
@@ -232,200 +235,158 @@ struct OnboardingView: View {
         }
     }
 
+    /// The arriving step travels 40 pt along the one axis, in the direction of travel; the leaving one fades.
     private var stepTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-        let forward = model.movingForward
-        return .asymmetric(insertion: .move(edge: forward ? .trailing : .leading),
-                           removal: .move(edge: forward ? .leading : .trailing))
-            .combined(with: .opacity)
+        let offset: CGFloat = model.movingForward ? 40 : -40
+        return .asymmetric(insertion: .modifier(active: StepArrival(offset: offset), identity: StepArrival(offset: 0)),
+                           removal: .opacity)
+    }
+
+    private func heading(_ title: String, _ detail: String) -> some View {
+        VStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-0.6)
+                .accessibilityAddTraits(.isHeader)
+            Text(detail)
+                .font(.system(size: 14))
+                .foregroundStyle(Pane.ink2)
+                .lineSpacing(4)
+                .frame(maxWidth: 440)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Welcome
 
     private var welcome: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Label { Text("Utter") } icon: { Image(systemName: "waveform") }
-                .font(Look.Font.body.weight(.bold))
-                .foregroundStyle(Look.Color.ink)
-            Text("Hold \(model.hotkey.word), say what you mean, and let go. Utter types it where your cursor is.")
-                .font(Look.Font.body)
-                .foregroundStyle(Look.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, Look.Space.x2)
-            demo.padding(.top, Look.Space.x6)
-            Label {
-                Text("Utter runs on this Mac. Your voice and words never leave it.")
-            } icon: {
-                Image(systemName: "lock").foregroundStyle(Look.Color.inkTertiary)
-            }
-            .font(Look.Font.body)
-            .foregroundStyle(Look.Color.ink)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, Look.Space.x8)
+        VStack(spacing: 0) {
+            hero
+            heading("Talk instead of typing",
+                    "Hold \(model.hotkey.word), say what you want to write, then let go. Utter types it wherever your cursor is, in any app.")
+                .padding(.top, 26)
         }
+        .task { await model.playDemo(reduceMotion: reduceMotion) }
     }
 
-    private var demo: some View {
-        let caption = OnboardingDemo.caption(model.demoFrame)
-        let phase = OnboardingDemo.phase(model.demoFrame)
-        return VStack(alignment: .leading, spacing: Look.Space.x3) {
-            Look.CaptionPlate(text: caption.text, liveWord: caption.live, caret: phase == .hold || phase == .speak)
-                .accessibilityHidden(true)
-            HStack(spacing: Look.Space.x3) {
-                HStack(spacing: Look.Space.x3) {
-                    Look.Keycap(model.hotkey.cap)
-                    ForEach(OnboardingDemo.Phase.allCases, id: \.self) { step in
-                        ZStack {
-                            Look.SoundTag(phaseLabel(step), state: .live).hidden()
-                            Look.SoundTag(phaseLabel(step), state: step == phase ? .live : .neutral)
-                        }
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Example: hold \(model.hotkey.word), speak, then let go, and your words are typed.")
-                Spacer(minLength: Look.Space.x3)
-                if model.demoFinished, !reduceMotion {
-                    Button("Replay example") { model.replayDemo() }
-                        .buttonStyle(Look.QuietButtonStyle())
-                } else {
-                    Look.SoundTag("example").accessibilityHidden(true)
-                }
-            }
+    private var hero: some View {
+        let frame = model.demoFrame
+        let phase = OnboardingDemo.phase(frame)
+        return HStack(spacing: 22) {
+            DemoKey(cap: model.hotkey.cap, pressed: phase == .hold || phase == .speak)
+            PillCapsule(look: OnboardingDemo.look(frame), level: Float(OnboardingDemo.level(frame)), namespace: pillGlass)
+                .scaleEffect(1.4)
+                .frame(width: 96, height: 28)
         }
-        .task(id: model.demoRun) { await model.playDemo(reduceMotion: reduceMotion) }
-    }
-
-    private func phaseLabel(_ phase: OnboardingDemo.Phase) -> String {
-        switch phase {
-        case .hold: "hold \(model.hotkey.cap)"
-        case .speak: "speak"
-        case .release: "let go"
-        }
+        .lookAnimation(.settle, value: frame)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Permissions
 
     private var permissions: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Let Utter hear you and type for you")
-                .font(Look.Font.body.weight(.semibold))
-                .foregroundStyle(Look.Color.ink)
-            Text("If System Settings opens, switch Utter on there and come back.")
-                .font(Look.Font.secondary)
-                .foregroundStyle(Look.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, Look.Space.x1)
-            Look.Well(spacing: Look.Space.x5) {
-                PermissionRow(title: "Microphone",
-                              why: "Hears you only while you hold \(model.hotkey.word).",
-                              granted: model.micGranted,
-                              grant: model.requestMic)
-                PermissionRow(title: "Accessibility",
-                              why: "Lets Utter notice \(model.hotkey.word) and type your words where your cursor is.",
-                              granted: model.axGranted,
-                              grant: model.requestAccessibility)
+        VStack(spacing: 0) {
+            heading("Two quick permissions",
+                    "Utter needs to hear you and to type for you. If System Settings opens, switch Utter on there and come back.")
+            PaneGroup {
+                PermissionRow(name: "Microphone",
+                              purpose: "Hears you only while you hold \(model.hotkey.word). Your voice stays on this Mac.",
+                              need: .core(granted: model.micGranted), grant: model.requestMic)
+                PermissionRow(name: "Accessibility",
+                              purpose: "Lets Utter notice \(model.hotkey.word) and type your words where your cursor is.",
+                              need: .core(granted: model.axGranted), grant: model.requestAccessibility)
             }
-            .padding(.top, Look.Space.x5)
+            .frame(width: 460)
+            .padding(.top, 24)
         }
     }
 
     // MARK: - Try it
 
     private var tryIt: some View {
-        let blocked = !model.micGranted || !model.axGranted
-        return VStack(alignment: .leading, spacing: 0) {
-            Text("Try it")
-                .font(Look.Font.body.weight(.semibold))
-                .foregroundStyle(Look.Color.ink)
-            Text("Hold \(model.hotkey.word) and say anything.")
-                .font(Look.Font.body)
-                .foregroundStyle(Look.Color.inkSecondary)
-                .padding(.top, Look.Space.x1)
-            TextField("Your words appear here", text: $model.typed, axis: .vertical)
-                .font(Look.Font.body)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(3...6)
-                .focused($fieldFocused)
-                .accessibilityLabel("Practice field")
-                .padding(.top, Look.Space.x4)
-            Look.SoundTag(model.dictated ? "it works" : blocked ? "not ready" : "ready",
-                          state: model.dictated ? .ok : blocked ? .warn : .neutral,
-                          widest: "not ready")
-                .padding(.top, Look.Space.x3)
-            if blocked, !model.dictated {
-                Text("Utter still needs both permissions. Go back to allow them.")
-                    .font(Look.Font.secondary)
-                    .foregroundStyle(Look.Color.inkSecondary)
-                    .padding(.top, Look.Space.x1)
+        VStack(spacing: 0) {
+            heading("Try it now", "Hold \(model.hotkey.word) and say anything. Let go, and your words appear here.")
+            TextField(text: $model.typed, prompt: Text("Your words will appear here.").foregroundStyle(Pane.ink3),
+                      axis: .vertical) {
+                Text("Practice text box")
             }
-            if model.dictated {
-                shortcutSummary
-                    .padding(.top, Look.Space.x5)
-                    .transition(.opacity)
-            }
+            .textFieldStyle(.plain)
+            .font(.system(size: 14))
+            .lineSpacing(4)
+            .lineLimit(4)
+            .focused($fieldFocused)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(width: 460, height: 110, alignment: .topLeading)
+            .background { PaneCard() }
+            .padding(.top, 24)
+            practiceStatus
+                .frame(width: 460, height: 18, alignment: .leading)
+                .padding(.top, 12)
         }
-        .lookAnimation(.settle, value: model.dictated)
         .onAppear { fieldFocused = true }
     }
 
-    private var shortcutSummary: some View {
-        Look.Well(spacing: Look.Space.x4) {
-            Text("That\u{2019}s it. It works the same in any app.")
-                .font(Look.Font.body)
-                .foregroundStyle(Look.Color.ink)
-            HStack(alignment: .top, spacing: Look.Space.x3) {
-                Look.Keycap(model.hotkey.cap)
-                VStack(alignment: .leading, spacing: Look.Space.x1) {
-                    Text("Hold to talk.").foregroundStyle(Look.Color.ink)
-                    Text(model.handsFree).foregroundStyle(Look.Color.inkSecondary)
-                }
-                .font(Look.Font.body)
-            }
-            .accessibilityElement(children: .combine)
+    @ViewBuilder private var practiceStatus: some View {
+        if model.dictated {
+            PaneStatus(text: "It works. Hold \(model.hotkey.word) to talk in any app. \(model.handsFree)", kind: .ok)
+        } else if !model.micGranted || !model.axGranted {
+            PaneStatus(text: "Utter still needs both permissions. Go back to allow them.", kind: .warn)
+        } else {
+            PaneStatus(text: "Ready")
         }
     }
 
     // MARK: - Navigation
 
-    private var navBar: some View {
-        HStack(spacing: Look.Space.x3) {
+    private var bar: some View {
+        HStack(spacing: 8) {
             Button("Set up later") { finish(skipped: true) }
-                .buttonStyle(Look.QuietButtonStyle())
+                .buttonStyle(.pane(.plain))
                 .keyboardShortcut(.cancelAction)
             Spacer()
             if model.step != .welcome {
                 Button("Back") { go(-1) }
+                    .buttonStyle(.pane())
             }
             Button(model.step == .tryIt ? "Done" : "Continue") {
                 if model.step == .tryIt { finish(skipped: false) } else { go(1) }
             }
+            .buttonStyle(.pane(.prime))
             .keyboardShortcut(.defaultAction)
             .disabled(!model.canContinue)
         }
-        .overlay { pager }
-        .padding(.horizontal, Look.Space.x8)
-        .padding(.vertical, Look.Space.x5)
+        .overlay { progressLens }
+        .padding(.horizontal, 26)
+        .frame(height: 80)
     }
 
-    private var pager: some View {
-        HStack(spacing: Look.Space.x2) {
+    /// Seven-point dots with one 20 pt lens that travels between them.
+    private var progressLens: some View {
+        HStack(spacing: 18) {
             ForEach(OnboardingViewModel.Step.allCases, id: \.self) { step in
-                Circle()
-                    .fill(step == model.step ? Look.Color.ink : Look.Color.inkTertiary.opacity(0.35))
-                    .frame(width: 6, height: 6)
+                Capsule()
+                    .fill(Pane.sep)
+                    .frame(width: 7, height: 7)
+                    .overlay {
+                        if step == model.step {
+                            Capsule()
+                                .fill(Look.Color.tint)
+                                .frame(width: 20, height: 7)
+                                .matchedGeometryEffect(id: "lens", in: progress)
+                        }
+                    }
             }
         }
-        .lookAnimation(.settle, value: model.step)
+        .animation(PaneMotion.lens(reduceMotion: reduceMotion), value: model.step)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(stepLabel(model.step))
     }
 
     private func go(_ delta: Int) {
-        model.aim(forward: delta > 0)
-        // The leaving step takes its removal edge from the previous render, so the direction lands a turn early.
-        DispatchQueue.main.async {
-            withAnimation(Look.Motion.settle.animation(reduceMotion: reduceMotion)) { model.move(by: delta) }
-        }
+        withAnimation(PaneMotion.page(reduceMotion: reduceMotion)) { model.move(by: delta) }
     }
 
     private func finish(skipped: Bool) {
@@ -440,46 +401,51 @@ struct OnboardingView: View {
     private func announce(_ text: String) {
         AccessibilityNotification.Announcement(text).post()
     }
+
+    /// The setup window, shared by `AppDelegate.showOnboarding` and the snapshot tests.
+    static func makeWindow(_ root: some View) -> NSWindow {
+        let hosting = NSHostingView(rootView: root)
+        // The hosting view must never size the window: that is the ~133 pt collapse `showMainWindow` guards.
+        hosting.sizingOptions = []
+        let size = NSSize(width: Layout.onboardingIdealWidth, height: Layout.onboardingIdealHeight)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.titled, .closable, .fullSizeContentView],
+                              backing: .buffered, defer: false)
+        window.title = "Set up Utter"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.isRestorable = false
+        window.contentView = hosting
+        window.isReleasedWhenClosed = false
+        return window
+    }
 }
 
-/// One permission: what it is, why Utter needs it, and its state or the button that asks for it.
-private struct PermissionRow: View {
-    let title: String
-    let why: String
-    let granted: Bool
-    let grant: () -> Void
+private struct StepArrival: ViewModifier {
+    let offset: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .blur(radius: abs(offset) / 5)
+            .opacity(offset == 0 ? 1 : 0)
+    }
+}
+
+/// The dictation key, drawn like a real keycap with its legend in the lower left, pressed while the demo holds it.
+private struct DemoKey: View {
+    let cap: String
+    let pressed: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: Look.Space.x4) {
-            VStack(alignment: .leading, spacing: Look.Space.x1) {
-                Text(title)
-                    .font(Look.Font.heading)
-                    .foregroundStyle(Look.Color.ink)
-                Text(why)
-                    .font(Look.Font.secondary)
-                    .foregroundStyle(Look.Color.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityValue(granted ? "On" : "Off")
-            ZStack(alignment: .trailing) {
-                status(granted: false).hidden()
-                status(granted: granted)
-            }
-        }
-    }
-
-    @ViewBuilder private func status(granted: Bool) -> some View {
-        if granted {
-            Look.ReadinessTag(label: "on", state: .ready).accessibilityHidden(true)
-        } else {
-            HStack(spacing: Look.Space.x2) {
-                Look.SoundTag("off", state: .warn).accessibilityHidden(true)
-                Button("Grant", action: grant)
-                    .accessibilityLabel("Grant \(title) access")
-            }
-        }
+        Text(cap)
+            .font(.system(size: 15, design: .monospaced))
+            .padding(.leading, 11)
+            .padding(.bottom, 9)
+            .frame(width: 64, height: 58, alignment: .bottomLeading)
+            .background { PaneCard(radius: 14) }
+            .offset(y: pressed ? 2 : 0)
     }
 }
 

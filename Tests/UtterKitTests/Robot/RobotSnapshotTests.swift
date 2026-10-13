@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import UtterKit
 
-@Suite("Robot snapshots", .serialized)
+@Suite("Robot snapshots", .serialized, .enabled(if: ProcessInfo.processInfo.environment["UTTER_ROBOT_SNAPSHOTS"] == "1"))
 @MainActor
 struct RobotSnapshotTests {
     /// Seconds into each state's plan where its expression is fully formed.
@@ -14,10 +14,7 @@ struct RobotSnapshotTests {
 
     @Test("Render each state's resting pose to .build/robot-snapshots")
     func renderStates() throws {
-        guard ProcessInfo.processInfo.environment["UTTER_ROBOT_SNAPSHOTS"] == "1" else { return }
-        let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent(".build/robot-snapshots", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let directory = try SnapshotCanvas.directory("robot-snapshots")
 
         let view = RobotView(frame: NSRect(x: 0, y: 0, width: 240, height: 240))
         view.layout()

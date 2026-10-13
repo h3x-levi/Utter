@@ -1,5 +1,6 @@
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 /// The three-step flow's rules. View models are built with a step override, which never writes
 /// the stored step, and an in-memory `UserData`.
@@ -14,22 +15,24 @@ struct OnboardingFlowTests {
         return OnboardingViewModel(stepOverride: step, userData: userData)
     }
 
-    @Test("The demo holds an empty plate, adds one live word at a time, then rests on the full line")
+    @Test("The demo holds the key, speaks one beat at a time, lets go, then rests")
     func demoScript() {
-        let words = OnboardingDemo.words
         #expect(OnboardingDemo.phase(0) == .hold)
-        #expect(OnboardingDemo.caption(0) == ("", nil))
-        for frame in 1...words.count {
+        for frame in 1...OnboardingDemo.beats {
             #expect(OnboardingDemo.phase(frame) == .speak)
-            let caption = OnboardingDemo.caption(frame)
-            #expect(caption.live == words[frame - 1])
-            #expect(caption.text == words.prefix(frame - 1).joined(separator: " "))
         }
-        let full = words.joined(separator: " ")
-        #expect(OnboardingDemo.phase(words.count + 1) == .release)
-        #expect(OnboardingDemo.caption(words.count + 1) == (full, nil))
+        #expect(OnboardingDemo.phase(OnboardingDemo.beats + 1) == .release)
         #expect(OnboardingDemo.phase(OnboardingDemo.restFrame) == nil)
-        #expect(OnboardingDemo.caption(OnboardingDemo.restFrame) == (full, nil))
+    }
+
+    @Test("The demo pill listens while the key is down, thinks on release, then rests as the icon")
+    func demoPill() {
+        #expect(OnboardingDemo.look(0) == .listening(nil))
+        #expect(OnboardingDemo.look(1) == .listening(nil))
+        #expect(OnboardingDemo.look(OnboardingDemo.beats + 1) == .thinking)
+        #expect(OnboardingDemo.look(OnboardingDemo.restFrame) == .hover(handsFree: false))
+        #expect(OnboardingDemo.level(1) > OnboardingDemo.level(0))
+        #expect(OnboardingDemo.level(OnboardingDemo.restFrame) == 0)
     }
 
     @Test("Reduce Motion lands on the finished line at once")

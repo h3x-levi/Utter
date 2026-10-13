@@ -10,10 +10,21 @@ struct RobotPalette: Equatable {
     var eye: NSColor
     /// The antenna tip.
     var accent: NSColor
+    /// An outline for the head and antenna; nil draws none, as upstream.
+    var rim: NSColor? = nil
 
     static let upstream: RobotPalette = {
         let ink = NSColor(srgbRed: 8 / 255, green: 9 / 255, blue: 11 / 255, alpha: 1)
         return RobotPalette(body: ink, face: ink, eye: .white, accent: ink)
+    }()
+
+    /// Upstream, plus a faint light rim in dark appearance so the ink head stays visible on dark backdrops.
+    static let utter: RobotPalette = {
+        var palette = upstream
+        palette.rim = NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.32) : .clear
+        }
+        return palette
     }()
 }
 

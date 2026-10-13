@@ -36,9 +36,6 @@ def _find(name):
 WHATS_NEW = _find("WhatsNewView.swift")
 CHANGELOG = os.path.join(ROOT, "CHANGELOG.md")
 
-DEFAULT_BULLETS = [
-    "Internal build — packaging and tooling updates",
-]
 
 
 def month_year(now: datetime.datetime | None = None) -> str:
@@ -54,7 +51,7 @@ def whats_new_entry(version: str, date: str, bullets: list[str]) -> str:
         f'            {swift_string(b)}' for b in bullets
     )
     return (
-        f'        VersionEntry(id: "{version}", version: "{version}", date: "{date}", highlights: [\n'
+        f'        Release(version: "{version}", date: "{date}", highlights: [\n'
         f'{indented_bullets},\n'
         f'        ]),\n'
     )
@@ -77,12 +74,12 @@ def update_whats_new(version: str, date: str, bullets: list[str]) -> str:
         content = f.read()
 
     # Already documented? Match `id: "X.X.X"` exactly.
-    pattern = rf'id:\s*"{re.escape(version)}"'
+    pattern = rf'version:\s*"{re.escape(version)}"'
     if re.search(pattern, content):
         return f"✓ WhatsNewView already has v{version}"
 
     # Insert immediately after the array opening: `versions: [VersionEntry] = [`
-    anchor = "private let versions: [VersionEntry] = ["
+    anchor = "static let releases: [Release] = ["
     idx = content.find(anchor)
     if idx == -1:
         return f"⚠️  Could not find versions array in {WHATS_NEW}"
@@ -108,7 +105,7 @@ def update_whats_new(version: str, date: str, bullets: list[str]) -> str:
 
 def changelog_entry(version: str, date: str, bullets: list[str]) -> str:
     body = "\n".join(f"- {b}" for b in bullets)
-    return f"## [{version}] — {date}\n\n{body}\n\n"
+    return f"## [{version}] - {date}\n\n{body}\n\n"
 
 
 def update_changelog(version: str, date: str, bullets: list[str]) -> str:
@@ -160,7 +157,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    bullets = args.bullet if args.bullet else DEFAULT_BULLETS
+    if not args.bullet:
+        print(f"No release notes for v{args.version}; What's New and CHANGELOG left unchanged")
+        return 0
+    bullets = args.bullet
     date = args.date or month_year()
 
     print(update_whats_new(args.version, date, bullets))

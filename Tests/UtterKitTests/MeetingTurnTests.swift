@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// Turn segmentation, speaker labelling, and the one persistence hazard they introduce.
 ///

@@ -1,6 +1,7 @@
 import AppKit
 import QuartzCore
 import SwiftUI
+import UtterCore
 
 /// The offer card's geometry.
 ///
@@ -74,21 +75,15 @@ enum MeetingOfferMetrics {
 
     /// Head-room over the derived content height.
     ///
-    /// One thing it absorbs now, and it is still not measurable from here: system font metrics are
-    /// not ours to promise across releases, and the title and caption are measured with them.
-    ///
-    /// It also used to cover `.glass` at `.controlSize(.large)` drawing taller than the AppKit
-    /// fitting height above, which `buttonRowHeight` explains is no longer a risk. Kept at the same
-    /// value regardless - the two text rows are the larger share of the card's height and they are
-    /// the part still measured against the system. `PillMetrics.noteBoxHeight` carries slack for the
-    /// same reason.
+    /// Absorbs system font metrics, which are not ours to promise across releases.
     static let slack = Space.x2
 
-    /// AppKit spellings of the two `Typo` faces the card uses, because a SwiftUI `Font` cannot be
+    /// AppKit spellings of the two faces the card uses, because a SwiftUI `Font` cannot be
     /// measured. Not private: the test measures the same faces rather than re-deriving them and
     /// agreeing with a bug.
-    static let titleFont = NSFont.systemFont(ofSize: 15, weight: .medium)   // Typo.bodyEmphasis
-    static let captionFont = NSFont.systemFont(ofSize: 12)                  // Typo.caption
+    static let titleFont = NSFont.systemFont(ofSize: 15, weight: .medium)
+    static let captionFont = NSFont.systemFont(ofSize: 12)
+    static let captionLineSpacing: CGFloat = 1.5
 
     /// The window size, with an optional failure message on the card.
     static func size(title: String = defaultTitle, message: String? = nil) -> NSSize {
@@ -138,7 +133,7 @@ enum MeetingOfferMetrics {
     /// Wrapped height of `text` in `font` inside a `width`-wide column.
     private static func wrappedHeight(_ text: String, font: NSFont, width: CGFloat) -> CGFloat {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = Typo.caption.lineSpacing
+        paragraph.lineSpacing = captionLineSpacing
         paragraph.lineBreakMode = .byWordWrapping
         let attributed = NSAttributedString(string: text,
                                             attributes: [.font: font,
@@ -204,8 +199,7 @@ final class MeetingOfferPanel: NSPanel {
         level = .statusBar
         isOpaque = false
         backgroundColor = .clear
-        // Decided in `refreshShadow`, not here: it depends on which of `ChromeGlass`'s four render
-        // paths draws, and one of them is a live accessibility preference.
+        // Decided in `refreshShadow`, not here: it depends on a live accessibility preference.
         hasShadow = false
         isMovableByWindowBackground = false
         hidesOnDeactivate = false
@@ -277,6 +271,7 @@ final class MeetingOfferPanel: NSPanel {
 
         if MotionPreference.shared.reduceMotion {
             setFrame(destination, display: true)
+            pill.alphaValue = 1
             withAnimation(.easeOut(duration: 0.16)) { model.contentVisible = true }
             return
         }
@@ -288,6 +283,11 @@ final class MeetingOfferPanel: NSPanel {
                 controlPoints: 0.23, 1, 0.32, 1
             )
             animator().setFrame(destination, display: true)
+        } completionHandler: { [weak self, weak pill] in
+            MainActor.assumeIsolated {
+                guard self?.model.contentVisible == true else { return }
+                pill?.alphaValue = 1
+            }
         }
     }
 
@@ -311,6 +311,7 @@ final class MeetingOfferPanel: NSPanel {
             finish()
             return
         }
+        pill.alphaValue = 0
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.20
             context.timingFunction = CAMediaTimingFunction(
@@ -322,30 +323,9 @@ final class MeetingOfferPanel: NSPanel {
         }
     }
 
-    /// Give the card a shadow on the render paths where nothing else supplies one.
-    ///
-    /// Same branch and same reasoning as the pill's `PillElevation`: on macOS 26 the Liquid Glass
-    /// material draws its own content-aware shadow - it "increases the opacity of its shadow when it
-    /// is over text" and lowers it over a light background - so a second one doubles it. Below 26,
-    /// and under Reduce Transparency at any version, there is no material to supply one: the card
-    /// becomes an opaque `Surface.raised` rect with a 1pt border, floating over the desktop with
-    /// nothing separating it from the wallpaper.
-    ///
-    /// The *window's* shadow rather than a SwiftUI `.shadow`, which is where this differs from the
-    /// pill. The pill's panel is 320x96 around a ~56pt capsule, so a layer shadow has margin to
-    /// blur into; this card's content is `.frame(maxWidth: .infinity, maxHeight: .infinity)` and
-    /// fills its window exactly, so a layer shadow would be clipped at the window's edge and only
-    /// the sliver under the rounded corners would show. `NSWindow.hasShadow` is drawn by the window
-    /// server *outside* the frame, which also means it costs the card no height - and the height is
-    /// the number `MeetingOfferMetrics` exists to protect.
-    ///
-    /// `invalidateShadow()` because the shape is derived from the content's alpha and cached: the
-    /// card is rounded, and it is resized by `showFailure`.
-    ///
-    /// Ceiling: the preference is read when the card appears, not observed. Toggling Reduce
-    /// Transparency while a card is already on screen leaves the shadow as it was until the next
-    /// one, which is a card's lifetime - seconds to the length of a call. Worth an observer only if
-    /// that stops being true.
+    /// The window's shadow, not a SwiftUI `.shadow`: the content fills the window exactly, so a layer
+    /// shadow would be clipped at its edge. Off where macOS 26 glass supplies its own. The Reduce
+    /// Transparency preference is read when the card appears, not observed.
     private func refreshShadow() {
         hasShadow = !GlassSupport.active(
             reduceTransparency: MotionPreference.shared.reduceTransparency
@@ -355,10 +335,8 @@ final class MeetingOfferPanel: NSPanel {
 
     /// Say why the capture did not start, on the card the user pressed.
     ///
-    /// The card keeps its buttons, so "Transcribe" is the try-again - the same shape as
-    /// `NotesView.startMeeting`, which does not return in the `.notDetermined` branch and leaves a
-    /// Try again button behind. Resized and repositioned because the message is a whole sentence and
-    /// the window cannot grow by itself.
+    /// The card keeps its buttons, so "Transcribe" is the try-again. Resized and repositioned because
+    /// the message is a whole sentence and the window cannot grow by itself.
     func showFailure(_ message: String) {
         model.failure = message
         setFrame(
@@ -441,25 +419,5 @@ private struct MeetingOfferView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 0.5)
         }
-
-        // No rim overlay on the card, and no outer contrast ring.
-        //
-        // There was a `strokeBorder(Line.hairline)` here, and it was redundant on every path that
-        // wanted a border and wrong on the one that does not. `ChromeGlass` already strokes the
-        // three fallbacks itself - `Line.strong` in its Reduce Transparency branch, `rimGradient` at
-        // 0.8pt in its pre-26 branch - so this card drew *two* borders on all three. On macOS 26 it
-        // drew the one thing the material asks not to have: glass "draws its own highlight layer,
-        // whose lights move in space, causing light to travel around the material, defining its
-        // silhouette", and `ChromeGlass.glass` records that a static stroke on top fights that.
-        //
-        // The pill overrides that and carries an outer contrast ring anyway (`PillContent.shell`),
-        // on the finding that its edge dissolved against busy wallpaper. That finding does not
-        // transfer on its face: the pill is a ~28pt capsule whose *only* content is its edge, while
-        // this is a 268pt sheet holding a title, a caption and two filled buttons, anchored 10pt
-        // above the pill - the content is the object cue here, not the outline. So there is no ring,
-        // and that is a judgement, not a measurement: nobody has yet looked at this card over a busy
-        // light wallpaper on macOS 26. If its silhouette does dissolve there, the fix is the pill's  - 
-        // one `shape.strokeBorder(contrast, lineWidth: 1)` at this exact point - and not the hairline
-        // that was removed, which was tuned as a rim on an opaque surface.
     }
 }

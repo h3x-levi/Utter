@@ -1,5 +1,6 @@
 import Testing
 @testable import UtterKit
+@testable import UtterCore
 
 /// Which voice commands survive a note capture, and why the distinction exists.
 ///

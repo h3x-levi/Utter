@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// The date grouping behind the History list, and the cache in front of it.
 ///

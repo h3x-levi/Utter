@@ -10,12 +10,15 @@ import PackageDescription
 // binary that is not there.
 //
 // **Four old-name literals survive on purpose and must not be swept up.** Both old names
-// appear twice: in `AppDirectory.legacyNames` (`Sources/UtterKit/Model/AppDirectory.swift`),
+// appear twice: in `AppDirectory.legacyNames` (`Sources/UtterCore/Services/AppDirectory.swift`),
 // which migrates `Application Support/Lumen` and `.../AWSFlow` into `Utter`, and in the
 // permission-reset step of `build-app.sh`, which backs those folders up before a fresh-install
 // test. They are the on-disk names of real folders and the only thing that finds an upgrading
 // user's notes. `legacyNames` is ordered newest-first and a future rename adds to the FRONT —
 // appending would migrate the oldest data and abandon the rest.
+let sdkStamp = LinkerSetting.unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "macos",
+                                           "-Xlinker", "14.0", "-Xlinker", "26.0"])
+
 let package = Package(
     name: "Utter",
     platforms: [.macOS(.v14)],
@@ -49,35 +52,52 @@ let package = Package(
             checksum: "af74fed13ea7f2d5ca2a39d9f58ec177713fafd7cab63aef4e27b79f3ceca80b"
         ),
 
-        // The whole app, as a library.
+        // Cactus's prebuilt Whistle engine (arm64) plus an x86_64 stub; see Vendor/Needle/build-xcframework.sh.
+        .binaryTarget(name: "Needle", path: "Vendor/Needle/Needle.xcframework"),
+
+        // Everything that is not UI, in layer folders: SDKs, Services, Features.
+        // It must not import SwiftUI; `AppIdentityTests` fails the suite if a file does.
+        .target(
+            name: "UtterCore",
+            dependencies: ["WhisperFramework", "Needle"],
+            path: "Sources/UtterCore",
+            linkerSettings: [.linkedLibrary("c++")]
+        ),
+
+        // The app layer (windows, screens, pill, companion), as a library.
         //
-        // Everything lives here so that it can be tested: SwiftPM cannot attach a test
+        // A library so that it can be tested: SwiftPM cannot attach a test
         // target to an executable target, so while the app *was* a single executable
         // target, none of it was reachable from a test — `import XCTest` fails to
         // resolve and `@testable import` has no module to enter. Verified on this
         // machine before restructuring.
         .target(
             name: "UtterKit",
-            dependencies: ["WhisperFramework"],
+            dependencies: ["UtterCore"],
             path: "Sources/UtterKit",
             // Documentation, not a compilable source or a runtime resource.
             exclude: ["README.md"]
         ),
 
         // The executable: a two-line shim that calls `UtterApp.main()`.
+        // SwiftPM links with the deployment target as the SDK version, which makes AppKit draw the
+        // pre-26 compatibility design; stamping the real SDK turns on Liquid Glass.
         .executableTarget(
             name: "Utter",
             dependencies: ["UtterKit"],
-            path: "Sources/Utter"
+            path: "Sources/Utter",
+            linkerSettings: [sdkStamp]
         ),
 
         .testTarget(
             name: "UtterKitTests",
             dependencies: [
                 "UtterKit",
+                "UtterCore",
                 .product(name: "Testing", package: "swift-testing"),
             ],
-            path: "Tests/UtterKitTests"
+            path: "Tests/UtterKitTests",
+            linkerSettings: [sdkStamp]
         ),
     ]
 )

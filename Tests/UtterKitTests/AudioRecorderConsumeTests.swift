@@ -2,6 +2,7 @@ import AVFoundation
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// `AudioRecorder.consume` front-trims the rolling capture buffer during a meeting, and the
 /// bytes it leaves behind are read back with 0-based offsets by `MeetingSession.transcribeWindows`

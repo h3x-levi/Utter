@@ -1,11 +1,16 @@
 import Cocoa
 import Combine
+import os
+import UtterCore
 
 /// Runs `CaptureMachine`'s effects and owns the turn's live parts: mic, telemetry, preview,
 /// pipeline and delivery. The only writer of the pill's state.
 @MainActor
 final class CaptureSession {
     private(set) var state = CaptureState()
+    /// Bumped as each turn starts, so late work from an earlier one is dropped.
+    private var turn = 0
+    private static let log = Logger(subsystem: "utter.dictation.app", category: "capture")
 
     private let recorder: AudioRecorder
     private let transcriber: TranscriptionService
@@ -44,16 +49,31 @@ final class CaptureSession {
     func showError(_ message: String) { handle(.show(.error(message))) }
     func showNotice(_ message: String) { handle(.show(.notice(message))) }
 
+    private func expireMessage(after seconds: TimeInterval) {
+        expiry?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.handle(.messageExpired) }
+        expiry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+    func cancel() { handle(.cancel) }
+
     func handle(_ event: CaptureEvent) {
         let (next, effects) = CaptureMachine.next(state, event)
         if effects.contains(.startTurn) { Signposts.beginKeyDownToPill() }
         let shown = state.pill
         state = next
-        if next.pill != shown {
-            if next.pill.isRecordingLike || next.pill.isIsland, !pill.isVisible { pill.orderFront(nil) }
-            pill.setState(next.pill)
-        }
+        if next.pill != shown { pill.setState(next.pill) }
         effects.forEach(run)
+    }
+
+    private func handle(_ event: CaptureEvent, from turn: Int) {
+        if turn == self.turn { handle(event) }
+    }
+
+    /// False once Escape cancelled this turn or a newer one started: its work must not reach the user.
+    private func isLive(_ turn: Int) -> Bool {
+        guard turn == self.turn, case .processing = state.phase else { return false }
+        return true
     }
 
     /// Mirror the engine's load state, so the first launch reads "Getting ready" instead of
@@ -71,6 +91,7 @@ final class CaptureSession {
     private func run(_ effect: CaptureEffect) {
         switch effect {
         case .startTurn:
+            turn += 1
             turnApp = NSWorkspace.shared.frontmostApplication?.processIdentifier
             SurroundingContext.prewarm()
             // Pause other audio so music doesn't bleed into the microphone.
@@ -78,16 +99,18 @@ final class CaptureSession {
             // Rebuilds an evicted whisper context (78-93 ms warm, ~7.7 s cold) while the user speaks.
             transcriber.warmUp()
             Task.detached(priority: .utility) { SentencePolish.prewarm() }
-            if state.modelLoading { print("⏳ Recording while the speech model finishes loading") }
+            if state.modelLoading { Self.log.info("Recording while the speech model finishes loading") }
         case .playStart:
             SoundPlayer.playStart()
         case .openMic(let vad):
-            let onVoiceStopped: (() -> Void)? = vad ? { [weak self] in self?.handle(.voiceStopped) } : nil
+            let turn = self.turn
+            let onVoiceStopped: (() -> Void)? = vad ? { [weak self] in self?.handle(.voiceStopped, from: turn) } : nil
             recorder.open(onVoiceStopped: onVoiceStopped) { [weak self] started in
-                if !started { self?.handle(.micFailed) }
+                if !started { self?.handle(.micFailed, from: turn) }
             }
         case .installVAD:
-            recorder.installVoiceStoppedCallback { [weak self] in self?.handle(.voiceStopped) }
+            let turn = self.turn
+            recorder.installVoiceStoppedCallback { [weak self] in self?.handle(.voiceStopped, from: turn) }
         case .suppressRelease(let on):
             suppressRelease(on)
         case .startTelemetry:
@@ -99,56 +122,73 @@ final class CaptureSession {
         case .closeMic:
             if state.destination == .app { TextInjector.prepareSnapshot() }
             stoppedAt = Date()
-            recorder.stopRecording(onClosed: {
-                // Before transcription: waiting seconds for it would feel like the app forgot.
-                MediaControl.resumeIfPaused()
-                SoundPlayer.playStop()
-            }) { [weak self] audio in
-                self?.handle(.audioReady(audio))
-            }
+            let turn = self.turn
+            closeMic { [weak self] audio in self?.handle(.audioReady(audio), from: turn) }
+        case .discardMic:
+            closeMic { _ in }
         case .resumeMedia:
             MediaControl.resumeIfPaused()
         case .transcribe(let audio):
+            let turn = self.turn
             Task {
                 do {
-                    handle(.transcribed(try await transcriber.transcribe(audioData: audio)))
+                    handle(.transcribed(try await transcriber.transcribe(audioData: audio)), from: turn)
                 } catch {
-                    print("Transcription error: \(error)")
-                    handle(.transcriptionFailed(Self.message(for: error)))
+                    Self.log.error("Transcription error: \(String(describing: error), privacy: .public)")
+                    handle(.transcriptionFailed(Self.message(for: error)), from: turn)
                 }
             }
         case .finish(let text):
-            let destination = state.destination
-            Task { handle(.finished(await finish(text, to: destination))) }
+            let turn = self.turn, destination = state.destination, appending = state.appendsToOpenNote
+            Task {
+                guard let outcome = await finish(text, to: destination, appending: appending, turn: turn) else { return }
+                handle(.finished(outcome), from: turn)
+            }
         case .playDone:
             SoundPlayer.playDone()
         case .playError:
             SoundPlayer.playError()
         case .endTurn:
             SurroundingContext.clearPrewarmed()
+            TextInjector.discardSnapshot()
         case .expireMessage:
-            expiry?.cancel()
-            let work = DispatchWorkItem { [weak self] in self?.handle(.messageExpired) }
-            expiry = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
+            expireMessage(after: 4)
+        case .expireMessageSoon:
+            expireMessage(after: 1.2)
         }
+    }
+
+    /// The stop chime and the media resume are skipped once a newer turn has taken the mic over.
+    private func closeMic(then audioReady: @escaping (Data?) -> Void) {
+        let turn = self.turn
+        recorder.stopRecording(onClosed: { [weak self] in
+            guard self?.turn == turn else { return }
+            // Before transcription: waiting seconds for it would feel like the app forgot.
+            MediaControl.resumeIfPaused()
+            SoundPlayer.playStop()
+        }, completion: audioReady)
     }
 
     // MARK: - Finishing a turn
 
-    private func finish(_ raw: String, to destination: CaptureDestination) async -> CaptureOutcome {
+    /// `nil` when the turn stopped being live before anything reached the user.
+    private func finish(_ raw: String, to destination: CaptureDestination, appending: Bool,
+                        turn: Int) async -> CaptureOutcome? {
         let pipeline = DictationPipeline.live()
         let text = await pipeline.polish(raw)
+        guard isLive(turn) else { return nil }
         if destination == .memory {
-            return await saveMemory(pipeline.prepare(text, for: .memory))
+            return await saveMemory(pipeline.prepare(text, for: .memory), turn: turn)
         }
         if let action = pipeline.command(in: text, for: destination) {
             // Log the matched action, not the spoken text it came from.
-            print("🗣️ Voice command: \(action)")
+            Self.log.info("Voice command: \(String(describing: action), privacy: .public)")
             switch action {
             case .startNewNote, .continueNote:
                 return .armedNote(routeNextDictation(action))
             default:
+                guard let held = await holds(turn) else { return nil }
+                if held { return .notice(CaptureMachine.commandSkippedMessage) }
                 TextInjector.executeAction(action)
                 return .delivered
             }
@@ -156,40 +196,43 @@ final class CaptureSession {
         // A note skips AI commands: they match suffixes, and every outcome acts on the frontmost
         // app, which is not where a note's text is going.
         if destination == .note {
-            return await deliver(pipeline.prepare(text, for: .note), to: .note, pipeline)
+            return await deliver(pipeline.prepare(text, for: .note), to: .note, appending: appending, pipeline, turn: turn)
         }
-        handle(.step(.rewriting))
+        handle(.step(.rewriting), from: turn)
         var selection: String?
         guard let result = await AICommands.process(text, selectedText: {
-            if selection == nil { selection = await readSelection() }
+            if selection == nil { selection = await self.readSelection(turn) }
             return selection ?? ""
         }) else {
-            return await deliver(pipeline.prepare(text, for: .app), to: .app, pipeline)
+            return await deliver(pipeline.prepare(text, for: .app), to: .app, appending: false, pipeline, turn: turn)
         }
         guard let rewritten = result.text else {
-            if let error = result.error { print("⚠️ AI command: \(error)") }
+            if let error = result.error { Self.log.error("AI command: \(error, privacy: .public)") }
             return .failed(result.error ?? "Command failed")
         }
-        // A live selection is still highlighted, so a plain paste replaces it; ⌘Z would undo the
-        // user's own last edit. Undo-then-paste only when the source was our dictation.
-        if result.replacesSelection, (selection ?? "").isEmpty {
-            TextInjector.undoLastTranscription()
-            try? await Task.sleep(nanoseconds: 100_000_000)
+        guard let held = await holds(turn) else { return nil }
+        if !held {
+            // A live selection is still highlighted, so a plain paste replaces it; ⌘Z would undo the
+            // user's own last edit. Undo-then-paste only when the source was our dictation.
+            if result.replacesSelection, (selection ?? "").isEmpty {
+                TextInjector.undoLastTranscription()
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            handle(.step(.typing), from: turn)
+            TextInjector.typeText(rewritten)
         }
-        handle(.step(.typing))
-        TextInjector.typeText(rewritten)
         if UserData.shared.keepHistory { TranscriptionHistory.shared.add(text: rewritten) }
-        print("🤖 AI result: \(rewritten.count) chars")
-        return .delivered
+        Self.log.info("AI result: \(rewritten.count) chars")
+        return held ? .held(rewritten) : .delivered
     }
 
-    private func deliver(_ text: String, to destination: CaptureDestination,
-                         _ pipeline: DictationPipeline) async -> CaptureOutcome {
+    private func deliver(_ text: String, to destination: CaptureDestination, appending: Bool,
+                         _ pipeline: DictationPipeline, turn: Int) async -> CaptureOutcome? {
         let delivery = Signposts.poster.beginInterval("Delivery")
         defer { Signposts.poster.endInterval("Delivery", delivery) }
-        let held = destination == .app ? await holdsTranscript() : false
+        guard let held = destination == .app ? await holds(turn) : false else { return nil }
         if destination == .note {
-            deliverToNote(text)
+            deliverToNote(text, appending: appending)
         } else if !held {
             TextInjector.typeText(text)
         }
@@ -203,8 +246,14 @@ final class CaptureSession {
         if UserData.shared.keepHistory {
             TranscriptionHistory.shared.add(text: text, language: pipeline.detectLanguage(text) ?? "")
         }
-        print("⚡ Total latency: \(String(format: "%.1f", Date().timeIntervalSince(stoppedAt)))s")
+        Self.log.info("Total latency: \(Date().timeIntervalSince(self.stoppedAt), format: .fixed(precision: 1))s")
         return held ? .held(text) : .delivered
+    }
+
+    /// Whether the island takes this turn's result instead of a keystroke; `nil` once it is not live.
+    private func holds(_ turn: Int) async -> Bool? {
+        let held = await holdsTranscript()
+        return isLive(turn) ? held : nil
     }
 
     /// The focus is read only when the user has actually moved to another app.
@@ -216,15 +265,16 @@ final class CaptureSession {
                                               focusAcceptsText: accepts)
     }
 
-    private func saveMemory(_ text: String) async -> CaptureOutcome {
-        handle(.step(.rewriting))
+    private func saveMemory(_ text: String, turn: Int) async -> CaptureOutcome? {
+        handle(.step(.rewriting), from: turn)
         do {
             let proposal = try await CompanionMemoryParser.parse(text)
+            guard isLive(turn) else { return nil }
             _ = try CompanionMemoryStore.shared.add(proposal: proposal, source: .spoken)
             _ = UserData.shared.recordCompanionDictation(
                 words: proposal.text.split(whereSeparator: \.isWhitespace).count
             )
-            print("🧠 Saved spoken memory in \(String(format: "%.1f", Date().timeIntervalSince(stoppedAt)))s")
+            Self.log.info("Saved spoken memory in \(Date().timeIntervalSince(self.stoppedAt), format: .fixed(precision: 1))s")
             return .notice(proposal.remindAt == nil ? "Remembered" : "Reminder saved")
         } catch {
             return .failed(error.localizedDescription)
@@ -234,17 +284,17 @@ final class CaptureSession {
     /// File a finished transcript into the notes store: the open note when asked and one is
     /// open, otherwise a new one. `NoteCaptureDestination.resolve` makes the choice, because the
     /// pill's note box names it while the user is still speaking.
-    private func deliverToNote(_ text: String) {
+    private func deliverToNote(_ text: String, appending: Bool) {
         let store = NoteStore.shared
         switch store.captureDestination(
-            appendsToOpenNote: UserData.shared.captureAppendsToOpenNote
+            appendsToOpenNote: appending || UserData.shared.captureAppendsToOpenNote
         ) {
         case .appending(let id, _):
             store.append(text, to: id)
-            print("📝 Appended \(text.split(separator: " ").count) words to the open note")
+            Self.log.info("Appended \(text.split(separator: " ").count) words to the open note")
         case .newNote:
             store.create(body: text, source: .dictated)
-            print("📝 Created a note from dictation (\(text.split(separator: " ").count) words)")
+            Self.log.info("Created a note from dictation (\(text.split(separator: " ").count) words)")
         }
         // Write through rather than waiting on the debounce: this text exists
         // nowhere else, and the user may quit straight after speaking.
@@ -264,18 +314,17 @@ final class CaptureSession {
             message = store.selectedNote == nil ? "No note open - starting one" : "Adding to the open note"
             if store.selectedNote == nil { store.create(body: "", source: .dictated) }
         }
-        UserData.shared.captureAppendsToOpenNote = true
-        UserData.shared.save()
         return message
     }
 
     /// The frontmost app's selection, for an AI command that has matched. Accessibility first, off
-    /// main; ⌘C only where that attribute is not exposed.
-    private func readSelection() async -> String {
+    /// main; ⌘C only where that attribute is not exposed and the island would not hold the result.
+    private func readSelection(_ turn: Int) async -> String {
         let selected = await AXReader.read {
             AXReader.focusedElement().flatMap { AXReader.string($0, kAXSelectedTextAttribute as CFString) }
         }
         if let selected { return selected }
+        guard await holds(turn) == false else { return "" }
         return await copySelection()
     }
 
@@ -356,11 +405,10 @@ final class CaptureSession {
         pill.stateModel.previewText = ""
     }
 
-    /// A rough transcript while the user talks, one pass at a time so passes cannot pile up.
-    /// Notes and memories always preview: the card exists to show it. Ordinary dictation honours
-    /// the preference.
+    /// A rough transcript while the user talks, one pass at a time so passes cannot pile up. Only
+    /// with "Show words as you speak" on: the pill shows no words by default.
     private func startPreview() {
-        guard UserData.shared.livePreviewEnabled || state.destination != .app else { return }
+        guard UserData.shared.livePreviewEnabled else { return }
         guard let local = transcriber.localProvider else { return }
 
         pill.stateModel.previewText = ""

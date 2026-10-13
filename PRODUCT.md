@@ -14,11 +14,11 @@ Everyday Mac users first: people who found Utter on Product Hunt or Homebrew and
 
 ## Product Purpose
 
-Utter turns speech into text wherever the cursor is, privately on the Mac. Hold a key (Fn by default), speak, release, and clean text is typed into the focused app. Around that core job: hands-free dictation, a notebook for voice notes and dual-stream meeting transcription (You and Others), voice transforms that rewrite selected text on device, a personal dictionary that improves recognition, text snippets triggered by voice, a choice of local Whisper models, and optional animated desktop companions. Success: a new user dictates their first sentence into another app within a minute, trusts that nothing leaves the Mac, and keeps Utter running.
+Utter turns speech into text wherever the cursor is, privately on the Mac. Hold a key (Fn by default), speak, release, and clean text is typed into the focused app. Around that core job: hands-free dictation, a notebook for voice notes and dual-stream meeting transcription (You and Others), voice transforms that rewrite selected text on device, a personal dictionary that improves recognition, text snippets triggered by voice, a choice of local Whisper models, and an optional robot companion on the desktop. Success: a new user dictates their first sentence into another app within a minute, trusts that nothing leaves the Mac, and keeps Utter running.
 
 ## Positioning
 
-Free, open-source and fully on device: whisper.cpp runs in-process with Metal acceleration and the bundled small English model, so audio is never uploaded, there is no account and it works offline. Transforms use Apple's on-device Foundation Models where the OS provides them. Companions give it a personality that cloud dictation tools do not have.
+Free, open-source and fully on device: whisper.cpp runs in-process with Metal acceleration and the bundled small English model, so audio is never uploaded, there is no account and it works offline. Transforms use Apple's on-device Foundation Models where the OS provides them. The robot companion gives it a personality that cloud dictation tools do not have.
 
 ## Operating Context
 
@@ -37,8 +37,11 @@ Free, open-source and fully on device: whisper.cpp runs in-process with Metal ac
 ## Brand Commitments
 
 - Name: Utter. Existing app icon (`AppIcon.icns`, `Assets/AppIconSource.png`) and menu-bar mark (`MenuBarIcon/`).
-- Companions: Charcoal Cat, Ginger Cat, Pixel Dog and Pixel Panda, drawn in code; optional user sprite packs.
-- The owner has handed full creative authority for the redesign (visual world, motion, information architecture).
+- Companion: the CX-ArtLab agent-robot-avatar robot (MIT code; the character's name and identity belong to CX ArtLab, credited in THIRD_PARTY_NOTICES.md), ported natively to Core Animation.
+- The owner has handed full creative authority for the redesign (visual world, motion, information architecture), with three pinned decisions (2026-10-10):
+  - The main app follows Apple's design system: native sidebar, toolbar, lists, forms, SF Pro, SF Symbols, Liquid Glass on macOS 26 and system materials on 14 and 15. No custom-painted window.
+  - The pill is as minimal and unobtrusive as Wispr Flow's: a 32x6 pt glass capsule at rest and about 64x20 pt while listening, showing the icon's 7 tiny bars moving with the voice, with no live words by default. On 2026-10-11 the owner removed the liquid from the pill and made it smaller. The window keeps the liquid direction and the Moonlight palette (silver light on the icon's midnight navy). Only the transcript island is large.
+  - The companion is the CX-ArtLab robot, which replaces the cats, dog, panda and sprite packs.
 
 ## Evidence on Hand
 

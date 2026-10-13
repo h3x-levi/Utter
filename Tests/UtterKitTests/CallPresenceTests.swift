@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// The rule that decides whether Utter interrupts you to offer a transcript.
 ///

@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import Combine
 @testable import UtterKit
+@testable import UtterCore
 
 /// The two pieces of throttling that keep the pill cheap while it is recording.
 ///

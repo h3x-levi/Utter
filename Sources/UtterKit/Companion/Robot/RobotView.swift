@@ -28,6 +28,27 @@ final class RobotView: NSView {
     /// Upstream's optional status flash of the antenna during actions; off by default, as upstream.
     var antennaFlashes = false
 
+    /// Seconds without a play, a press or the pointer near before the robot sleeps; nil never naps.
+    /// Asleep, nothing animates, so an idle robot composites nothing.
+    var napDelay: TimeInterval? = 30 {
+        didSet { noteActivity() }
+    }
+
+    /// Asleep until cleared: the pointer no longer wakes it, and a press dozes off again soon after.
+    var isQuiet = false {
+        didSet {
+            guard isQuiet != oldValue else { return }
+            play(isQuiet ? .sleep : .wake)
+        }
+    }
+
+    var state: RobotState { logicalState(at: CACurrentMediaTime()) }
+
+    var isHoldingAntenna: Bool {
+        if case .antenna = gesture { return true }
+        return false
+    }
+
     private let canvas = CALayer()
     private let dragLayer = CALayer()
     private let headLayer = CALayer()
@@ -65,6 +86,9 @@ final class RobotView: NSView {
     private var level: CGFloat = 0
     private var appliedLevel: CGFloat = 0
     private var lastLoud: CFTimeInterval = 0
+
+    private var lastActivity: CFTimeInterval = 0
+    private var napTimer: Timer?
 
     private struct Live {
         var sim: RobotSim
@@ -129,6 +153,7 @@ final class RobotView: NSView {
         guard Thread.isMainThread else { return }
         MainActor.assumeIsolated {
             link?.invalidate()
+            napTimer?.invalidate()
             monitors.forEach(NSEvent.removeMonitor)
         }
     }
@@ -137,6 +162,7 @@ final class RobotView: NSView {
 
     func play(_ state: RobotState) {
         let now = CACurrentMediaTime()
+        if state != .sleep { noteActivity() }
         guard !state.isNoOp(whenShowing: logicalState(at: now)) else { return }
         guard pauseReasons.isEmpty else {
             shownState = state
@@ -262,6 +288,10 @@ final class RobotView: NSView {
             effectiveAppearance.performAsCurrentDrawingAppearance {
                 headShape.fillColor = palette.body.cgColor
                 antennaLayer.fillColor = palette.accent.cgColor
+                for l in [headShape, antennaLayer] {
+                    l.strokeColor = palette.rim?.cgColor
+                    l.lineWidth = palette.rim == nil ? 0 : 5
+                }
                 for eye in eyes {
                     eye.base.fillColor = palette.eye.cgColor
                     eye.caret.fillColor = palette.eye.cgColor
@@ -485,6 +515,7 @@ final class RobotView: NSView {
             NotificationCenter.default.addObserver(self, selector: #selector(occlusionChanged), name: NSWindow.didChangeOcclusionStateNotification, object: window)
         }
         withoutActions { updateContentsScale() }
+        if window != nil { noteActivity() }
         setPaused(.hidden, isHiddenOrHasHiddenAncestor)
         setPaused(.occluded, !(window?.occlusionState.contains(.visible) ?? false))
         setPaused(.offscreen, window == nil)
@@ -507,6 +538,36 @@ final class RobotView: NSView {
     @objc private func sessionBecameActive() { setPaused(.sessionInactive, false) }
     @objc private func screenLocked() { setPaused(.screenLocked, true) }
     @objc private func screenUnlocked() { setPaused(.screenLocked, false) }
+
+    // MARK: Napping
+
+    private func noteActivity() {
+        lastActivity = CACurrentMediaTime()
+        if napTimer == nil, let delay = napDelayNow { scheduleNap(after: delay) }
+    }
+
+    private var napDelayNow: TimeInterval? { isQuiet ? 5 : napDelay }
+
+    private func scheduleNap(after delay: TimeInterval) {
+        napTimer?.invalidate()
+        let timer = Timer(timeInterval: max(0.01, delay), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.napDue() }
+        }
+        timer.tolerance = min(2, delay / 4)
+        RunLoop.main.add(timer, forMode: .common)
+        napTimer = timer
+    }
+
+    private func napDue() {
+        napTimer = nil
+        guard let delay = napDelayNow else { return }
+        let quiet = CACurrentMediaTime() - lastActivity
+        if quiet < delay - 0.05 { return scheduleNap(after: delay - quiet) }
+        switch state {
+        case .input, .waiting, .waitingWrap, .sleep: return
+        default: play(.sleep)
+        }
+    }
 
     // MARK: Display link
 
@@ -548,15 +609,23 @@ final class RobotView: NSView {
     // MARK: Pointer follow
 
     private func pointerMoved(dragging: Bool = false) {
-        guard pauseReasons.isEmpty, !reduceMotion, let window else { return }
+        guard pauseReasons.isEmpty, let window else { return }
         let mouse = NSEvent.mouseLocation
         let center = window.convertPoint(toScreen: convert(NSPoint(x: bounds.midX, y: bounds.midY), to: nil))
         let dx = mouse.x - center.x, dy = center.y - mouse.y
         let influence = robotClamp(1 - hypot(dx, dy) / max(1, max(bounds.width, bounds.height) * 2.55), 0, 1)
         let now = CACurrentMediaTime()
+        if influence > 0.65 {
+            noteActivity()
+            switch logicalState(at: now) {
+            case .bored: play(.idle)
+            case .sleep where !isQuiet: play(.wake)
+            default: break
+            }
+        }
+        guard !reduceMotion else { return }
         if live == nil {
             guard influence > 0.001, gesture == nil || dragging else { return }
-            if logicalState(at: now) == .bored, influence > 0.65 { play(.idle) }
             guard isIdleRest(at: now) else { return }
             beginLive(at: now)
         }
@@ -619,6 +688,7 @@ final class RobotView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        noteActivity()
         guard pauseReasons.isEmpty, gesture == nil else { return }
         let now = CACurrentMediaTime()
         let p = convert(event.locationInWindow, from: nil)

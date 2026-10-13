@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import UtterKit
+@testable import UtterCore
 
 /// Naming the app a call is happening in.
 ///
@@ -135,12 +136,11 @@ struct CallSourceTests {
     @Test("The note's heading names the app, and stays a markdown heading either way")
     func noteHeading() {
         #expect(CallSource.noteHeading(appName: "Zoom", when: "Aug 17, 2:31 PM")
-                == "# Zoom meeting \u{2014} Aug 17, 2:31 PM\n")
-        // The shape `NoteTitleTests` pins, unchanged when there is no app name.
-        #expect(CallSource.noteHeading(appName: nil, when: "Aug 11, 2:15 PM")
-                == "# Meeting \u{2014} Aug 11, 2:15 PM\n")
+                == "# Zoom meeting, Aug 17 at 2:31 PM\n")
+        #expect(CallSource.noteHeading(appName: nil, when: "Oct 12, 7:21 PM")
+                == "# Meeting, Oct 12 at 7:21 PM\n")
         // And what the user actually sees in the notes list, via the same function the store uses.
         #expect(Note.derivedTitle(from: CallSource.noteHeading(appName: "Zoom", when: "Aug 17"))
-                == "Zoom meeting \u{2014} Aug 17")
+                == "Zoom meeting, Aug 17")
     }
 }

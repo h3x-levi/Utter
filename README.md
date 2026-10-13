@@ -1,306 +1,194 @@
 <div align="center">
 
-<img src="Assets/AppIconSource.png" alt="Utter App Icon" width="128" height="128" />
+<img src="Assets/AppIconSource.png" alt="Utter app icon" width="112" height="112" />
 
 # Utter
 
-**Private, on-device voice dictation for macOS.**
+**Voice dictation for the Mac that never leaves the Mac.**
 
-[![macOS 13.3+](https://img.shields.io/badge/macOS-13.3%2B-black?style=for-the-badge&logo=apple&logoColor=white)](https://apple.com)
-[![Swift 6](https://img.shields.io/badge/Swift-6%2B-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://swift.org)
-[![Engine: whisper.cpp](https://img.shields.io/badge/Engine-whisper.cpp%20Metal-blue?style=for-the-badge)](https://github.com/ggerganov/whisper.cpp)
-[![Apple Intelligence](https://img.shields.io/badge/AI-Apple%20Intelligence%20Local-purple?style=for-the-badge)](https://apple.com)
-[![Privacy: 100% On-Device](https://img.shields.io/badge/Privacy-100%25%20On--Device-success?style=for-the-badge)](PRIVACY.md)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
+Hold a key, say it, let go. Your words appear wherever the cursor is.<br />
+The speech model runs on your Mac, so it works offline, with no account and no subscription.
+
+<a href="https://github.com/h3x-levi/Utter/releases"><img src="https://img.shields.io/badge/Download_for_Mac-Utter_v1.0_(.dmg)-0b0f17?style=for-the-badge&logo=apple&logoColor=white" alt="Download Utter v1.0 for Mac" height="44" /></a>
+
+<sub>macOS 14 or later · Apple silicon and Intel · 192 MB, speech model included · <a href="https://github.com/h3x-levi/Utter/releases">All releases</a></sub>
+
+[![Version: 1.0 (v1)](https://img.shields.io/badge/version-1.0_(v1)-blue?style=flat-square)](https://github.com/h3x-levi/Utter/releases)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-3b82f6?style=flat-square)](LICENSE)
+[![Runs on-device](https://img.shields.io/badge/speech-on--device-22c55e?style=flat-square)](PRIVACY.md)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-f59e0b?style=flat-square)](#contributing)
+
+> [!NOTE]
+> **Version 1 (Initial Release):** Utter is currently at **Version 1 (v1.0)**. Core on-device voice dictation, local Whisper/Whistle speech models, meeting transcription, dictionary snippets, and companion features are fully operational on your Mac. As this is version one, active polish, performance optimizations, and community feedback are continuously incorporated.
 
 <br />
 
+<img src="Assets/screenshots/home.webp" alt="Utter's Home window: today's dictations as beads on a line, with a list of recent dictations" width="100%" />
+
+</div>
+
+---
+
+## How it works
+
+<table>
+<tr>
+<td width="55%">
+
+1. **Hold `fn`** in any app: Mail, Slack, Notes, Xcode, a terminal, a browser.
+2. **Talk.** The small pill at the bottom of the screen shows it's listening.
+3. **Let go.** Utter turns your speech into text on your Mac and types it at the cursor.
+
+Double-tap `fn` to keep listening hands-free, and press `Esc` to cancel.
+
+</td>
+<td width="45%" align="center">
+
+<img src="Assets/screenshots/pill-listening.webp" alt="The Utter pill while listening: seven white bars in a small dark capsule" width="100%" />
+
+</td>
+</tr>
+</table>
+
+If no text box was selected when you finished, your words wait in a small island with a Copy button, so nothing you said is lost.
+
 <p align="center">
-  <a href="https://github.com/h3x-levi/Utter/releases/latest"><b>Download Latest Release (.dmg)</b></a> •
-  <a href="https://h3x-levi.github.io/Utter/"><b>Live Web Showcase</b></a> •
-  <a href="#quick-start"><b>Quick Start</b></a> •
-  <a href="#features"><b>Features</b></a> •
-  <a href="#privacy--security"><b>Privacy</b></a> •
-  <a href="#building-from-source"><b>Building</b></a>
+  <img src="Assets/screenshots/pill-island.webp" alt="The island: 'No text box was focused, so your words are here', the transcript, a Copy button and an Esc to close hint" width="70%" />
 </p>
 
-<img src="Assets/screenshots/hero-main.png" alt="Utter Native macOS App Workspace" width="100%" />
+---
 
-<sub>Static product previews generated from SwiftUI views; they illustrate the information architecture and are not captures of a running AppKit window.</sub>
+## Local-first by design
 
-</div>
+Utter was built to keep your voice on your Mac. This is how the code behaves out of the box:
+
+| | |
+| :--- | :--- |
+| **Where speech becomes text** | In the Utter process on your Mac, with [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (or the optional Whistle engine). Audio is never uploaded. |
+| **When it goes online** | Only when you choose to download another speech model. The model that ships in the app works with Wi-Fi off. |
+| **Accounts and tracking** | None. No sign-in, no analytics, no telemetry. |
+| **Where your data lives** | Plain JSON files in `~/Library/Application Support/Utter`, a folder only your user account can read. Delete it and everything is gone. |
+| **Cost** | Free and open source under Apache 2.0. |
+
+Read [PRIVACY.md](PRIVACY.md) for the details.
 
 ---
 
-## 🌟 Overview
+## What's inside
 
-**Utter** is a native macOS application that turns your spoken voice into text wherever your cursor is focused. Hold a keycap, speak naturally, let go - and your words are instantly typed into Mail, Slack, Notes, Xcode, VS Code, Cursor, Obsidian, a terminal, or any active macOS application.
+### Library: every dictation, note and meeting
 
-### Why Utter?
+Search everything you've said, grouped by day. Dictate straight into a note with `⌃⌥N`. When a Zoom, Teams, FaceTime, Webex, Slack or Discord call starts, Utter can offer to transcribe it. It records your microphone and the call audio and labels the two sides **You** and **Others**, all on your Mac.
 
-Most dictation and voice AI tools stream your audio recordings to remote third-party cloud servers. Utter is engineered with an uncompromising commitment to privacy, speed, and native macOS design:
+<img src="Assets/screenshots/library.webp" alt="Library: today's dictations, notes and a meeting, with filters for All, Dictations, Notes and Meetings" width="100%" />
 
-- 🔒 **On-Device Inference**: Runs `whisper.cpp` in-process with local acceleration where supported. Speech audio is not uploaded.
-- ⚡ **Local-First**: No account or telemetry service. Network access is used only when you explicitly download an optional speech model or update the app.
-- 🎯 **Context-Aware Precision**: Automatically adapts capitalization, spacing, and punctuation to code, chat, or long-form prose.
-- 🖥️ **Native macOS Workspace**: Uses AppKit window chrome, system sidebar navigation, native controls, and adaptive appearance. Capture, Library, Tools, and Companion each have a focused place in the app.
-- 🐾 **Desktop Companions**: Optional animated sprite-pack companions, including cat and dog characters, with cursor-aware behavior.
+### Words: teach it your vocabulary
 
----
+- **Dictionary:** names and terms Utter should always spell your way, such as colleagues, products and jargon.
+- **Snippets:** say a short phrase and it expands into longer text, with `[date]`, `[time]`, `[day]` and `[clipboard]` filled in when it expands.
+- **Voice commands:** select text in any app and say what to do with it ("make this shorter", "fix the punctuation"). On Macs with Apple Intelligence these run on the on-device model.
 
-## ✨ Key Features
+### Companion: a small friend beside the pill
 
-### 🎙️ Global Push-to-Talk & Hands-Free Dictation
+An optional robot that floats near the pill, listens along with you, and sleeps when you're idle. It can remind you to stretch, drink water or take a break, track a daily word goal, and keep private reminders you speak with `⌃⌥R`. It goes quiet by itself while you share your screen or record a meeting.
 
-- **Global Push-to-Talk**: Hold **`Fn`** (or Right **`⌥`**, Right **`⌘`**, Right **`⌃`**), speak your thought, and release. Utter injects clean sentences directly into your active input field.
-- **Double-Tap Hotkey for Hands-Free**: Double-tap **`Fn`** (or your chosen hotkey) to lock hands-free dictation without holding down any keys. Tap again or press `Escape` to finish.
-- **Hands-Free Lock Shortcut (`⌃⌥Space`)**: Alternative global shortcut to latch recording mode for long-form dictation, brainstorming, or lectures.
-- **Fluid Floating Pill**: Non-intrusive HUD capsule with live RMS waveform metering and seamless morphing transitions across 7 distinct states.
+<img src="Assets/screenshots/companion.webp" alt="Companion settings: the robot preview, size and head shape controls, and reminders" width="100%" />
 
-<div align="center">
-  <img src="Assets/screenshots/feature-pill-lineup.png" alt="Dynamic Liquid Glass Pill Morphing" width="100%" />
-</div>
+### Two speech engines
 
----
-
-### 📝 Note Capture Studio & Meeting Audio Transcription
-
-- **Direct Note Dictation (`⌃⌥N`)**: Stream voice notes directly into Utter's built-in notebook with instant search, speaker separation, and Markdown export.
-- **Dual-Stream Meeting Transcription**: Captures microphone input alongside system audio output, transcribing both streams locally as **You** and **Others**.
-- **Proactive Meeting Presence Detection**: Automatically detects active meetings across Zoom, Microsoft Teams, Google Meet, FaceTime, Webex, Slack, and Discord.
-
-<div align="center">
-  <img src="Assets/screenshots/feature-notes.png" alt="Utter Notes Studio" width="94%" />
-</div>
-
----
-
-### 🧠 Apple Intelligence Voice Transforms
-
-- **Voice Transforms**: Highlight any text in any macOS application, trigger Utter, and speak an instruction:
-  - *"Make this concise and professional"*
-  - *"Fix punctuation and tone"*
-  - *"Translate into Japanese"*
-  - *"Extract bulleted action items"*
-- **On-Device Foundation Models**: Uses macOS `FoundationModels` when the OS makes it available, with local heuristic fallbacks. No Ollama service is required.
-- **Custom AI Commands**: Craft bespoke reusable prompt templates tailored to your personal coding or writing workflow.
-
-<div align="center">
-  <img src="Assets/screenshots/feature-transforms.png" alt="AI Voice Transforms Hub" width="94%" />
-</div>
-
----
-
-### 📚 Custom Vocabulary Boosting & Dynamic Snippets
-
-- **Speech Biasing & Custom Dictionary**: Improve recognition of uncommon proper nouns, engineering jargon, medical terms, and project acronyms.
-- **Voice Snippets**: Speak trigger keywords to expand complex boilerplate templates with dynamic placeholders (`{date}`, `{time}`, `{clipboard}`).
-
-<div align="center">
-  <img src="Assets/screenshots/feature-dictionary.png" alt="Custom Dictionary" width="48%" />
-  <img src="Assets/screenshots/feature-snippets.png" alt="Voice Snippets Studio" width="48%" />
-</div>
-
----
-
-### 🐾 Procedural Vector Desktop Companions
-
-Utter's four built-in companions are drawn in code at runtime ([`CodePixelCat.swift`](Sources/UtterKit/Companion/CodePixelCat.swift)). Optional user-authored sprite packs can add image-based companions:
-
-- 🐱 **Charcoal Cat** (`pixel-cat-gray`): Sleek slate-charcoal coat, white chest bib & snout, bright cyan eyes with glossy specular catchlights, and friendly waving paw.
-- 🐱 **Ginger Cat** (`pixel-cat-orange`): Warm ginger tabby with orange tiger stripes, white chest bib, sparkling emerald green eyes, and waving paw.
-- 🐶 **Pixel Dog** (`dog`): Golden puppy coat, drooping floppy brown ears, cream muzzle, and happy open smile with pink tongue.
-- 🐼 **Pixel Panda** (`panda`): White chibi head, round black ears, classic angled black eye patches, black vest & arms, and pink toe bean pads.
-
-<div align="center">
-  <img src="Assets/screenshots/character-selector.png" alt="Utter macOS Native Character Selector" width="100%" />
-</div>
-
-#### Interactive Motions & Physics:
-- 👋 **Wave Hello**: Waving front paw greeting with friendly ear twitches.
-- 🧶 **Biscuit Kneading**: Sinusoidal arm push gestures on mechanical keypads during dictation.
-- 🐾 **4-Leg Walking Cycles**: Articulated quadruped diagonal limb cadence across window bezels.
-- 🍞 **Loaf Sleep Mode**: Four limbs tucked cleanly underneath during resting/sleep with peaceful breathing animation.
-- 🤔 **Chin-Scratch Thinking**: Arm raised to chin with thoughtful head tilts while evaluating speech tokens.
-- 🎉 **Delighted Celebration**: Both paws raised in celebration during fast speech flow and coding streaks.
-- 👁️ **Real-Time Cursor Pupil Gaze**: Pupils smoothly track your cursor across any active display in real time.
-- 🪂 **Dangle Physics**: Limbs and tail dangle with natural gravity when dragged across displays.
-- **Animated companions**: SwiftUI-driven motion responds to app state, typing, and pointer activity. CPU and frame-time costs vary with the selected companion, display refresh rate, and Mac hardware; the project does not currently publish a measured performance guarantee.
-
----
-
-### 🎛️ Speech Model Chooser & Benchmark Selection
-
-Utter bundles the `ggml-small.en-q5_1.bin` model (about 181 MB) so local transcription is available without a model download. It can download additional Whisper models on request. Model load and transcription speed depend on the selected model, backend, available memory, and Mac hardware.
-
-<div align="center">
-  <img src="Assets/screenshots/feature-speech-models.png" alt="Speech Model Chooser" width="94%" />
-</div>
-
----
-
-### 🎨 7 Liquid Glass Themes
-
-Crafted with pixel-perfect macOS typography, high-contrast borders, and adaptive materials:
-1. **System Glass** (Dynamic Auto Light/Dark)
-2. **Dark Glass** (Refined Translucent Obsidian)
-3. **Obsidian** (Pure Deep Charcoal)
-4. **Solar Warmth** (Warm Amber Glow)
-5. **Nordic Frost** (Crisp Polar Blue)
-6. **Midnight Indigo** (Rich Deep Violet)
-7. **Paper White** (Clean Minimalist Editorial)
-
-<div align="center">
-  <img src="Assets/screenshots/feature-settings-general.png" alt="Settings & Appearance" width="94%" />
-</div>
-
----
-
-## 🔒 Privacy & Performance Matrix
-
-| Metric / Feature | Utter | Cloud AI Dictation Apps | System Siri Dictation |
-| :--- | :---: | :---: | :---: |
-| **Audio Processing Location** | **100% Local (In-Process)** | Cloud Servers | Cloud / Partial Local |
-| **Network Traffic** | **No audio upload; model downloads are user initiated** | Continuous Audio Upload | Telemetry & Logs |
-| **Offline Operation** | **Full (Airplane Mode)** | Requires Active Internet | Limited |
-| **Hardware Acceleration** | **whisper.cpp acceleration where supported by the bundled backend and Mac** | Remote GPU Fleet | Apple Neural Engine |
-| **Subscription / Pricing** | **Free & Open Source** | $10–$20 / month | Free |
-| **Meeting Dual-Stream Capture** | **Included** | Paid Add-on Bot | Unsupported |
-
----
-
-## ⌨️ Default Keyboard Shortcuts
-
-| Shortcut | Action | Scope |
+| Engine | Best for | Size |
 | :--- | :--- | :--- |
-| **`Hold Fn`** *(or `Right ⌥`, `Right ⌘`, `Right ⌃`)* | **Push-to-Talk**: Dictate into active cursor position | Global |
-| **`Double-Tap Fn`** *(or configured key)* | **Hands-Free Dictation**: Start or stop hands-free dictation without holding | Global |
-| **`⌃ ⌥ Space`** | **Toggle Hands-Free Mode**: Continuous dictation | Global |
-| **`⌃ ⌥ N`** | **Dictate to Notes**: Capture voice into notebook | Global |
-| **`⌃ ⌥ U`** | **Open Utter Workspace**: Access settings and history | Global |
-| **`Escape`** | Cancel active recording / Dismiss HUD | Global |
+| **Accurate** (Whisper small.en, included) | Everyday dictation with the best results | 190 MB |
+| **Fast** ([Whistle](https://cactuscompute.com/blog/whistle), included) | Text that appears instantly; Apple silicon on macOS 26 | 17 MB |
+
+In Settings → Speech you can switch engines, or download larger Whisper models, including multilingual ones.
+
+<img src="Assets/screenshots/settings.webp" alt="Settings window with General, Speech, Shortcuts, Privacy and Help tabs" width="100%" />
+
+### Made for macOS
+
+Utter is a native Swift app. On macOS 26 it uses Liquid Glass for the floating sidebar and toolbar, and it follows your Light or Dark setting. It is a menu bar app, so it stays out of the Dock unless you ask for it there.
 
 ---
 
-## 🚀 Quick Start
+## Keyboard shortcuts
 
-### 1. Install via Homebrew (Recommended)
+| Shortcut | What it does |
+| :--- | :--- |
+| Hold **`fn`** (or Right `⌥`, Right `⌘`, Right `⌃`) | Dictate into the app you're using |
+| Double-tap **`fn`**, or **`⌃⌥Space`** | Hands-free: keep listening until you stop |
+| **`⌃⌥N`** | Dictate into a new Utter note |
+| **`⌃⌥R`** | Tell your companion a private reminder |
+| **`⌃⌥U`** | Open the Utter window |
+| **`Esc`** | Cancel |
 
-```bash
-brew install --cask utter
-```
-
-### 2. Or Download Directly
-
-Download the latest DMG release from [GitHub Releases](https://github.com/h3x-levi/Utter/releases/latest):
-```bash
-# Direct download from terminal:
-curl -LO https://github.com/h3x-levi/Utter/releases/download/v1.1.56/Utter-1.1.56.dmg
-```
-
-1. Double-click `Utter-1.1.56.dmg`.
-2. Drag **Utter.app** into your **Applications** folder.
-3. Launch **Utter** from Spotlight or Applications.
-
-### 3. Grant macOS Permissions
-
-Upon first launch, Utter will guide you through granting two standard macOS permissions:
-- **Microphone**: Required for capturing spoken audio.
-- **Accessibility**: Required for detecting your chosen global push-to-talk hotkey and injecting transcribed text into active applications.
+You can change the dictation key in Settings → Shortcuts.
 
 ---
 
-## 🛠️ Building from Source
+## Install
 
-### Prerequisites
-- macOS 13.3 Ventura or later
-- Xcode 16+ or Command Line Tools (`xcode-select --install`) with Swift 6 or later
+1. **[Download Utter-1.0.0.dmg](https://github.com/h3x-levi/Utter/releases)** and open it.
+2. Drag **Utter** into **Applications**.
+3. Open Utter. Setup asks for two permissions:
+   - **Microphone**, to hear you.
+   - **Accessibility**, to notice the `fn` key and type into other apps.
 
-### Clone & Build
-```bash
-# 1. Clone repository
-git clone https://github.com/h3x-levi/Utter.git
-cd Utter
-
-# 2. Build release binary using Swift Package Manager
-swift build -c release
-
-# 3. Create styled DMG installer and application bundle
-./scripts/build-app.sh
-```
-The compiled application and installer will be located in:
-- `build/Utter.app`
-- `build/Utter-1.1.56.dmg`
-
----
-
-## 🧩 Architecture
-
-```mermaid
-graph TD
-    User([User Voice]) --> Mic[AVAudioEngine 16kHz PCM Buffer]
-    SysAudio([Meeting Audio]) --> Tap[ProcessTap / CoreAudio System Stream]
-    
-    Mic --> Pill[Pill HUD Floating Window]
-    Tap --> Meeting[Meeting Session Coordinator]
-    
-    Mic --> Whisper[Local whisper.cpp inference; Metal where available]
-    Tap --> Whisper
-    
-    Whisper --> Bias[Speech Bias & Dictionary Engine]
-    Bias --> Polish[Sentence Polish & Punctuation]
-    
-    Polish --> Injector[Accessibility Text Injector]
-    Polish --> NoteStore[Local Notes Store JSON]
-    
-    Polish --> AI[Apple Intelligence Local LLM Engine]
-    AI --> Injector
-    
-    Pill --> Companion[Procedural 60FPS Companion Engine]
-```
-
----
-
-## ⚠️ Ported Project Notice & Reporting Issues
+<img src="Assets/screenshots/onboarding.webp" alt="First-run setup: 'Talk instead of typing'" width="100%" />
 
 > [!NOTE]
-> **Utter is a complete bi-ported native macOS application** bringing together high-performance C++ `whisper.cpp` Metal bindings, CoreAudio system taps, and Apple Intelligence FoundationModels inside a unified SwiftUI Liquid Glass architecture.
->
-> Because this is a complex ported application, **there might still be occasional edge-case bugs, UI quirks, or hardware-specific lag/latency issues** on particular Mac configurations (Intel vs Apple Silicon M1/M2/M3/M4 or non-standard external audio interfaces).
->
-> We actively welcome and appreciate all community feedback, issue reports, and diagnostic logs to help us make Utter rock-solid for everyone!
-
-### 🐛 How to Report Bugs or Performance Issues
-
-If you encounter a crash, audio dropout, UI lag, or unexpected behavior:
-
-1. **Check or Open an Issue**: Visit our [GitHub Issue Tracker](https://github.com/h3x-levi/Utter/issues).
-2. **Include Your System Info**:
-   - macOS version (e.g. `macOS 14.5 Sonoma` or `macOS 15.0 Sequoia` via `sw_vers`)
-   - Mac model (e.g. MacBook Pro M3, MacBook Air M1, Mac Studio M2 Max, Intel iMac)
-   - Active input device (Built-in Microphone, AirPods, USB mic, etc.)
-3. **Attach Diagnostic Logs**:
-   - Open **Utter Settings** (`⌃ ⌥ U` or click the menu bar icon → *Settings*).
-   - Go to the **Diagnostics & Telemetry** pane.
-   - Click **"Reveal Logs"** to open Utter's local diagnostic reports folder (`~/Library/Logs/DiagnosticReports/` or Utter crash logs).
-   - Attach or paste relevant log snippets in your issue description.
-4. **Describe the Steps to Reproduce**:
-   - What key was pressed (e.g. `Fn`, `⌃⌥Space`)?
-   - What application had the active text cursor?
-   - What was the expected vs. actual behavior?
+> Utter is signed but not notarized, because notarization needs a paid Apple developer account. The first time you open a downloaded copy, macOS says it can't verify the app. Go to **System Settings → Privacy & Security** and click **Open Anyway**. [Installing on another Mac](docs/INSTALLING-ON-ANOTHER-MAC.md) has the details.
 
 ---
 
-## 📄 License
+## Build it yourself
 
-Utter is distributed under the **Apache License 2.0**. See [`LICENSE`](LICENSE) for complete terms.
+You need macOS 26 with Xcode 26 or its Command Line Tools, because the app uses the macOS 26 SDK. The app itself runs on macOS 14 and later.
 
+```bash
+git clone https://github.com/h3x-levi/Utter.git
+cd Utter
+swift build                                  # compile
+swift test                                   # run the test suite
+bash scripts/build-app.sh --no-dmg           # make build/Utter.app
+bash scripts/build-app.sh --version=1.0.0    # make build/Utter-1.0.0.dmg too
 ```
-Copyright 2026 Utter Contributors
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+To try a build without touching your own notes and history, point it at a throwaway folder:
 
-    http://www.apache.org/licenses/LICENSE-2.0
+```bash
+open --env UTTER_DATA_DIR=/tmp/utter-dev build/Utter.app --args --open-window
 ```
+
+---
+
+## Contributing
+
+Utter is a community project and contributions are welcome, whether code, design, bug reports or docs.
+
+- **Found a bug?** [Open an issue](https://github.com/h3x-levi/Utter/issues/new). Include your macOS version, Mac model and microphone. Settings → Help → Report an Issue fills most of this in for you.
+- **Want to build something?** Open an issue first for anything large so we can agree on the shape, then send a pull request.
+- **Before you start,** read [CONTRIBUTING.md](CONTRIBUTING.md). Above all, never log or upload audio, transcripts or anything the user typed.
+
+How the code is laid out:
+
+| Folder | What lives there |
+| :--- | :--- |
+| `Sources/UtterCore` | Audio, speech engines, storage, the dictation pipeline. No UI. |
+| `Sources/UtterKit` | Every window and view: pill, island, Home, Library, Words, Companion, Settings. |
+| `Sources/Utter` | The app's entry point. |
+| `Tests/UtterKitTests` | The test suite. `UTTER_SCREEN_SNAPSHOTS=1 swift test` also renders every screen to `.build/screen-snapshots/`. |
+
+---
+
+## Credits
+
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT) for the Accurate engine.
+- [Whistle](https://cactuscompute.com/blog/whistle) by Cactus Compute (Apache 2.0) for the Fast engine.
+- The companion robot is a native port of a design by CX-ArtLab (MIT).
+
+Full notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
