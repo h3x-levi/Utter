@@ -24,3 +24,6 @@ website/dist/
 
 # Local editor and tooling configurations
 .claude/
+.agents/
+skills-lock.json
+

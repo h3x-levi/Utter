@@ -19,6 +19,16 @@ The speech model runs on your Mac, so it works offline, with no account and no s
 
 <br />
 
+<video src="promo/Utter-Hype-16x9.mp4" controls="controls" width="100%" playsinline>
+  <source src="promo/Utter-Hype-16x9.mp4" type="video/mp4" />
+</video>
+
+<p align="center">
+  🎬 <strong><a href="promo/Utter-Hype-16x9.mp4">Watch the Utter promo video (16:9 Landscape)</a></strong>
+</p>
+
+<br />
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Assets/screenshots/library-dark.webp" />
   <img src="Assets/screenshots/library.webp" alt="Utter's Library: today as a cassette tape with Side A and Side B tracklists and running times, and the open track on the right with Paste again, Copy and Delete" width="100%" />
