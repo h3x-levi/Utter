@@ -409,9 +409,16 @@ private struct SearchFocus: ViewModifier {
 
 // MARK: - Shared pieces
 
+private struct LibraryTransitionKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
 extension EnvironmentValues {
     /// Pairs a Home row with the Library detail it opens, so the words appear to travel.
-    @Entry var libraryTransition: Namespace.ID?
+    var libraryTransition: Namespace.ID? {
+        get { self[LibraryTransitionKey.self] }
+        set { self[LibraryTransitionKey.self] = newValue }
+    }
 }
 
 extension View {
