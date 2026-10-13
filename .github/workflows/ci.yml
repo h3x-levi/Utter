@@ -21,6 +21,17 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Select Xcode 16
+        run: |
+          XCODE_APP=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          if [ -n "$XCODE_APP" ]; then
+            echo "Selecting $XCODE_APP"
+            sudo xcode-select -s "$XCODE_APP"
+            echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+          xcodebuild -version
+          swift --version
+
       - name: Build app and test targets
         run: swift build
 
