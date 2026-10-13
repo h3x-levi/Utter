@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utter · Mockup 3: Cupertino Liquid Glass Native</title>
+  <style>
+    :root {
+      --bg: #0D111A;
+      --glass-surface: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-highlight: rgba(255, 255, 255, 0.22);
+      --text: #F5F7FA;
+      --text-secondary: #94A0B8;
+      --apple-blue: #0A84FF;
+      --apple-red: #FF453A;
+      --apple-green: #30D158;
+      --font-sf: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+      --font-mono: "SF Mono", Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sf);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      background-image: radial-gradient(circle at 50% 10%, rgba(10, 132, 255, 0.15) 0%, transparent 60%);
+    }
+
+    /* Comparison Bar */
+    .top-switcher {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: rgba(13, 17, 26, 0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+    .switcher-tabs { display: flex; gap: 8px; }
+    .switcher-tab {
+      padding: 5px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--text-secondary);
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .switcher-tab:hover { color: #fff; background: rgba(255,255,255,0.06); }
+    .switcher-tab.active {
+      color: #fff;
+      background: rgba(10, 132, 255, 0.2);
+      border-color: var(--apple-blue);
+      font-weight: 600;
+    }
+
+    header {
+      padding: 20px 32px;
+      max-width: 1240px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.25rem;
+    }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+
+    .btn-download-glass {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--glass-highlight);
+      backdrop-filter: blur(12px);
+      color: #fff;
+      padding: 9px 20px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+    .btn-download-glass:hover {
+      background: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    }
+
+    /* Hero */
+    .hero {
+      max-width: 1100px;
+      margin: 50px auto 40px;
+      text-align: center;
+      padding: 0 24px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(10, 132, 255, 0.1);
+      border: 1px solid rgba(10, 132, 255, 0.3);
+      color: #5AC8FA;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(3rem, 6vw, 4.8rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      max-width: 650px;
+      margin: 0 auto 36px;
+    }
+
+    /* Floating Liquid Glass Mac Desktop Stage */
+    .desktop-stage {
+      max-width: 980px;
+      margin: 0 auto 80px;
+      background: var(--glass-surface);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(40px);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .desktop-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .traffic-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .traffic-dot.r { background: #FF5F56; }
+    .traffic-dot.y { background: #FFBD2E; }
+    .traffic-dot.g { background: #27C93F; }
+
+    /* Interactive Liquid Glass Pill */
+    .liquid-pill-container {
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 40px 20px;
+      text-align: center;
+      position: relative;
+    }
+    .liquid-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 8px 24px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.4);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .liquid-pill:hover {
+      background: rgba(255, 255, 255, 0.18);
+      transform: scale(1.02);
+    }
+
+    .pill-bars {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      height: 16px;
+    }
+    .pill-bars span {
+      width: 3px;
+      height: 6px;
+      background: #FF453A;
+      border-radius: 2px;
+      animation: pulseBar 0.9s ease-in-out infinite alternate;
+    }
+    @keyframes pulseBar {
+      0% { height: 4px; }
+      100% { height: 16px; }
+    }
+    .pill-bars span:nth-child(2) { animation-delay: 0.15s; }
+    .pill-bars span:nth-child(3) { animation-delay: 0.3s; }
+    .pill-bars span:nth-child(4) { animation-delay: 0.45s; }
+
+    /* Video Player embedded cleanly */
+    .promo-section {
+      max-width: 1040px;
+      margin: 80px auto;
+      padding: 0 24px;
+    }
+    .glass-card {
+      background: var(--glass-surface);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(30px);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .glass-card video {
+      width: 100%;
+      border-radius: 12px;
+      display: block;
+      aspect-ratio: 16 / 9;
+    }
+    .glass-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    /* 3 Pillars */
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 80px auto;
+      padding: 0 24px;
+    }
+    .pillar-card {
+      background: var(--glass-surface);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      padding: 30px;
+      backdrop-filter: blur(20px);
+    }
+    .pillar-icon {
+      font-size: 1.8rem;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+    .pillar-card h3 { font-size: 1.3rem; margin-bottom: 8px; font-weight: 700; }
+    .pillar-card p { color: var(--text-secondary); font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Switcher -->
+  <aside class="top-switcher">
+    <div><strong>UTTER DESIGN EXPLORATION</strong> · Select an Impeccable Mockup to preview:</div>
+    <div class="switcher-tabs">
+      <a href="mockup-1-mixtape.html" class="switcher-tab">1. Mixtape J-Card</a>
+      <a href="mockup-2-studio-video.html" class="switcher-tab">2. Video-First Cine-Deck</a>
+      <a href="mockup-3-liquid-glass.html" class="switcher-tab active">3. Liquid Glass Native</a>
+      <a href="mockup-4-airgap-terminal.html" class="switcher-tab">4. Air-Gapped Terminal</a>
+    </div>
+  </aside>
+
+  <header>
+    <div class="brand">
+      <img src="public/assets/brand/AppIconSource.png" alt="Utter Icon" onerror="this.src='../Assets/AppIconSource.png'">
+      <span>Utter</span>
+    </div>
+    <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg" class="btn-download-glass">
+      Download for Mac
+    </a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-badge">macOS 14+ · APPLE SILICON & INTEL · ZERO CLOUD</div>
+      <h1>
+        Liquid voice dictation<br>
+        crafted for the Mac.
+      </h1>
+      <p>
+        Whisper on-device intelligence without subscriptions or cloud telemetry. Tap Fn anywhere, speak naturally, and watch words type in place.
+      </p>
+
+      <!-- Desktop Liquid Stage -->
+      <div class="desktop-stage">
+        <div class="desktop-bar">
+          <span class="traffic-dot r"></span>
+          <span class="traffic-dot y"></span>
+          <span class="traffic-dot g"></span>
+          <span style="color: var(--text-secondary); font-size: 0.82rem; margin-left: 8px; font-family: var(--font-mono);">Utter Menu Bar Capsule</span>
+        </div>
+
+        <div class="liquid-pill-container">
+          <div class="liquid-pill" id="demoPill" onclick="toggleDemoState()">
+            <div class="pill-bars">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <span id="pillLabel" style="font-weight: 600; font-size: 0.95rem;">Hold Fn to Talk</span>
+          </div>
+          <div id="demoText" style="margin-top: 20px; font-size: 1.1rem; color: #E2E8F0; min-height: 28px;">
+            Click the liquid pill to test active transcription
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Promo Video Showcase -->
+    <section class="promo-section">
+      <div class="glass-card">
+        <video controls playsinline preload="metadata">
+          <source src="public/assets/promo/Utter-Hype-16x9.mp4" type="video/mp4">
+          <source src="../promo/Utter-Hype-16x9.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+        <div class="glass-footer">
+          <span>📼 16:9 Landscape Promo Reel</span>
+          <a href="../promo/Utter-Hype-16x9.mp4" target="_blank" style="color: var(--apple-blue); text-decoration: none;">View original MP4 ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 Pillars -->
+    <section class="pillars-grid">
+      <div class="pillar-card">
+        <span class="pillar-icon">🔒</span>
+        <h3>Air-Gapped Privacy</h3>
+        <p>No audio packets leave your computer. The model runs locally in RAM with Apple Metal hardware acceleration.</p>
+      </div>
+      <div class="pillar-card">
+        <span class="pillar-icon">⚡</span>
+        <h3>Sub-150ms Speed</h3>
+        <p>Choose between accurate Whisper small.en (190MB) or ultra-fast Cactus Whistle (17MB) for instant dictation.</p>
+      </div>
+      <div class="pillar-card">
+        <span class="pillar-icon">🎙️</span>
+        <h3>Meeting Diarization</h3>
+        <p>Captures Zoom, Teams, and Slack calls by separating system audio from your microphone on two distinct channels.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let active = false;
+    function toggleDemoState() {
+      active = !active;
+      const label = document.getElementById('pillLabel');
+      const text = document.getElementById('demoText');
+      if (active) {
+        label.innerText = 'Listening on Mac mic...';
+        text.innerText = 'Dictating: "Utter turns your speech into text on your Mac and types it at the cursor."';
+      } else {
+        label.innerText = '✓ Text Injected at Cursor';
+        text.innerText = 'Finished dictation. Click to talk again.';
+      }
+    }
+  </script>
+</body>
+</html>
