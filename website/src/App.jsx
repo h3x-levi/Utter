@@ -39,86 +39,7 @@ const SCREENSHOT_DATA = {
   }
 };
 
-const INITIAL_REVIEWS = [
-  {
-    id: 'rev-1',
-    name: 'Devon Miller',
-    handle: '@devon_infra',
-    role: 'Staff Infrastructure Engineer',
-    platform: 'macOS (M3 Max)',
-    tag: 'Performance ⚡',
-    rating: 5,
-    date: '2 days ago',
-    likes: 34,
-    avatar: 'DM',
-    content: 'Injecting directly into terminal and VS Code with zero network round-trip makes dictation feel like a native keyboard feature. No cloud latency lag whatsoever.'
-  },
-  {
-    id: 'rev-2',
-    name: 'Elena Rostova',
-    handle: '@elena_legal',
-    role: 'Legal Tech Consultant',
-    platform: 'macOS (Apple Silicon)',
-    tag: 'Privacy Win 🛡️',
-    rating: 5,
-    date: '3 days ago',
-    likes: 28,
-    avatar: 'ER',
-    content: 'Our compliance team strictly forbids third-party audio uploads. Utter running in-process whisper on local GPU with zero telemetry passed our air-gap security audit immediately.'
-  },
-  {
-    id: 'rev-3',
-    name: 'Marcus Thorne',
-    handle: '@mthorne_dev',
-    role: 'Principal Systems Architect',
-    platform: 'Windows 11 Wishlist',
-    tag: 'Feature Wish 💡',
-    rating: 5,
-    date: 'Yesterday',
-    likes: 42,
-    avatar: 'MT',
-    content: 'Eagerly waiting for the Windows 11 build! If it brings the exact same local GPU pipeline and Fn push-to-talk to PC, it will easily replace Dragon and Whispering for engineering teams.'
-  },
-  {
-    id: 'rev-4',
-    name: 'Julian Park',
-    handle: '@julianp_design',
-    role: 'Product Designer',
-    platform: 'macOS (M2 Pro)',
-    tag: 'Loved It 🔥',
-    rating: 5,
-    date: '4 days ago',
-    likes: 19,
-    avatar: 'JP',
-    content: 'The cassette J-card tape library is pure delight. Splitting my daily dictations into Side A (morning standups) and Side B (design reviews) makes reviewing notes tactile and fun.'
-  },
-  {
-    id: 'rev-5',
-    name: 'Priya Sharma',
-    handle: '@priya_codes',
-    role: 'Senior Full-Stack Engineer',
-    platform: 'Linux Wishlist',
-    tag: 'Feature Wish 💡',
-    rating: 5,
-    date: 'Just now',
-    likes: 15,
-    avatar: 'PS',
-    content: 'Applied for the Linux beta. A small wish: would love custom punctuation voice macros like "wrap in backticks" or "format as json". The offline transcription accuracy is already top tier.'
-  },
-  {
-    id: 'rev-6',
-    name: 'Kenji Takahashi',
-    handle: '@kenji_audio',
-    role: 'Indie Hacker & Creator',
-    platform: 'macOS (M1 Air)',
-    tag: 'Loved It 🔥',
-    rating: 5,
-    date: '5 days ago',
-    likes: 23,
-    avatar: 'KT',
-    content: 'Dual-stream meeting audio without having to invite an awkward bot to Zoom or Google Meet is worth its weight in gold. Both sides of the call transcribed in private.'
-  }
-];
+const INITIAL_REVIEWS = [];
 
 export default function App() {
   const [isDark, setIsDark] = useState(false);
@@ -363,7 +284,7 @@ export default function App() {
             <a href="#privacy" className="hover:text-[#141E3C] dark:hover:text-white transition-colors">Privacy</a>
             <a href="#community" className="hover:text-[#141E3C] dark:hover:text-white transition-colors">Community</a>
             <a href="#apply" className="hover:text-[#141E3C] dark:hover:text-white transition-colors">Apply for Beta</a>
-            <a href="https://github.com/h3x-levi/Utter" target="_blank" rel="noopener noreferrer" className="hover:text-[#141E3C] dark:hover:text-white transition-colors">GitHub</a>
+            
           </nav>
 
           <div className="flex items-center gap-3.5">
@@ -885,8 +806,23 @@ export default function App() {
             onMouseLeave={() => setIsCarouselHovered(false)}
           >
             {filteredReviews.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-[#6C789B] font-mono text-sm">
-                No reviews found in this category yet. Be the first to share one below!
+              <div className="col-span-full py-12 px-6 rounded-2xl bg-white dark:bg-[#1A1F2C] border-2 border-dashed border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] text-center">
+                <div className="w-12 h-12 rounded-full bg-[rgba(37,78,219,0.1)] text-[#254EDB] dark:text-[#5E82FF] flex items-center justify-center mx-auto mb-3 text-xl">
+                  🎙️
+                </div>
+                <h4 className="font-bold font-display text-lg text-[#141E3C] dark:text-white mb-1">
+                  The Community Tape Deck is fresh.
+                </h4>
+                <p className="text-sm text-[#4B587E] dark:text-[#A3AFCC] max-w-md mx-auto mb-4">
+                  Have questions, platform wishlist items (Windows 11 / Linux), or early feedback? Drop your note below to be the first voice on the deck!
+                </p>
+                <a
+                  href="#comm-form"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] text-xs font-bold hover:bg-[#254EDB] transition-all"
+                >
+                  <span>Drop the First Community Note</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
               </div>
             ) : (
               // Display 3 responsive cards starting at carouselIndex
@@ -977,7 +913,7 @@ export default function App() {
           </div>
 
           {/* Interactive "Leave a Review / Drop Feedback" Box */}
-          <div className="bg-[#EDF1F7] dark:bg-[#151924] border-2 border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] rounded-3xl p-7 sm:p-10">
+          <div id="comm-form" className="bg-[#EDF1F7] dark:bg-[#151924] border-2 border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] rounded-3xl p-7 sm:p-10">
             <div className="max-w-3xl mx-auto">
               <div className="text-center mb-8">
                 <div className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-[#D83125] uppercase tracking-wider mb-2">
@@ -1100,7 +1036,7 @@ export default function App() {
 
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
                   <div className="text-xs text-[#6C789B] dark:text-[#7A87A6]">
-                    Have a technical bug to report? Please open a ticket on <a href="https://github.com/h3x-levi/Utter/issues" target="_blank" rel="noopener noreferrer" className="text-[#254EDB] hover:underline font-bold">GitHub Issues</a>.
+                    Community notes appear immediately on the tape deck above for everyone to read.
                   </div>
 
                   <button
@@ -1339,11 +1275,11 @@ export default function App() {
             <strong className="text-[#141E3C] dark:text-white">Utter</strong> · Open Source Apache License 2.0 · Private on-device voice dictation for macOS, Windows & Linux
           </div>
           <div className="flex gap-6 font-mono text-sm text-[#4B587E] dark:text-[#A3AFCC]">
-            <a href="https://github.com/h3x-levi/Utter" target="_blank" rel="noopener noreferrer" className="hover:text-[#141E3C] dark:hover:text-white">GitHub</a>
+            <a href="#screenshots" className="hover:text-[#141E3C] dark:hover:text-white">Screenshots</a>
+            <a href="#library" className="hover:text-[#141E3C] dark:hover:text-white">Mixtape Library</a>
+            <a href="#privacy" className="hover:text-[#141E3C] dark:hover:text-white">Privacy</a>
             <a href="#community" className="hover:text-[#141E3C] dark:hover:text-white">Community</a>
-            <a href="#apply" className="hover:text-[#141E3C] dark:hover:text-white">Apply for Beta</a>
-            <a href="https://github.com/h3x-levi/Utter/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" className="hover:text-[#141E3C] dark:hover:text-white">PRIVACY.md</a>
-            <a href="https://github.com/h3x-levi/Utter/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="hover:text-[#141E3C] dark:hover:text-white">LICENSE</a>
+            <a href="#apply" className="hover:text-[#141E3C] dark:hover:text-white font-bold text-[#D83125]">Apply for Beta</a>
           </div>
         </div>
       </footer>
