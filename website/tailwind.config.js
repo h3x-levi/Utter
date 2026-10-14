@@ -8,40 +8,38 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'sans-serif'],
+        display: ['"SF Pro Rounded"', '"Plus Jakarta Sans"', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'monospace'],
       },
       colors: {
-        brand: {
-          50: '#fff7ed',
-          100: '#ffedd5',
-          200: '#fed7aa',
-          300: '#fdba74',
-          400: '#fb923c',
-          500: '#f97316',
-          600: '#ea580c',
-          700: '#c2410c',
+        paper: {
+          DEFAULT: '#F7F9FC',
+          subtle: '#EDF1F7',
+          card: '#FFFFFF',
+          dark: '#0E1118',
+          'subtle-dark': '#151924',
+          'card-dark': '#1A1F2C',
+        },
+        ink: {
+          DEFAULT: '#141E3C',
+          muted: '#4B587E',
+          subtle: '#6C789B',
+          dark: '#F2F5FC',
+          'muted-dark': '#A3AFCC',
+        },
+        tape: {
+          red: '#D83125',
+          gold: '#EDB123',
+          navy: '#1C2A5E',
+          dark: '#0F1219',
+        },
+        pen: {
+          DEFAULT: '#254EDB',
+          light: '#486DEB',
+          dark: '#5E82FF',
         },
       },
-      animation: {
-        'float-slow': 'float 6s ease-in-out infinite',
-        'pulse-glow': 'pulseGlow 4s ease-in-out infinite',
-        'wave-bar': 'waveBar 1.2s ease-in-out infinite alternate',
-      },
-      keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
-          '50%': { transform: 'translateY(-10px) rotate(0.5deg)' },
-        },
-        pulseGlow: {
-          '0%, 100%': { opacity: '0.3', transform: 'scale(1)' },
-          '50%': { opacity: '0.6', transform: 'scale(1.05)' },
-        },
-        waveBar: {
-          '0%': { height: '15%' },
-          '100%': { height: '100%' },
-        }
-      }
     },
   },
   plugins: [],

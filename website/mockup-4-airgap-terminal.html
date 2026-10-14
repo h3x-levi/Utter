@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utter · Mockup 4: Air-Gapped Cyber-Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #06080C;
+      --surface: #0C1017;
+      --border: rgba(0, 240, 255, 0.2);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --cyan: #00F0FF;
+      --green: #00FF66;
+      --amber: #FFB800;
+      --text: #DCE5F2;
+      --text-dim: #708299;
+      --font: "JetBrains Mono", Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      background-image: linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    /* Comparison Bar */
+    .top-switcher {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: #020306;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+    .switcher-tabs { display: flex; gap: 8px; }
+    .switcher-tab {
+      padding: 5px 12px;
+      border-radius: 4px;
+      text-decoration: none;
+      color: var(--text-dim);
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .switcher-tab:hover { color: #fff; background: rgba(0, 240, 255, 0.08); }
+    .switcher-tab.active {
+      color: var(--cyan);
+      background: rgba(0, 240, 255, 0.15);
+      border-color: var(--cyan);
+      font-weight: 700;
+    }
+
+    header {
+      padding: 24px 32px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand-cli {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: var(--cyan);
+    }
+    .brand-cli span { color: var(--green); }
+
+    .btn-terminal {
+      background: transparent;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+      padding: 8px 16px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+    .btn-terminal:hover {
+      background: var(--cyan);
+      color: #000;
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+    }
+
+    /* Hero */
+    .hero {
+      max-width: 1100px;
+      margin: 40px auto 60px;
+      padding: 0 24px;
+    }
+    .terminal-window {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.1);
+      overflow: hidden;
+      margin-top: 24px;
+    }
+    .terminal-header {
+      background: #090C12;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+    .terminal-dots { display: flex; gap: 6px; }
+    .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; background: #2A3245; }
+    .terminal-body {
+      padding: 28px;
+    }
+    .cli-prompt { color: var(--green); margin-bottom: 12px; }
+    .cli-heading {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      color: #FFF;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .cli-heading span { color: var(--cyan); }
+    .cli-desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+      margin-bottom: 30px;
+    }
+
+    .install-box {
+      background: #06080C;
+      border: 1px solid var(--border-subtle);
+      border-left: 3px solid var(--cyan);
+      padding: 14px 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      font-size: 0.95rem;
+    }
+
+    /* Video Player Terminal Edition */
+    .video-term {
+      max-width: 1100px;
+      margin: 70px auto;
+      padding: 0 24px;
+    }
+    .video-term-frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .video-term-frame video {
+      width: 100%;
+      border-radius: 4px;
+      display: block;
+      aspect-ratio: 16 / 9;
+    }
+    .video-term-meta {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 6px 0;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    /* Verification Terminal */
+    .verify-box {
+      max-width: 1100px;
+      margin: 60px auto 100px;
+      padding: 0 24px;
+    }
+    .code-block {
+      background: #020305;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      font-size: 0.88rem;
+      color: #79C0FF;
+      overflow-x: auto;
+    }
+    .code-comment { color: #8B949E; }
+    .code-out { color: var(--green); }
+  </style>
+</head>
+<body>
+
+  <!-- Top Switcher -->
+  <aside class="top-switcher">
+    <div><strong>UTTER DESIGN EXPLORATION</strong> · Select an Impeccable Mockup to preview:</div>
+    <div class="switcher-tabs">
+      <a href="mockup-1-mixtape.html" class="switcher-tab">1. Mixtape J-Card</a>
+      <a href="mockup-2-studio-video.html" class="switcher-tab">2. Video-First Cine-Deck</a>
+      <a href="mockup-3-liquid-glass.html" class="switcher-tab">3. Liquid Glass Native</a>
+      <a href="mockup-4-airgap-terminal.html" class="switcher-tab active">4. Air-Gapped Terminal</a>
+    </div>
+  </aside>
+
+  <header>
+    <div class="brand-cli">
+      <span>$</span> utter --voice-engine=whisper-small
+    </div>
+    <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg" class="btn-terminal">
+      Download v1.2.0 (.dmg)
+    </a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <span>utter-dictation-daemon · Metal GPU Active</span>
+          <span style="color: var(--green);">● AIR-GAPPED</span>
+        </div>
+        <div class="terminal-body">
+          <div class="cli-prompt">$ cat README.md | head -n 2</div>
+          <h1 class="cli-heading">
+            Voice dictation for the Mac<br>
+            that <span>never leaves the Mac.</span>
+          </h1>
+          <p class="cli-desc">
+            Hold Fn anywhere, talk, release. whisper.cpp processes the audio in-process on your Apple silicon GPU and injects text straight into your cursor.
+          </p>
+
+          <div class="install-box">
+            <code>curl -fsSL https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg -o Utter.dmg</code>
+            <span style="color: var(--amber); font-size: 0.82rem;">[192 MB DMG]</span>
+          </div>
+
+          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg" class="btn-terminal" style="background: var(--cyan); color: #000;">
+              Download macOS Installer (.dmg)
+            </a>
+            <a href="https://github.com/h3x-levi/Utter" target="_blank" class="btn-terminal">
+              Inspect Source (GitHub)
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Embedded Promo Video -->
+    <section class="video-term">
+      <div class="video-term-frame">
+        <video controls playsinline preload="metadata">
+          <source src="public/assets/promo/Utter-Hype-16x9.mp4" type="video/mp4">
+          <source src="../promo/Utter-Hype-16x9.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+        <div class="video-term-meta">
+          <span>SOURCE: promo/Utter-Hype-16x9.mp4 [1920x1080 @ 30 FPS]</span>
+          <span style="color: var(--cyan);">AUDIO: STEREO LOUDNORM</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Verification Section -->
+    <section class="verify-box">
+      <div style="margin-bottom: 12px; font-weight: 700; color: var(--cyan);">
+        # VERIFY ZERO NETWORK CONNECTIONS:
+      </div>
+      <div class="code-block">
+        <span class="code-comment"># Inspect Utter process for open sockets while dictating</span><br>
+        $ lsof -i -P | grep -i Utter<br>
+        <span class="code-out"># Output: (empty — 0 network sockets established)</span><br><br>
+        <span class="code-comment"># Inspect audio retention</span><br>
+        $ ls -lh ~/Library/Application\ Support/Utter/audio<br>
+        <span class="code-out"># Output: (empty — audio is discarded immediately after Metal infer)</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

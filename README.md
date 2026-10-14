@@ -10,12 +10,25 @@ Hold a key, say it, let go. Your words appear wherever the cursor is.<br />
 The speech model runs on your Mac, so it works offline, with no account and no subscription.
 
 <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg"><img src="https://img.shields.io/badge/Download_for_Mac-Utter_1.2.0_(.dmg)-1c2a5e?style=for-the-badge&logo=apple&logoColor=white" alt="Download Utter 1.2.0 for Mac" height="44" /></a>
+&nbsp;
+<a href="https://utter-eight.vercel.app/"><img src="https://img.shields.io/badge/Live_Website-utter--eight.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Utter Live Website" height="44" /></a>
 
-<sub>macOS 14 or later · Apple silicon and Intel · 192 MB, speech model included · <a href="https://github.com/h3x-levi/Utter/releases">All releases</a></sub>
+<sub>macOS 14 or later · Apple silicon and Intel · 192 MB, speech model included · <a href="https://github.com/h3x-levi/Utter/releases">All releases</a> · <a href="https://utter-eight.vercel.app/">Official Website</a></sub>
 
+[![Website](https://img.shields.io/badge/website-utter--eight.vercel.app-000000?style=flat-square&logo=vercel)](https://utter-eight.vercel.app/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-1c2a5e?style=flat-square)](LICENSE)
 [![Runs on-device](https://img.shields.io/badge/speech-on--device-d8352a?style=flat-square)](PRIVACY.md)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-f1b632?style=flat-square)](#contributing)
+
+<br />
+
+<video src="promo/Utter-Hype-16x9.mp4" controls="controls" width="100%" playsinline>
+  <source src="promo/Utter-Hype-16x9.mp4" type="video/mp4" />
+</video>
+
+<p align="center">
+  🎬 <strong><a href="promo/Utter-Hype-16x9.mp4">Watch the Utter promo video (16:9 Landscape)</a></strong>
+</p>
 
 <br />
 

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utter · Mockup 2: Video-First Studio / Cine-Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090E;
+      --bg-surface: #0F131D;
+      --bg-card: #151A27;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-active: rgba(255, 69, 58, 0.5);
+      --text: #F3F5FA;
+      --text-muted: #8F9BB3;
+      --accent-red: #FF453A;
+      --accent-blue: #0A84FF;
+      --accent-gold: #FFD60A;
+      --font-main: "Plus Jakarta Sans", -apple-system, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-main);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Comparison Bar */
+    .top-switcher {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: #020305;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+    .switcher-tabs {
+      display: flex;
+      gap: 8px;
+    }
+    .switcher-tab {
+      padding: 5px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .switcher-tab:hover { color: #fff; background: rgba(255,255,255,0.06); }
+    .switcher-tab.active {
+      color: #fff;
+      background: rgba(255, 69, 58, 0.2);
+      border-color: var(--accent-red);
+      font-weight: 600;
+    }
+
+    header {
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.3rem;
+      letter-spacing: -0.02em;
+    }
+    .brand img { width: 34px; height: 34px; border-radius: 8px; }
+
+    .nav-cta {
+      background: var(--accent-red);
+      color: white;
+      padding: 9px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .nav-cta:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
+    /* Hero section */
+    .hero {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px 60px;
+      text-align: center;
+    }
+    .pill-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 69, 58, 0.12);
+      border: 1px solid rgba(255, 69, 58, 0.3);
+      color: #FF6B6B;
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(2.8rem, 5.5vw, 4.6rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, #FFFFFF 30%, #8F9BB3 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 36px;
+    }
+
+    /* Video Player Center Stage */
+    .video-stage {
+      position: relative;
+      max-width: 1040px;
+      margin: 0 auto 80px;
+      border-radius: 18px;
+      padding: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 100%);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.6), 0 0 40px rgba(255, 69, 58, 0.15);
+    }
+    .video-inner {
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    .video-inner video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16 / 9;
+    }
+    .video-bar {
+      padding: 16px 24px;
+      background: #090C13;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    /* Beat Breakdown Grid */
+    .beats-section {
+      max-width: 1200px;
+      margin: 0 auto 100px;
+      padding: 0 24px;
+    }
+    .beats-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .beats-header h2 { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .beats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .beat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      position: relative;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .beat-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.2); }
+    .beat-time {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent-red);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .beat-card h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; }
+    .beat-card p { font-size: 0.95rem; color: var(--text-muted); }
+
+    /* Screenshot Gallery */
+    .gallery-section {
+      max-width: 1200px;
+      margin: 0 auto 100px;
+      padding: 0 24px;
+    }
+    .gallery-showcase {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+    @media (max-width: 900px) {
+      .gallery-showcase { grid-template-columns: 1fr; }
+    }
+    .gallery-img {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      padding: 10px;
+    }
+    .gallery-img img { width: 100%; border-radius: 10px; display: block; }
+
+    /* Download Banner */
+    .download-strip {
+      background: radial-gradient(circle at top, rgba(255, 69, 58, 0.15) 0%, transparent 70%), var(--bg-surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 80px 24px;
+      text-align: center;
+    }
+    .download-strip h2 { font-size: 2.6rem; font-weight: 800; margin-bottom: 16px; }
+    .download-strip p { color: var(--text-muted); font-size: 1.1rem; max-width: 500px; margin: 0 auto 32px; }
+    .cta-btn-large {
+      background: var(--accent-red);
+      color: white;
+      padding: 16px 36px;
+      border-radius: 12px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 30px rgba(255, 69, 58, 0.35);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Switcher -->
+  <aside class="top-switcher">
+    <div><strong>UTTER DESIGN EXPLORATION</strong> · Select an Impeccable Mockup to preview:</div>
+    <div class="switcher-tabs">
+      <a href="mockup-1-mixtape.html" class="switcher-tab">1. Mixtape J-Card</a>
+      <a href="mockup-2-studio-video.html" class="switcher-tab active">2. Video-First Cine-Deck</a>
+      <a href="mockup-3-liquid-glass.html" class="switcher-tab">3. Liquid Glass Native</a>
+      <a href="mockup-4-airgap-terminal.html" class="switcher-tab">4. Air-Gapped Terminal</a>
+    </div>
+  </aside>
+
+  <header>
+    <div class="brand">
+      <img src="public/assets/brand/AppIconSource.png" alt="Utter Icon" onerror="this.src='../Assets/AppIconSource.png'">
+      <span>Utter</span>
+    </div>
+    <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg" class="nav-cta">
+      Download Utter 1.2.0 (.dmg)
+    </a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="pill-kicker">
+        <span>● LIVE 16:9 PROMO REEL</span>
+      </div>
+      <h1>
+        Voice dictation that<br>
+        <span>stays on your Mac.</span>
+      </h1>
+      <p>
+        Offline, local Whisper transcription at the press of a key. Watch the 23-second breakdown below.
+      </p>
+
+      <!-- Center Stage Video -->
+      <div class="video-stage">
+        <div class="video-inner">
+          <video controls autoplay muted loop playsinline preload="metadata">
+            <source src="public/assets/promo/Utter-Hype-16x9.mp4" type="video/mp4">
+            <source src="../promo/Utter-Hype-16x9.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+        <div class="video-bar">
+          <span style="color: var(--accent-red)">▶ 1080p 16:9 HYPE REEL</span>
+          <span>130 BPM TAPE GRID · NO CLOUD DELAY</span>
+          <a href="../promo/Utter-Hype-16x9.mp4" target="_blank" style="color: #fff; text-decoration: none;">Download Video ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 Key Moments from the Video -->
+    <section class="beats-section">
+      <div class="beats-header">
+        <h2>What Makes Utter Different</h2>
+        <p style="color: var(--text-muted); font-size: 1.1rem;">Zero telemetry, native Swift speed, and local models.</p>
+      </div>
+
+      <div class="beats-grid">
+        <div class="beat-card">
+          <div class="beat-time">BEAT 01 · ANYWHERE</div>
+          <h3>Hold Fn & Speak</h3>
+          <p>Types wherever your cursor is: Mail, Slack, Notes, Xcode, terminal, or browser. Release to type.</p>
+        </div>
+        <div class="beat-card">
+          <div class="beat-time">BEAT 02 · LOCAL-FIRST</div>
+          <h3>In-Process Whisper</h3>
+          <p>Whisper small.en runs on Apple Metal GPU in memory. Audio is discarded immediately after transcription.</p>
+        </div>
+        <div class="beat-card">
+          <div class="beat-time">BEAT 03 · CASSETTE TIMELINE</div>
+          <h3>Mixtape J-Card</h3>
+          <p>Every day is tracked as Side A & Side B. Re-paste previous dictations or convert to notes with ↩.</p>
+        </div>
+        <div class="beat-card">
+          <div class="beat-time">BEAT 04 · INTELLIGENCE</div>
+          <h3>Dual-Stream Meetings</h3>
+          <p>Records microphone and system audio independently to transcribe Zoom, Teams, and Slack calls on-device.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real Screenshots Showcase -->
+    <section class="gallery-section">
+      <div class="gallery-showcase">
+        <div>
+          <span style="color: var(--accent-red); font-family: var(--font-mono); font-size: 0.82rem; font-weight: 700;">CASSETTE TIMELINE</span>
+          <h2 style="font-size: 2.2rem; margin: 12px 0 16px;">The Mixtape Library</h2>
+          <p style="color: var(--text-muted); font-size: 1.05rem; margin-bottom: 24px;">
+            A custom-painted window inspired by white ruled card stock and navy ink. Morning dictations stay on Side A, afternoon on Side B.
+          </p>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; color: var(--text-muted);">
+            <li>✓ <strong>⌘C</strong> to copy, <strong>↩</strong> to paste again into current app</li>
+            <li>✓ Full text search through every day, note, and call</li>
+            <li>✓ Optional CX-ArtLab robot companion that floats beside the pill</li>
+          </ul>
+        </div>
+        <div class="gallery-img">
+          <img src="public/assets/screenshots/library.webp" alt="Library preview" onerror="this.src='../Assets/screenshots/library.webp'">
+        </div>
+      </div>
+    </section>
+
+    <!-- Download Strip -->
+    <section class="download-strip">
+      <h2>Ready to stop typing?</h2>
+      <p>Download Utter for macOS 14+ on Apple silicon and Intel. Fully open source.</p>
+      <a href="https://github.com/h3x-levi/Utter/releases/download/v1.2.0/Utter-1.2.0.dmg" class="cta-btn-large">
+        Download Utter 1.2.0 (.dmg)
+      </a>
+      <div style="margin-top: 16px; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">
+        192 MB · Bundled Whisper model included · No account required
+      </div>
+    </section>
+  </main>
+</body>
+</html>
