@@ -48,13 +48,16 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [activeScreenshot, setActiveScreenshot] = useState('library');
 
-  // Community Reviews State
+  // Community Reviews State (Strictly Real User-Submitted Data Only)
   const [reviews, setReviews] = useState(() => {
     try {
-      const saved = localStorage.getItem('utter_community_reviews');
-      return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+      // Purge any legacy mock reviews
+      localStorage.removeItem('utter_community_reviews');
+      localStorage.removeItem('utter_upvoted_reviews');
+      const saved = localStorage.getItem('utter_community_feed_real');
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_REVIEWS;
+      return [];
     }
   });
   const [activeReviewTag, setActiveReviewTag] = useState('All');
@@ -172,19 +175,17 @@ export default function App() {
     if (!newComment.name || !newComment.content) return;
     setIsPostingComment(true);
 
-    const initials = newComment.name.trim().split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'UT';
+    const initials = newComment.name.trim().split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) || 'U';
     const cleanHandle = newComment.handle ? (newComment.handle.startsWith('@') ? newComment.handle : `@${newComment.handle}`) : `@${newComment.name.toLowerCase().replace(/\s+/g, '_')}`;
 
     const created = {
-      id: `rev-${Date.now()}`,
+      id: `user-${Date.now()}`,
       name: newComment.name.trim(),
       handle: cleanHandle,
-      role: newComment.role.trim() || 'Verified Builder',
+      role: newComment.role.trim() || 'Community Member',
       platform: newComment.platform,
       tag: newComment.tag,
-      rating: newComment.rating,
       date: 'Just now',
-      likes: 1,
       avatar: initials,
       content: newComment.content.trim()
     };
@@ -192,7 +193,7 @@ export default function App() {
     const updated = [created, ...reviews];
     setReviews(updated);
     try {
-      localStorage.setItem('utter_community_reviews', JSON.stringify(updated));
+      localStorage.setItem('utter_community_feed_real', JSON.stringify(updated));
     } catch {}
 
     setNewComment({
@@ -200,13 +201,12 @@ export default function App() {
       handle: '',
       role: '',
       platform: 'macOS (Apple Silicon)',
-      tag: 'Loved It 🔥',
+      tag: 'Feature Wish 💡',
       rating: 5,
       content: ''
     });
     setIsPostingComment(false);
     setCommentSuccess(true);
-    setCarouselIndex(0);
     setTimeout(() => setCommentSuccess(false), 5000);
   };
 
@@ -638,7 +638,7 @@ export default function App() {
               <div className="bg-[#EDF1F7] dark:bg-[#151924] border border-[rgba(37,78,219,0.14)] dark:border-[rgba(128,158,255,0.14)] rounded-2xl p-6 sm:p-8">
                 <div className="flex items-center justify-between pb-4 mb-6 border-b border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)]">
                   <span className="font-display font-extrabold text-xl text-[#141E3C] dark:text-white">Side A · Morning Session</span>
-                  <span className="font-mono text-xs font-semibold text-[#254EDB] dark:text-[#5E82FF]">RUNNING TIME: 42 MIN</span>
+                  <span className="font-mono text-xs font-semibold text-[#254EDB] dark:text-[#5E82FF]">CORE ENGINE TRACKS</span>
                 </div>
 
                 <div className="space-y-5">
@@ -672,7 +672,7 @@ export default function App() {
               <div className="bg-[#EDF1F7] dark:bg-[#151924] border border-[rgba(37,78,219,0.14)] dark:border-[rgba(128,158,255,0.14)] rounded-2xl p-6 sm:p-8">
                 <div className="flex items-center justify-between pb-4 mb-6 border-b border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)]">
                   <span className="font-display font-extrabold text-xl text-[#141E3C] dark:text-white">Side B · Afternoon Session</span>
-                  <span className="font-mono text-xs font-semibold text-[#254EDB] dark:text-[#5E82FF]">RUNNING TIME: 38 MIN</span>
+                  <span className="font-mono text-xs font-semibold text-[#254EDB] dark:text-[#5E82FF]">ADVANCED WORKFLOWS</span>
                 </div>
 
                 <div className="space-y-5">
@@ -740,108 +740,54 @@ export default function App() {
           </div>
         </section>
 
-        {/* COMMUNITY TAPE DECK & REVIEWS SECTION */}
+        {/* COMMUNITY FEEDBACK & FEATURE REQUESTS (100% REAL - NO FAKE DATA) */}
         <section className="max-w-[1520px] mx-auto px-6 sm:px-12 my-28" id="community">
           <div className="flex flex-wrap items-end justify-between gap-6 mb-10">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-xs font-mono text-[#D83125] font-bold mb-3 shadow-sm">
                 <MessageSquare className="w-3.5 h-3.5" />
-                <span>COMMUNITY TAPE DECK · BUILDER NOTES</span>
+                <span>COMMUNITY FEEDBACK & FEATURE REQUESTS</span>
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight font-display text-[#141E3C] dark:text-white">
-                What builders are saying.
+                Community Notes.
               </h2>
             </div>
             <p className="text-base sm:text-lg text-[#4B587E] dark:text-[#A3AFCC] max-w-[560px]">
-              Real impressions, speedups, and feature wishes from developers, writers, and power users dictating with Utter.
+              Have a question, platform request (Windows 11 / Linux), or early suggestion? Post your note below. Notes appear live for everyone.
             </p>
           </div>
 
-          {/* Filter Pills & Carousel Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-            <div className="flex flex-wrap items-center gap-2">
-              {['All', 'Loved It', 'Feature Wish', 'Performance', 'Privacy Win'].map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => {
-                    setActiveReviewTag(tag);
-                    setCarouselIndex(0);
-                  }}
-                  className={`px-4 py-2 rounded-full text-xs font-bold font-display transition-all ${
-                    activeReviewTag === tag
-                      ? 'bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] shadow-sm'
-                      : 'bg-white dark:bg-[#1A1F2C] text-[#4B587E] dark:text-[#A3AFCC] border border-[rgba(37,78,219,0.14)] dark:border-[rgba(128,158,255,0.14)] hover:border-[#254EDB]'
-                  }`}
-                >
-                  {tag === 'All' ? `All Notes (${reviews.length})` : tag}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={prevSlide}
-                aria-label="Previous review"
-                className="w-10 h-10 rounded-full border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] flex items-center justify-center hover:border-[#254EDB] transition-all"
-              >
-                <ChevronLeft className="w-5 h-5 text-[#141E3C] dark:text-white" />
-              </button>
-              <span className="font-mono text-xs text-[#6C789B] px-2">
-                {filteredReviews.length > 0 ? `${(carouselIndex % filteredReviews.length) + 1} / ${filteredReviews.length}` : '0 / 0'}
-              </span>
-              <button
-                onClick={nextSlide}
-                aria-label="Next review"
-                className="w-10 h-10 rounded-full border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] flex items-center justify-center hover:border-[#254EDB] transition-all"
-              >
-                <ChevronRight className="w-5 h-5 text-[#141E3C] dark:text-white" />
-              </button>
-            </div>
-          </div>
-
-          {/* Carousel Grid Cards */}
-          <div 
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12"
-            onMouseEnter={() => setIsCarouselHovered(true)}
-            onMouseLeave={() => setIsCarouselHovered(false)}
-          >
-            {filteredReviews.length === 0 ? (
-              <div className="col-span-full py-12 px-6 rounded-2xl bg-white dark:bg-[#1A1F2C] border-2 border-dashed border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] text-center">
-                <div className="w-12 h-12 rounded-full bg-[rgba(37,78,219,0.1)] text-[#254EDB] dark:text-[#5E82FF] flex items-center justify-center mx-auto mb-3 text-xl">
-                  🎙️
+          {/* Live Feed Cards (Only renders if real user submitted comments exist) */}
+          <div className="mb-12">
+            {reviews.length === 0 ? (
+              <div className="py-14 px-6 rounded-3xl bg-white dark:bg-[#1A1F2C] border-2 border-dashed border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] text-center max-w-xl mx-auto shadow-sm">
+                <div className="w-12 h-12 rounded-full bg-[rgba(37,78,219,0.1)] text-[#254EDB] dark:text-[#5E82FF] flex items-center justify-center mx-auto mb-4 text-xl">
+                  💬
                 </div>
-                <h4 className="font-bold font-display text-lg text-[#141E3C] dark:text-white mb-1">
-                  The Community Tape Deck is fresh.
+                <h4 className="font-bold font-display text-lg text-[#141E3C] dark:text-white mb-2">
+                  No community notes yet.
                 </h4>
-                <p className="text-sm text-[#4B587E] dark:text-[#A3AFCC] max-w-md mx-auto mb-4">
-                  Have questions, platform wishlist items (Windows 11 / Linux), or early feedback? Drop your note below to be the first voice on the deck!
+                <p className="text-sm text-[#4B587E] dark:text-[#A3AFCC] mb-5 leading-relaxed">
+                  Be the first to post a feature request, ask a question, or leave feedback using the form below.
                 </p>
                 <a
                   href="#comm-form"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] text-xs font-bold hover:bg-[#254EDB] transition-all"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] text-xs font-bold hover:bg-[#254EDB] transition-all"
                 >
-                  <span>Drop the First Community Note</span>
+                  <span>Post the First Note</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </a>
               </div>
             ) : (
-              // Display 3 responsive cards starting at carouselIndex
-              [0, 1, 2].map(offset => {
-                const idx = (carouselIndex + offset) % filteredReviews.length;
-                const review = filteredReviews[idx];
-                if (!review) return null;
-                const isLiked = upvotedIds.includes(review.id);
-
-                return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {reviews.map(review => (
                   <div
-                    key={`${review.id}-${offset}`}
-                    className="bg-white dark:bg-[#1A1F2C] border-2 border-[rgba(37,78,219,0.14)] dark:border-[rgba(128,158,255,0.14)] rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group"
+                    key={review.id}
+                    className="bg-white dark:bg-[#1A1F2C] border-2 border-[rgba(37,78,219,0.14)] dark:border-[rgba(128,158,255,0.14)] rounded-2xl p-6 sm:p-7 shadow-sm flex flex-col justify-between relative overflow-hidden"
                   >
-                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#D83125] via-[#EDB123] to-[#254EDB] opacity-80"></div>
-
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#254EDB]"></div>
                     <div>
-                      {/* Author Header */}
-                      <div className="flex items-start justify-between gap-3 mb-4 mt-1">
+                      <div className="flex items-center justify-between mb-4 mt-1">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-[#EDF1F7] dark:bg-[#151924] border border-[rgba(37,78,219,0.16)] flex items-center justify-center font-bold text-xs font-mono text-[#254EDB] dark:text-[#5E82FF]">
                             {review.avatar}
@@ -855,201 +801,146 @@ export default function App() {
                             </div>
                           </div>
                         </div>
-
-                        {/* 5-Star Rating */}
-                        <div className="flex items-center gap-0.5 text-[#EDB123]">
-                          {[...Array(review.rating || 5)].map((_, i) => (
-                            <Star key={i} className="w-3.5 h-3.5 fill-current" />
-                          ))}
-                        </div>
                       </div>
 
-                      {/* Badges Row */}
                       <div className="flex flex-wrap items-center gap-2 mb-4">
                         <span className="font-mono text-[0.7rem] px-2.5 py-0.5 rounded-full bg-[#EDF1F7] dark:bg-[#151924] border border-[rgba(37,78,219,0.14)] text-[#141E3C] dark:text-white font-semibold">
                           {review.platform}
                         </span>
-                        <span className={`font-mono text-[0.7rem] px-2.5 py-0.5 rounded-full font-bold ${
-                          review.tag.includes('Loved')
-                            ? 'bg-[rgba(216,49,37,0.1)] text-[#D83125]'
-                            : review.tag.includes('Feature')
-                            ? 'bg-[rgba(237,177,35,0.1)] text-[#EDB123]'
-                            : review.tag.includes('Performance')
-                            ? 'bg-[rgba(37,78,219,0.1)] text-[#254EDB] dark:text-[#5E82FF]'
-                            : 'bg-[rgba(16,185,129,0.1)] text-[#10B981]'
-                        }`}>
+                        <span className="font-mono text-[0.7rem] px-2.5 py-0.5 rounded-full bg-[rgba(37,78,219,0.1)] text-[#254EDB] dark:text-[#5E82FF] font-bold">
                           {review.tag}
                         </span>
                       </div>
 
-                      {/* Content */}
-                      <p className="text-sm text-[#141E3C] dark:text-white/90 leading-relaxed font-sans mb-6">
+                      <p className="text-sm text-[#141E3C] dark:text-white/90 leading-relaxed font-sans mb-4">
                         "{review.content}"
                       </p>
                     </div>
 
-                    {/* Card Footer */}
-                    <div className="pt-4 border-t border-dashed border-[rgba(37,78,219,0.12)] dark:border-[rgba(128,158,255,0.14)] flex items-center justify-between text-xs font-mono">
-                      <span className="text-[#6C789B] dark:text-[#7A87A6]">
-                        {review.role}
-                      </span>
-                      <button
-                        onClick={() => handleUpvote(review.id)}
-                        disabled={isLiked}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-bold transition-all ${
-                          isLiked
-                            ? 'bg-[rgba(16,185,129,0.1)] border-[#10B981] text-[#10B981]'
-                            : 'bg-[#EDF1F7] dark:bg-[#151924] border-[rgba(37,78,219,0.16)] text-[#4B587E] dark:text-[#A3AFCC] hover:border-[#254EDB]'
-                        }`}
-                      >
-                        <ThumbsUp className="w-3 h-3" />
-                        <span>{review.likes}</span>
-                      </button>
+                    <div className="pt-3 border-t border-dashed border-[rgba(37,78,219,0.12)] text-xs font-mono text-[#6C789B] dark:text-[#7A87A6]">
+                      {review.role}
                     </div>
                   </div>
-                );
-              })
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Interactive "Leave a Review / Drop Feedback" Box */}
-          <div id="comm-form" className="bg-[#EDF1F7] dark:bg-[#151924] border-2 border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] rounded-3xl p-7 sm:p-10">
-            <div className="max-w-3xl mx-auto">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-[#D83125] uppercase tracking-wider mb-2">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Public Tape Deck</span>
-                </div>
-                <h3 className="text-2xl sm:text-3xl font-bold font-display text-[#141E3C] dark:text-white mb-2">
-                  Drop your note to the community.
-                </h3>
-                <p className="text-sm text-[#4B587E] dark:text-[#A3AFCC]">
-                  Tell others how Utter speeds up your work, or submit what you would love improved next.
-                </p>
+          {/* Clean "Leave a Community Note" Form */}
+          <div id="comm-form" className="bg-[#EDF1F7] dark:bg-[#151924] border-2 border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] rounded-3xl p-7 sm:p-10 max-w-3xl mx-auto">
+            <div className="text-center mb-7">
+              <div className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-[#D83125] uppercase tracking-wider mb-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Public Community Board</span>
               </div>
+              <h3 className="text-2xl font-bold font-display text-[#141E3C] dark:text-white mb-1.5">
+                Leave a Note or Feature Request
+              </h3>
+              <p className="text-sm text-[#4B587E] dark:text-[#A3AFCC]">
+                Share your platform suggestions, workflows, or feedback directly with the project.
+              </p>
+            </div>
 
-              {commentSuccess && (
-                <div className="mb-6 p-4 rounded-xl bg-[rgba(16,185,129,0.12)] border border-[#10B981] text-[#10B981] text-sm font-bold flex items-center justify-center gap-2 animate-fadeIn">
-                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                  <span>Your note has been posted live to the community tape deck above!</span>
-                </div>
-              )}
+            {commentSuccess && (
+              <div className="mb-6 p-4 rounded-xl bg-[rgba(16,185,129,0.12)] border border-[#10B981] text-[#10B981] text-sm font-bold flex items-center justify-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                <span>Your note has been posted to the board above!</span>
+              </div>
+            )}
 
-              <form onSubmit={handlePostComment} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                      Your Name / Handle <span className="text-[#D83125]">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newComment.name}
-                      onChange={(e) => setNewComment({ ...newComment, name: e.target.value })}
-                      placeholder="e.g. Liam Scott or @liam"
-                      className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                      Your Role / Tagline
-                    </label>
-                    <input
-                      type="text"
-                      value={newComment.role}
-                      onChange={(e) => setNewComment({ ...newComment, role: e.target.value })}
-                      placeholder="e.g. Backend Dev / Writer"
-                      className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                      Platform
-                    </label>
-                    <select
-                      value={newComment.platform}
-                      onChange={(e) => setNewComment({ ...newComment, platform: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
-                    >
-                      <option>macOS (Apple Silicon)</option>
-                      <option>macOS (Intel Core)</option>
-                      <option>Windows 11 Wishlist</option>
-                      <option>Linux Wishlist</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                      Category Tag
-                    </label>
-                    <select
-                      value={newComment.tag}
-                      onChange={(e) => setNewComment({ ...newComment, tag: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
-                    >
-                      <option>Loved It 🔥</option>
-                      <option>Feature Wish 💡</option>
-                      <option>Performance ⚡</option>
-                      <option>Privacy Win 🛡️</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                      Rating
-                    </label>
-                    <div className="flex items-center gap-1.5 py-2">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          key={star}
-                          type="button"
-                          onClick={() => setNewComment({ ...newComment, rating: star })}
-                          className="focus:outline-none"
-                        >
-                          <Star className={`w-5 h-5 ${star <= newComment.rating ? 'text-[#EDB123] fill-current' : 'text-gray-300 dark:text-gray-600'}`} />
-                        </button>
-                      ))}
-                      <span className="font-mono text-xs font-bold ml-2 text-[#4B587E] dark:text-[#A3AFCC]">
-                        {newComment.rating}/5
-                      </span>
-                    </div>
-                  </div>
+            <form onSubmit={handlePostComment} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
+                    Your Name / Handle <span className="text-[#D83125]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newComment.name}
+                    onChange={(e) => setNewComment({ ...newComment, name: e.target.value })}
+                    placeholder="e.g. Alex or @alex_dev"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
-                    Your Note or Feature Wish <span className="text-[#D83125]">*</span>
+                    Your Role / Setup
                   </label>
-                  <textarea
-                    required
-                    rows="3"
-                    value={newComment.content}
-                    onChange={(e) => setNewComment({ ...newComment, content: e.target.value })}
-                    placeholder="Tell the community how you use Utter, what speedups you noticed, or what you would love built in the next update..."
-                    className="w-full px-4 py-3 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB] transition-all resize-y"
-                  ></textarea>
+                  <input
+                    type="text"
+                    value={newComment.role}
+                    onChange={(e) => setNewComment({ ...newComment, role: e.target.value })}
+                    placeholder="e.g. Software Engineer / Writer"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
+                  />
                 </div>
+              </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                  <div className="text-xs text-[#6C789B] dark:text-[#7A87A6]">
-                    Community notes appear immediately on the tape deck above for everyone to read.
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isPostingComment}
-                    className="bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] px-6 py-3 rounded-xl font-bold font-display text-sm hover:bg-[#254EDB] dark:hover:bg-[#E2E8F0] transition-all shadow-sm flex items-center gap-2"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
+                    Platform
+                  </label>
+                  <select
+                    value={newComment.platform}
+                    onChange={(e) => setNewComment({ ...newComment, platform: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
                   >
-                    <span>Post Community Note</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                    <option>macOS (Apple Silicon)</option>
+                    <option>macOS (Intel Core)</option>
+                    <option>Windows 11 Wishlist</option>
+                    <option>Linux Wishlist</option>
+                  </select>
                 </div>
-              </form>
-            </div>
+
+                <div>
+                  <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
+                    Topic Tag
+                  </label>
+                  <select
+                    value={newComment.tag}
+                    onChange={(e) => setNewComment({ ...newComment, tag: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB]"
+                  >
+                    <option>Feature Wish 💡</option>
+                    <option>General Feedback 💬</option>
+                    <option>Hardware / OS Request 💻</option>
+                    <option>Question ❓</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold font-display uppercase tracking-wider text-[#141E3C] dark:text-white mb-1.5">
+                  Your Note or Request <span className="text-[#D83125]">*</span>
+                </label>
+                <textarea
+                  required
+                  rows="3"
+                  value={newComment.content}
+                  onChange={(e) => setNewComment({ ...newComment, content: e.target.value })}
+                  placeholder="What would you love to see built, or what questions do you have about on-device speech?"
+                  className="w-full px-4 py-3 rounded-xl border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)] bg-white dark:bg-[#1A1F2C] text-sm text-[#141E3C] dark:text-white focus:outline-none focus:border-[#254EDB] transition-all resize-y"
+                ></textarea>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                <div className="text-xs text-[#6C789B] dark:text-[#7A87A6]">
+                  Notes appear directly on the community board above.
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isPostingComment}
+                  className="bg-[#141E3C] dark:bg-white text-white dark:text-[#0E1118] px-6 py-3 rounded-xl font-bold font-display text-sm hover:bg-[#254EDB] dark:hover:bg-[#E2E8F0] transition-all shadow-sm flex items-center gap-2"
+                >
+                  <span>Post Community Note</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
           </div>
         </section>
 
