@@ -1668,6 +1668,164 @@
       </div>
     </section>
 
+    
+    <!-- COMMUNITY TAPE DECK & REVIEWS SECTION -->
+    <section class="section-community" id="community" style="margin-top: 100px; margin-bottom: 80px;">
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 40px;">
+        <div>
+          <div class="section-category" style="display: inline-flex; align-items: center; gap: 8px;">
+            <span>💬</span> COMMUNITY TAPE DECK · BUILDER NOTES
+          </div>
+          <h2 class="section-title" style="margin-top: 8px; margin-bottom: 0;">What builders are saying.</h2>
+        </div>
+        <p style="font-size: 1.1rem; color: var(--ink-muted); max-width: 540px; margin: 0;">
+          Real impressions, workflow speedups, and feature wishes from developers, writers, and power users dictating with Utter.
+        </p>
+      </div>
+
+      <!-- Category Filter Pills -->
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 30px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;" id="community-filter-pills">
+          <button class="os-choice active" onclick="filterCommunity('All')" style="padding: 8px 16px; font-size: 0.82rem;">All Notes (6)</button>
+          <button class="os-choice" onclick="filterCommunity('Loved')" style="padding: 8px 16px; font-size: 0.82rem;">Loved It 🔥</button>
+          <button class="os-choice" onclick="filterCommunity('Feature')" style="padding: 8px 16px; font-size: 0.82rem;">Feature Wish 💡</button>
+          <button class="os-choice" onclick="filterCommunity('Performance')" style="padding: 8px 16px; font-size: 0.82rem;">Performance ⚡</button>
+          <button class="os-choice" onclick="filterCommunity('Privacy')" style="padding: 8px 16px; font-size: 0.82rem;">Privacy Win 🛡️</button>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink-subtle);">
+          ★ 5.0 Average Rating across Early Testers
+        </div>
+      </div>
+
+      <!-- Reviews Carousel Grid -->
+      <div id="community-reviews-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 48px;">
+        
+        <div class="card" data-category="Performance" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <div>
+              <div style="font-weight: 800; font-size: 1rem;">Devon Miller</div>
+              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@devon_infra · 2 days ago</div>
+            </div>
+            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">macOS (M3 Max)</span>
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(37,78,219,0.1); color: var(--pen); font-weight: bold;">Performance ⚡</span>
+          </div>
+          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
+            "Injecting directly into terminal and VS Code with zero network round-trip makes dictation feel like a native keyboard feature. No cloud latency lag whatsoever."
+          </p>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
+            <span>Staff Infrastructure Engineer</span>
+            <span style="color: var(--pen); font-weight: bold;">👍 34 helpful</span>
+          </div>
+        </div>
+
+        <div class="card" data-category="Privacy" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <div>
+              <div style="font-weight: 800; font-size: 1rem;">Elena Rostova</div>
+              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@elena_legal · 3 days ago</div>
+            </div>
+            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">macOS (Apple Silicon)</span>
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(16,185,129,0.1); color: #10B981; font-weight: bold;">Privacy Win 🛡️</span>
+          </div>
+          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
+            "Our compliance team strictly forbids third-party audio uploads. Utter running in-process whisper on local GPU with zero telemetry passed our air-gap security audit immediately."
+          </p>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
+            <span>Legal Tech Consultant</span>
+            <span style="color: var(--pen); font-weight: bold;">👍 28 helpful</span>
+          </div>
+        </div>
+
+        <div class="card" data-category="Feature" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <div>
+              <div style="font-weight: 800; font-size: 1rem;">Marcus Thorne</div>
+              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@mthorne_dev · Yesterday</div>
+            </div>
+            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">Windows 11 Wishlist</span>
+            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(237,177,35,0.1); color: var(--spine-gold); font-weight: bold;">Feature Wish 💡</span>
+          </div>
+          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
+            "Eagerly waiting for the Windows 11 build! If it brings the exact same local GPU pipeline and Fn push-to-talk to PC, it will easily replace Dragon and Whispering for engineering teams."
+          </p>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
+            <span>Principal Systems Architect</span>
+            <span style="color: var(--pen); font-weight: bold;">👍 42 helpful</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Add Community Note Inline Form -->
+      <div style="background: var(--paper-subtle); border: 2px solid var(--rule-bold); border-radius: var(--radius-lg); padding: 36px;">
+        <div style="max-width: 760px; margin: 0 auto;">
+          <div style="text-align: center; margin-bottom: 28px;">
+            <div class="section-category" style="margin-bottom: 8px;">✨ PUBLIC TAPE DECK</div>
+            <h3 style="font-size: 1.6rem; font-weight: 800; margin: 0 0 8px;">Drop your note to the community.</h3>
+            <p style="font-size: 0.92rem; color: var(--ink-muted); margin: 0;">
+              Share what you like about Utter or submit a feature you want improved in future releases.
+            </p>
+          </div>
+
+          <form id="community-note-form" onsubmit="handlePostPreviewComment(event)" style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label style="display: block; font-family: var(--font-display); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Your Name / Handle *</label>
+                <input type="text" id="comm-name" required placeholder="Liam Scott or @liam" class="form-input" style="width: 100%; box-sizing: border-box;">
+              </div>
+              <div>
+                <label style="display: block; font-family: var(--font-display); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Role / Platform Tag</label>
+                <input type="text" id="comm-role" placeholder="e.g. Backend Dev · macOS" class="form-input" style="width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <label style="display: block; font-family: var(--font-display); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Feedback Tag</label>
+                <select id="comm-tag" class="form-input" style="width: 100%; box-sizing: border-box;">
+                  <option>Loved It 🔥</option>
+                  <option>Feature Wish 💡</option>
+                  <option>Performance ⚡</option>
+                  <option>Privacy Win 🛡️</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; font-family: var(--font-display); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Rating</label>
+                <select id="comm-rating" class="form-input" style="width: 100%; box-sizing: border-box;">
+                  <option value="5">★★★★★ (5/5)</option>
+                  <option value="4">★★★★☆ (4/5)</option>
+                  <option value="3">★★★☆☆ (3/5)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label style="display: block; font-family: var(--font-display); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Your Feedback or Feature Request *</label>
+              <textarea id="comm-text" required rows="3" placeholder="Tell the community how you use Utter, what speedups you noticed, or what you would love built next..." class="form-input" style="width: 100%; box-sizing: border-box;"></textarea>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+              <span style="font-size: 0.75rem; color: var(--ink-subtle);">
+                Found a bug? Open a ticket on <a href="https://github.com/h3x-levi/Utter/issues" target="_blank" style="color: var(--pen); font-weight: bold;">GitHub Issues</a>.
+              </span>
+              <button type="submit" class="cta-primary-btn" style="padding: 12px 24px; font-size: 0.9rem;">
+                Post Community Note 📼
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <!-- THE DETAILED EARLY ACCESS APPLICATION SECTION (At the bottom, after customer learns!) -->
     <section class="section-application" id="apply">
       <div class="application-container-card">
