@@ -16,6 +16,7 @@ struct GeneralSettingsContent: View {
     }
 
     var body: some View {
+        AccountSettingsSection()
         SettingsSection("Look", detail: "light or dark") {
             SettingsRow("Appearance", "System follows the Light or Dark setting on your Mac.") {
                 SettingsChoice(title: "Appearance", selection: model.appearance,
@@ -44,10 +45,6 @@ struct GeneralSettingsContent: View {
                 SettingsChoice(title: "When you dictate into Utter", selection: model.preference(\.captureAppendsToOpenNote),
                                options: [(true, "Add to open note"), (false, "New note")])
             }
-            SettingsRow("Setup", "Walk through the permissions and a first dictation again.") {
-                Button("Run setup again") { model.runSetupAgain() }
-                    .buttonStyle(.pen(.outline, .small))
-            }
         }
         HelpSettingsContent(model: model)
             .onAppear { model.refreshLaunchAtLogin() }
@@ -57,6 +54,33 @@ struct GeneralSettingsContent: View {
                         _ key: ReferenceWritableKeyPath<UserData, Bool>) -> some View {
         SettingsRow(title, detail) {
             Toggle(title, isOn: model.preference(key)).toggleStyle(.settingsSwitch)
+        }
+    }
+}
+
+/// Who is signed in. Signing out of a required sign-in quits, so the next launch asks again.
+private struct AccountSettingsSection: View {
+    @ObservedObject private var session = AccountSession.shared
+
+    var body: some View {
+        SettingsSection("Account", detail: "your Google account") {
+            if let account = session.account {
+                SettingsRow(account.name, account.email) {
+                    Button(session.isRequired ? "Sign out and quit" : "Sign out") {
+                        let quit = session.isRequired
+                        session.signOut()
+                        if quit { NSApp.terminate(nil) }
+                    }
+                    .buttonStyle(.pen(.outline, .small))
+                }
+            } else {
+                SettingsRow("Not signed in", session.isRequired
+                            ? "Sign in with Google to use Utter."
+                            : "Google sign-in isn\u{2019}t connected yet.") {
+                    Button("Sign in") { AppDelegate.current?.showSignIn() }
+                        .buttonStyle(.pen(.outline, .small))
+                }
+            }
         }
     }
 }
@@ -73,6 +97,19 @@ struct SpeechSettingsContent: View {
     }
 
     var body: some View {
+        let mics = AudioInputs.all()
+        SettingsSection("Microphone", detail: "what Utter listens to") {
+            SettingsRow("Record from", "Meetings use the call app\u{2019}s microphone when Utter can tell which one it is.") {
+                SettingsPick("Microphone", value: mics.first { $0.id == userData.microphoneUID }?.name ?? "System default") {
+                    Picker("Microphone", selection: model.preference(\.microphoneUID)) {
+                        Text("System default").tag("")
+                        ForEach(mics) { Text($0.name).tag($0.id) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+            }
+        }
         if WhistleEngine.isAvailable {
             SettingsSection("Engine", detail: "how Utter hears you") {
                 SettingsRow("Engine", userData.speechEngine == .whistle

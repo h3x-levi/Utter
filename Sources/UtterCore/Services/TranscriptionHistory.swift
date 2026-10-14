@@ -25,13 +25,6 @@ package struct TranscriptionEntry: Identifiable, Sendable {
     }
 }
 
-/// Groups entries by date for display
-struct HistoryGroup: Identifiable {
-    let id: String // date string key
-    let label: String
-    let entries: [TranscriptionEntry]
-}
-
 package class TranscriptionHistory: ObservableObject {
     private static let live = TranscriptionHistory()
     nonisolated(unsafe) static var preview: TranscriptionHistory?
@@ -49,30 +42,21 @@ package class TranscriptionHistory: ObservableObject {
     /// touched from `add`, `delete`, `deleteAll` and `load`, and a future fifth
     /// caller that forgot to clear the cache would serve a stale list with no
     /// visible cause.
-    @Published package var entries: [TranscriptionEntry] = [] {
-        didSet { groupCache = nil }
-    }
+    @Published package var entries: [TranscriptionEntry] = []
     @Published package var totalWords: Int = 0
-    @Published var streakDays: Int = 0
 
     /// Average words per saved dictation. Entries saved before durations were
     /// recorded have none, so words per minute here would be fabricated precision.
-    var averageWordsPerDictation: String {
-        guard !entries.isEmpty else { return "\u{2014}" }
-        let mean = Double(totalWords) / Double(entries.count)
-        return mean.formatted(.number.precision(.fractionLength(0)))
-    }
 
     private let storageDir: URL?
 
     private var historyURL: URL? { storageDir?.appendingPathComponent("history.json") }
-    private var streakURL: URL? { storageDir?.appendingPathComponent("streak.json") }
 
     init(storageDir: URL? = AppDirectory.support) {
         self.storageDir = storageDir
         load()
-        activeDays = Self.readStreak(at: streakURL)
-        calculateStreak()
+        // The streak is no longer kept; drop the file older builds wrote.
+        if let storageDir { try? FileManager.default.removeItem(at: storageDir.appendingPathComponent("streak.json")) }
     }
 
     // MARK: - Public API
@@ -83,8 +67,6 @@ package class TranscriptionHistory: ObservableObject {
         DispatchQueue.main.async {
             self.entries.insert(entry, at: 0)
             self.totalWords += entry.wordCount
-            self.recordToday()
-            self.calculateStreak()
             self.saveHistory()
         }
     }
@@ -97,139 +79,15 @@ package class TranscriptionHistory: ObservableObject {
         }
     }
 
-    /// Erase all history, including the streak record. Used by
+    /// Erase all history. Used by
     /// Privacy → Clear All Data, which must leave nothing behind.
     package func deleteAll() {
         DispatchQueue.main.async {
             self.entries.removeAll()
             self.totalWords = 0
-            self.streakDays = 0
-            self.activeDays = []
             self.saveHistory()
             self.flushPendingWrites()
         }
-    }
-
-    /// Group entries by date for display
-    /// Cached date grouping, rebuilt when `entries` changes or the day rolls over.
-    ///
-    /// This was a computed property, so a SwiftUI body reading it re-ran a
-    /// `Dictionary(grouping:)` plus a sort over every entry on every layout pass  - 
-    /// 300+ entries, many times a second while scrolling. The cache is invalidated
-    /// from `entries.didSet`.
-    private var groupCache: [HistoryGroup]?
-
-    /// When the cached *labels* stop being true.
-    ///
-    /// `dateLabel` is relative to now - TODAY, YESTERDAY, a weekday - so entries
-    /// alone are not enough to key the cache on. Left to `entries.didSet`, a window
-    /// open across midnight kept showing yesterday's dictations under a "TODAY"
-    /// heading until the user happened to dictate again, which could be hours. The
-    /// uncached computed property had corrected itself on the next layout pass.
-    ///
-    /// A deadline rather than re-deriving the day on every read: this is compared on
-    /// the render path, and one `Date()` and a comparison is what the cache exists to
-    /// protect. The expiry itself is only computed when the groups are rebuilt.
-    private var groupCacheExpiry: Date?
-
-    var groupedByDate: [HistoryGroup] {
-        if let groupCache, let groupCacheExpiry, Date() < groupCacheExpiry {
-            return groupCache
-        }
-        let built = buildGroups()
-        groupCache = built
-        groupCacheExpiry = Self.nextMidnight(after: Date())
-        return built
-    }
-
-    /// The next local midnight strictly after `date`.
-    ///
-    /// Derived by adding a calendar day to the start of `date`'s day rather than
-    /// adding 86,400 seconds: on a DST transition a local day is 23 or 25 hours long,
-    /// and a fixed-seconds deadline would land an hour either side of midnight  - 
-    /// exactly the case where a "TODAY" label is wrong and nobody would think to
-    /// look. Falls back to +24h only if the calendar cannot answer at all.
-    static func nextMidnight(after date: Date, calendar: Calendar = .current) -> Date {
-        let startOfDay = calendar.startOfDay(for: date)
-        return calendar.date(byAdding: .day, value: 1, to: startOfDay)
-            ?? startOfDay.addingTimeInterval(86_400)
-    }
-
-    private func buildGroups() -> [HistoryGroup] {
-        let cal = Calendar.current
-        let grouped = Dictionary(grouping: entries) { entry -> String in
-            let comps = cal.dateComponents([.year, .month, .day], from: entry.timestamp)
-            return "\(comps.year!)-\(comps.month!)-\(comps.day!)"
-        }
-
-        return grouped.map { key, entries in
-            let label = dateLabel(for: entries.first?.timestamp ?? Date())
-            return HistoryGroup(id: key, label: label, entries: entries)
-        }
-        .sorted { g1, g2 in
-            (g1.entries.first?.timestamp ?? .distantPast) > (g2.entries.first?.timestamp ?? .distantPast)
-        }
-    }
-
-    private func dateLabel(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "TODAY" }
-        if cal.isDateInYesterday(date) { return "YESTERDAY" }
-
-        let days = cal.dateComponents([.day], from: date, to: Date()).day ?? 0
-        if days < 7 {
-            let fmt = DateFormatter()
-            fmt.dateFormat = "EEEE" // e.g. "Monday"
-            return fmt.string(from: date).uppercased()
-        }
-
-        let fmt = DateFormatter()
-        fmt.dateFormat = "MMMM d, yyyy"
-        return fmt.string(from: date).uppercased()
-    }
-
-    // MARK: - Streak
-
-    private var activeDays: Set<String> = [] {
-        didSet { saveStreak() }
-    }
-
-    private static func readStreak(at url: URL?) -> Set<String> {
-        guard let url, let data = try? Data(contentsOf: url),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else { return [] }
-        return Set(arr)
-    }
-
-    private func saveStreak() {
-        guard let destination = streakURL,
-              let data = try? JSONSerialization.data(withJSONObject: activeDays.sorted()) else { return }
-        Self.persistenceQueue.async {
-            do { try data.write(to: destination, options: .atomic) }
-            catch { print("⚠️ Could not write streak: \(error.localizedDescription)") }
-        }
-    }
-
-    private func recordToday() {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        let today = fmt.string(from: Date())
-        if !activeDays.contains(today) { activeDays.insert(today) }
-    }
-
-    private func calculateStreak() {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        let days = activeDays
-        guard !days.isEmpty else { streakDays = 0; return }
-
-        var streak = 0
-        var date = Date()
-        let cal = Calendar.current
-        while days.contains(fmt.string(from: date)) {
-            streak += 1
-            date = cal.date(byAdding: .day, value: -1, to: date)!
-        }
-        streakDays = streak
     }
 
     // MARK: - Persistence

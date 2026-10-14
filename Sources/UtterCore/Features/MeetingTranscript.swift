@@ -70,6 +70,32 @@ enum MeetingTranscript {
         "\(heading(label)) \(text)"
     }
 
+    /// True when a microphone turn is the call itself, picked up from the Mac's speakers.
+    ///
+    /// Compared on word pairs, not single words: a real reply shares "the", "we" and "it" with
+    /// anything, but rarely half its word pairs. A one-word turn has no pairs, so it needs the word.
+    static func isEcho(_ mine: String, of theirs: String) -> Bool {
+        let words = words(mine)
+        guard !words.isEmpty else { return false }
+        let heard = Self.words(theirs)
+        guard words.count > 1 else { return heard.contains(words[0]) }
+        let heardPairs = Set(zip(heard, heard.dropFirst()).map { "\($0) \($1)" })
+        let pairs = zip(words, words.dropFirst()).map { "\($0) \($1)" }
+        return pairs.filter(heardPairs.contains).count * 2 >= pairs.count
+    }
+
+    /// Take the turns that started before `time` out of `pending`, in the order they were said.
+    static func release<Turn>(_ pending: inout [(at: TimeInterval, turn: Turn)],
+                              before time: TimeInterval) -> [(at: TimeInterval, turn: Turn)] {
+        let ready = pending.filter { $0.at < time }.sorted { $0.at < $1.at }
+        pending.removeAll { $0.at < time }
+        return ready
+    }
+
+    private static func words(_ text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+    }
+
     /// Rewrite every turn heading for `old` to `new`, leaving everything else alone.
     ///
     /// Anchored to the start of a line, not a global find-and-replace, because

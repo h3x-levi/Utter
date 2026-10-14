@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import UtterKit
 @testable import UtterCore
@@ -112,3 +113,72 @@ struct OnboardingFlowTests {
         #expect(model(step: -2).step == .welcome)
     }
 }
+
+/// The account session's rules, against a stand-in for the Google provider.
+@Suite("Sign-in session")
+@MainActor
+struct AccountSessionTests {
+    private final class FakeProvider: SignInProvider {
+        var next: Result<Account, Error> = .success(Account(name: "Priya Shah", email: "priya@example.com"))
+        var restored: Account?
+        var signedOut = false
+        func restore() async -> Account? { restored }
+        func signIn(presenting window: NSWindow?) async throws -> Account { try next.get() }
+        func signOut() { signedOut = true }
+    }
+
+    private func defaults() -> UserDefaults { UserDefaults(suiteName: UUID().uuidString)! }
+
+    @Test("Without a provider nothing is required and the button says so")
+    func notConnected() async {
+        let session = AccountSession(defaults: defaults())
+        #expect(!session.isRequired && !session.needsSignIn)
+        #expect(await !session.signIn(presenting: nil))
+        #expect(session.problem == "Google sign-in isn\u{2019}t connected yet.")
+    }
+
+    @Test("Signing in is kept across launches until sign out")
+    func signInPersists() async {
+        let store = defaults()
+        let provider = FakeProvider()
+        let session = AccountSession(provider: provider, defaults: store)
+        #expect(session.needsSignIn)
+        #expect(await session.signIn(presenting: nil))
+        #expect(session.account?.email == "priya@example.com")
+
+        let relaunched = AccountSession(provider: provider, defaults: store)
+        await relaunched.restore()
+        #expect(!relaunched.needsSignIn)
+
+        relaunched.signOut()
+        #expect(provider.signedOut)
+        #expect(AccountSession(provider: provider, defaults: store).needsSignIn)
+    }
+
+    @Test("A restore that can't tell keeps the stored account; a fresh one replaces it")
+    func restore() async {
+        let store = defaults()
+        let provider = FakeProvider()
+        let session = AccountSession(provider: provider, defaults: store)
+        await session.signIn(presenting: nil)
+        await session.restore()
+        #expect(session.account?.name == "Priya Shah")
+        provider.restored = Account(name: "Priya S.", email: "priya@example.com")
+        await session.restore()
+        #expect(session.account?.name == "Priya S.")
+    }
+
+    @Test("Closing the browser shows nothing; a real failure says why")
+    func failures() async {
+        let provider = FakeProvider()
+        let session = AccountSession(provider: provider, defaults: defaults())
+        provider.next = .failure(CancellationError())
+        #expect(await !session.signIn(presenting: nil))
+        #expect(session.problem == nil)
+        provider.next = .failure(URLError(.notConnectedToInternet))
+        #expect(await !session.signIn(presenting: nil))
+        #expect(session.problem?.hasPrefix("Couldn\u{2019}t sign in:") == true)
+        #expect(session.needsSignIn)
+    }
+}
+

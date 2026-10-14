@@ -56,14 +56,11 @@ final class CompanionSettingsModel {
     }
 
     /// Today's tape, oldest first: the same tracks the hub and Library count (dictations, notes and meetings).
-    var todayTape: [TapeSegment<UUID>] {
-        let tracks = HubTrack.tape(history.entries, notes.notes).filter { Calendar.current.isDateInToday($0.date) }
-        let dictated = tracks.filter { $0.kind == .dictation }.reduce(0) { $0 + $1.words }
-        return tracks.reversed().map { TapeSegment(id: $0.id, words: $0.words, label: $0.title) }
-            + TapeSegment.unkept(userData.unkeptWordsToday(onTape: dictated), id: Self.unkeptID)
+    var todayTape: [TapeSegment<String>] {
+        let items = HubTrack.tape(history.entries, notes.notes).filter { Calendar.current.isDateInToday($0.date) }
+            .reversed().map(\.item)
+        return TapeSegment.today(items, unkept: userData.unkeptWordsToday(onTape: TapeSegment.dictatedWords(items)))
     }
-
-    private static let unkeptID = UUID()
 
     var wordsToday: Int { todayTape.reduce(0) { $0 + $1.words } }
 

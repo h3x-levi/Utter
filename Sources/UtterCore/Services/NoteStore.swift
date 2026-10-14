@@ -39,6 +39,11 @@ package struct Note: Identifiable, Codable, Equatable, Sendable {
     /// by moving the user's entire notes file aside. Optional decodes absent as `nil`.
     /// `MeetingSpeakers.default` covers the `nil` case at every read instead.
     var speakers: MeetingSpeakers?
+    /// How long a meeting recorded, pauses left out. Optional for the same reason as `speakers`.
+    var recordedSeconds: TimeInterval?
+
+    /// A meeting's length: what it recorded, or for older notes the span until the last edit.
+    package var meetingLength: TimeInterval { recordedSeconds ?? modified.timeIntervalSince(created) }
 
     init(
         id: UUID = UUID(),
@@ -149,14 +154,6 @@ enum NoteDateFormat {
     }()
 }
 
-/// Notes grouped under a date heading, mirroring `HistoryGroup` so the notes list
-/// and the history list read the same way.
-struct NoteGroup: Identifiable {
-    let id: String
-    let label: String
-    let notes: [Note]
-}
-
 /// Where a dictated capture will land.
 ///
 /// One authority for a decision two places need. `AppDelegate.deliverToNote` files the
@@ -200,7 +197,7 @@ package enum NoteCaptureDestination: Equatable {
 /// Durable storage for notes.
 ///
 /// Modelled on `TranscriptionHistory` - singleton `ObservableObject`, one JSON
-/// file under Application Support, date-grouped for display - with two
+/// file under Application Support - with two
 /// deliberate departures:
 ///
 ///   * **Its own file.** `UserData.save()` re-serialises every preference on each
@@ -272,68 +269,6 @@ package final class NoteStore: ObservableObject {
                  notes: notes)
     }
 
-    private var cacheGeneration: Int = 0
-    private var cachedQuery: String?
-    private var cachedGroupGeneration: Int = -1
-    private var cachedGroups: [NoteGroup] = []
-
-    private func invalidateGroupCache() {
-        cacheGeneration &+= 1
-    }
-
-    /// Newest first, grouped by modification date.
-    ///
-    /// Grouping and labelling deliberately match `TranscriptionHistory`
-    /// (TODAY / YESTERDAY / weekday / full date) so the two screens agree.
-    func grouped(matching search: String = "") -> [NoteGroup] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cachedGroupGeneration == cacheGeneration, cachedQuery == query {
-            return cachedGroups
-        }
-
-        let filtered = query.isEmpty ? notes : notes.filter {
-            $0.body.localizedCaseInsensitiveContains(query)
-                || $0.displayTitle.localizedCaseInsensitiveContains(query)
-                || $0.tags.contains { $0.localizedCaseInsensitiveContains(query) }
-        }
-
-        let cal = Calendar.current
-        let groups = Dictionary(grouping: filtered) { note -> String in
-            let c = cal.dateComponents([.year, .month, .day], from: note.modified)
-            return "\(c.year!)-\(c.month!)-\(c.day!)"
-        }
-
-        let result = groups.map { key, notes in
-            let sorted = notes.sorted { $0.modified > $1.modified }
-            return NoteGroup(
-                id: key,
-                label: Self.dateLabel(for: sorted.first?.modified ?? Date()),
-                notes: sorted
-            )
-        }
-        .sorted { ($0.notes.first?.modified ?? .distantPast) > ($1.notes.first?.modified ?? .distantPast) }
-
-        cachedQuery = query
-        cachedGroupGeneration = cacheGeneration
-        cachedGroups = result
-        return result
-    }
-
-    static func dateLabel(for date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return "TODAY" }
-        if cal.isDateInYesterday(date) { return "YESTERDAY" }
-
-        let days = cal.dateComponents([.day], from: date, to: Date()).day ?? 0
-        let fmt = DateFormatter()
-        if days < 7 {
-            fmt.dateFormat = "EEEE"
-        } else {
-            fmt.dateFormat = "MMMM d, yyyy"
-        }
-        return fmt.string(from: date).uppercased()
-    }
-
     // MARK: - Writing
 
     @discardableResult
@@ -347,7 +282,6 @@ package final class NoteStore: ObservableObject {
 
     private func insert(_ note: Note, select: Bool) {
         notes.insert(note, at: 0)
-        invalidateGroupCache()
         if select { selectedNoteID = note.id }
         scheduleSave()
     }
@@ -411,6 +345,13 @@ package final class NoteStore: ObservableObject {
     ///
     /// Blank names are ignored rather than accepted: an empty heading (`**:**`) would
     /// leave the turn unattributed with no way to tell which stream it came from.
+    func setRecordedSeconds(_ seconds: TimeInterval, of id: UUID) {
+        mutate(id) { note in
+            note.recordedSeconds = seconds
+            return true
+        }
+    }
+
     package func renameSpeaker(_ role: SpeakerRole, to name: String, in id: UUID) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -418,7 +359,8 @@ package final class NoteStore: ObservableObject {
         mutate(id) { note in
             var speakers = note.speakerLabels
             let old = speakers[role]
-            guard old != trimmed else { return false }
+            // Both sources under one name could never be told apart again.
+            guard old != trimmed, trimmed != speakers[role == .you ? .others : .you] else { return false }
             speakers[role] = trimmed
             note.speakers = speakers
             note.body = MeetingTranscript.relabel(note.body, from: old, to: trimmed)
@@ -428,20 +370,8 @@ package final class NoteStore: ObservableObject {
         }
     }
 
-    func setTags(_ tags: [String], for id: UUID) {
-        mutate(id) { note in
-            let cleaned = tags
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            guard note.tags != cleaned else { return false }
-            note.tags = cleaned
-            return true
-        }
-    }
-
     package func delete(id: UUID) {
         notes.removeAll { $0.id == id }
-        invalidateGroupCache()
         if selectedNoteID == id { selectedNoteID = notes.first?.id }
         scheduleSave()
     }
@@ -450,7 +380,6 @@ package final class NoteStore: ObservableObject {
     /// nothing behind.
     package func deleteAll() {
         notes.removeAll()
-        invalidateGroupCache()
         selectedNoteID = nil
         // Write through immediately rather than on the debounce: a user clearing
         // their data should not have it linger on disk for another second.
@@ -469,7 +398,6 @@ package final class NoteStore: ObservableObject {
         guard change(&note) else { return }
         note.modified = Date()
         notes[index] = note
-        invalidateGroupCache()
         scheduleSave()
     }
 
@@ -602,7 +530,6 @@ package final class NoteStore: ObservableObject {
             return
         }
         notes = decoded.sorted { $0.modified > $1.modified }
-        invalidateGroupCache()
         selectedNoteID = notes.first?.id
     }
 }

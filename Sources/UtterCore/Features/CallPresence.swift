@@ -67,19 +67,11 @@ struct CallPresence: Equatable {
     /// Feed a sample. Returns true when `isInCall` changed, so the caller can act once per
     /// transition rather than on every sample.
     ///
-    /// `inputByOthers` / `outputByOthers` are "some process that is not Utter has an input stream /
-    /// an output stream running". All four combinations are reachable: playback with no microphone
-    /// open is the ordinary state of a machine, a voice memo is input with nothing playing, and a
-    /// call is both.
-    ///
-    /// `selfIsCapturing` suppresses the whole thing while Utter is recording. The pid filter in the
-    /// shim already keeps Utter's *own* streams out of the two flags, so this is not there to stop
-    /// the app detecting its own microphone tap any more; it covers what a pid cannot. See
-    /// `CallDetector.selfIsCapturing`.
+    /// `qualified` is "one supported calling app has both the microphone and the speakers open"
+    /// (`CallAudioEvidence`). `selfIsCapturing` suppresses the whole thing while Utter is recording;
+    /// see `CallDetector.selfIsCapturing`.
     @discardableResult
-    mutating func update(inputByOthers: Bool,
-                         outputByOthers: Bool,
-                         plausibleCall: Bool = true,
+    mutating func update(qualified: Bool,
                          selfIsCapturing: Bool,
                          at now: TimeInterval) -> Bool {
         // Our own capture makes the surrounding audio state meaningless. Reset rather than hold a
@@ -92,7 +84,6 @@ struct CallPresence: Equatable {
             return changed
         }
 
-        let qualified = inputByOthers && outputByOthers && plausibleCall
         if qualified != lastQualified {
             lastQualified = qualified
             since = now

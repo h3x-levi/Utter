@@ -85,13 +85,13 @@ struct MainWindowTests {
         typealias Setup = SetupNeeds
         let ready = Setup.Readiness(mic: true, ax: true, modelPresent: true, modelLoad: .ready)
         #expect(Setup.needs(ready, modelState: .bundled).isEmpty)
-        #expect(Setup.cardTitle(1) == "One thing left.")
+        #expect(Setup.cardTitle(1) == "One thing left")
 
         var missing = ready
         missing.mic = false
         missing.modelPresent = false
         #expect(Setup.needs(missing, modelState: .downloading(0.4)) == [.microphone, .model(downloading: 0.4)])
-        #expect(Setup.cardTitle(Setup.needs(missing, modelState: nil).count) == "2 things left.")
+        #expect(Setup.cardTitle(Setup.needs(missing, modelState: nil).count) == "Two things left")
 
         var failed = ready
         failed.modelLoad = .failed("Out of memory")
@@ -128,7 +128,7 @@ struct LibraryModelTests {
                  modified: now.addingTimeInterval(-20), source: .meeting, titleIsCustom: true),
         ])
         let model = LibraryViewModel(selection: SidebarSelection(arguments: []), history: history, store: store,
-                                     prepareMeeting: { nil }, paste: paste)
+                                     paste: paste)
         return (model, store, history)
     }
 
@@ -157,7 +157,7 @@ struct LibraryModelTests {
         let history = TranscriptionHistory(storageDir: nil)
         history.entries = [TranscriptionEntry(text: "Book the dentist", timestamp: now.addingTimeInterval(-90_000))]
         let model = LibraryViewModel(selection: SidebarSelection(arguments: []), history: history,
-                                     store: NoteStore(storageDir: nil), prepareMeeting: { nil })
+                                     store: NoteStore(storageDir: nil))
         #expect(model.days.map(\.items.count) == [0, 1])
         #expect(model.days.first?.id == Calendar.current.startOfDay(for: .now))
     }
@@ -312,6 +312,13 @@ struct LibraryModelTests {
         #expect(turns.map(\.speaker) == ["You", "Sam"])
         #expect(turns.map(\.text) == ["Let's start.\nWith the pill.", "Agreed."])
         #expect(LibraryItem.turns(in: "No headings here").first?.speaker == nil)
+    }
+
+    @Test func theRecordingBannerShowsOneHintAtATime() {
+        let silent = MeetingNote.hint(heardOthers: false, onSpeakers: true)
+        #expect(silent?.hasPrefix("Nothing heard") == true)
+        #expect(MeetingNote.hint(heardOthers: true, onSpeakers: true)?.contains("headphones") == true)
+        #expect(MeetingNote.hint(heardOthers: true, onSpeakers: false) == nil)
     }
 
     @Test func csvExportQuotesEveryTextCell() {

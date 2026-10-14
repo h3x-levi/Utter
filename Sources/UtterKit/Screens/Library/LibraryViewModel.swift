@@ -4,6 +4,21 @@ import SwiftUI
 import UtterCore
 
 /// One dictation, note or meeting: a track on Library's tape.
+extension TapeSegment where ID == String {
+    static let unkeptID = "unkept"
+
+    /// Today's tape for every stripe (Library, hub, Settings): one segment per track with words,
+    /// oldest first, then the words dictated today that no track holds.
+    static func today(_ items: [LibraryItem], unkept: Int) -> [TapeSegment] {
+        items.filter { $0.words > 0 }.map { TapeSegment(id: $0.id, words: $0.words, label: $0.title) }
+            + Self.unkept(unkept, id: unkeptID)
+    }
+
+    static func dictatedWords(_ items: [LibraryItem]) -> Int {
+        items.filter { $0.kind == .dictation }.reduce(0) { $0 + $1.words }
+    }
+}
+
 struct LibraryItem: Identifiable, Hashable {
     enum Kind { case dictation, note, meeting }
 
@@ -53,7 +68,7 @@ struct LibraryItem: Identifiable, Hashable {
         title = note.displayTitle
         body = note.body
         words = note.wordCount
-        duration = note.source == .meeting ? note.modified.timeIntervalSince(note.created) : 0
+        duration = note.source == .meeting ? note.meetingLength : 0
         app = ""
         you = note.source == .meeting ? note.speakerLabels.you : nil
     }
@@ -166,8 +181,7 @@ final class LibraryViewModel {
     @ObservationIgnored let selection: SidebarSelection
     @ObservationIgnored private let history: TranscriptionHistory
     @ObservationIgnored private let store: NoteStore
-    @ObservationIgnored private let prepareMeeting: () -> String?
-    @ObservationIgnored private let startMeetingCapture: () async -> UUID?
+    @ObservationIgnored private let startMeetingCapture: () async -> MeetingSession.StartOutcome
     @ObservationIgnored private let runAction: (NoteAction, UUID) async -> NoteActionResult
     @ObservationIgnored private let paste: @MainActor (String) -> Void
     @ObservationIgnored private var draftNoteID: UUID?
@@ -179,15 +193,13 @@ final class LibraryViewModel {
 
     init(selection: SidebarSelection, history: TranscriptionHistory, store: NoteStore,
          meeting: MeetingSession? = nil,
-         prepareMeeting: (() -> String?)? = nil,
-         startMeetingCapture: @escaping () async -> UUID? = { nil },
+         startMeetingCapture: @escaping () async -> MeetingSession.StartOutcome = { .refused("") },
          runAction: ((NoteAction, UUID) async -> NoteActionResult)? = nil,
          paste: @escaping @MainActor (String) -> Void = LibraryViewModel.pasteIntoPreviousApp) {
         self.selection = selection
         self.history = history
         self.store = store
         self.meeting = meeting
-        self.prepareMeeting = prepareMeeting ?? { MeetingSession.prepare() }
         self.startMeetingCapture = startMeetingCapture
         self.runAction = runAction ?? { await NoteActionRunner.run($0, noteID: $1, store: store) }
         self.paste = paste
@@ -406,10 +418,19 @@ final class LibraryViewModel {
         pastedIDs.insert(item.id)
     }
 
-    /// Hiding Utter hands focus back to the app underneath; the paste waits for it to come to the front.
+    /// Hiding Utter hands focus back to the app underneath; the text is typed only once that app has
+    /// focus, and left on the clipboard otherwise, like the hub's paste.
     static func pasteIntoPreviousApp(_ text: String) {
         NSApp.hide(nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { TextInjector.typeText(text) }
+        Task { @MainActor in
+            let own = ProcessInfo.processInfo.processIdentifier
+            var target: pid_t?
+            for _ in 0..<25 where target == nil {
+                try? await Task.sleep(for: .milliseconds(20))
+                target = NSWorkspace.shared.frontmostApplication.map(\.processIdentifier).flatMap { $0 == own ? nil : $0 }
+            }
+            _ = await PasteBack(hubIsKey: { false }).run(text, into: target)
+        }
     }
 
     func copy(_ item: Item) {
@@ -481,21 +502,16 @@ final class LibraryViewModel {
 
     func startMeeting() {
         meetingMessage = nil
-        if let why = prepareMeeting() {
-            meetingMessage = why
-            return
-        }
         Task {
-            guard let id = await startMeetingCapture() else {
-                if case .failed(let why) = meeting?.state { meetingMessage = why }
-                return
+            switch await startMeetingCapture() {
+            case .started(let id): selection.openNote(id)
+            case .refused(let why): meetingMessage = why.isEmpty ? nil : why
             }
-            selection.openNote(id)
         }
     }
 
     func stopMeeting() {
-        Task { await meeting?.stop(store: store) }
+        Task { await meeting?.stop() }
     }
 
     // MARK: Export

@@ -10,8 +10,5 @@ package enum SpeechEngine: String, Codable, CaseIterable {
         data.speechEngine == .whistle && WhistleEngine.isAvailable ? .whistle : .whisper
     }
 
-    static func provider(whisper: TranscriptionProvider) -> TranscriptionProvider {
-        active() == .whistle ? WhistleProvider(fallback: whisper) : whisper
-    }
 
 }

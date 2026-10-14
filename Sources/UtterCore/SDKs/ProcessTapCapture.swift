@@ -88,7 +88,9 @@ final class ProcessTapCapture {
     }
 
     /// Called with 16 kHz mono Int16 PCM and the peak of that buffer, on `queue`.
-    private let onSamples: (Data, Float) -> Void
+    private let onSamples: (Data, Float, UInt64) -> Void
+    /// On `queue`, like every IO cycle.
+    private let resampler = SystemAudioPCM.Resampler()
 
     /// Where the IO block runs.
     ///
@@ -111,7 +113,7 @@ final class ProcessTapCapture {
     /// Whether the IO block has ever run with frames in it. Guarded by `queue`.
     private var delivered = false
 
-    init(onSamples: @escaping (Data, Float) -> Void) {
+    init(onSamples: @escaping (Data, Float, UInt64) -> Void) {
         self.onSamples = onSamples
     }
 
@@ -172,15 +174,14 @@ final class ProcessTapCapture {
         var started = false
         defer { if !started { teardown() } }
 
-        guard let uid = Self.string(tap, kAudioTapPropertyUID) else {
+        guard let uid = AudioInputs.string(tap, kAudioTapPropertyUID) else {
             throw Failure.tapUIDUnreadable
         }
 
         // "An AudioStreamBasicDescription that describes the current data format for the tap. This is
         // the format of that data that will be accessible in any aggregate device that contains the
-        // tap." - AudioHardware.h. Read once: a device change mid-meeting could in principle change
-        // it, and the cost of not noticing is a window of wrong-rate audio rather than a crash, which
-        // is not worth a property listener for a feature that runs for the length of one meeting.
+        // tap." - AudioHardware.h. Followed after this: AirPods switching to call mode mid-meeting
+        // change the rate, and resampling at the old one garbles the rest of the meeting.
         var asbd = AudioStreamBasicDescription()
         var asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var asbdAddress = AudioObjectPropertyAddress(mSelector: kAudioTapPropertyFormat,
@@ -195,6 +196,8 @@ final class ProcessTapCapture {
             throw Failure.tapFormatNotFloat(asbd.mFormatFlags)
         }
         queue.sync { format = asbd }
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.refreshFormat() }
+        if AudioObjectAddPropertyListenerBlock(tap, &asbdAddress, queue, listener) == noErr { formatListener = listener }
 
         // A tap-only aggregate: no sub-device list, so the device has input streams and no output
         // streams at all. Including the default output device as a sub-device is the other documented
@@ -224,8 +227,10 @@ final class ProcessTapCapture {
         }
 
         status = AudioDeviceCreateIOProcIDWithBlock(&ioProc, aggregate, queue) {
-            [weak self] _, input, _, output, _ in
-            self?.receive(input: input, output: output)
+            [weak self] _, input, inputTime, output, _ in
+            let stamp = inputTime.pointee
+            let host = stamp.mFlags.contains(.hostTimeValid) ? stamp.mHostTime : mach_absolute_time()
+            self?.receive(input: input, output: output, host: host)
         }
         guard status == noErr, ioProc != nil else { throw Failure.ioProcNotCreated(status) }
 
@@ -290,6 +295,11 @@ final class ProcessTapCapture {
             aggregate = AudioObjectID(kAudioObjectUnknown)
         }
         if tap != AudioObjectID(kAudioObjectUnknown) {
+            if let formatListener {
+                var address = Self.formatAddress
+                AudioObjectRemovePropertyListenerBlock(tap, &address, queue, formatListener)
+                self.formatListener = nil
+            }
             // Guarded rather than annotated because `deinit` cannot carry availability. Unreachable
             // below 14.2 in any case: nothing but `start` sets this handle, and `start` needs 14.2.
             if #available(macOS 14.2, *) { AudioHardwareDestroyProcessTap(tap) }
@@ -297,11 +307,29 @@ final class ProcessTapCapture {
         }
     }
 
+    private var formatListener: AudioObjectPropertyListenerBlock?
+
+    private static let formatAddress = AudioObjectPropertyAddress(mSelector: kAudioTapPropertyFormat,
+                                                                  mScope: kAudioObjectPropertyScopeGlobal,
+                                                                  mElement: kAudioObjectPropertyElementMain)
+
+    /// On `queue`, like the IO block that reads `format`.
+    private func refreshFormat() {
+        var address = Self.formatAddress
+        var asbd = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        guard AudioObjectGetPropertyData(tap, &address, 0, nil, &size, &asbd) == noErr,
+              asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0 else { return }
+        format = asbd
+        print("🎯 Process tap format changed: \(Int(asbd.mSampleRate)) Hz, \(asbd.mChannelsPerFrame) ch")
+    }
+
     // MARK: - The callback
 
     /// One IO cycle. On `queue`, not on the real-time thread - see `queue`.
     private func receive(input: UnsafePointer<AudioBufferList>,
-                         output: UnsafeMutablePointer<AudioBufferList>) {
+                         output: UnsafeMutablePointer<AudioBufferList>,
+                         host: UInt64) {
         // The aggregate is built with no output sub-device so there should be no output buffers to
         // fill, but an IOProc that leaves an output buffer untouched plays whatever was in that
         // memory, and the cost of being wrong about that is noise in the user's ears during a
@@ -333,11 +361,9 @@ final class ProcessTapCapture {
                                                    count: floatCount,
                                                    channels: channels,
                                                    interleaved: interleaved)
-        if abs(asbd.mSampleRate - 16_000) > 1, asbd.mSampleRate > 0 {
-            pcm = SystemAudioPCM.resampleToSixteenK(pcm, from: asbd.mSampleRate)
-        }
+        pcm = resampler.sixteenK(pcm, from: asbd.mSampleRate)
         guard !pcm.isEmpty else { return }
-        onSamples(pcm, peak)
+        onSamples(pcm, peak, host)
     }
 
     // MARK: - HAL reads
@@ -370,22 +396,19 @@ final class ProcessTapCapture {
         return [object]
     }
 
-    /// A CFString property, as a Swift string.
-    ///
-    /// The +1 the HAL hands back is balanced by ARC releasing the `CFString?` variable it was written
-    /// into; there is deliberately no `CFRelease` here. Same reasoning as `CallDetector.bundleID`.
-    private static func string(_ object: AudioObjectID,
-                              _ selector: AudioObjectPropertySelector) -> String? {
-        var address = AudioObjectPropertyAddress(mSelector: selector,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
-        var value: CFString?
-        var size = UInt32(MemoryLayout<CFString?>.size)
-        let status = withUnsafeMutablePointer(to: &value) {
-            AudioObjectGetPropertyData(object, &address, 0, nil, &size, $0)
+    /// Whether sound goes out of speakers the microphone can hear: the Mac's own, or a display's.
+    /// USB and Bluetooth are left out because they are usually headsets.
+    static var playsThroughSpeakers: Bool {
+        guard let device = AudioInputs.uint32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice),
+              let transport = AudioInputs.uint32(device, kAudioDevicePropertyTransportType) else { return false }
+        switch transport {
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort:
+            return true
+        case kAudioDeviceTransportTypeBuiltIn:
+            return AudioInputs.uint32(device, kAudioDevicePropertyDataSource, scope: kAudioDevicePropertyScopeOutput) == 0x6973_706B // 'ispk'
+        default:
+            return false
         }
-        guard status == noErr, let value else { return nil }
-        let string = value as String
-        return string.isEmpty ? nil : string
     }
+
 }

@@ -46,8 +46,10 @@ final class CaptureSession {
     func holdBegan() { handle(.holdBegan(meetingActive: meetingIsActive())) }
     func holdEnded() { handle(.holdEnded) }
     func toggle(_ toggle: CaptureToggle) { handle(.toggle(toggle, meetingActive: meetingIsActive())) }
-    func showError(_ message: String) { handle(.show(.error(message))) }
-    func showNotice(_ message: String) { handle(.show(.notice(message))) }
+    // The pill may be ordered out ("show at all times" off), and a message doesn't bring it back by itself.
+    func showError(_ message: String) { wakePill(); handle(.show(.error(message))) }
+    func showNotice(_ message: String) { wakePill(); handle(.show(.notice(message))) }
+    private func wakePill() { if !pill.isVisible { pill.orderFront(nil) } }
 
     private func expireMessage(after seconds: TimeInterval) {
         expiry?.cancel()
@@ -79,7 +81,7 @@ final class CaptureSession {
     /// Mirror the engine's load state, so the first launch reads "Getting ready" instead of
     /// inviting a dictation that would just queue.
     func observeModelLoad() {
-        guard let local = transcriber.localProvider else { return }
+        let local = transcriber.localProvider
         loadObserver = local.$loadState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] load in
@@ -407,7 +409,7 @@ final class CaptureSession {
         previewTask?.cancel()
         previewTask = nil
         // Abandon in-flight inference too, or a started pass would delay the real one.
-        transcriber.localProvider?.cancelPreviews()
+        transcriber.localProvider.cancelPreviews()
         pill.stateModel.previewText = ""
     }
 
@@ -415,7 +417,7 @@ final class CaptureSession {
     /// with "Show words as you speak" on: the pill shows no words by default.
     private func startPreview() {
         guard UserData.shared.livePreviewEnabled else { return }
-        guard let local = transcriber.localProvider else { return }
+        let local = transcriber.localProvider
 
         pill.stateModel.previewText = ""
         previewTask?.cancel()

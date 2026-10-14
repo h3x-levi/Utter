@@ -112,6 +112,18 @@ struct ZZMainWindowScreens {
         try render(firstRun, "library-setup", dark: false)
     }
 
+    @Test func meetingBanner() throws {
+        let hint = MeetingNote.hint(heardOthers: true, onSpeakers: true)
+        let banner = VStack(spacing: 12) {
+            MeetingNote.recording(elapsed: 184, hint: hint, levels: { (0.7, 0.4) }, pause: {}, stop: {})
+            MeetingNote.paused(elapsed: 184, problem: nil, resume: {}, stop: {})
+        }
+        .padding(18).frame(width: 460).background(Mixtape.paper)
+        for dark in [false, true] {
+            try SnapshotCanvas.write(banner, "meeting-banner-speakers", size: CGSize(width: 460, height: 260), dark: dark)
+        }
+    }
+
     // MARK: Content
 
     private var sampleEntries: [TranscriptionEntry] {

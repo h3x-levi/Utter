@@ -74,7 +74,7 @@ says where things live and what review checks; do not copy its tables here.
 | `Screens/SettingsWindowView.swift` | The Settings kit: `SettingsTabs`, `SettingsSection`, `SettingsRow`, `SettingsChoice`, `SettingsPick`, `SettingsField`, `.settingsSwitch`, `SettingsStatus`, `SettingsMeter`, `SettingsKeycap`, `SettingsProse`, `SettingsDetail`. Words, the companion tab and Report Issue use it too. |
 | `Screens/Library/LibraryScreen.swift` | `TapeNote`, the quiet empty-state note. |
 | `DesignSystem/DesignTokens.swift` | `Space` (8, 12, 16), `Layout` (window sizes), `MotionPreference` (Reduce Motion and Reduce Transparency, read from AppKit). |
-| `DesignSystem/Look/` | `Look.Swatch`, the four-way colour (light, dark, and each with Increase Contrast) that every Mixtape colour is built from, and `MarkGeometry`, the icon's bar proportions that `PillBarGeometry` uses. The rest of `Look` is the previous Moonlight look: only `Look.Status.Kind` and `lookAnimation` are still called, and nothing in the app draws with `Look.Color`, `Look.RowStyle`, `Look.ActionStyle`, `Look.Keycap` or `LivingMark`. Do not build on them. |
+| `DesignSystem/Look/` | `Look.Swatch`, the four-way colour (light, dark, and each with Increase Contrast) that every Mixtape colour is built from; `Look.Motion` with `lookAnimation`; and `MarkGeometry`, the icon's bar proportions that `PillBars` uses. |
 | `DesignSystem/GlassSurface.swift` | `GlassSupport` and `WindowBacking`. |
 | `DesignSystem/ShapedHostingView.swift` | A hosting view that takes the mouse only where something is drawn, for the companion panel. |
 | `Pill/PillWindow.swift` | `PillColor`, the pill's own inks. The pill is always chrome tape, so it does not use `Mixtape.*`. |
@@ -173,6 +173,26 @@ window when the choice changes.
   through the Accessibility API against a scratch data folder, and keeps screenshots, AX trees
   and the JSON each action writes. It needs `bash scripts/build-app.sh --no-dmg` first and
   Accessibility for the terminal.
+
+## Sign-in (not connected to Google yet)
+
+The screen, the Settings row and the session are built; nothing talks to Google. `AccountSession` (UtterCore/Services/Account.swift) holds the signed-in account and keeps it in UserDefaults, so an offline launch still counts as signed in. Sign-in is required only once `AccountSession.shared.provider` is set; until then Utter runs as before. `--open-sign-in` opens the screen for a look.
+
+To connect Google:
+
+1. In Google Cloud Console, create an OAuth client of type **iOS** with bundle ID `utter.dictation.app`. Google requires the iOS type for macOS apps. There is no client secret. On the consent screen, choose External with scopes `openid`, `email` and `profile`, then publish.
+2. Add `GoogleSignIn` 10.x with SwiftPM (`https://github.com/google/GoogleSignIn-iOS`) and run `swift package resolve`, because the build script passes `--skip-update`.
+3. In the Info.plist that `scripts/build-app.sh` writes, add `GIDClientID` and a `CFBundleURLTypes` scheme set to the reversed client ID (`com.googleusercontent.apps.<id>`).
+4. Write a `SignInProvider`:
+   - `restore()` calls `restorePreviousSignIn`. It needs the network, so return nil when it fails offline.
+   - `signIn(presenting:)` calls `signIn(withPresenting:)`. Throw `CancellationError` when the user closes the browser.
+   - `signOut()` calls `signOut()`.
+   - Read the account from `user.profile` (name, email, `imageURL(withDimension:)`).
+5. Set `AccountSession.shared.provider` at the top of `applicationDidFinishLaunching`, before the sign-in gate.
+6. Keychain: GoogleSignIn 10 stores its session in the data protection keychain. That needs a `keychain-access-groups` entitlement (`TEAMID.utter.dictation.app`) and an embedded provisioning profile. The build script signs with neither, so expect error -34018 until both are added.
+7. Update the privacy copy ("Utter goes online only to download a model you choose") in Settings, onboarding and the README. Signing in will now go online too.
+
+The button is Google's official light and dark art (`GoogleButtonArt`), drawn unchanged as the branding rules ask.
 
 ## Other conventions worth knowing before editing
 

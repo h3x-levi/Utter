@@ -66,7 +66,6 @@ read it.
 | `notes.json` | Every note, including anything you dictated into a note. This is the only copy. |
 | `notes.previous.json` | One generation of backup of the above, so a bad write cannot lose everything. |
 | `history.json` | Your dictation history: the **full text** of each transcription, its timestamp, a word count, and the detected language. Capped at the most recent 1000 entries. |
-| `streak.json` | Daily-streak counters. |
 | `userdata.json` | Preferences and your own content: dictionary words, snippets, custom AI commands, scratchpad, last transcription, language, theme, hotkey choice. |
 | `crashes/` | Local crash logs. See below. |
 | `Models/` | Speech models you chose to download. Empty unless you did. |

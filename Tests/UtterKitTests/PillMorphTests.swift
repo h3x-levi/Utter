@@ -719,6 +719,11 @@ struct ZZPillSnapshots {
                                          size: MeetingOfferMetrics.size(message: failure), dark: dark)
             }
         }
+        let model = MeetingOfferModel()
+        model.contentVisible = true
+        try SnapshotCanvas.write(MeetingOfferView(title: MeetingOfferMetrics.defaultTitle, tip: true, model: model,
+                                                  onAccept: {}, onDecline: {}),
+                                 "meeting-offer-speakers", size: MeetingOfferMetrics.size(tip: true), dark: false)
     }
 
     private static let canvas = CGSize(width: 440, height: 260)

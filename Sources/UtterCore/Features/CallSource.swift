@@ -9,7 +9,7 @@ import Foundation
 ///
 /// Automatic offers are deliberately limited to dedicated calling apps. A browser reports the same
 /// bundle ID for Meet and YouTube, so its audio activity cannot safely distinguish a call from media
-/// playback. `automaticCallFamily` is therefore the allowlist used by the detector; browser meetings
+/// playback. `knownName` is therefore the allowlist used by the detector; browser meetings
 /// remain available through the explicit "Record a meeting" action in Notes.
 ///
 /// **Where the name comes from.** Supported apps are identified by bundle family because helper
@@ -84,10 +84,6 @@ extension CallSource {
     static func knownName(bundleID: String?) -> String? {
         guard let bundleID, !bundleID.isEmpty else { return nil }
         return automaticCallApps.first { bundleID.hasPrefix($0.prefix) }?.name
-    }
-
-    static func automaticCallFamily(bundleID: String?) -> String? {
-        knownName(bundleID: bundleID)
     }
 
     // MARK: - Naming

@@ -1,5 +1,6 @@
 import ApplicationServices
 import AppKit
+import AVFoundation
 
 /// Utter's one route to the Accessibility permission, and the only place the system's own
 /// prompt is allowed to be raised.
@@ -43,10 +44,23 @@ package enum AccessibilityPermission {
     /// system's dialog afterwards would be a second ask for the same thing.
     package static func openSettingsPane() {
         markAsked()
-        guard let url = URL(
-            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        ) else { return }
-        NSWorkspace.shared.open(url)
+        openPrivacyPane("Privacy_Accessibility")
+    }
+
+    /// System Settings at Privacy & Security, scrolled to `pane` ("Privacy_Microphone", "Privacy_ScreenCapture").
+    package static func openPrivacyPane(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// macOS asks for the microphone only while undecided; after a denial the switch is in System Settings.
+    package static func requestMicrophone(granted: @escaping @Sendable (Bool) -> Void = { _ in }) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .notDetermined: AVCaptureDevice.requestAccess(for: .audio, completionHandler: granted)
+        case .authorized: granted(true)
+        default: openPrivacyPane("Privacy_Microphone")
+        }
     }
 
     /// Raise the system's own permission dialog, at most once for the life of the install.

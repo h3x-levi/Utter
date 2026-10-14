@@ -9,6 +9,13 @@ enum TranscriptText {
 
     static func isUsable(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && !noSpeechMarkers.contains(trimmed.uppercased())
+        return !trimmed.isEmpty && !noSpeechMarkers.contains(trimmed.uppercased()) && !isAnnotation(trimmed)
+    }
+
+    /// Nothing but whisper's captions for sound that is not speech, "[GASP]" or "(music)".
+    private static func isAnnotation(_ text: String) -> Bool {
+        text.replacingOccurrences(of: #"\[[^\]]*\]|\([^)]*\)"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            .isEmpty
     }
 }

@@ -174,4 +174,11 @@ struct MeetingOfferMetricsTests {
     func anEmptyMessageDoesNotGrowTheCard() {
         #expect(MeetingOfferMetrics.height(message: "") == MeetingOfferMetrics.height())
     }
+
+    @Test
+    func theHeadphonesTipGetsItsOwnRow() {
+        let grew = MeetingOfferMetrics.height(tip: true) - MeetingOfferMetrics.height()
+        let owed = MeetingOfferMetrics.rowSpacing + MeetingOfferMetrics.captionHeight(MeetingOfferMetrics.speakersTip)
+        #expect(abs(grew - owed) <= 1)
+    }
 }

@@ -23,7 +23,6 @@ struct UserDataPersistenceTests {
         saved.captureAppendsToOpenNote = false
         saved.companionSize = .huge
         saved.companionMemoryEnabled = true
-        saved.companionWindowEdges = false
         saved.companionHydrationGoal = 6
         _ = saved.recordCompanionReminder(.water, completed: false)
         _ = saved.recordCompanionReminder(.stretch, completed: true)
@@ -43,19 +42,12 @@ struct UserDataPersistenceTests {
         #expect(loaded.captureAppendsToOpenNote == false)
         #expect(loaded.companionSize == .huge)
         #expect(loaded.companionMemoryEnabled)
-        #expect(loaded.companionWindowEdges == false)
         #expect(loaded.companionHydrationGoal == 6)
         #expect(loaded.companionProgress.dismissed["water"] == 1)
         #expect(loaded.companionProgress.extraDelayMinutes["water"] == 5)
         #expect(loaded.companionProgress.stretches == 1)
         #expect(loaded.companionProgress.dictationWords == 1_200)
-        #expect(loaded.companionProgress.lifetimeWords == 1_200)
         #expect(loaded.companionProgress.dictations == 1)
-        #expect(loaded.companionRewardUnlocked(.ball))
-        #expect(loaded.companionRewardUnlocked(.yarn))
-        #expect(loaded.companionRewardUnlocked(.curiousTrill))
-        #expect(!loaded.companionAnimationUnlocked(.grooming))
-        #expect(!loaded.companionAnimationUnlocked(.rolling))
         #expect(loaded.customAICommands == saved.customAICommands)
     }
 
@@ -79,16 +71,16 @@ struct UserDataPersistenceTests {
 
     private static let goldenKeys: Set<String> = [
         "words", "snippets", "language", "voiceCommands", "spokenPunctuation", "hotkeyId", "hotkeyName",
-        "doubleTapHotkeyForHandsFree", "appTheme", "scratchpad", "customAICommands",
+        "doubleTapHotkeyForHandsFree", "appTheme", "microphoneUID", "scratchpad", "customAICommands",
         "alwaysShowPill", "showInDock", "soundsEnabled", "muteMusicWhileDictating",
         "captureAppendsToOpenNote", "sentencePolishEnabled", "speechBiasEnabled", "speechEngine",
         "useSurroundingContext", "perAppToneEnabled", "livePreviewEnabled",
-        "offerToTranscribeCalls", "keepHistory", "companionEnabled", "companionCharacter",
-        "companionSize", "companionPetBehaviours", "companionUserName",
+        "offerToTranscribeCalls", "keepHistory", "companionEnabled",
+        "companionSize", "companionUserName",
         "companionStretchMinutes", "companionWaterMinutes", "companionPomodoroFocusMinutes",
         "companionPomodoroBreakMinutes", "companionPinnedMessage", "companionSounds",
-        "companionObject", "companionMemoryEnabled", "companionGoalsEnabled",
-        "companionWindowEdges", "companionQuietMode", "companionAutomaticQuietMode",
+        "companionMemoryEnabled", "companionGoalsEnabled",
+        "companionQuietMode", "companionAutomaticQuietMode",
         "companionHydrationGoal", "companionStretchGoal", "companionFocusGoal",
         "companionDictationGoal", "companionProgress",
     ]
@@ -104,6 +96,7 @@ struct UserDataPersistenceTests {
       "hotkeyName": "Right ⌥ Option",
       "doubleTapHotkeyForHandsFree": false,
       "appTheme": "midnight",
+      "microphoneUID": "BuiltInMicrophoneDevice",
       "scratchpad": "draft",
       "customAICommands": [{
         "id": "5B3D8C2E-1F4A-4B6C-9D8E-0A1B2C3D4E5F",
@@ -124,9 +117,7 @@ struct UserDataPersistenceTests {
       "offerToTranscribeCalls": true,
       "keepHistory": false,
       "companionEnabled": true,
-      "companionCharacter": "pixel-dog-brown",
       "companionSize": "huge",
-      "companionPetBehaviours": false,
       "companionUserName": "Alex",
       "companionStretchMinutes": 30,
       "companionWaterMinutes": 60,
@@ -134,10 +125,8 @@ struct UserDataPersistenceTests {
       "companionPomodoroBreakMinutes": 7,
       "companionPinnedMessage": "Ship it",
       "companionSounds": false,
-      "companionObject": "yarn",
       "companionMemoryEnabled": false,
       "companionGoalsEnabled": false,
-      "companionWindowEdges": false,
       "companionQuietMode": true,
       "companionAutomaticQuietMode": false,
       "companionHydrationGoal": 6,
@@ -147,8 +136,8 @@ struct UserDataPersistenceTests {
       "companionProgress": {
         "day": 20261010, "hydration": 1, "stretches": 2, "focusBlocks": 3,
         "dictationWords": 4, "dismissed": {"water": 2}, "preferredHours": {"stretch": 9},
-        "extraDelayMinutes": {"water": 5}, "unlocked": ["loaf", "rolling"],
-        "lifetimeWords": 1200, "dictations": 8, "memoriesCreated": 3, "memoriesCompleted": 2
+        "extraDelayMinutes": {"water": 5},
+        "dictations": 8, "memoriesCreated": 3, "memoriesCompleted": 2
       }
     }
     """
@@ -189,9 +178,7 @@ struct UserDataPersistenceTests {
 
         #expect(loaded.captureAppendsToOpenNote == false)
         #expect(AppTheme.find(loaded.appTheme) == .dark)
-        #expect(loaded.companionCharacter == "pixel-dog-brown")
         #expect(loaded.companionSize == UserData.defaultCompanionSize)
-        #expect(loaded.companionObject == .none)
         #expect(loaded.companionStretchMinutes == 480)
 
         loaded.save()

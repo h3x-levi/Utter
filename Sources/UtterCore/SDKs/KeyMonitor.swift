@@ -63,7 +63,7 @@ package struct HotkeyOption: Identifiable {
 /// the end of the held dictation hotkey. The monitor resolves an event to an action and
 /// dispatches once, so the two spellings of one shortcut cannot drift into doing
 /// different things.
-enum ShortcutAction: Equatable {
+package enum ShortcutAction: Equatable {
     case handsFree
     case noteCapture
     case memoryCapture
@@ -119,6 +119,8 @@ package struct KeyChord {
                                      flags: [.control, .option],
                                      keyLabel: "U",
                                      action: .openWindow)
+
+    static let all: [KeyChord] = [.handsFree, .noteCapture, .memoryCapture, .openWindow]
 
     /// Each modifier's flag, glyph and spelled name, in the order macOS prints them
     /// in a menu - Control, Option, Shift, Command - rather than the order the flags
@@ -392,10 +394,7 @@ private final class HoldTapMonitor {
 package class KeyMonitor {
     private let onRecordStart: () -> Void
     private let onRecordStop: () -> Void
-    private let onHandsFreeToggle: () -> Void
-    private let onNoteCaptureToggle: () -> Void
-    private let onMemoryCaptureToggle: () -> Void
-    private let onOpenWindow: () -> Void
+    private let onAction: (ShortcutAction) -> Void
     private let onCancel: () -> Void
     private var globalFlagsMonitor: Any?
     private var localFlagsMonitor: Any?
@@ -420,18 +419,12 @@ package class KeyMonitor {
     package init(
         onRecordStart: @escaping () -> Void,
         onRecordStop: @escaping () -> Void,
-        onHandsFreeToggle: @escaping () -> Void = {},
-        onNoteCaptureToggle: @escaping () -> Void = {},
-        onMemoryCaptureToggle: @escaping () -> Void = {},
-        onOpenWindow: @escaping () -> Void = {},
+        onAction: @escaping (ShortcutAction) -> Void = { _ in },
         onCancel: @escaping () -> Void = {}
     ) {
         self.onRecordStart = onRecordStart
         self.onRecordStop = onRecordStop
-        self.onHandsFreeToggle = onHandsFreeToggle
-        self.onNoteCaptureToggle = onNoteCaptureToggle
-        self.onMemoryCaptureToggle = onMemoryCaptureToggle
-        self.onOpenWindow = onOpenWindow
+        self.onAction = onAction
         self.onCancel = onCancel
     }
 
@@ -521,7 +514,7 @@ package class KeyMonitor {
                 firstTapWasQuick = false
                 lastHotkeyReleaseTime = 0
                 suppressReleaseStop = true
-                DispatchQueue.main.async { self.onHandsFreeToggle() }
+                dispatch(.handsFree)
             } else {
                 lastHotkeyPressTime = now
                 DispatchQueue.main.async { self.onRecordStart() }
@@ -561,15 +554,8 @@ package class KeyMonitor {
         // Resolve which chord this is first, so the modifier check below tests the
         // flags that chord actually declares rather than one chord's flags standing
         // in for both.
-        let chord: KeyChord
-        switch event.keyCode {
-        case KeyChord.handsFree.keyCode: chord = .handsFree
-        case KeyChord.noteCapture.keyCode: chord = .noteCapture
-        case KeyChord.memoryCapture.keyCode: chord = .memoryCapture
-        case KeyChord.openWindow.keyCode: chord = .openWindow
-        default: return
-        }
-        guard flags.contains(chord.flags) else { return }
+        guard let chord = KeyChord.all.first(where: { $0.keyCode == event.keyCode }),
+              flags.contains(chord.flags) else { return }
         // Reject if other primary modifiers are also held to avoid accidental matches.
         guard !flags.contains(.command), !flags.contains(.shift) else { return }
 
@@ -582,16 +568,7 @@ package class KeyMonitor {
     /// main thread, hold-then-tap from the event tap's own thread - so they cannot drift,
     /// and so the main-thread hop is stated once rather than per gesture.
     private func dispatch(_ action: ShortcutAction) {
-        switch action {
-        case .handsFree:
-            DispatchQueue.main.async { self.onHandsFreeToggle() }
-        case .noteCapture:
-            DispatchQueue.main.async { self.onNoteCaptureToggle() }
-        case .memoryCapture:
-            DispatchQueue.main.async { self.onMemoryCaptureToggle() }
-        case .openWindow:
-            DispatchQueue.main.async { self.onOpenWindow() }
-        }
+        DispatchQueue.main.async { self.onAction(action) }
     }
 
     deinit { stop() }

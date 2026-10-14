@@ -105,7 +105,8 @@ struct SettingsTests {
                                                notifications: CompanionNotificationScheduler(center: nil),
                                                selection: selection, history: history, notes: notes)
 
-        #expect(companion.todayTape.map(\.id) == [older.id, note.id, newer.id], "an empty note isn't a track")
+        #expect(companion.todayTape.map(\.id) == [LibraryItem.dictationID(older.id), LibraryItem.noteID(note.id), LibraryItem.dictationID(newer.id)],
+                "an empty note isn't a track")
         #expect(companion.wordsToday == 7)
         let hub = HubModel()
         hub.reload(entries: history.entries, notes: notes.notes)

@@ -35,6 +35,8 @@ enum MeetingOfferMetrics {
     /// Says what it will and will not do. The panel appearing on its own is exactly when a user
     /// needs to know that nothing has been recorded yet.
     static let caption = "Nothing is being recorded. Transcribe it into a note?"
+    /// Shown when the call plays on speakers, before the user commits to recording on them.
+    static let speakersTip = "Wear headphones so only your words show as \u{201C}You\u{201D}."
 
     /// Wide enough for the caption to wrap to two lines rather than five.
     static let width: CGFloat = 268
@@ -81,8 +83,8 @@ enum MeetingOfferMetrics {
     static let captionLineSpacing: CGFloat = 1.5
 
     /// The window size, with an optional failure message on the card.
-    static func size(title: String = defaultTitle, message: String? = nil) -> NSSize {
-        NSSize(width: width, height: height(title: title, message: message))
+    static func size(title: String = defaultTitle, message: String? = nil, tip: Bool = false) -> NSSize {
+        NSSize(width: width, height: height(title: title, message: message, tip: tip))
     }
 
     /// The height the content needs, and therefore the window's.
@@ -90,7 +92,7 @@ enum MeetingOfferMetrics {
     /// `title` and `message` are both measured rather than allowed a fixed number of lines: the
     /// title now carries an app name of a length no one here knows in advance, and `message` is the
     /// "why the capture could not start" line, which is a whole sentence.
-    static func height(title: String = defaultTitle, message: String? = nil) -> CGFloat {
+    static func height(title: String = defaultTitle, message: String? = nil, tip: Bool = false) -> CGFloat {
         var total = padding * 2
             + titleHeight(title)
             + rowSpacing
@@ -101,6 +103,7 @@ enum MeetingOfferMetrics {
         if let message, !message.isEmpty {
             total += rowSpacing + captionHeight(message)
         }
+        if tip { total += rowSpacing + captionHeight(speakersTip) }
         return ceil(total)
     }
 
@@ -176,15 +179,18 @@ final class MeetingOfferPanel: NSPanel {
     /// Not `title`: `NSWindow` already has one, and the two are ambiguous at every use site inside
     /// this class rather than shadowing cleanly.
     private let cardTitle: String
+    private let showsTip: Bool
 
     init(pill: PillWindow,
          title: String = MeetingOfferMetrics.defaultTitle,
+         onSpeakers: Bool = false,
          onAccept: @escaping () -> Void,
          onDecline: @escaping () -> Void) {
         self.pill = pill
         self.pillWasVisible = pill.isVisible
         self.cardTitle = title
-        super.init(contentRect: NSRect(origin: .zero, size: MeetingOfferMetrics.size(title: title)),
+        self.showsTip = onSpeakers
+        super.init(contentRect: NSRect(origin: .zero, size: MeetingOfferMetrics.size(title: title, tip: onSpeakers)),
                    styleMask: [.nonactivatingPanel, .fullSizeContentView, .borderless],
                    backing: .buffered,
                    defer: false)
@@ -201,7 +207,7 @@ final class MeetingOfferPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
 
         let hosting = NSHostingView(rootView: ThemedRoot {
-            MeetingOfferView(title: title, model: model, onAccept: onAccept, onDecline: onDecline)
+            MeetingOfferView(title: title, tip: onSpeakers, model: model, onAccept: onAccept, onDecline: onDecline)
         })
         // Never let the hosting view drive the window's size - the collapse documented in
         // `showMainWindow`. Which is exactly why `MeetingOfferMetrics` exists: with the window's
@@ -333,7 +339,7 @@ final class MeetingOfferPanel: NSPanel {
     func showFailure(_ message: String) {
         model.failure = message
         setFrame(
-            positionedFrame(size: MeetingOfferMetrics.size(title: cardTitle, message: message)),
+            positionedFrame(size: MeetingOfferMetrics.size(title: cardTitle, message: message, tip: showsTip)),
             display: true
         )
         // The card just changed shape, and the window shadow is cached from the old one.
@@ -351,6 +357,7 @@ final class MeetingOfferModel: ObservableObject {
 /// The offer's contents.
 struct MeetingOfferView: View {
     let title: String
+    var tip = false
     @ObservedObject var model: MeetingOfferModel
     let onAccept: () -> Void
     let onDecline: () -> Void
@@ -380,6 +387,13 @@ struct MeetingOfferView: View {
                     .font(Mixtape.body(12))
                     .foregroundStyle(Mixtape.ink3)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if tip {
+                    Text(MeetingOfferMetrics.speakersTip)
+                        .font(Mixtape.body(12))
+                        .foregroundStyle(Mixtape.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if let failure = model.failure {
                     Text(failure)

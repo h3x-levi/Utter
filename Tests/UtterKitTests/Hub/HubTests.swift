@@ -100,11 +100,11 @@ struct HubTests {
     func status() {
         let model = HubModel()
         #expect(model.stripeLabel == "Ready \u{00B7} hold Fn")
-        model.needs = HubNeed.needs(mic: true, ax: false, model: true)
+        model.needs = SetupNeeds.needs(.init(mic: true, ax: false), modelState: nil)
         #expect(model.needs == [.accessibility])
         #expect(model.status == .setup)
         #expect(model.stripeLabel == "One thing left")
-        model.needs = HubNeed.needs(mic: false, ax: false, model: true)
+        model.needs = SetupNeeds.needs(.init(mic: false, ax: false), modelState: nil)
         #expect(model.stripeLabel == "Two things left")
         model.recording = true
         #expect(model.status == .recording)

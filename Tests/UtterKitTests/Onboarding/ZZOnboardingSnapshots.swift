@@ -30,21 +30,25 @@ struct ZZOnboardingSnapshots {
         }
     }
 
-    @Test func livingMark() throws {
+    @Test func signIn() async throws {
         for dark in [false, true] {
-            let sheet = VStack(spacing: 24) {
-                ForEach([240.0, 96.0, 24.0], id: \.self) { height in
-                    HStack(spacing: 32) {
-                        ForEach([LivingMark.Phase.rest, .listening, .thinking, .smile, .flat], id: \.self) { phase in
-                            LivingMark(phase: phase, level: 0.6, tint: Look.Color.tint).frame(height: height)
-                        }
-                    }
-                }
-            }
-            .padding(32)
-            .background(.background)
-            try SnapshotCanvas.write(sheet, "living-mark", size: CGSize(width: 1060, height: 520), dark: dark, settle: 0.8)
+            let session = AccountSession(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+            try capture(SignInView(session: session, onSignedIn: {}, onQuit: {}), "sign-in", dark: dark)
         }
+        let session = AccountSession(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        await session.signIn(presenting: nil)
+        try capture(SignInView(session: session, onSignedIn: {}, onQuit: {}), "sign-in-not-connected", dark: false)
+    }
+
+    private func capture(_ root: some View, _ name: String, dark: Bool) throws {
+        let window = OnboardingView.makeWindow(root, title: "Sign in to Utter")
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        SnapshotCanvas.center(window)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        let view = try #require(window.contentView?.superview ?? window.contentView)
+        try SnapshotCanvas.capture(window, view: view, name, dark: dark)
     }
 
     private func render(_ name: String, dark: Bool, hotkey: String = "fn",
