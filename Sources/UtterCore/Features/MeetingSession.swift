@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 
 /// Records a meeting and turns it into a note as it goes.
@@ -16,7 +17,8 @@ import Foundation
 /// Each source is transcribed separately and labelled, which gives "You" vs
 /// "Others" for free - they are literally different audio streams. That is a
 /// *source* distinction, not speaker diarisation: this cannot tell two remote
-/// participants apart, and does not pretend to.
+/// participants apart, and does not pretend to. On speakers the mic hears the call
+/// too, so mic turns that repeat "Others" are dropped (`MeetingTranscript.isEcho`).
 ///
 /// Two consequences of that follow the transcript all the way to the note, and both
 /// are deliberate restraint rather than unfinished work:
@@ -31,16 +33,11 @@ import Foundation
 ///     properly either: the macOS 26.5 `SpeechAnalyzer` exposes exactly
 ///     `DictationTranscriber`, `SpeechTranscriber` and `SpeechDetector`, and nothing
 ///     resembling speaker identity.
-///   * **The two streams are not merged into one chronological conversation.**
-///     Tempting, and wrong with what is measurable here. The only clock available is
-///     each stream's own sample count, the two captures start at different moments by
-///     an unmeasured margin (`SystemAudioCapture.start` awaits a permission-gated
-///     content enumeration before the mic tap even opens), a dropped
-///     `ScreenCaptureKit` packet shifts one clock against the other permanently, and
-///     each stream advances its own retry cursor so one can be a whole window ahead of
-///     the other. Interleaving on that would fabricate a turn order - asserting who
-///     replied to whom. Source-major ordering is visibly coarse, which is the honest
-///     failure.
+///   * **The two streams are merged on the host clock.** Every captured buffer is
+///     stamped with the host time of its first sample (`SampleClock`), so each turn has
+///     a real start time whichever stream it came from. A turn is written only once both
+///     streams have been transcribed past it, so a reply never lands above what it
+///     answered. Error is tens of milliseconds, far below a turn.
 ///
 /// Labels are the user's to change. `MeetingSpeakers` is stored on the note and read
 /// fresh on every window, so renaming "Others" to a name mid-meeting applies from the
@@ -74,6 +71,28 @@ package final class MeetingSession: ObservableObject {
     /// True once any audio has actually been heard on the system tap. A silent tap
     /// is the most likely failure and looks identical to a working one otherwise.
     @Published package private(set) var heardOthers = false
+    /// The call is playing on speakers, so the mic hears it as well.
+    @Published package private(set) var onSpeakers = false
+    /// Off the record: both captures are closed and nothing is transcribed until resume.
+    @Published package private(set) var isPaused = false
+    /// Why the last resume could not reopen the captures.
+    @Published package private(set) var resumeProblem: String?
+    /// The meeting that just ended, for the Library's summary offer. Cleared by `dismissFinished`.
+    @Published package private(set) var finishedNoteID: UUID?
+
+    /// A meeting is being recorded or finished; `.failed` is not, though it is not `.idle` either.
+    package var isCapturing: Bool { state == .recording || state == .finishing }
+
+    /// Whether sound goes out of speakers the mic can hear.
+    package static var playsThroughSpeakers: Bool { ProcessTapCapture.playsThroughSpeakers }
+
+    /// The call ended and the recording stopped itself.
+    package var onCallEnded: (() -> Void)?
+
+    /// You (mic) and Others (call) levels, 0...1, for the banner's meters. Reading resets the call peak.
+    package var levels: (you: Float, others: Float) {
+        (isPaused ? 0 : recorder?.inputLevel ?? 0, isPaused ? 0 : systemAudio.meterLevel)
+    }
 
     private let systemAudio = SystemAudioCapture()
     private var recorder: AudioRecorder?
@@ -113,6 +132,23 @@ package final class MeetingSession: ObservableObject {
     private var systemFailures = 0
     private let maxWindowRetries = 3
     private var startedAt: Date?
+    /// Recent "Others" turns, to tell the call heard through the speakers from the user's own words.
+    private var recentOthers: [(start: TimeInterval, end: TimeInterval, text: String)] = []
+    /// Turns waiting until both streams are transcribed past them, at host-clock seconds.
+    private var pending: [(at: TimeInterval, turn: (role: SpeakerRole, text: String))] = []
+    /// Recorded seconds before the current run; `startedAt` is the current run's start.
+    private var recordedBefore: TimeInterval = 0
+    /// What to tap and which mic to open, kept for resume.
+    private var tapping: [AudioObjectID] = []
+    private var micDevice: AudioDeviceID?
+    /// The call, watched so the recording stops when the call does.
+    private var watchedCall: CallSource?
+    private var callQuietSince: TimeInterval?
+    private var transition: Task<Void, Never>?
+    /// Where the meeting's note lives, set at start; every later write goes here.
+    private var store = NoteStore.shared
+    /// Whether the mic and the call tap are open right now, so closing never runs twice or not at all.
+    private var capturesOpen = false
 
     /// Whether meeting capture can run at all, and why not if it can't.
     ///
@@ -181,7 +217,19 @@ package final class MeetingSession: ObservableObject {
         store: NoteStore? = nil,
         source: CallSource? = nil
     ) async -> UUID? {
+        await serially { [self] in
+            await begin(recorder: recorder, transcriber: transcriber, store: store, source: source)
+        }
+    }
+
+    private func begin(
+        recorder: AudioRecorder,
+        transcriber: TranscriptionService,
+        store: NoteStore?,
+        source: CallSource?
+    ) async -> UUID? {
         let store = store ?? NoteStore.shared
+        self.store = store
         // Retry from a failure, not just from rest.
         //
         // `.failed` was terminal: nothing assigned `.idle` again, and the UI only
@@ -192,7 +240,7 @@ package final class MeetingSession: ObservableObject {
         case .idle, .failed:
             state = .idle
         case .recording, .finishing:
-            return nil
+            return noteID
         }
 
         self.recorder = recorder
@@ -200,6 +248,17 @@ package final class MeetingSession: ObservableObject {
         micFailures = 0
         systemFailures = 0
         heardOthers = false
+        recentOthers = []
+        pending = []
+        recordedBefore = 0
+        isPaused = false
+        resumeProblem = nil
+        finishedNoteID = nil
+        callQuietSince = nil
+        let call = source ?? (CallDetector.audioInUseByOtherProcesses() ?? nil)
+        watchedCall = call
+        tapping = source.map { [$0.processObject] } ?? []
+        micDevice = call.flatMap(CallDetector.microphone(of:))
 
         let fmt = DateFormatter()
         fmt.dateFormat = "MMM d, h:mm a"
@@ -208,42 +267,12 @@ package final class MeetingSession: ObservableObject {
         let note = store.create(body: heading, source: .meeting)
         noteID = note.id
 
-        do {
-            // The process holding the call, when one was identified. Empty means "everything but
-            // Utter", which is what the ScreenCaptureKit path has always done.
-            try await systemAudio.start(tapping: source.map { [$0.processObject] } ?? [])
-        } catch {
+        if let problem = await openCaptures(recorder: recorder) {
             // Roll back the empty note: leaving a titled but contentless meeting
             // note behind after a failed start is worse than nothing.
             store.delete(id: note.id)
             noteID = nil
-            state = .failed(error.localizedDescription)
-            return nil
-        }
-
-        // The mic path is the existing recorder, with VAD disabled: a meeting has
-        // long silences on the user's side and auto-stopping on them would end the
-        // recording every time the user listened instead of talked.
-        //
-        // The result is checked, not discarded. `startRecording` returns false when
-        // the tap could not be opened *or* when it is already open, and both were
-        // silently ignored here:
-        //
-        //   * Microphone denied → the meeting ran with only "Others" transcribed,
-        //     while the UI said "Recording this meeting" for an hour.
-        //   * A hands-free dictation already holding the tap → the meeting adopted
-        //     that session's buffer, `tick()` transcribed the user's dictation into
-        //     the meeting note and then `consume()`d it out of the buffer, so the
-        //     dictation returned a truncated transcript to the app it was aimed at.
-        //     `stop()` would then have torn the engine down under it.
-        guard recorder.startRecording() else {
-            await systemAudio.stop()
-            store.delete(id: note.id)
-            noteID = nil
-            state = .failed(
-                "Couldn\u{2019}t open the microphone. Stop any dictation in progress, "
-                + "check Microphone access, then try again."
-            )
+            state = .failed(problem)
             return nil
         }
 
@@ -256,44 +285,155 @@ package final class MeetingSession: ObservableObject {
         return note.id
     }
 
-    /// Stop recording, transcribe whatever is left, and finish the note.
-    package func stop(store: NoteStore? = nil) async {
-        let store = store ?? NoteStore.shared
-        guard state == .recording else { return }
-        state = .finishing
-        timer?.invalidate()
-        timer = nil
+    package enum StartOutcome: Equatable {
+        case started(UUID)
+        case refused(String)
+    }
 
-        // Let an in-flight drain finish before taking the tail, or both would work
-        // from overlapping snapshots and double-append. `state` is already
-        // `.finishing`, so `tick` cannot start another.
-        await drainTask?.value
-        drainTask = nil
+    /// The one way in for every surface: ask for what is needed, start, and say why not in a sentence.
+    package func record(recorder: AudioRecorder, transcriber: TranscriptionService,
+                        source: CallSource? = nil) async -> StartOutcome {
+        if let why = Self.prepare() { return .refused(why) }
+        if let id = await start(recorder: recorder, transcriber: transcriber, source: source) { return .started(id) }
+        if case .failed(let why) = state { return .refused(why) }
+        return .refused("Couldn\u{2019}t start the meeting recording.")
+    }
 
-        let systemTail = await systemAudio.stop()
+    /// Stop recording, transcribe whatever is left, and finish the note. False when nothing was recording.
+    @discardableResult
+    package func stop() async -> Bool {
+        await serially { [self] in
+            guard state == .recording else { return false }
+            state = .finishing
+            timer?.invalidate()
+            timer = nil
 
-        // Close the mic. The completion hands back trimmed WAV, but the rolling
-        // windows work in raw PCM, so the tail is taken from the snapshot instead.
-        let micTail = recorder?.audioSnapshot() ?? Data()
+            // Let an in-flight drain finish before taking the tail, or both would work
+            // from overlapping snapshots and double-append. `state` is already
+            // `.finishing`, so `tick` cannot start another.
+            await drainTask?.value
+            drainTask = nil
+            await closeCaptures()
+            if let noteID {
+                store.setRecordedSeconds(recordedBefore + (startedAt.map { Date().timeIntervalSince($0) } ?? 0), of: noteID)
+                store.writeToDisk()
+            }
+
+            state = .idle
+            elapsed = 0
+            startedAt = nil
+            isPaused = false
+            resumeProblem = nil
+            watchedCall = nil
+            finishedNoteID = noteID
+            noteID = nil
+            self.recorder = nil
+            transcriber = nil
+            return true
+        }
+    }
+
+    /// Go off the record: transcribe what was said so far, then close the mic and the call tap.
+    package func pause() async {
+        await serially { [self] in
+            guard state == .recording, !isPaused else { return }
+            isPaused = true
+            recordedBefore += startedAt.map { Date().timeIntervalSince($0) } ?? 0
+            startedAt = nil
+            await drainTask?.value
+            drainTask = nil
+            await closeCaptures()
+        }
+    }
+
+    package func resume() async {
+        await serially { [self] in
+            guard state == .recording, isPaused, let recorder else { return }
+            if let problem = await openCaptures(recorder: recorder) {
+                resumeProblem = problem
+                return
+            }
+            resumeProblem = nil
+            isPaused = false
+            startedAt = Date()
+            callQuietSince = nil
+        }
+    }
+
+    /// Start, pause, resume and stop run one at a time in the order pressed, so none of them
+    /// opens or closes captures while another is halfway through doing the same.
+    private func serially<T: Sendable>(_ work: @escaping @MainActor () async -> T) async -> T {
+        let previous = transition
+        let task = Task { @MainActor in
+            await previous?.value
+            return await work()
+        }
+        transition = Task { _ = await task.value }
+        return await task.value
+    }
+
+    package func dismissFinished() { finishedNoteID = nil }
+
+    /// Write turns still waiting for the other stream, for a quit mid-meeting.
+    package func flushPending() {
+        guard let noteID, !pending.isEmpty else { return }
+        let speakers = store.notes.first { $0.id == noteID }?.speakerLabels ?? .default
+        let ready = MeetingTranscript.release(&pending, before: .infinity)
+        store.append(ready.map { MeetingTranscript.line(speakers[$0.turn.role], $0.turn.text) }.joined(separator: "\n\n"),
+                     to: noteID)
+    }
+
+    /// Open the call tap, then the mic. Returns the sentence to show when either fails.
+    private func openCaptures(recorder: AudioRecorder) async -> String? {
+        do {
+            // Empty means "everything but Utter", which is what the ScreenCaptureKit path has always done.
+            try await systemAudio.start(tapping: tapping)
+        } catch {
+            return error.localizedDescription
+        }
+
+        // The mic path is the existing recorder, with VAD disabled: a meeting has
+        // long silences on the user's side and auto-stopping on them would end the
+        // recording every time the user listened instead of talked.
+        //
+        // The result is checked, not discarded. `open` reports false when
+        // the tap could not be opened *or* when it is already open: microphone denied
+        // would run a meeting with only "Others", and a hands-free dictation holding
+        // the tap would have its audio transcribed into the meeting and consumed.
+        // Opened off the main thread: a Bluetooth or USB mic can take seconds to start.
+        let opened = await withCheckedContinuation { done in
+            recorder.open(device: micDevice) { done.resume(returning: $0) }
+        }
+        guard opened else {
+            await systemAudio.stop()
+            return "Couldn\u{2019}t open the microphone. Stop any dictation in progress, "
+                + "check Microphone access, then try again."
+        }
+        capturesOpen = true
+        return nil
+    }
+
+    /// Close both captures and transcribe everything they still hold.
+    private func closeCaptures() async {
+        guard capturesOpen else { return }
+        capturesOpen = false
+        await systemAudio.stop()
+        // Taken before the stop: `stopRecording` clears the buffer and its clock.
+        let micTail = recorder?.bufferSnapshot() ?? CaptureBuffer()
         recorder?.stopRecording { _ in }
-
-        await transcribeWindows(mic: micTail, system: systemTail, flushAll: true, store: store)
-
-        state = .idle
-        elapsed = 0
-        startedAt = nil
-        noteID = nil
-        recorder = nil
-        transcriber = nil
+        await transcribeWindows(mic: micTail, system: systemAudio.bufferSnapshot, flushAll: true)
     }
 
     // MARK: - Rolling transcription
 
     private func tick() {
         guard state == .recording else { return }
-        if let startedAt { elapsed = Int(Date().timeIntervalSince(startedAt)) }
+        elapsed = Int(recordedBefore + (startedAt.map { Date().timeIntervalSince($0) } ?? 0))
+        if watchCallEnded() { return }
+        guard !isPaused else { return }
 
-        if systemAudio.peakLevel > 0.01 { heardOthers = true }
+        if systemAudio.heardSound { heardOthers = true }
+        onSpeakers = ProcessTapCapture.playsThroughSpeakers
 
         // Only wake the transcriber once a full window has accumulated on either
         // side; otherwise this would fire every second. Checked before copying: a
@@ -304,10 +444,10 @@ package final class MeetingSession: ObservableObject {
         // definition not yet transcribed.
         let window = windowSeconds * bytesPerSecond
         guard !isDraining else { return }
-        guard (recorder?.audioByteCount ?? 0) >= window || systemAudio.sampleByteCount >= window else { return }
+        guard (recorder?.capturedByteCount ?? 0) >= window || systemAudio.sampleByteCount >= window else { return }
 
-        let mic = recorder?.audioSnapshot() ?? Data()
-        let system = systemAudio.samples
+        let mic = recorder?.bufferSnapshot() ?? CaptureBuffer()
+        let system = systemAudio.bufferSnapshot
         isDraining = true
         drainTask = Task { @MainActor in
             await transcribeWindows(mic: mic, system: system, flushAll: false)
@@ -315,28 +455,40 @@ package final class MeetingSession: ObservableObject {
         }
     }
 
+    /// Stops the recording once the call app has done no audio for `CallPresence.releaseAfter`,
+    /// the same wait that ends a call for the detector, so a mute never trips it.
+    private func watchCallEnded() -> Bool {
+        guard let watchedCall else { return false }
+        let now = ProcessInfo.processInfo.systemUptime
+        if CallDetector.callIsAlive(watchedCall) {
+            callQuietSince = nil
+            return false
+        }
+        guard let since = callQuietSince else {
+            callQuietSince = now
+            return false
+        }
+        guard now - since >= CallPresence.releaseAfter else { return false }
+        self.watchedCall = nil
+        Task { @MainActor in
+            if await stop() { onCallEnded?() }
+        }
+        return true
+    }
+
     /// Transcribe any complete windows (or everything, when finishing) and append
     /// the text to the meeting note.
     private func transcribeWindows(
-        mic: Data,
-        system: Data,
-        flushAll: Bool,
-        store: NoteStore? = nil
+        mic: CaptureBuffer,
+        system: CaptureBuffer,
+        flushAll: Bool
     ) async {
-        let store = store ?? NoteStore.shared
         guard let noteID, let transcriber else { return }
         let window = windowSeconds * bytesPerSecond
-
-        // Read the labels once per pass rather than once per meeting: a rename made
-        // while the meeting is still running has to take effect, and re-reading here is
-        // a dictionary-free array lookup against a handful of notes.
-        let speakers = store.notes.first { $0.id == noteID }?.speakerLabels ?? .default
 
         // Below roughly a second there is nothing recognisable, and Whisper on a
         // sliver of audio tends to hallucinate a plausible sentence.
         let minimumBytes = bytesPerSecond
-
-        var additions: [String] = []
 
         // Takes the stream's retry count and returns it alongside the byte count,
         // rather than mutating actor state through `inout` - passing isolated state as
@@ -349,9 +501,11 @@ package final class MeetingSession: ObservableObject {
         func drain(
             _ data: Data,
             role: SpeakerRole,
-            failures: Int
-        ) async -> (consumed: Int, failures: Int) {
-            let label = speakers[role]
+            failures: Int,
+            seconds: (Int) -> TimeInterval?
+        ) async -> (consumed: Int, failures: Int, turns: [(at: TimeInterval, end: TimeInterval, text: String)]) {
+            let label = role.rawValue
+            var turnTexts: [(at: TimeInterval, end: TimeInterval, text: String)] = []
             var cursor = 0          // also the number of bytes consumed, since the
                                     // caller trims the buffer front afterwards
             var failures = failures
@@ -363,7 +517,7 @@ package final class MeetingSession: ObservableObject {
                 } else if flushAll, available >= minimumBytes {
                     take = available
                 } else {
-                    return (cursor, failures)
+                    return (cursor, failures, turnTexts)
                 }
 
                 let chunk = data.subdata(in: cursor..<(cursor + take))
@@ -376,7 +530,8 @@ package final class MeetingSession: ObservableObject {
                     // line between them is the *only* thing separating two people who
                     // spoke in the same window - it says "there was a real pause here"
                     // and stops short of saying who filled it.
-                    additions.append(contentsOf: turns.map { MeetingTranscript.line(label, $0.text) })
+                    let base = seconds(cursor - take) ?? SampleClock.now
+                    turnTexts.append(contentsOf: turns.map { (base + $0.start, base + max($0.end, $0.start), $0.text) })
                 case .silence:
                     // Nothing was said. Consume it - there is nothing to keep, and
                     // holding silent audio would stall the buffer forever.
@@ -391,16 +546,38 @@ package final class MeetingSession: ObservableObject {
                         cursor += take
                         continue
                     }
+                    // A flush has no next pass (the buffer is cleared after it), so retry now.
+                    if flushAll { continue }
                     // Stop without advancing, so the window survives in the buffer
                     // and the next pass retries it. Returning rather than continuing
                     // also avoids hammering a transcriber that is currently broken.
-                    return (cursor, failures)
+                    return (cursor, failures, turnTexts)
                 }
             }
         }
 
-        let micDrain = await drain(mic, role: .you, failures: micFailures)
-        let systemDrain = await drain(system, role: .others, failures: systemFailures)
+        let systemDrain = await drain(system.data, role: .others, failures: systemFailures) { system.seconds(at: $0) }
+        let micDrain = await drain(mic.data, role: .you, failures: micFailures) { mic.seconds(at: $0) }
+        // Read the labels after the drains, which take seconds: a rename made meanwhile has to apply.
+        let speakers = store.notes.first { $0.id == noteID }?.speakerLabels ?? .default
+        recentOthers += systemDrain.turns.map { ($0.at, $0.end, $0.text) }
+        if let latest = recentOthers.last?.end { recentOthers.removeAll { $0.end < latest - 120 } }
+        // Echo is the call said at the same moment, give or take the speaker-to-mic and clock slack.
+        let mine = micDrain.turns.filter { turn in
+            let heard = recentOthers.filter { $0.end + 2 >= turn.at && $0.start - 2 <= turn.end }
+            return !MeetingTranscript.isEcho(turn.text, of: heard.map(\.text).joined(separator: " "))
+        }
+        pending += mine.map { ($0.at, (SpeakerRole.you, $0.text)) }
+            + systemDrain.turns.map { ($0.at, (SpeakerRole.others, $0.text)) }
+
+        // Each stream is transcribed up to its first untranscribed byte; one with nothing
+        // buffered (a mic before the first word) holds nothing back.
+        let micUpTo = mic.data.isEmpty ? SampleClock.now : mic.seconds(at: micDrain.consumed) ?? SampleClock.now
+        let systemUpTo = system.data.isEmpty ? SampleClock.now : system.seconds(at: systemDrain.consumed) ?? SampleClock.now
+        // Held for the slower stream, but never more than two windows, so one that stalls can't freeze the note.
+        let releaseBefore = max(min(micUpTo, systemUpTo), max(micUpTo, systemUpTo) - 2 * Double(windowSeconds))
+        let ready = MeetingTranscript.release(&pending, before: flushAll ? .infinity : releaseBefore)
+        let additions = ready.map { MeetingTranscript.line(speakers[$0.turn.role], $0.turn.text) }
         micFailures = micDrain.failures
         systemFailures = systemDrain.failures
         let micConsumed = micDrain.consumed
@@ -434,8 +611,16 @@ package final class MeetingSession: ObservableObject {
         case failed
     }
 
+    /// Peak below which a whole window is treated as silence (about -41 dBFS, under the dictation VAD's floor).
+    static let speechFloor: UInt16 = 300
+
     private func transcribe(_ pcm: Data, using service: TranscriptionService) async -> WindowOutcome {
-        guard let wav = AudioRecorder.wav(fromPCM: pcm) else { return .silence }
+        // Most of a meeting is one side listening: skipping whisper there saves the inference and
+        // the "[BLANK_AUDIO]" or "Thank you." it invents for silence.
+        let peak = pcm.withUnsafeBytes { raw in
+            raw.bindMemory(to: Int16.self).baseAddress.map { AudioRecorder.peakAmplitude($0, count: pcm.count / 2) } ?? 0
+        }
+        guard peak >= Self.speechFloor, let wav = AudioRecorder.wav(fromPCM: pcm) else { return .silence }
         do {
             let turns = try await service.transcribeTurns(audioData: wav)
             return turns.isEmpty ? .silence : .turns(turns)

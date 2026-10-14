@@ -1,4 +1,3 @@
-import AVFoundation
 import AppKit
 import Carbon.HIToolbox
 import Combine
@@ -40,7 +39,7 @@ final class HubController: NSObject {
     let model = HubModel()
     let panel = HubPanel()
     private let statusItem: NSStatusItem
-    private let startMeeting: () async -> UUID?
+    private let startMeeting: () async -> MeetingSession.StartOutcome
     private let notify: (String) -> Void
     private let command: (HubModel.Action) -> Void
     private let dot = NSView()
@@ -53,7 +52,7 @@ final class HubController: NSObject {
     private var pollingForSetup = false
 
     init(statusItem: NSStatusItem, pill: PillStateModel, meeting: MeetingSession,
-         startMeeting: @escaping () async -> UUID?, notify: @escaping (String) -> Void,
+         startMeeting: @escaping () async -> MeetingSession.StartOutcome, notify: @escaping (String) -> Void,
          command: @escaping (HubModel.Action) -> Void) {
         self.statusItem = statusItem
         self.startMeeting = startMeeting
@@ -74,10 +73,11 @@ final class HubController: NSObject {
 
         let readiness = ReadinessMonitor.shared
         // Settles the launch burst: the model check publishes a moment after the permission checks.
-        readiness.$micGranted.combineLatest(readiness.$axGranted, readiness.$modelPresent)
+        Publishers.CombineLatest4(readiness.$micGranted, readiness.$axGranted, readiness.$modelPresent, readiness.$modelLoad)
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .sink { [weak self] mic, ax, model in
-                MainActor.assumeIsolated { self?.setNeeds(HubNeed.needs(mic: mic, ax: ax, model: model)) }
+            .sink { [weak self] mic, ax, present, load in
+                let state = SetupNeeds.Readiness(mic: mic, ax: ax, modelPresent: present, modelLoad: load)
+                MainActor.assumeIsolated { self?.setNeeds(SetupNeeds.needs(state, modelState: nil)) }
             }.store(in: &watches)
         readiness.startPolling()
         pollingForSetup = true
@@ -215,12 +215,13 @@ final class HubController: NSObject {
             close()
             Task { [weak self] in
                 guard let self else { return }
-                guard let id = await startMeeting() else {
-                    notify("Couldn\u{2019}t start the meeting recording")
-                    return
+                switch await startMeeting() {
+                case .started(let id):
+                    SidebarSelection.shared.openNote(id)
+                    command(.openLibrary)
+                case .refused(let why):
+                    notify(why)
                 }
-                SidebarSelection.shared.openNote(id)
-                command(.openLibrary)
             }
         default:
             close()
@@ -243,18 +244,11 @@ final class HubController: NSObject {
         }
     }
 
-    private func grant(_ need: HubNeed) {
+    private func grant(_ need: SetupNeeds.Need) {
         switch need {
-        case .microphone:
-            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
-                AVCaptureDevice.requestAccess(for: .audio) { _ in }
-            } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
-        case .accessibility:
-            AccessibilityPermission.openSettingsPane()
-        case .model:
-            command(.settings)
+        case .microphone: AccessibilityPermission.requestMicrophone()
+        case .accessibility: AccessibilityPermission.openSettingsPane()
+        case .model, .modelFailed: command(.settings)
         }
     }
 
@@ -270,7 +264,7 @@ final class HubController: NSObject {
         refreshDot()
     }
 
-    private func setNeeds(_ needs: [HubNeed]) {
+    private func setNeeds(_ needs: [SetupNeeds.Need]) {
         model.needs = needs
         if needs.isEmpty == pollingForSetup {
             pollingForSetup.toggle()

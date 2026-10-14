@@ -148,15 +148,42 @@ final class SystemAudioCapture {
 
     private var isCapturing = false
     private let bufferQueue = DispatchQueue(label: "utter.dictation.systemaudio")
-    private var _samples = Data()
+    private var buffer = CaptureBuffer()
 
     /// Int16 / 16 kHz / mono PCM captured so far - the same format
     /// `AudioRecorder` yields, so both sides can be mixed without conversion.
     var samples: Data {
-        bufferQueue.sync { _samples }
+        bufferQueue.sync { buffer.data }
     }
 
-    var sampleByteCount: Int { bufferQueue.sync { _samples.count } }
+    var sampleByteCount: Int { bufferQueue.sync { buffer.data.count } }
+
+    /// Everything captured with its clock.
+    var bufferSnapshot: CaptureBuffer { bufferQueue.sync { buffer } }
+
+    private var _meter: Float = 0
+    private var _heard = false
+
+
+    /// Whether anything above a whisper has come through since the capture started. A silent tap
+    /// looks identical to a working one until someone speaks, and that is the failure to report.
+    var heardSound: Bool { bufferQueue.sync { _heard } }
+
+    /// Loudest sound since the last read, on the same dB scale as `AudioRecorder.inputLevel`.
+    var meterLevel: Float {
+        bufferQueue.sync {
+            defer { _meter = 0 }
+            return SampleClock.meter(peak: _meter)
+        }
+    }
+
+    private func append(_ data: Data, peak: Float, host: UInt64) {
+        bufferQueue.sync {
+            buffer.append(data, host: host)
+            if peak > 0.01 { _heard = true }
+            _meter = max(_meter, peak)
+        }
+    }
 
     /// Discard the first `count` bytes, which the caller has finished with.
     ///
@@ -164,28 +191,7 @@ final class SystemAudioCapture {
     /// would hold ~345 MB per stream in memory even though every byte but the last
     /// window has already been transcribed and will never be read again.
     func consume(_ count: Int) {
-        bufferQueue.sync {
-            guard count > 0, count <= _samples.count else { return }
-            // See `AudioRecorder.consume`: `removeFirst` advances `startIndex` rather than
-            // rebasing, so a consumed buffer read back with 0-based offsets in
-            // `MeetingSession` traps. `subdata` returns a fresh zero-based tail and frees
-            // the rest.
-            _samples = _samples.subdata(in: (_samples.startIndex + count)..<_samples.endIndex)
-        }
-    }
-
-    /// Highest absolute sample seen since the last call, 0...1.
-    ///
-    /// Used to prove the capture is actually hearing something: a silent system
-    /// tap looks identical to a working one until someone speaks, and "recording"
-    /// with no signal is the failure the user most needs to know about.
-    private var _peak: Float = 0
-    var peakLevel: Float {
-        bufferQueue.sync {
-            let value = _peak
-            _peak = 0
-            return value
-        }
+        bufferQueue.sync { buffer.consume(count) }
     }
 
     #if canImport(ScreenCaptureKit)
@@ -246,30 +252,31 @@ final class SystemAudioCapture {
 
     private func reset() {
         bufferQueue.sync {
-            _samples = Data()
-            _peak = 0
+            buffer = CaptureBuffer()
+            _heard = false
+            _meter = 0
         }
     }
 
     /// The preferred route. Throws for the fallback to catch - see `ProcessTapCapture.Failure`.
     @available(macOS 14.2, *)
     private func startProcessTap(processes: [AudioObjectID]) async throws {
-        let tap = ProcessTapCapture { [weak self] data, peak in
-            guard let self else { return }
-            self.bufferQueue.sync {
-                self._samples.append(data)
-                self._peak = max(self._peak, peak)
-            }
+        let tap = ProcessTapCapture { [weak self] data, peak, host in
+            self?.append(data, peak: peak, host: host)
         }
         try tap.start(processes: processes)
 
         // Do not commit to this route until it has actually produced a buffer. 1.5s is many hundreds
         // of IO cycles at any device rate, and it is paid once at the start of a meeting - against the
         // alternative of discovering at the end that nothing was recorded.
-        guard await tap.awaitFirstAudio(timeout: 1.5) else {
+        // Until a tap has worked once, macOS may be showing its system-audio prompt, and nothing
+        // arrives until the user answers it.
+        let tapWorkedKey = "processTapDelivered"
+        guard await tap.awaitFirstAudio(timeout: UserDefaults.standard.bool(forKey: tapWorkedKey) ? 1.5 : 30) else {
             tap.stop()
             throw ProcessTapCapture.Failure.noAudioDelivered
         }
+        UserDefaults.standard.set(true, forKey: tapWorkedKey)
 
         processTap = tap
         route = .processTap
@@ -307,12 +314,8 @@ final class SystemAudioCapture {
         config.queueDepth = 5
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
-        let handler = AudioStreamOutput { [weak self] data, peak in
-            guard let self else { return }
-            self.bufferQueue.sync {
-                self._samples.append(data)
-                self._peak = max(self._peak, peak)
-            }
+        let handler = AudioStreamOutput { [weak self] data, peak, host in
+            self?.append(data, peak: peak, host: host)
         }
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
@@ -353,7 +356,70 @@ final class SystemAudioCapture {
         return captured
     }
 
-    var active: Bool { isCapturing }
+}
+
+/// A capture's 16 kHz Int16 mono audio and the clock of its samples, trimmed from the front as it
+/// is transcribed. Shared by the mic and the call capture.
+struct CaptureBuffer {
+    private(set) var data: Data
+    private var clock = SampleClock()
+
+    init(data: Data = Data()) { self.data = data }
+
+    mutating func append(_ chunk: Data, host: UInt64) {
+        clock.stamp(offset: data.count, host: host)
+        data.append(chunk)
+    }
+
+    /// `subdata`, not `removeFirst`: that keeps a non-zero `startIndex`, and readers index from 0.
+    mutating func consume(_ count: Int) {
+        guard count > 0, count <= data.count else { return }
+        data = data.subdata(in: (data.startIndex + count)..<data.endIndex)
+        clock.consume(count)
+    }
+
+    func seconds(at offset: Int) -> TimeInterval? { clock.seconds(at: offset) }
+}
+
+/// When each sample of a front-trimmed 16 kHz Int16 mono buffer was captured, on the host clock.
+///
+/// Both captures stamp every buffer they append, so a turn from the mic and a turn from the call can be
+/// placed on one timeline. Offsets are bytes from the buffer's current front, like `consume`.
+struct SampleClock {
+    private var anchors: [(offset: Int, host: UInt64)] = []
+
+    mutating func stamp(offset: Int, host: UInt64) {
+        anchors.append((offset, host))
+    }
+
+    /// Follow the buffer's front, keeping the anchor that still covers the new first byte.
+    mutating func consume(_ count: Int) {
+        let keep = anchors.lastIndex { $0.offset <= count } ?? 0
+        anchors = anchors.dropFirst(keep).map { ($0.offset - count, $0.host) }
+    }
+
+    func seconds(at offset: Int) -> TimeInterval? {
+        guard let anchor = anchors.last(where: { $0.offset <= offset }) ?? anchors.first else { return nil }
+        return Self.seconds(anchor.host) + Double(offset - anchor.offset) / 32_000
+    }
+
+    static func seconds(_ host: UInt64) -> TimeInterval {
+        Double(host) * Double(timebase.numer) / Double(timebase.denom) / 1_000_000_000
+    }
+
+    static var now: TimeInterval { seconds(mach_absolute_time()) }
+
+    private static let timebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    /// A 0...1 peak as a meter reading: -50 dBFS is empty, -5 dBFS is full.
+    static func meter(peak: Float) -> Float {
+        let db = 20 * log10(max(peak, 1 / 32_768))
+        return min(max((db + 50) / 45, 0), 1)
+    }
 }
 
 /// Turning a buffer of system audio into Utter's Int16 / 16 kHz / mono contract.
@@ -405,27 +471,29 @@ enum SystemAudioPCM {
         return (pcm, peak)
     }
 
-    /// Nearest-neighbour resample of Int16 mono PCM to 16 kHz.
-    ///
-    /// Nearest-neighbour is adequate: this feeds a speech recogniser, not playback. Both routes need
-    /// it - ScreenCaptureKit delivers float PCM at its own rate regardless of the requested
-    /// `sampleRate`, and a tap's format follows the output device, which is usually 48 kHz.
-    static func resampleToSixteenK(_ data: Data, from rate: Float64) -> Data {
-        let sourceCount = data.count / 2
-        guard sourceCount > 0 else { return data }
-        let ratio = 16_000.0 / rate
-        let targetCount = Int(Double(sourceCount) * ratio)
-        guard targetCount > 0 else { return Data() }
+    /// Int16 mono at any rate to 16 kHz through AVAudioConverter, which low-passes first, so sound
+    /// above 8 kHz is removed rather than folded down into the speech band. One per stream: the
+    /// converter carries its filter state from one buffer to the next.
+    final class Resampler {
+        private var converter: AVAudioConverter?
 
-        return data.withUnsafeBytes { rawBuffer -> Data in
-            let source = rawBuffer.bindMemory(to: Int16.self)
-            var out = Data(capacity: targetCount * 2)
-            for i in 0..<targetCount {
-                let sourceIndex = min(sourceCount - 1, Int(Double(i) / ratio))
-                var sample = source[sourceIndex]
-                withUnsafeBytes(of: &sample) { out.append(contentsOf: $0) }
+        func sixteenK(_ pcm: Data, from rate: Double) -> Data {
+            let frames = pcm.count / 2
+            guard rate > 0, abs(rate - 16_000) > 1 else { return pcm }
+            guard frames > 0 else { return Data() }
+            if converter?.inputFormat.sampleRate != rate {
+                guard let input = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: rate, channels: 1, interleaved: true),
+                      let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)
+                else { return Data() }
+                converter = AVAudioConverter(from: input, to: output)
             }
-            return out
+            guard let converter,
+                  let buffer = AVAudioPCMBuffer(pcmFormat: converter.inputFormat, frameCapacity: AVAudioFrameCount(frames)),
+                  let channel = buffer.int16ChannelData else { return Data() }
+            buffer.frameLength = AVAudioFrameCount(frames)
+            pcm.withUnsafeBytes { channel[0].update(from: $0.bindMemory(to: Int16.self).baseAddress!, count: frames) }
+            guard let out = AudioRecorder.convert(buffer, with: converter), let samples = out.int16ChannelData else { return Data() }
+            return Data(bytes: samples[0], count: Int(out.frameLength) * 2)
         }
     }
 }
@@ -437,9 +505,10 @@ enum SystemAudioPCM {
 /// so the conversion is explicit rather than assumed.
 @available(macOS 13.0, *)
 private final class AudioStreamOutput: NSObject, SCStreamOutput {
-    private let onSamples: (Data, Float) -> Void
+    private let onSamples: (Data, Float, UInt64) -> Void
+    private let resampler = SystemAudioPCM.Resampler()
 
-    init(onSamples: @escaping (Data, Float) -> Void) {
+    init(onSamples: @escaping (Data, Float, UInt64) -> Void) {
         self.onSamples = onSamples
         super.init()
     }
@@ -505,12 +574,10 @@ private final class AudioStreamOutput: NSObject, SCStreamOutput {
                                                    count: floatCount,
                                                    channels: channels,
                                                    interleaved: interleaved)
-        let sourceRate = asbd.mSampleRate
-        if abs(sourceRate - 16_000) > 1, sourceRate > 0 {
-            pcm = SystemAudioPCM.resampleToSixteenK(pcm, from: sourceRate)
-        }
+        pcm = resampler.sixteenK(pcm, from: asbd.mSampleRate)
 
-        onSamples(pcm, peak)
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        onSamples(pcm, peak, pts.isValid ? CMClockConvertHostTimeToSystemUnits(pts) : mach_absolute_time())
     }
 }
 #endif

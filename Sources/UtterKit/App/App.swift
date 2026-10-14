@@ -65,6 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var meetingOfferPanel: MeetingOfferPanel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Line-buffered, so a log redirected to a file shows each line as it happens.
+        setvbuf(stdout, nil, _IOLBF, 0)
         AXReader.configure()
         AppDelegate.current = self
 
@@ -87,6 +89,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // so dynamic NSColor tokens resolve correctly from the first frame.
         ThemeManager.shared.applyAppearance()
 
+        // Nothing past here runs until whoever has to sign in has.
+        let account = AccountSession.shared
+        guard account.isRequired else { return launchApp() }
+        Task { @MainActor in
+            await account.restore()
+            if account.needsSignIn { showSignIn(required: true) } else { launchApp() }
+        }
+    }
+
+    @MainActor private func launchApp() {
         // Carry the old single-buffer scratchpad over to a real note. Runs before
         // any window appears, so the notes screen never renders the empty state
         // while the user's previous text is still sitting in the old key.
@@ -110,10 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // the store is only needed when a window opens, and the pill has to come up first.
         // `--open-window` (below) still pays it inline, since that opens a window in this same
         // call - a dev flag, and no worse than before.
-        DispatchQueue.main.async {
-            let history = TranscriptionHistory.shared
-            _ = UserData.shared.syncCompanionLifetimeWords(history.totalWords)
-        }
+        DispatchQueue.main.async { _ = TranscriptionHistory.shared }
 
         transcriptionService = TranscriptionService()
         audioRecorder = AudioRecorder()
@@ -158,10 +167,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         keyMonitor = KeyMonitor(
             onRecordStart: { [weak self] in self?.capture.holdBegan() },
             onRecordStop: { [weak self] in self?.capture.holdEnded() },
-            onHandsFreeToggle: { [weak self] in self?.capture.toggle(.handsFree) },
-            onNoteCaptureToggle: { [weak self] in self?.capture.toggle(.note) },
-            onMemoryCaptureToggle: { [weak self] in self?.toggleMemoryCapture() },
-            onOpenWindow: { [weak self] in self?.showMainWindow() },
+            onAction: { [weak self] action in
+                switch action {
+                case .handsFree: self?.capture.toggle(.handsFree)
+                case .noteCapture: self?.capture.toggle(.note)
+                case .memoryCapture: self?.toggleMemoryCapture()
+                case .openWindow: self?.showMainWindow()
+                }
+            },
             onCancel: { [weak self] in self?.capture.cancel() }
         )
         keyMonitor.start()
@@ -176,7 +189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             forName: .speechModelChanged, object: nil, queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            self.transcriptionService.localProvider?.invalidate()
+            self.transcriptionService.localProvider.invalidate()
             // preload() reads the selected tier from ModelStore, which is
             // main-actor isolated, so hop explicitly rather than relying on the
             // notification queue.
@@ -202,6 +215,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         if CommandLine.arguments.contains("--open-settings") { showSettingsWindow() }
         if CommandLine.arguments.contains("--open-onboarding") { showOnboarding() }
+        if CommandLine.arguments.contains("--open-sign-in") { showSignIn() }
         if CommandLine.arguments.contains("--open-hub") { DispatchQueue.main.async { [weak self] in self?.hub?.open() } }
 
         // Suppress any spurious windows automatically opened by SwiftUI's default scene resolution
@@ -224,6 +238,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private var onboardingWindow: NSWindow?
+    private var signInWindow: NSWindow?
+
+    /// `required` is the launch gate: the window cannot be closed, and signing in finishes the launch.
+    @MainActor func showSignIn(required: Bool = false) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let existing = signInWindow {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = OnboardingView.makeWindow(ThemedRoot {
+            SignInView(session: AccountSession.shared,
+                       onSignedIn: { [weak self] in
+                           self?.signInWindow?.close()
+                           self?.signInWindow = nil
+                           if required { self?.launchApp() }
+                       },
+                       onQuit: { NSApp.terminate(nil) })
+        }, title: "Sign in to Utter")
+        if required {
+            window.styleMask.remove(.closable)
+            // No menu-bar item exists yet, so the Dock icon is the only way back to this window.
+            NSApp.setActivationPolicy(.regular)
+        }
+        window.delegate = self
+        window.center()
+        signInWindow = window
+        window.makeKeyAndOrderFront(nil)
+    }
 
     func showOnboarding() {
         // A second press must raise the window already on screen, not leave it orphaned beside a new one.
@@ -279,8 +321,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationWillTerminate(_ notification: Notification) {
         // A meeting in progress holds un-transcribed audio. Nothing can be done
-        // about that window at quit time, but everything already transcribed is in
-        // the note and the flush below persists it.
+        // about that window at quit time, but everything already transcribed goes
+        // into the note here and the flush below persists it.
+        meetingSession.flushPending()
         // Notes save on a 1s debounce, so a quit within that window would drop the
         // last edit. Queue the latest snapshot and wait for the serial writer to drain.
         NoteStore.shared.writeToDisk()
@@ -316,19 +359,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
+        meetingSession.onCallEnded = { [weak self] in
+            self?.capture.showNotice("Call ended. Meeting saved")
+        }
         hub = HubController(
             statusItem: statusItem,
             pill: pillWindow.stateModel,
             meeting: meetingSession,
-            startMeeting: { [weak self] in
-                guard let self else { return nil }
-                return await self.meetingSession.start(recorder: self.audioRecorder, transcriber: self.transcriptionService)
-            },
-            notify: { [weak self] message in
-                guard let self else { return }
-                if !self.pillWindow.isVisible { self.pillWindow.orderFront(nil) }
-                self.capture.showNotice(message)
-            },
+            startMeeting: { [weak self] in await self?.recordMeeting() ?? .refused("") },
+            notify: { [weak self] message in self?.capture.showNotice(message) },
             command: { [weak self] action in
                 guard let self else { return }
                 switch action {
@@ -376,10 +415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let model = MainWindowModel(
             status: CaptureStatus(source: pillWindow?.stateModel),
             meeting: meetingSession,
-            startMeeting: { [weak self] in
-                guard let self else { return nil }
-                return await self.meetingSession.start(recorder: self.audioRecorder, transcriber: self.transcriptionService)
-            },
+            startMeeting: { [weak self] in await self?.recordMeeting() ?? .refused("") },
             openSettings: { [weak self] group in
                 if let group { SettingsModel.shared.group = group }
                 self?.showSettingsWindow()
@@ -473,16 +509,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         NSApp.setActivationPolicy(target)
     }
 
-    /// Whether any window that takes focus is on screen.
-    ///
-    /// The pill and the companion are deliberately absent: both are
-    /// `.nonactivatingPanel`s, so they never hold focus and there is nothing for a
-    /// policy change to disturb. Settings and What's New used to be absent too, which
-    /// is how closing either one could leave the app `.regular` with the preference
-    /// off - nothing reasserted it afterwards.
+    /// Whether any titled window is on screen. Panels (pill, hub, companion, call card) never hold
+    /// focus, and the status item's window has no title bar, so neither counts.
     private var isAnyWindowVisible: Bool {
-        [mainWindow, onboardingWindow, settingsWindow, whatsNewWindow, reportIssueWindow]
-            .contains { $0?.isVisible == true }
+        NSApp.windows.contains { $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel) }
     }
 
     /// Keep the pill on screen, or hide it until dictation starts.
@@ -573,7 +603,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // change mid-call.
         callDetector.selfIsCapturing = { [weak self] in
             guard let self else { return false }
-            return self.audioRecorder.isRecording || self.meetingSession.state != .idle
+            return self.audioRecorder.isRecording || self.meetingIsRecording
         }
         callDetector.onCallStarted = { [weak self] in self?.showMeetingOffer() }
         callDetector.onCallEnded = { [weak self] in self?.dismissMeetingOffer() }
@@ -594,6 +624,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // browser tab, not a failure. The card's height is measured from whichever string this is,
             // because a long app name wraps the title and the overflow is the button row.
             title: CallSource.offerTitle(appName: callDetector.currentCall?.appName),
+            onSpeakers: MeetingSession.playsThroughSpeakers,
             // Deliberately does *not* dismiss the card first. A start can fail - no Screen
             // Recording, the microphone busy - and the card is the only surface that can say why and
             // the only try-again for this call: `onCallStarted` fires on a transition, so once the
@@ -629,25 +660,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// likely to go unnoticed: it produces a transcript that simply has half a conversation in it.
     @MainActor
     private func startMeetingFromOffer() {
-        if let why = MeetingSession.prepare() {
-            reportOfferFailure(why)
-            return
-        }
-
         // Read before the hop: the call can end while the task is suspended, and the note's title and
         // the capture's target both come from this.
         let source = callDetector.currentCall
         Task { @MainActor in
-            guard let id = await meetingSession.start(recorder: audioRecorder,
-                                                     transcriber: transcriptionService,
-                                                     source: source) else {
-                // The session already named the reason (microphone busy, system audio refused);
-                // "Could not start the meeting recording" threw it away.
-                if case .failed(let why) = meetingSession.state {
-                    reportOfferFailure(why)
-                } else {
-                    reportOfferFailure("Couldn\u{2019}t start the meeting recording.")
-                }
+            let outcome = await recordMeeting(source: source)
+            guard case .started(let id) = outcome else {
+                if case .refused(let why) = outcome { reportOfferFailure(why) }
                 return
             }
             NoteStore.shared.selectedNoteID = id
@@ -666,12 +685,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             SidebarSelection.shared.openNote(id)
             showMainWindow()
 
-            // And a transient confirmation on the pill, which has to be brought up first: with
-            // "show at all times" off, `setState(.idle)` has already ordered it out and `.notice`
-            // does not bring it back, so both the success and the failure were invisible.
-            if !pillWindow.isVisible { pillWindow.orderFront(nil) }
             capture.showNotice("Recording the meeting")
         }
+    }
+
+    @MainActor
+    private func recordMeeting(source: CallSource? = nil) async -> MeetingSession.StartOutcome {
+        await meetingSession.record(recorder: audioRecorder, transcriber: transcriptionService, source: source)
     }
 
     /// Report a failed start where the user pressed the button.
@@ -686,7 +706,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         // The card is already gone: the call ended, or the preference was switched off, while the
         // start was in flight. The pill is all that is left, so it gets the short version.
-        if !pillWindow.isVisible { pillWindow.orderFront(nil) }
         capture.showError("Couldn\u{2019}t start the meeting recording")
     }
 
@@ -862,7 +881,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     /// deleted by that `consume` - up to a 30s window of bytes - and the user is never told.
     private var meetingIsRecording: Bool {
         MainActor.assumeIsolated {
-            meetingSession.state == .recording || meetingSession.state == .finishing
+            meetingSession.isCapturing
         }
     }
 
@@ -954,6 +973,7 @@ extension AppDelegate: NSWindowDelegate {
                 onboardingWindow = nil
             }
             if closing === reportIssueWindow { reportIssueWindow = nil }
+            if closing === signInWindow { signInWindow = nil }
             if closing === whatsNewWindow { whatsNewWindow = nil }
         }
         DispatchQueue.main.async { [weak self] in self?.applyDockVisibility() }

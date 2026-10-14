@@ -8,6 +8,7 @@ package class AudioRecorder: ObservableObject {
     private let engineQueue = DispatchQueue(label: "utter.dictation.audioengine", qos: .userInitiated)
     /// Only touched on `engineQueue`.
     private var audioEngine: AVAudioEngine?
+    private var configObserver: NSObjectProtocol?
     /// Whether a capture is claimed: from the start request until `stopRecording` or a failed
     /// start. Main thread.
     package private(set) var isRecording = false
@@ -24,14 +25,14 @@ package class AudioRecorder: ObservableObject {
 
     // Thread-safe audio buffer
     private let bufferQueue = DispatchQueue(label: "utter.dictation.audiobuffer")
-    private var _audioData = Data()
+    private var buffer = CaptureBuffer()
     /// The raw capture buffer, behind the same serialization the tap and snapshot use.
     /// Internal rather than private so `AudioRecorderConsumeTests` can seed it without a
     /// live microphone - the crash it guards (`consume` front-trimming into a non-zero
     /// `startIndex`) is otherwise only reachable after real audio has been recorded.
     var audioData: Data {
-        get { bufferQueue.sync { _audioData } }
-        set { bufferQueue.sync { _audioData = newValue } }
+        get { bufferQueue.sync { buffer.data } }
+        set { bufferQueue.sync { buffer = CaptureBuffer(data: newValue) } }
     }
 
     // VAD: Voice Activity Detection
@@ -55,34 +56,21 @@ package class AudioRecorder: ObservableObject {
     private let silenceTimeout: TimeInterval = 3.0 // Auto-send after 3s of silence (was 1.2s - too aggressive for paragraphs)
 
     /// Open the microphone off the main thread. `completion` runs on main with whether it started.
-    package func open(onVoiceStopped: (() -> Void)? = nil, completion: @escaping (Bool) -> Void) {
+    /// `device` overrides the microphone chosen in Settings, for a meeting that follows the call app's mic.
+    package func open(onVoiceStopped: (() -> Void)? = nil, device: AudioDeviceID? = nil,
+                      completion: @escaping (Bool) -> Void) {
         guard !isRecording else { return completion(false) }
         isRecording = true
         claim += 1
         let request = claim
+        let device = device ?? AudioInputs.chosen
         engineQueue.async { [self] in
-            let started = startEngine(onVoiceStopped: onVoiceStopped)
+            let started = startEngine(onVoiceStopped: onVoiceStopped, device: device)
             DispatchQueue.main.async { [self] in
                 if !started, claim == request { isRecording = false }
                 completion(started)
             }
         }
-    }
-
-    /// Begin capturing synchronously. Returns false when capture could not start.
-    ///
-    /// Callers must check the result: setting up state for a recording that never began left
-    /// nothing able to end the turn.
-    @discardableResult
-    func startRecording(onVoiceStopped: (() -> Void)? = nil) -> Bool {
-        // Already capturing: refuse rather than no-op silently. A second caller
-        // (dictation starting while a meeting records) would otherwise believe it
-        // owns the tap, and its `stopRecording` would steal the first session's
-        // audio and tear the engine down underneath it.
-        guard !isRecording else { return false }
-        claim += 1
-        isRecording = engineQueue.sync { startEngine(onVoiceStopped: onVoiceStopped) }
-        return isRecording
     }
 
     private static let targetFormat = AVAudioFormat(
@@ -93,23 +81,44 @@ package class AudioRecorder: ObservableObject {
     )
 
     /// `engineQueue` only.
-    private func startEngine(onVoiceStopped: (() -> Void)?) -> Bool {
+    private func startEngine(onVoiceStopped: (() -> Void)?, device: AudioDeviceID?) -> Bool {
         // Under the queue: the tap reads all of these from the render thread.
         bufferQueue.sync {
-            _audioData = Data()
+            buffer = CaptureBuffer()
             silenceStart = nil
             hasDetectedVoice = false
             everDetectedVoice = false
             vadCallback = onVoiceStopped
         }
+        bufferQueue.sync { engineStartInterval = Signposts.poster.beginInterval("EngineStartToFirstBuffer") }
+        return launchEngine(device: device)
+    }
+
+    /// Build, tap and start an engine on `device`. Also the restart after the audio hardware
+    /// changes, which keeps the buffer so a meeting carries on when AirPods connect. On `engineQueue`.
+    private func launchEngine(device: AudioDeviceID?) -> Bool {
         let audioEngine = AVAudioEngine()
         let inputNode = audioEngine.inputNode
-        let nativeFormat = inputNode.outputFormat(forBus: 0)
+        // Before the format is read, so the format is the chosen device's.
+        if var device, let unit = inputNode.audioUnit {
+            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                              &device, UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status != noErr { print("⚠️ Couldn't switch to the chosen microphone (OSStatus \(status)); using the default") }
+        }
+        var nativeFormat = inputNode.outputFormat(forBus: 0)
+        // The node keeps the format it was created with; the input side does no rate conversion,
+        // so the tap has to run at the chosen device's rate.
+        let hardwareRate = inputNode.inputFormat(forBus: 0).sampleRate
+        if device != nil, hardwareRate > 0, hardwareRate != nativeFormat.sampleRate,
+           let format = AVAudioFormat(standardFormatWithSampleRate: hardwareRate, channels: nativeFormat.channelCount) {
+            nativeFormat = format
+        }
 
         guard let targetFormat = Self.targetFormat,
               let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else { return false }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, when in
+            let host = when.isHostTimeValid ? when.hostTime : mach_absolute_time()
             guard let self, let outputBuffer = Self.convert(buffer, with: converter),
                   let channelData = outputBuffer.int16ChannelData else { return }
             let frameLength = Int(outputBuffer.frameLength)
@@ -124,16 +133,21 @@ package class AudioRecorder: ObservableObject {
                     self.engineStartInterval = nil
                     Signposts.poster.endInterval("EngineStartToFirstBuffer", interval)
                 }
-                self._audioData.append(data)
+                self.buffer.append(data, host: host)
                 self.checkVoiceActivity(channelData: queuedChannelData[0], frameLength: frameLength)
                 self.publishLevel(channelData: queuedChannelData[0], frameLength: frameLength)
             }
         }
 
-        bufferQueue.sync { engineStartInterval = Signposts.poster.beginInterval("EngineStartToFirstBuffer") }
         do {
             try audioEngine.start()
             self.audioEngine = audioEngine
+            // The engine stops itself when devices change; without this the mic side goes silent.
+            configObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: nil
+            ) { [weak self, weak audioEngine] _ in
+                self?.engineQueue.async { self?.restart(audioEngine, device: device) }
+            }
             print("🎙️ Recording started")
             return true
         } catch {
@@ -148,6 +162,21 @@ package class AudioRecorder: ObservableObject {
     }
 
     /// Resample one tap buffer to the converter's output format.
+    private func restart(_ stale: AVAudioEngine?, device: AudioDeviceID?) {
+        guard let stale, stale === audioEngine else { return }
+        dropConfigObserver()
+        stale.inputNode.removeTap(onBus: 0)
+        stale.stop()
+        audioEngine = nil
+        print("🎙️ Audio devices changed, reopening the microphone")
+        if !launchEngine(device: device) { print("❌ Couldn't reopen the microphone after a device change") }
+    }
+
+    private func dropConfigObserver() {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        configObserver = nil
+    }
+
     static func convert(_ buffer: AVAudioPCMBuffer, with converter: AVAudioConverter) -> AVAudioPCMBuffer? {
         let ratio = converter.outputFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
@@ -189,9 +218,9 @@ package class AudioRecorder: ObservableObject {
     /// `LocalWhisperProvider` already documented this bound as existing; it did not.
     ///
     /// Capping also avoids a copy on the audio render thread, **on the capped path only**. Handing
-    /// back `_audioData` itself leaves a second reference alive, so the tap's next `append` has to
+    /// back `buffer.data` itself leaves a second reference alive, so the tap's next `append` has to
     /// copy the whole buffer - inside the lock, on the render thread. `subdata` returns a fresh
-    /// buffer and leaves `_audioData` uniquely referenced, so the append stays in place. Meeting
+    /// buffer and leaves `buffer.data` uniquely referenced, so the append stays in place. Meeting
     /// capture reads uncapped 30-second windows and still pays that copy; only the preview, which
     /// reads every 700ms, is spared it.
     ///
@@ -202,12 +231,16 @@ package class AudioRecorder: ObservableObject {
     package func audioSnapshot(lastBytes cap: Int = .max) -> Data {
         bufferQueue.sync {
             guard everDetectedVoice else { return Data() }
-            return Self.tail(of: _audioData, lastBytes: cap)
+            return Self.tail(of: buffer.data, lastBytes: cap)
         }
     }
 
-    /// What `audioSnapshot().count` would be, without sharing the buffer.
-    var audioByteCount: Int { bufferQueue.sync { everDetectedVoice ? _audioData.count : 0 } }
+    /// Everything captured with its clock, voice or not: meetings consume every window, so silence
+    /// never piles up, and the clock survives `stopRecording` clearing the buffer.
+    func bufferSnapshot() -> CaptureBuffer { bufferQueue.sync { buffer } }
+
+    /// What `bufferSnapshot().data.count` would be, without sharing the buffer.
+    var capturedByteCount: Int { bufferQueue.sync { buffer.data.count } }
 
     /// The last `cap` bytes of `data`, or all of it when it is already shorter.
     ///
@@ -246,16 +279,7 @@ package class AudioRecorder: ObservableObject {
     /// though the early audio has already been used. Not used by ordinary
     /// dictation, which needs the whole utterance at the end.
     func consume(_ count: Int) {
-        bufferQueue.sync {
-            guard count > 0, count <= _audioData.count else { return }
-            // `removeFirst` advances the Data's `startIndex` instead of rebasing it to 0, so
-            // every later reader that indexes from 0 - `MeetingSession`'s `subdata(in:)` - traps
-            // once anything has been consumed (SIGTRAP, verified). `subdata` returns a fresh
-            // zero-based copy of the remaining tail, which also actually releases the trimmed
-            // bytes rather than sliding a cursor over a buffer that never shrinks - the
-            // bounded-memory point of consuming at all.
-            _audioData = _audioData.subdata(in: (_audioData.startIndex + count)..<_audioData.endIndex)
-        }
+        bufferQueue.sync { buffer.consume(count) }
     }
 
     /// Install or replace the VAD silence callback after recording has started.
@@ -379,6 +403,7 @@ package class AudioRecorder: ObservableObject {
                 return completion(nil)
             }
             let stopStart = Date()
+            dropConfigObserver()
             audioEngine.inputNode.removeTap(onBus: 0)
             audioEngine.stop()
             self.audioEngine = nil
@@ -387,8 +412,8 @@ package class AudioRecorder: ObservableObject {
             let capturedData = bufferQueue.sync {
                 vadCallback = nil
                 smoothedLevel = 0
-                let captured = _audioData
-                _audioData = Data()
+                let captured = buffer.data
+                buffer = CaptureBuffer()
                 return captured
             }
             DispatchQueue.main.async { [weak self] in
@@ -513,5 +538,82 @@ package class AudioRecorder: ObservableObject {
         append32(pcm.count)
         wav.append(pcm)
         return wav
+    }
+}
+
+/// The Mac's microphones: the Settings picker's list, and the mic a call app is using.
+package enum AudioInputs {
+    package struct Device: Identifiable, Equatable {
+        /// `kAudioDevicePropertyDeviceUID`: stable across reboots and replugs, unlike the device ID.
+        package let id: String
+        package let name: String
+    }
+
+    package static func all() -> [Device] {
+        devices().compactMap { device in
+            guard isMicrophone(device), let uid = string(device, kAudioDevicePropertyDeviceUID) else { return nil }
+            return Device(id: uid, name: string(device, kAudioObjectPropertyName) ?? uid)
+        }
+    }
+
+    /// The mic chosen in Settings, or nil for the system default (also when it is unplugged).
+    static var chosen: AudioDeviceID? {
+        let uid = UserData.shared.microphoneUID
+        guard !uid.isEmpty else { return nil }
+        return devices().first { string($0, kAudioDevicePropertyDeviceUID) == uid }
+    }
+
+    /// The input device `process` is recording from right now, if any.
+    static func device(usedBy process: AudioObjectID) -> AudioDeviceID? {
+        objects(process, kAudioProcessPropertyDevices, scope: kAudioObjectPropertyScopeInput).first(where: isMicrophone)
+    }
+
+    private static func devices() -> [AudioDeviceID] {
+        objects(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDevices)
+    }
+
+    /// A real input: has input streams and is not a virtual loopback (Zoom and Teams install those).
+    private static func isMicrophone(_ device: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
+                                                 mScope: kAudioObjectPropertyScopeInput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr, size > 0 else { return false }
+        let transport = uint32(device, kAudioDevicePropertyTransportType)
+        return transport != kAudioDeviceTransportTypeVirtual && transport != kAudioDeviceTransportTypeAggregate
+    }
+
+    // The HAL property readers every CoreAudio caller in Utter uses.
+
+    static func objects(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> [AudioObjectID] {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(object, &address, 0, nil, &size) == noErr, size > 0 else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.filter { $0 != AudioObjectID(kAudioObjectUnknown) }
+    }
+
+    static func uint32(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                       scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> UInt32? {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr ? value : nil
+    }
+
+    /// A CFString property; the +1 the HAL returns is balanced by ARC releasing `value`. Empty reads as nil.
+    static func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var value: CFString?
+        var size = UInt32(MemoryLayout<CFString?>.size)
+        let status = withUnsafeMutablePointer(to: &value) {
+            AudioObjectGetPropertyData(object, &address, 0, nil, &size, $0)
+        }
+        guard status == noErr, let value, !(value as String).isEmpty else { return nil }
+        return value as String
     }
 }

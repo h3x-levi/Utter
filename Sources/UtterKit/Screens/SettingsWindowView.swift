@@ -50,7 +50,6 @@ final class SettingsModel {
     @ObservationIgnored private let injectedMeeting: MeetingSession?
     @ObservationIgnored private let levels: AnyPublisher<Float, Never>?
     @ObservationIgnored private let openIssue: (String?, IssueCategory) -> Void
-    @ObservationIgnored private let openSetup: () -> Void
     @ObservationIgnored private var levelWatch: AnyCancellable?
     @ObservationIgnored lazy var companion = CompanionSettingsModel(userData: userData, history: history)
 
@@ -65,7 +64,6 @@ final class SettingsModel {
          crashReports: (() -> (logs: [CrashLogSummary], lastRunCrashed: Bool))? = nil,
          levels: AnyPublisher<Float, Never>? = nil,
          openIssue: ((String?, IssueCategory) -> Void)? = nil,
-         openSetup: (() -> Void)? = nil,
          device: Device = .current(),
          appVersion: String = ConfigManager.shared.appVersion,
          launchAtLogin: Bool = SMAppService.mainApp.status == .enabled) {
@@ -80,7 +78,6 @@ final class SettingsModel {
         self.crashReports = crashReports ?? Self.savedCrashReports
         self.levels = levels
         self.openIssue = openIssue ?? { AppDelegate.current?.openReportIssue(crashLog: $0, category: $1) }
-        self.openSetup = openSetup ?? { AppDelegate.current?.showOnboarding() }
         self.device = device
         self.appVersion = appVersion
         self.launchAtLogin = launchAtLogin
@@ -128,13 +125,7 @@ final class SettingsModel {
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
-    func openSystemSettings(_ anchor: String) {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    func runSetupAgain() { openSetup() }
+    func openSystemSettings(_ anchor: String) { AccessibilityPermission.openPrivacyPane(anchor) }
 
     /// Lands the window on the Companion tab, scrolled to `section`.
     func showCompanion(_ section: CompanionSection = .companion) {
@@ -651,8 +642,10 @@ struct SettingsField: View {
 
 /// A state beside a name: granted gets a drawn tick, a warning a gold dot.
 struct SettingsStatus: View {
+    enum Kind { case neutral, ok, warn }
+
     let text: String
-    var kind: Look.Status.Kind = .neutral
+    var kind: Kind = .neutral
 
     var body: some View {
         HStack(spacing: 6) {

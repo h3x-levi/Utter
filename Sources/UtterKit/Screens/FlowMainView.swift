@@ -250,18 +250,16 @@ final class SetupNeeds {
         return needs
     }
 
+    /// "One thing left", shared by the Library card and the hub's stripe.
     static func cardTitle(_ count: Int) -> String {
-        count == 1 ? "One thing left." : "\(count) things left."
+        let number = ["One", "Two", "Three"][min(max(count, 1), 3) - 1]
+        return "\(number) thing\(count == 1 ? "" : "s") left"
     }
 
     func grant(_ need: Need) {
         switch need {
         case .microphone:
-            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
-                AVCaptureDevice.requestAccess(for: .audio) { _ in }
-            } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
+            AccessibilityPermission.requestMicrophone()
         case .accessibility:
             AccessibilityPermission.openSettingsPane()
         case .model:
@@ -298,7 +296,7 @@ final class MainWindowModel {
          notes: NoteStore? = nil,
          models: ModelStore? = nil,
          meeting: MeetingSession? = nil,
-         startMeeting: @escaping () async -> UUID? = { nil },
+         startMeeting: @escaping () async -> MeetingSession.StartOutcome = { .refused("") },
          openSettings: @escaping (SettingsGroup?) -> Void = { _ in },
          toggleHandsFree: @escaping () -> Void = {}) {
         let selection = selection ?? .shared

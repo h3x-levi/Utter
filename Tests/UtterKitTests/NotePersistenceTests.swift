@@ -335,6 +335,33 @@ struct NotePersistenceTests {
         }
     }
 
+    @Test("A meeting's length is what it recorded, kept on disk, not the time until its last edit")
+    @MainActor
+    func meetingLengthSurvivesEdits() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NoteStore(storageDir: directory)
+        let meeting = store.create(body: "# Meeting", source: .meeting)
+        store.setRecordedSeconds(1_800, of: meeting.id)
+        store.renameSpeaker(.others, to: "Priya", in: meeting.id)
+        store.writeToDisk()
+        store.flushPendingWrites()
+        #expect(NoteStore(storageDir: directory).notes.first { $0.id == meeting.id }?.meetingLength == 1_800)
+    }
+
+    @Test("Both speakers can't share one name, so their turns stay apart")
+    @MainActor
+    func speakersKeepDistinctNames() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NoteStore(storageDir: directory)
+        let meeting = store.create(body: "**You:** hi\n\n**Others:** hello", source: .meeting)
+        store.renameSpeaker(.others, to: "You", in: meeting.id)
+        let note = try #require(store.notes.first { $0.id == meeting.id })
+        #expect(note.speakerLabels.others == "Others")
+        #expect(note.body.contains("**Others:** hello"))
+    }
+
     @Test("A written note loads in the next store, and a second write keeps the previous copy")
     @MainActor
     func writeThenReload() throws {

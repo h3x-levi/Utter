@@ -10,7 +10,7 @@ struct HubView: View {
     var body: some View {
         VStack(spacing: 0) {
             TapeStripe(model.stripeLabel, status: model.status, segments: model.segments, goal: model.goal) { id in
-                if let track = model.today.first(where: { $0.id == id }) { model.perform(.open(track)) }
+                if let track = model.today.first(where: { $0.item.id == id }) { model.perform(.open(track)) }
             }
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -55,13 +55,15 @@ struct HubView: View {
                 .padding(.top, 10)
         } else if let need = model.needs.first {
             HStack(spacing: 10) {
-                (Text(HubNeed.title(model.needs.count) + ".").fontWeight(.semibold).foregroundStyle(Mixtape.ink) + Text(" " + need.message))
+                (Text(SetupNeeds.cardTitle(model.needs.count) + ".").fontWeight(.semibold).foregroundStyle(Mixtape.ink) + Text(" " + need.sentence))
                     .font(Mixtape.body(12.5))
                     .foregroundStyle(Mixtape.ink2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Button(need.button) { model.perform(.grant(need)) }.buttonStyle(.pen(.fill, .small))
+                // The hub hands model work to Speech settings rather than downloading from a popover.
+                Button([.microphone, .accessibility].contains(need) ? need.actionTitle : "Set up") { model.perform(.grant(need)) }
+                    .buttonStyle(.pen(.fill, .small))
             }
             .padding(.top, 10)
         }

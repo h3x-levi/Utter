@@ -95,17 +95,8 @@ final class OnboardingViewModel {
     }
 
     func requestMic() {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-                DispatchQueue.main.async {
-                    self?.micGranted = granted
-                }
-            }
-        case .denied, .restricted:
-            openSettings("Privacy_Microphone")
-        default:
-            micGranted = true
+        AccessibilityPermission.requestMicrophone { [weak self] granted in
+            DispatchQueue.main.async { self?.micGranted = granted }
         }
     }
 
@@ -117,11 +108,6 @@ final class OnboardingViewModel {
         if !isPreview { OnboardingState.markCompleted() }
     }
 
-    private func openSettings(_ pane: String) {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-            NSWorkspace.shared.open(url)
-        }
-    }
 }
 
 /// The dictation key as a keycap and as a word in a sentence.
@@ -385,7 +371,7 @@ struct OnboardingView: View {
     }
 
     /// The setup window, shared by `AppDelegate.showOnboarding` and the snapshot tests.
-    static func makeWindow(_ root: some View) -> NSWindow {
+    static func makeWindow(_ root: some View, title: String = "Set up Utter") -> NSWindow {
         let hosting = NSHostingView(rootView: root)
         // The hosting view must never size the window: that is the ~133 pt collapse `showMainWindow` guards.
         hosting.sizingOptions = []
@@ -393,7 +379,7 @@ struct OnboardingView: View {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.title = "Set up Utter"
+        window.title = title
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
@@ -523,5 +509,98 @@ enum OnboardingState {
         UserDefaults.standard.set(true, forKey: completedKey)
         // Leaving the step behind would drop a later replay of onboarding into the middle of the flow.
         UserDefaults.standard.removeObject(forKey: stepKey)
+    }
+}
+
+// MARK: - Sign in
+
+/// The first screen once Google sign-in is connected: who you are, then the app opens.
+struct SignInView: View {
+    @ObservedObject var session: AccountSession
+    let onSignedIn: () -> Void
+    let onQuit: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Sign in to Utter")
+                .font(Mixtape.body(12))
+                .foregroundStyle(Mixtape.ink3)
+                .frame(maxWidth: .infinity, minHeight: 32, alignment: .center)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+            Text("Sign in")
+                .mixtapeCaps(10.5, tracking: 0.2)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .leading)
+                .background(Mixtape.red)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Sign in to start")
+                        .mixtapeCaps(30, tracking: 0.02)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Use your Google account so Utter knows it\u{2019}s you. Your recordings, notes and words stay on this Mac.")
+                        .font(Mixtape.body(14))
+                        .foregroundStyle(Mixtape.ink2)
+                        .lineSpacing(4)
+                        .frame(maxWidth: 500, alignment: .leading)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Button(action: signIn) {
+                    Image(nsImage: colorScheme == .dark ? GoogleButtonArt.dark : GoogleButtonArt.light)
+                }
+                .buttonStyle(GoogleButtonStyle())
+                .disabled(session.isSigningIn)
+                .keyboardShortcut(.defaultAction)
+                .accessibilityLabel("Sign in with Google")
+                status
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.top, 28)
+            .padding(.horizontal, 56)
+            HStack {
+                Button("Quit Utter", action: onQuit)
+                    .buttonStyle(.pen(.ghost))
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+            }
+            .padding(.horizontal, 56)
+            .frame(height: 76)
+            .overlay(alignment: .top) { Rectangle().fill(Mixtape.rule).frame(height: 1) }
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Mixtape.paper)
+        .foregroundStyle(Mixtape.ink)
+    }
+
+    @ViewBuilder private var status: some View {
+        if session.isSigningIn {
+            SettingsStatus(text: "Finish signing in in your browser.")
+        } else if let problem = session.problem {
+            SettingsStatus(text: problem, kind: .warn)
+        } else {
+            Text("Signing in opens your browser. Utter only learns your name, email and photo.")
+                .font(Mixtape.body(12.5))
+                .foregroundStyle(Mixtape.ink3)
+        }
+    }
+
+    private func signIn() {
+        Task { if await session.signIn(presenting: NSApp.keyWindow) { onSignedIn() } }
+    }
+}
+
+/// Google's art is used as drawn; only the press and disabled states are Utter's.
+private struct GoogleButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(isEnabled ? 1 : 0.5)
+            .animation(Mixtape.press, value: configuration.isPressed)
     }
 }

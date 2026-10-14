@@ -498,8 +498,14 @@ if [ -d "$STAGING_DIR/$APP_NAME.app/Contents/Frameworks/whisper.framework" ]; th
     codesign --force --sign "$SIGN_ID" "$STAGING_DIR/$APP_NAME.app/Contents/Frameworks/whisper.framework" 2>/dev/null || true
 fi
 
-# Code sign the entire bundle. Fatal on failure, and verified.
-if ! codesign --force --deep --sign "$SIGN_ID" "$STAGING_DIR/$APP_NAME.app"; then
+# Code sign the entire bundle. Fatal on failure, and verified. A certificate build gets the hardened
+# runtime that notarization requires, with the microphone entitlement it then needs; an ad-hoc build
+# cannot, because library validation would refuse its ad-hoc whisper.framework.
+RUNTIME_FLAGS=()
+if [ "$SIGN_ID" != "-" ]; then
+    RUNTIME_FLAGS=(--options runtime --entitlements "Utter/Utter.entitlements")
+fi
+if ! codesign --force --deep "${RUNTIME_FLAGS[@]}" --sign "$SIGN_ID" "$STAGING_DIR/$APP_NAME.app"; then
     echo "   ❌ Signing the app bundle failed with identity: $SIGN_ID"
     rm -rf "$STAGING_DIR"
     exit 1

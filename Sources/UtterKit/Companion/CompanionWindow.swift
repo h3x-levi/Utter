@@ -149,8 +149,7 @@ final class CompanionWindow: NSPanel {
 
     private var automaticQuiet: Bool {
         if screenSharing { return true }
-        guard let state = AppDelegate.current?.meetingSession.state else { return false }
-        return state != .idle
+        return AppDelegate.current?.meetingSession.isCapturing ?? false
     }
 
     private func refreshScreenSharing() {

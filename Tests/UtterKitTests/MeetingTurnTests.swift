@@ -285,6 +285,40 @@ struct MeetingTurnTests {
         #expect(MeetingTranscript.heading("Ana") == "**Ana:**")
     }
 
+    @Test("The call heard back through the speakers is not the user's turn")
+    func echoIsDropped() {
+        let others = "Morning everyone. Let's start with the launch dates, Priya can you share your screen? Thanks."
+        // Speaker bleed, transcribed a little differently from the clean stream.
+        #expect(MeetingTranscript.isEcho("Let's start with the launch date. Priya, can you share your screen.", of: others))
+        #expect(MeetingTranscript.isEcho("Thanks.", of: others))
+        // A real reply shares common words, not word pairs.
+        #expect(!MeetingTranscript.isEcho("Sure, I can share the screen with everyone.", of: others))
+        #expect(!MeetingTranscript.isEcho("Yes.", of: others))
+        #expect(!MeetingTranscript.isEcho("Anything at all", of: ""))
+        #expect(!MeetingTranscript.isEcho("", of: others))
+    }
+
+    @Test("Turns from both streams come out in the order they were said, once both are past them")
+    func turnsInterleaveByTime() {
+        var pending: [(at: TimeInterval, turn: String)] = [(12, "You: second"), (3, "Others: first"), (31, "Others: later")]
+        let ready = MeetingTranscript.release(&pending, before: 30)
+        #expect(ready.map(\.turn) == ["Others: first", "You: second"])
+        #expect(pending.map(\.turn) == ["Others: later"])
+        #expect(MeetingTranscript.release(&pending, before: .infinity).map(\.turn) == ["Others: later"])
+        #expect(pending.isEmpty)
+    }
+
+    @Test("Whisper's captions for non-speech never become a turn")
+    func nonSpeechCaptionsAreNotTurns() {
+        for caption in ["[BLANK_AUDIO]", "[GASP]", "(music)", "[The following transcript may mention a woman.]"] {
+            #expect(!TranscriptText.isUsable(caption), "\(caption)")
+        }
+        #expect(TranscriptText.isUsable("We are back [laughs] for the last item."))
+        #expect(TranscriptText.isUsable("[Music] Welcome back everyone [Music]"))
+        #expect(!TranscriptText.isUsable("[Music] (applause) [Music]"))
+        #expect(TranscriptText.isUsable("Let's go."))
+    }
+
     // MARK: - Persistence
 
     /// Matches `NoteStore.writeToDisk()`.

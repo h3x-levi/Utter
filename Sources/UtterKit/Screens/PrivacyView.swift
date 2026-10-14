@@ -30,7 +30,7 @@ struct PrivacySettingsContent: View {
             PermissionRow(name: "Screen Recording", purpose: "To hear the other side of a call.",
                           need: .screenRecording(granted: readiness.screenRecordingGranted,
                                                  offersToTranscribeCalls: userData.offerToTranscribeCalls,
-                                                 meetingCaptureUnderway: meeting.state != .idle)) {
+                                                 meetingCaptureUnderway: meeting.isCapturing)) {
                 model.openSystemSettings("Privacy_ScreenCapture")
             }
         }

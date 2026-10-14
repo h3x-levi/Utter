@@ -176,7 +176,7 @@ package final class CallDetector {
     private var isSampling = false
 
     /// The main-actor half of a sample: everything that reads owner state or drives UI.
-    private func decide(_ io: (input: Bool, output: Bool, source: CallSource?)?) {
+    private func decide(_ io: CallSource??) {
         guard let io else {
             reportUnavailable()
             return
@@ -187,18 +187,16 @@ package final class CallDetector {
         // whole purpose is to sit out a chime - was skipped outright. `systemUptime` is monotonic
         // and does not advance while the machine is asleep, which is exactly the interval that
         // should not count towards "held open for five seconds".
-        let changed = presence.update(inputByOthers: io.input,
-                                      outputByOthers: io.output,
-                                      plausibleCall: io.source != nil,
+        let changed = presence.update(qualified: io != nil,
                                       selfIsCapturing: selfIsCapturing(),
                                       at: ProcessInfo.processInfo.systemUptime)
         guard changed else { return }
         if presence.isInCall {
             // Taken from the sample that confirmed the call, and then frozen - see `currentCall`.
-            currentCall = io.source
+            currentCall = io
             // The app's name is logged; nothing about what is being said is, and no capture has
             // started at this point.
-            print("📞 Call detected\(io.source?.appName.map { " (\($0))" } ?? "")")
+            print("📞 Call detected\(io?.appName.map { " (\($0))" } ?? "")")
             onCallStarted?()
         } else {
             currentCall = nil
@@ -230,7 +228,7 @@ package final class CallDetector {
 
     // MARK: - CoreAudio
 
-    /// Whether any process other than Utter is running audio input, whether any is running output,
+    /// The supported calling app that has both the microphone and the speakers open, if any,
     /// and which process looks most like the one holding the call. `nil` means the HAL declined the
     /// query, which is how this reports "not available here" - see `reportUnavailable`.
     ///
@@ -243,12 +241,10 @@ package final class CallDetector {
     /// allowed to be nil while they are both true - see `CallSource`. It costs one extra property
     /// read per process on a list that is being walked anyway.
     nonisolated static func audioInUseByOtherProcesses()
-        -> (input: Bool, output: Bool, source: CallSource?)? {
+        -> CallSource?? {
         guard let processes = processObjects(), !processes.isEmpty else { return nil }
 
         let own = ProcessInfo.processInfo.processIdentifier
-        var input = false
-        var output = false
         // Keep every active process because Electron calling apps may split microphone and output
         // across helpers. `CallAudioEvidence` joins only helpers from the same supported app family.
         var activities: [CallProcessActivity] = []
@@ -277,12 +273,10 @@ package final class CallDetector {
             if let running = isRunning(process, kAudioProcessPropertyIsRunningInput) {
                 answered = true
                 runsInput = running
-                if running, somebodyElse { input = true }
             }
             if let running = isRunning(process, kAudioProcessPropertyIsRunningOutput) {
                 answered = true
                 runsOutput = running
-                if running, somebodyElse { output = true }
             }
 
             // Only build a source for a process that could be the call, so the bundle ID of every
@@ -296,7 +290,44 @@ package final class CallDetector {
 
         guard answered else { return nil }
         let chosen = CallAudioEvidence.candidate(from: activities)
-        return (input, output, chosen)
+        return .some(chosen)
+    }
+
+    /// Whether an app other than Utter is playing sound, for pausing music while dictating.
+    nonisolated static func otherAppIsPlaying() -> Bool {
+        let own = ProcessInfo.processInfo.processIdentifier
+        return (processObjects() ?? []).contains {
+            pid(of: $0).map { $0 != own } == true && isRunning($0, kAudioProcessPropertyIsRunningOutput) == true
+        }
+    }
+
+    /// Whether `process` has any audio input or output running; false once it has gone.
+    nonisolated static func isDoingAudio(_ process: AudioObjectID) -> Bool {
+        isRunning(process, kAudioProcessPropertyIsRunningInput) == true
+            || isRunning(process, kAudioProcessPropertyIsRunningOutput) == true
+    }
+
+    /// Whether the call is still on: its process is doing audio, or failing that any process of
+    /// the same app, because Electron clients can move audio to another helper mid-call.
+    nonisolated static func callIsAlive(_ call: CallSource) -> Bool {
+        if isDoingAudio(call.processObject) { return true }
+        guard let family = CallSource.knownName(bundleID: call.bundleID),
+              let processes = processObjects() else { return false }
+        return processes.contains {
+            CallSource.knownName(bundleID: bundleID(of: $0)) == family && isDoingAudio($0)
+        }
+    }
+
+    /// The mic the call app records from: its own process's, or another helper's of the same app,
+    /// since Electron clients put input and output in different helpers.
+    nonisolated static func microphone(of call: CallSource) -> AudioDeviceID? {
+        if let device = AudioInputs.device(usedBy: call.processObject) { return device }
+        guard let family = CallSource.knownName(bundleID: call.bundleID),
+              let processes = processObjects() else { return nil }
+        return processes.lazy
+            .filter { CallSource.knownName(bundleID: bundleID(of: $0)) == family }
+            .compactMap(AudioInputs.device(usedBy:))
+            .first
     }
 
     /// Everything known about one candidate process.
@@ -314,81 +345,21 @@ package final class CallDetector {
 
     /// The system's process objects, or `nil` if it does not have any.
     private nonisolated static func processObjects() -> [AudioObjectID]? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyProcessObjectList,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        let system = AudioObjectID(kAudioObjectSystemObject)
-        let stride = MemoryLayout<AudioObjectID>.size
-
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(system, &address, 0, nil, &size) == noErr,
-              size >= UInt32(stride) else { return nil }
-
-        var objects = [AudioObjectID](repeating: AudioObjectID(kAudioObjectUnknown),
-                                      count: Int(size) / stride)
-        guard AudioObjectGetPropertyData(system, &address, 0, nil, &size, &objects) == noErr else {
-            return nil
-        }
-        // The second call reports how much it actually wrote, which can be less than the size query
-        // promised if a process went away in between.
-        return Array(objects.prefix(Int(size) / stride))
+        let list = AudioInputs.objects(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyProcessObjectList)
+        return list.isEmpty ? nil : list
     }
 
-    /// One of the process object's boolean properties, or `nil` if it does not answer.
     private nonisolated static func isRunning(_ process: AudioObjectID,
-                                  _ selector: AudioObjectPropertySelector) -> Bool? {
-        var address = AudioObjectPropertyAddress(mSelector: selector,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
-        var value: UInt32 = 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(process, &address, 0, nil, &size, &value) == noErr else {
-            return nil
-        }
-        return value != 0
+                                              _ selector: AudioObjectPropertySelector) -> Bool? {
+        AudioInputs.uint32(process, selector).map { $0 != 0 }
     }
 
-    /// The bundle ID behind a process object, or `nil` if it does not answer or has none.
-    ///
-    /// `AudioHardware.h` describes `kAudioProcessPropertyBundleID` (`'pbid'`) as "A CFString that
-    /// contains the bundle ID of the process. The caller is responsible for releasing the returned
-    /// CFObject." - so it comes back at +1 and something has to balance it.
-    ///
-    /// Nothing here calls `CFRelease`, and that is not an omission. The property is written straight
-    /// into the storage of a Swift `CFString?` variable, which is an owning reference: ARC releases
-    /// it when `value` goes out of scope, which is exactly the one release the +1 is owed. Adding a
-    /// `CFRelease` on top would be a release over a retain, and the crash it caused would land
-    /// somewhere else entirely.
-    ///
-    /// An unreadable bundle ID cannot safely qualify for an automatic offer. The explicit meeting
-    /// recorder remains available in Notes.
     private nonisolated static func bundleID(of process: AudioObjectID) -> String? {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyBundleID,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
-        var value: CFString?
-        var size = UInt32(MemoryLayout<CFString?>.size)
-        let status = withUnsafeMutablePointer(to: &value) {
-            AudioObjectGetPropertyData(process, &address, 0, nil, &size, $0)
-        }
-        guard status == noErr, let value else { return nil }
-        let bundleID = value as String
-        return bundleID.isEmpty ? nil : bundleID
+        AudioInputs.string(process, kAudioProcessPropertyBundleID)
     }
 
-    /// The pid behind a process object, or `nil` if it does not answer.
     private nonisolated static func pid(of process: AudioObjectID) -> pid_t? {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyPID,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
-        var value: pid_t = 0
-        var size = UInt32(MemoryLayout<pid_t>.size)
-        guard AudioObjectGetPropertyData(process, &address, 0, nil, &size, &value) == noErr else {
-            return nil
-        }
-        return value
+        AudioInputs.uint32(process, kAudioProcessPropertyPID).map { pid_t(bitPattern: $0) }
     }
 }
 
@@ -408,11 +379,11 @@ enum CallAudioEvidence {
         let inputs = activities.filter(\.runsInput)
         let outputs = activities.filter(\.runsOutput)
         for input in inputs {
-            guard let family = CallSource.automaticCallFamily(bundleID: input.source.bundleID) else {
+            guard let family = CallSource.knownName(bundleID: input.source.bundleID) else {
                 continue
             }
             if let output = outputs.first(where: {
-                CallSource.automaticCallFamily(bundleID: $0.source.bundleID) == family
+                CallSource.knownName(bundleID: $0.source.bundleID) == family
             }) {
                 return output.source
             }

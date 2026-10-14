@@ -40,16 +40,13 @@ struct LibraryScreen: View {
     // MARK: Tape
 
     private func tape(_ today: [LibraryItem]) -> some View {
-        let dictated = today.filter { $0.kind == .dictation }.reduce(0) { $0 + $1.words }
-        let segments = today.map { TapeSegment(id: $0.id, words: $0.words, label: $0.title) }
-            + TapeSegment.unkept(userData.unkeptWordsToday(onTape: dictated), id: Self.unkeptID)
+        let segments = TapeSegment.today(today, unkept: userData.unkeptWordsToday(onTape: TapeSegment.dictatedWords(today)))
         return TapeStripe(status: stripeStatus, segments: segments, goal: userData.tapeGoal, selected: model.selectedID,
                           insets: EdgeInsets(top: 0, leading: 34, bottom: 0, trailing: 30)) { id in
-            if id != Self.unkeptID { model.selection.open(libraryItem: id) }
+            if id != TapeSegment.unkeptID { model.selection.open(libraryItem: id) }
         }
     }
 
-    private static let unkeptID = "unkept"
 
     private var stripeStatus: TapeStripe<String>.Status {
         if window.status.turn == .listening || model.meetingState == .recording { return .recording }
@@ -118,7 +115,7 @@ struct LibraryScreen: View {
         }
         let needs = window.setup.needs
         if let need = needs.first {
-            InkNote(Text(SetupNeeds.cardTitle(needs.count)).bold().foregroundStyle(Mixtape.ink) + Text(" \(need.sentence)")) {
+            InkNote(Text(SetupNeeds.cardTitle(needs.count) + ".").bold().foregroundStyle(Mixtape.ink) + Text(" \(need.sentence)")) {
                 if case .model(let fraction?) = need {
                     ProgressView(value: fraction)
                         .frame(width: 120)
@@ -370,6 +367,9 @@ private struct FoldContent: View {
             text.padding(.top, 12)
             buttons.padding(.top, 20)
             heardName
+            if let meeting = model.meeting, let note, note.source == .meeting {
+                MeetingDoneNote(meeting: meeting, note: note) { model.run($0, on: note) }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $model.namingSpeakers) { speakers }
@@ -601,8 +601,33 @@ private struct FoldContent: View {
 
 // MARK: - Meeting note
 
+/// After a meeting ends, offers the two Improve actions people want from one.
+private struct MeetingDoneNote: View {
+    @ObservedObject var meeting: MeetingSession
+    let note: Note
+    let run: (NoteAction) -> Void
+
+    var body: some View {
+        if meeting.finishedNoteID == note.id, LocalAIEngine.availability.isReady,
+           !note.body.contains("## Summary"), !note.body.contains("## Action items") {
+            InkNote(Text("Meeting saved.").bold().foregroundStyle(Mixtape.ink)
+                    + Text(" Want a summary or the action items?")) {
+                Button("Summarise") { done(.summarise) }.buttonStyle(.pen(.fill, .small))
+                Button("Action items") { done(.actionItems) }.buttonStyle(.pen(.outline, .small))
+                Button("Not now") { meeting.dismissFinished() }.buttonStyle(.pen(.ghost, .small))
+            }
+            .padding(.top, 22)
+        }
+    }
+
+    private func done(_ action: NoteAction) {
+        run(action)
+        meeting.dismissFinished()
+    }
+}
+
 /// The recording banner: while a call is recorded it says so, with the time and Stop.
-private struct MeetingNote: View {
+struct MeetingNote: View {
     @ObservedObject var meeting: MeetingSession
     let message: String?
     let retry: () -> Void
@@ -617,12 +642,14 @@ private struct MeetingNote: View {
     @ViewBuilder
     private var note: some View {
         switch meeting.state {
+        case .recording where meeting.isPaused:
+            Self.paused(elapsed: meeting.elapsed, problem: meeting.resumeProblem,
+                        resume: { Task { await meeting.resume() } }, stop: stop)
         case .recording:
-            InkNote(Text("Recording this meeting ").bold().foregroundStyle(Mixtape.ink)
-                    + Text(String(format: "%d:%02d", meeting.elapsed / 60, meeting.elapsed % 60)).font(Mixtape.mono(12, .semibold))
-                    + Text(meeting.heardOthers ? "" : "\nNothing heard from the others yet. Check the call isn't muted or on a headset Utter can't hear.")) {
-                Button("Stop", action: stop).buttonStyle(.pen(.fill, .small))
-            }
+            Self.recording(elapsed: meeting.elapsed,
+                           hint: Self.hint(heardOthers: meeting.heardOthers, onSpeakers: meeting.onSpeakers),
+                           levels: { meeting.levels },
+                           pause: { Task { await meeting.pause() } }, stop: stop)
         case .finishing:
             InkNote(Text("Finishing the transcript"))
         case .failed(let why):
@@ -631,6 +658,63 @@ private struct MeetingNote: View {
             }
         case .idle:
             InkNote(Text(message ?? ""))
+        }
+    }
+
+    /// One follow-up line at most; a silent call outranks the speakers tip.
+    static func hint(heardOthers: Bool, onSpeakers: Bool) -> String? {
+        if !heardOthers { return "Nothing heard from the others yet. Check the call isn't muted or on a headset Utter can't hear." }
+        if onSpeakers { return "Your mic can hear the call through the speakers. Wear headphones so only your words show as \u{201C}You\u{201D}." }
+        return nil
+    }
+
+    static func recording(elapsed: Int, hint: String?, levels: @escaping () -> (you: Float, others: Float),
+                          pause: @escaping () -> Void, stop: @escaping () -> Void) -> some View {
+        InkNote(Text("Recording this meeting ").bold().foregroundStyle(Mixtape.ink) + time(elapsed)
+                + Text(hint.map { "\n" + $0 } ?? "")) {
+            Button("Stop", action: stop).buttonStyle(.pen(.fill, .small))
+            Button("Pause", action: pause).buttonStyle(.pen(.outline, .small))
+                .help("Stop listening for a moment; the transcript carries on when you resume")
+            Spacer(minLength: 12)
+            MeetingMeters(levels: levels)
+        }
+    }
+
+    static func paused(elapsed: Int, problem: String?, resume: @escaping () -> Void,
+                       stop: @escaping () -> Void) -> some View {
+        InkNote(Text("Paused ").bold().foregroundStyle(Mixtape.ink) + time(elapsed)
+                + Text("\n" + (problem ?? "Nothing is being recorded until you resume."))) {
+            Button("Resume", action: resume).buttonStyle(.pen(.fill, .small))
+            Button("Stop", action: stop).buttonStyle(.pen(.outline, .small))
+        }
+    }
+
+    private static func time(_ elapsed: Int) -> Text {
+        Text(String(format: "%d:%02d", elapsed / 60, elapsed % 60)).font(Mixtape.mono(12, .semibold))
+    }
+}
+
+/// Two level lines, one per stream, so both sides are visibly heard long before the first words land.
+private struct MeetingMeters: View {
+    let levels: () -> (you: Float, others: Float)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 12)) { _ in
+            let level = levels()
+            HStack(spacing: 12) {
+                meter("You", level.you)
+                meter("Others", level.others)
+            }
+        }
+        // Constantly changing values are noise to VoiceOver; the hint line says when one side is silent.
+        .accessibilityHidden(true)
+    }
+
+    private func meter(_ name: String, _ value: Float) -> some View {
+        HStack(spacing: 6) {
+            Text(name).font(Mixtape.body(12)).foregroundStyle(Mixtape.ink2)
+            SettingsMeter(value: Double(value), width: 44)
+                .animation(.easeOut(duration: 0.12), value: value)
         }
     }
 }

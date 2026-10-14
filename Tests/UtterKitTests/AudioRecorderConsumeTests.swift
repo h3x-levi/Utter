@@ -115,4 +115,11 @@ struct AudioRecorderConverterTests {
         }
         #expect(worst < 64, "largest continuity residual \(worst)")
     }
+
+    @Test("The microphone list names every device once")
+    func microphonesHaveNamesAndUniqueIDs() {
+        let mics = AudioInputs.all()
+        #expect(mics.allSatisfy { !$0.name.isEmpty })
+        #expect(Set(mics.map(\.id)).count == mics.count)
+    }
 }

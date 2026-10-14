@@ -17,23 +17,24 @@ package class TranscriptionService {
         category: "speech-performance"
     )
 
-    /// The active provider. Change this to swap implementations.
-    private let provider: TranscriptionProvider
+    /// On-device Whisper: the default engine, the fallback for Whistle, and the only one with timings.
+    package let localProvider: LocalWhisperProvider
+    private let whistle: WhistleProvider
 
-    /// The on-device engine, when that's what we're using. Exposed so the UI can
-    /// observe model load progress.
-    package var localProvider: LocalWhisperProvider? { provider as? LocalWhisperProvider }
-
-    package init(provider: TranscriptionProvider = LocalWhisperProvider()) {
-        self.provider = provider
+    package init(whisper: LocalWhisperProvider = LocalWhisperProvider()) {
+        localProvider = whisper
+        whistle = WhistleProvider(fallback: whisper)
     }
+
+    /// The engine Settings picked, read per call so a switch applies to the next dictation.
+    private var provider: TranscriptionProvider { SpeechEngine.active() == .whistle ? whistle : localProvider }
 
     /// Whisper, then mechanical formatting. Polish and the later text stages belong to
     /// `DictationPipeline`.
     package func transcribe(audioData: Data) async throws -> String {
         let requestStarted = DispatchTime.now().uptimeNanoseconds
         let raw = try await Signposts.interval("Transcription") {
-            try await SpeechEngine.provider(whisper: provider).transcribe(audioData: audioData)
+            try await provider.transcribe(audioData: audioData)
         }
         guard TranscriptText.isUsable(raw) else {
             Self.performanceLog.info("dictation produced no usable speech text")
@@ -74,17 +75,9 @@ package class TranscriptionService {
     ///     Mac has macOS 26 with Apple Intelligence on - so this is not the per-turn
     ///     round trip it looks like on most machines.
     ///
-    /// Only the on-device whisper provider reports timings. Any other provider gets
-    /// one turn spanning the whole buffer with a zero-length time span, which is
-    /// honest: it does not know where the pauses were, so it does not claim to.
+    /// Always on Whisper, whichever engine dictation uses: it is the one that reports timings.
     func transcribeTurns(audioData: Data) async throws -> [SpeechTurn] {
-        guard let local = localProvider else {
-            let text = try await provider.transcribe(audioData: audioData)
-            guard let turn = await Self.finish(text, start: 0, end: 0) else { return [] }
-            return [turn]
-        }
-
-        let segments = try await local.transcribeTimed(audioData: audioData)
+        let segments = try await localProvider.transcribeTimed(audioData: audioData)
         var turns: [SpeechTurn] = []
         for turn in TurnSegmenter.turns(from: segments) {
             guard let finished = await Self.finish(turn.text, start: turn.start, end: turn.end)
@@ -105,6 +98,7 @@ package class TranscriptionService {
         start: TimeInterval,
         end: TimeInterval
     ) async -> SpeechTurn? {
+        guard TranscriptText.isUsable(raw) else { return nil }
         let polished = await SentencePolish.polish(formatText(raw), deadline: SentencePolish.dictationDeadline)
         let trimmed = polished.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -118,7 +112,7 @@ package class TranscriptionService {
     /// `ModelStore`, which lives on the main actor.
     @MainActor
     package func preload() {
-        (provider as? LocalWhisperProvider)?.preload()
+        localProvider.preload()
     }
 
     /// Rebuild the speech context ahead of a transcription that is about to need it, for callers
@@ -131,7 +125,7 @@ package class TranscriptionService {
     @MainActor
     package func warmUp() {
         guard SpeechEngine.active() == .whisper else { return }
-        (provider as? LocalWhisperProvider)?.warmUp()
+        localProvider.warmUp()
     }
 
     /// Smart text formatting.

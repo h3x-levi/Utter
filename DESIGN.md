@@ -309,7 +309,7 @@ Footer text links in 12.5 pt semibold ink, 28 pt high, wash on hover in a 7 pt r
 - **SettingsMeter:** 4 pt red capsule on a `rule2` track, 120 pt default.
 
 ### InkNote
-Gold-tinted callout (`note` fill, 12 pt radius, 11 / 14 padding), 12.5 pt Ink 2 text with a bold Ink lead, then pens. Use for one suggestion or setup need at a time: a newly heard name, a missing permission, a model upgrade. `TapeNote` is its quiet sibling for empty states: bold line, quiet line, optional action, no fill.
+Gold-tinted callout (`note` fill, 12 pt radius, 11 / 14 padding), 12.5 pt Ink 2 text with a bold Ink lead, then pens. Use for one suggestion or setup need at a time: a newly heard name, a missing permission, a model upgrade. The sign-in screen uses the onboarding window and type, with Google's official light or dark button art unchanged (their branding rules forbid restyling it). The meeting banner is the one InkNote with a live row: Stop (fill) and Pause (outline), then two `SettingsMeter` lines labelled You and Others, hidden from VoiceOver. `TapeNote` is its quiet sibling for empty states: bold line, quiet line, optional action, no fill.
 
 ### TapeStripe (signature)
 The red stripe: optional caps label, an 8 pt capsule track, and a mono count (`180 / 500 WORDS`, or `180 WORDS` with no goal), 30 pt high.

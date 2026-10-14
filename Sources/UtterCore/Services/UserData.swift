@@ -19,6 +19,8 @@ package class UserData: ObservableObject {
     @Published package var doubleTapHotkeyForHandsFree: Bool = true
     @Published package var lastTranscription: String = ""
     @Published package var appTheme: String = "system"
+    /// `AudioInputs.Device.id` of the mic to record, or empty for the system default.
+    @Published package var microphoneUID: String = ""
     @Published package var customAICommands: [CustomAICommand] = []
     /// Scratchpad contents. Persisted so switching sidebar tabs (which rebuilds
     /// the detail view) doesn't silently discard the user's notes.
@@ -78,15 +80,6 @@ package class UserData: ObservableObject {
     /// setting here that costs attention.
     @Published package var companionEnabled: Bool = false
 
-    /// The selected character: the folder name of a sprite pack, as it appears in
-    /// `Companions/` - either one bundled with the app or one the user installed.
-    ///
-    /// A folder name rather than an enum because packs are discovered on disk, so the
-    /// set of valid values is not known at compile time and a stored value can name a
-    /// pack that is no longer there. `resolveCompanionCharacter` is the single rule for
-    /// that, and everything that reads this goes through it.
-    @Published var companionCharacter: String = UserData.defaultCompanionPack
-
     /// How large the character is drawn. See `CompanionSize` for the ladder and why it
     /// is a ladder.
     ///
@@ -105,14 +98,6 @@ package class UserData: ObservableObject {
     // The reactions driven by the user's own hands rather than by dictation: kneading while
     // you type, watching the cursor, purring when stroked, and the timed nudges. All local
     // - a cursor position, a keystroke count, a clock. Nothing here reaches the network.
-
-    /// Whether the character reacts to typing, the cursor and scrolling at all.
-    ///
-    /// On by default, unlike `companionEnabled`: someone who has deliberately switched a
-    /// desktop pet on has opted into a thing that reacts, and a cat that ignores you is a
-    /// worse first impression than one that does not exist. Switching it off leaves the
-    /// character reacting to dictation only.
-    @Published var companionPetBehaviours: Bool = true
 
     /// What the character calls the user in reminders. Empty means no name is used.
     ///
@@ -144,10 +129,8 @@ package class UserData: ObservableObject {
     /// asked the app to do something; the cat's fire when you touch it or when a timer goes
     /// off, which is a different bargain - so silencing one should not silence the other.
     @Published package var companionSounds: Bool = true
-    @Published var companionObject: CompanionObject = .none
     @Published var companionMemoryEnabled: Bool = true
     @Published package var companionGoalsEnabled: Bool = true
-    @Published var companionWindowEdges: Bool = true
     @Published package var companionQuietMode: Bool = false
     @Published package var companionAutomaticQuietMode: Bool = true
     @Published package var companionHydrationGoal: Int = 4
@@ -155,75 +138,6 @@ package class UserData: ObservableObject {
     @Published package var companionFocusGoal: Int = 2
     @Published package var companionDictationGoal: Int = 500
     @Published package var companionProgress = CompanionProgress.today()
-
-    /// The character selected on a fresh install. The pixel cat is drawn in code, so it is
-    /// available in both app bundles and plain `swift run` development builds.
-    ///
-    /// A bundled pack rather than "whichever is installed first", so a new user gets a
-    /// known character. Only a default, though: resolution still falls back to another
-    /// available character if a stored selection no longer exists.
-    static let defaultCompanionPack = "pixel-cat-gray"
-
-    /// The prefix this value used to carry when it named a sprite pack rather than one
-    /// of the four code-drawn characters that used to ship alongside them.
-    ///
-    /// Those characters are gone, so every selection is a pack now and the prefix
-    /// distinguishes nothing. It survives only to read a `userdata.json` written before
-    /// the change: values are stripped on the way in and `save()` writes the bare id,
-    /// so a file is migrated the first time it is written.
-    static let legacyPackPrefix = "pack:"
-
-    /// The pack id inside a stored selection, with the legacy prefix removed.
-    private static func packID(in stored: String) -> String {
-        stored.hasPrefix(legacyPackPrefix)
-            ? String(stored.dropFirst(legacyPackPrefix.count))
-            : stored
-    }
-
-    /// Which pack a stored selection resolves to, given the packs actually present.
-    ///
-    /// Pure, and the only definition of the rule - the renderer, the window's decision
-    /// to appear at all, and the correction on first scan all ask this, so none of them
-    /// can disagree about which character is selected.
-    ///
-    /// `nil` means there is no character to show. That is a real state rather than an
-    /// error: every character is a sprite pack now, so a build with no bundled packs and
-    /// an empty Companions folder has nothing to draw.
-    ///
-    /// A selection that names nothing installed falls back to `defaultCompanionPack`
-    /// first, and only then to whatever is available. Someone upgrading from a version
-    /// with the code-drawn characters lands on the same character a fresh install gets,
-    /// which is a choice; the alphabetically-first pack is an accident. `available` is
-    /// expected in the order the picker lists them, so the last resort is still the
-    /// first pack the user would see rather than an arbitrary one.
-    static func resolveCompanionCharacter(_ stored: String, available: [String]) -> String? {
-        let id = packID(in: stored)
-        if available.contains(id) { return id }
-        if available.contains(defaultCompanionPack) { return defaultCompanionPack }
-        return available.first
-    }
-
-    /// Correct `companionCharacter` to a pack that exists, and persist the correction.
-    ///
-    /// Called once the pack folders have been scanned, which is the earliest anything
-    /// knows what is installed - `load()` runs from `init()`, long before that. Writing
-    /// the corrected value back is what stops an upgraded install (one still naming a
-    /// code-drawn character) resolving the same dead selection on every launch.
-    ///
-    /// Returns the resolved id, or nil when no pack is installed. In that case the
-    /// stored value is deliberately left alone: a missing Companions folder is usually
-    /// temporary, and overwriting the user's choice with nothing would lose it.
-    @discardableResult
-    func resolveCompanionCharacter(against available: [String]) -> String? {
-        let resolved = Self.resolveCompanionCharacter(companionCharacter, available: available)
-        // Only assign on a real change. This runs from the same preference-observer
-        // path that `save()` feeds, and publishing an identical value would schedule
-        // another pass through it for nothing.
-        guard let resolved, resolved != companionCharacter else { return resolved }
-        companionCharacter = resolved
-        save()
-        return resolved
-    }
 
     /// Show a rough live transcript in the pill while speaking.
     ///
@@ -380,6 +294,7 @@ package class UserData: ObservableObject {
             "hotkeyName": hotkeyName,
             "doubleTapHotkeyForHandsFree": doubleTapHotkeyForHandsFree,
             "appTheme": appTheme,
+            "microphoneUID": microphoneUID,
             "scratchpad": scratchpad,
             "customAICommands": customCmdData,
             "alwaysShowPill": alwaysShowPill,
@@ -396,9 +311,7 @@ package class UserData: ObservableObject {
             "offerToTranscribeCalls": offerToTranscribeCalls,
             "keepHistory": keepHistory,
             "companionEnabled": companionEnabled,
-            "companionCharacter": companionCharacter,
             "companionSize": companionSize.rawValue,
-            "companionPetBehaviours": companionPetBehaviours,
             "companionUserName": companionUserName,
             "companionStretchMinutes": companionStretchMinutes,
             "companionWaterMinutes": companionWaterMinutes,
@@ -406,10 +319,8 @@ package class UserData: ObservableObject {
             "companionPomodoroBreakMinutes": companionPomodoroBreakMinutes,
             "companionPinnedMessage": companionPinnedMessage,
             "companionSounds": companionSounds,
-            "companionObject": companionObject.rawValue,
             "companionMemoryEnabled": companionMemoryEnabled,
             "companionGoalsEnabled": companionGoalsEnabled,
-            "companionWindowEdges": companionWindowEdges,
             "companionQuietMode": companionQuietMode,
             "companionAutomaticQuietMode": companionAutomaticQuietMode,
             "companionHydrationGoal": companionHydrationGoal,
@@ -453,6 +364,7 @@ package class UserData: ObservableObject {
         }
         if let dth = json["doubleTapHotkeyForHandsFree"] as? Bool { doubleTapHotkeyForHandsFree = dth }
         if let theme = json["appTheme"] as? String { appTheme = theme }
+        if let v = json["microphoneUID"] as? String { microphoneUID = v }
         if let pad = json["scratchpad"] as? String { scratchpad = pad }
         if let v = json["alwaysShowPill"] as? Bool { alwaysShowPill = v }
         if let v = json["showInDock"] as? Bool { showInDock = v }
@@ -473,14 +385,6 @@ package class UserData: ObservableObject {
         // upgrade keeps recording history exactly as it did before the switch arrived.
         if let v = json["keepHistory"] as? Bool { keepHistory = v }
         if let v = json["companionEnabled"] as? Bool { companionEnabled = v }
-        // Strip the legacy `pack:` prefix here so nothing downstream has to know the
-        // old format existed. The name may still be a pack that is no longer installed
-        // - including one of the code-drawn characters - which cannot be checked yet:
-        // no pack folder has been scanned at this point. See
-        // `resolveCompanionCharacter(against:)`.
-        if let v = json["companionCharacter"] as? String, !v.isEmpty {
-            companionCharacter = Self.packID(in: v)
-        }
         // An unknown name falls back to the default rather than being coerced to the
         // nearest step: the value is a name, not a number, so a file written by a future
         // version (or edited by hand) has no "nearest" - and a companion that silently
@@ -489,7 +393,6 @@ package class UserData: ObservableObject {
         if let v = json["companionSize"] as? String {
             companionSize = CompanionSize(rawValue: v) ?? Self.defaultCompanionSize
         }
-        if let v = json["companionPetBehaviours"] as? Bool { companionPetBehaviours = v }
         if let v = json["companionUserName"] as? String { companionUserName = v }
         // Intervals are clamped rather than rejected: they are minutes typed into a field,
         // so a nonsense value should still leave a working companion. 0 means off, and the
@@ -509,12 +412,8 @@ package class UserData: ObservableObject {
         }
         if let v = json["companionPinnedMessage"] as? String { companionPinnedMessage = v }
         if let v = json["companionSounds"] as? Bool { companionSounds = v }
-        if let v = json["companionObject"] as? String {
-            companionObject = CompanionObject(rawValue: v) ?? .none
-        }
         if let v = json["companionMemoryEnabled"] as? Bool { companionMemoryEnabled = v }
         if let v = json["companionGoalsEnabled"] as? Bool { companionGoalsEnabled = v }
-        if let v = json["companionWindowEdges"] as? Bool { companionWindowEdges = v }
         if let v = json["companionQuietMode"] as? Bool { companionQuietMode = v }
         if let v = json["companionAutomaticQuietMode"] as? Bool {
             companionAutomaticQuietMode = v
@@ -558,9 +457,7 @@ package class UserData: ObservableObject {
         guard words > 0 else { return nil }
         var progress = companionProgress(for: date)
         progress.dictationWords += words
-        progress.lifetimeWords += words
         progress.dictations += 1
-        grantCompanionRewards(in: &progress)
         companionProgress = progress
         save()
         guard companionGoalsEnabled, companionDictationGoal > 0,
@@ -641,32 +538,6 @@ package class UserData: ObservableObject {
         save()
     }
 
-    @discardableResult
-    package func syncCompanionLifetimeWords(_ totalWords: Int) -> [CompanionReward] {
-        var progress = companionProgress
-        progress.lifetimeWords = max(progress.lifetimeWords, max(0, totalWords))
-        let before = progress.unlocked
-        grantCompanionRewards(in: &progress)
-        guard progress != companionProgress else { return [] }
-        companionProgress = progress
-        save()
-        return CompanionReward.allCases.filter {
-            progress.unlocked.contains($0.rawValue) && !before.contains($0.rawValue)
-        }
-    }
-
-    func companionRewardUnlocked(_ reward: CompanionReward) -> Bool {
-        companionProgress.unlocked.contains(reward.rawValue)
-    }
-
-    func companionObjectUnlocked(_ object: CompanionObject) -> Bool {
-        object.reward.map(companionRewardUnlocked) ?? true
-    }
-
-    func companionAnimationUnlocked(_ unlock: CompanionUnlock) -> Bool {
-        companionRewardUnlocked(unlock.reward)
-    }
-
     package func companionExtraDelay(for reminder: CompanionReminder) -> Int {
         guard companionMemoryEnabled else { return 0 }
         return companionProgress.extraDelayMinutes[reminder.memoryKey, default: 0]
@@ -682,37 +553,6 @@ package class UserData: ObservableObject {
         progress.focusBlocks = 0
         progress.dictationWords = 0
         return progress
-    }
-
-    private func grantCompanionRewards(in progress: inout CompanionProgress) {
-        for reward in CompanionReward.allCases
-        where progress.lifetimeWords >= reward.wordRequirement {
-            progress.unlocked.insert(reward.rawValue)
-        }
-    }
-}
-
-enum CompanionUnlock: String, CaseIterable {
-    case grooming, rolling, loaf
-
-    var label: String {
-        switch self {
-        case .grooming: return "Grooming"
-        case .rolling: return "Roll over"
-        case .loaf: return "Cozy loaf"
-        }
-    }
-
-    var requirement: String {
-        "\(reward.wordRequirement.formatted()) dictated words"
-    }
-
-    var reward: CompanionReward {
-        switch self {
-        case .grooming: return .grooming
-        case .rolling: return .rolling
-        case .loaf: return .loaf
-        }
     }
 }
 
@@ -744,8 +584,6 @@ package struct CompanionProgress: Equatable {
     var dismissed: [String: Int] = [:]
     var preferredHours: [String: Int] = [:]
     var extraDelayMinutes: [String: Int] = [:]
-    var unlocked: Set<String> = []
-    var lifetimeWords = 0
     var dictations = 0
     var memoriesCreated = 0
     var memoriesCompleted = 0
@@ -772,8 +610,6 @@ package struct CompanionProgress: Equatable {
         dismissed = Self.intDictionary(json["dismissed"])
         preferredHours = Self.intDictionary(json["preferredHours"])
         extraDelayMinutes = Self.intDictionary(json["extraDelayMinutes"])
-        unlocked = Set(json["unlocked"] as? [String] ?? [])
-        lifetimeWords = json["lifetimeWords"] as? Int ?? 0
         dictations = json["dictations"] as? Int ?? 0
         memoriesCreated = json["memoriesCreated"] as? Int ?? 0
         memoriesCompleted = json["memoriesCompleted"] as? Int ?? 0
@@ -789,8 +625,6 @@ package struct CompanionProgress: Equatable {
             "dismissed": dismissed,
             "preferredHours": preferredHours,
             "extraDelayMinutes": extraDelayMinutes,
-            "unlocked": unlocked.sorted(),
-            "lifetimeWords": lifetimeWords,
             "dictations": dictations,
             "memoriesCreated": memoriesCreated,
             "memoriesCompleted": memoriesCompleted,

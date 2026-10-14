@@ -29,8 +29,7 @@ struct CallPresenceTests {
                      from start: TimeInterval = 1_000) -> CallPresence {
         var presence = CallPresence()
         for (i, sample) in samples.enumerated() {
-            presence.update(inputByOthers: sample.input,
-                            outputByOthers: sample.output,
+            presence.update(qualified: sample.input && sample.output,
                             selfIsCapturing: selfIsCapturing,
                             at: start + TimeInterval(i))
         }
@@ -48,7 +47,7 @@ struct CallPresenceTests {
         var presence = CallPresence()
         var t = start
         for _ in 0..<Int(CallPresence.confirmAfter + 2) {
-            presence.update(inputByOthers: true, outputByOthers: true,
+            presence.update(qualified: true,
                             selfIsCapturing: false, at: t)
             t += 1
         }
@@ -91,21 +90,6 @@ struct CallPresenceTests {
         #expect(!run(samples).isInCall)
     }
 
-    @Test("Unrelated microphone and playback processes are not a call")
-    func unrelatedTwoWayAudioIsNotACall() {
-        var presence = CallPresence()
-        for second in 0...Int(CallPresence.confirmAfter + 2) {
-            presence.update(
-                inputByOthers: true,
-                outputByOthers: true,
-                plausibleCall: false,
-                selfIsCapturing: false,
-                at: TimeInterval(second)
-            )
-        }
-        #expect(!presence.isInCall)
-    }
-
     @Test("Utter's own recording is never mistaken for a call")
     func selfCaptureIsSuppressed() {
         // A meeting capture takes the far side through ScreenCaptureKit, which is not a HAL client
@@ -120,7 +104,7 @@ struct CallPresenceTests {
         // `selfCaptureIsSuppressed` passes `true` for every sample, so `isInCall` was false already
         // and the branch's return value was dead.
         var presence = confirmedCall()
-        let changed = presence.update(inputByOthers: true, outputByOthers: true,
+        let changed = presence.update(qualified: true,
                                       selfIsCapturing: true, at: afterConfirm())
         #expect(changed, "the caller was never told the call ended, so the card would stay up")
         #expect(!presence.isInCall)
@@ -131,12 +115,12 @@ struct CallPresenceTests {
         // Suppression clears the clock, so the call has to be held for `confirmAfter` again rather
         // than firing on the first sample after the capture stops.
         var presence = confirmedCall()
-        presence.update(inputByOthers: true, outputByOthers: true,
+        presence.update(qualified: true,
                         selfIsCapturing: true, at: afterConfirm())
         let t = afterConfirm() + 1
         var changes = 0
         for i in 0...Int(CallPresence.confirmAfter + 1) {
-            if presence.update(inputByOthers: true, outputByOthers: true,
+            if presence.update(qualified: true,
                                selfIsCapturing: false, at: t + TimeInterval(i)) {
                 changes += 1
             }
@@ -154,7 +138,7 @@ struct CallPresenceTests {
 
         // Muted for less than the release window: still in the call.
         for _ in 0..<Int(CallPresence.releaseAfter - 2) {
-            presence.update(inputByOthers: false, outputByOthers: true,
+            presence.update(qualified: false,
                             selfIsCapturing: false, at: t)
             t += 1
         }
@@ -166,7 +150,7 @@ struct CallPresenceTests {
         var presence = confirmedCall(from: 0)
         var t = afterConfirm(0)
         for _ in 0...Int(CallPresence.releaseAfter + 1) {
-            presence.update(inputByOthers: false, outputByOthers: false,
+            presence.update(qualified: false && false,
                             selfIsCapturing: false, at: t)
             t += 1
         }
@@ -179,7 +163,7 @@ struct CallPresenceTests {
         var presence = CallPresence()
         var changes = 0
         for i in 0...Int(CallPresence.confirmAfter + 30) {
-            if presence.update(inputByOthers: true, outputByOthers: true,
+            if presence.update(qualified: true,
                                selfIsCapturing: false, at: TimeInterval(i)) {
                 changes += 1
             }
@@ -202,7 +186,7 @@ struct CallPresenceTests {
         let t = afterConfirm()
         var changes = 0
         for i in 0..<600 {
-            if presence.update(inputByOthers: true, outputByOthers: true,
+            if presence.update(qualified: true,
                                selfIsCapturing: false, at: t + TimeInterval(i)) {
                 changes += 1
             }
@@ -219,19 +203,19 @@ struct CallPresenceTests {
 
         // Still in the declined call.
         for _ in 0..<30 {
-            presence.update(inputByOthers: true, outputByOthers: true, selfIsCapturing: false, at: t)
+            presence.update(qualified: true, selfIsCapturing: false, at: t)
             t += 1
         }
         // It ends. The release window is what takes the latch off.
         for _ in 0...Int(CallPresence.releaseAfter + 1) {
-            presence.update(inputByOthers: false, outputByOthers: false,
+            presence.update(qualified: false && false,
                             selfIsCapturing: false, at: t)
             t += 1
         }
         // A new call.
         var changes = 0
         for i in 0...Int(CallPresence.confirmAfter + 1) {
-            if presence.update(inputByOthers: true, outputByOthers: true,
+            if presence.update(qualified: true,
                                selfIsCapturing: false, at: t + TimeInterval(i)) {
                 changes += 1
             }
@@ -247,13 +231,13 @@ struct CallPresenceTests {
         // dictating - in the call they had already said no to.
         var presence = confirmedCall()
         presence.decline()
-        presence.update(inputByOthers: true, outputByOthers: true,
+        presence.update(qualified: true,
                         selfIsCapturing: true, at: afterConfirm())
         let t = afterConfirm() + 1
 
         var changes = 0
         for i in 0..<60 {
-            if presence.update(inputByOthers: true, outputByOthers: true,
+            if presence.update(qualified: true,
                                selfIsCapturing: false, at: t + TimeInterval(i)) {
                 changes += 1
             }
@@ -272,7 +256,7 @@ struct CallPresenceTests {
         let t = afterConfirm()
 
         for i in 0...Int(CallPresence.confirmAfter + 1) {
-            presence.update(inputByOthers: true, outputByOthers: true,
+            presence.update(qualified: true,
                             selfIsCapturing: false, at: t + TimeInterval(i))
         }
         #expect(presence.isInCall)
@@ -295,16 +279,16 @@ struct CallPresenceTests {
         // `systemUptime` this cannot happen, because sleep does not advance it; the value type is
         // pinned anyway, since it is the thing that would be wrong.
         var presence = CallPresence()
-        presence.update(inputByOthers: true, outputByOthers: true, selfIsCapturing: false, at: 100)
+        presence.update(qualified: true, selfIsCapturing: false, at: 100)
         // One sample, one hour later, nothing else changed.
-        presence.update(inputByOthers: true, outputByOthers: true, selfIsCapturing: false, at: 3_700)
+        presence.update(qualified: true, selfIsCapturing: false, at: 3_700)
         #expect(presence.isInCall, "a genuine hour of two-way audio is a call")
 
         // And the same jump must not confirm a call from a *single* sample when the run began at
         // the jump itself.
         var fresh = CallPresence()
-        fresh.update(inputByOthers: false, outputByOthers: false, selfIsCapturing: false, at: 100)
-        fresh.update(inputByOthers: true, outputByOthers: true, selfIsCapturing: false, at: 3_700)
+        fresh.update(qualified: false && false, selfIsCapturing: false, at: 100)
+        fresh.update(qualified: true, selfIsCapturing: false, at: 3_700)
         #expect(!fresh.isInCall, "confirmed a call from one sample by inheriting an old clock")
     }
 
@@ -317,15 +301,15 @@ struct CallPresenceTests {
         let t = afterConfirm()
 
         // Hang up, then the clock goes back an hour mid-release.
-        presence.update(inputByOthers: false, outputByOthers: false, selfIsCapturing: false, at: t)
-        presence.update(inputByOthers: false, outputByOthers: false,
+        presence.update(qualified: false && false, selfIsCapturing: false, at: t)
+        presence.update(qualified: false && false,
                         selfIsCapturing: false, at: t - 3_600)
         #expect(presence.isInCall, "nothing has been held long enough yet either way")
 
         // From the stepped-back clock, the release window still completes.
         var now = t - 3_600
         for _ in 0...Int(CallPresence.releaseAfter + 1) {
-            presence.update(inputByOthers: false, outputByOthers: false,
+            presence.update(qualified: false && false,
                             selfIsCapturing: false, at: now)
             now += 1
         }

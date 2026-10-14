@@ -2,51 +2,28 @@ import AppKit
 import ApplicationServices
 import UtterCore
 
-/// One dictation, note or meeting on the hub's tape.
+/// One track on the hub's tape: a Library item plus its number within its day.
 struct HubTrack: Identifiable, Equatable {
-    enum Kind { case dictation, note, meeting }
-
-    let id: UUID
-    let kind: Kind
-    let date: Date
-    let title: String
-    let text: String
-    let words: Int
-    let seconds: Int
+    let item: LibraryItem
     /// Place in its own day, oldest first.
     var number = 0
 
-    init(_ entry: TranscriptionEntry) {
-        id = entry.id
-        kind = .dictation
-        date = entry.timestamp
-        title = entry.text
-        text = entry.text
-        words = entry.wordCount
-        seconds = Self.seconds(entry.duration, words: entry.wordCount)
-    }
+    init(_ item: LibraryItem) { self.item = item }
 
-    init(_ note: Note) {
-        let meeting = note.source == .meeting
-        id = note.id
-        kind = meeting ? .meeting : .note
-        date = meeting ? note.created : note.modified
-        title = note.displayTitle
-        text = note.body
-        words = note.wordCount
-        seconds = Self.seconds(meeting ? note.modified.timeIntervalSince(note.created) : 0, words: words)
-    }
-
-    /// Recorded seconds, or the mock's 144 words a minute when nothing was recorded.
-    static func seconds(_ duration: TimeInterval, words: Int) -> Int {
-        duration > 0 ? max(1, Int(duration.rounded())) : max(3, Int((Double(words) / 2.4).rounded()))
-    }
+    var id: UUID { item.uuid }
+    var kind: LibraryItem.Kind { item.kind }
+    var date: Date { item.date }
+    var title: String { item.title }
+    var text: String { item.body }
+    var words: Int { item.words }
+    var seconds: Int { max(1, Int(item.talkTime.rounded())) }
 
     var time: String { String(format: "%d:%02d", seconds / 60, seconds % 60) }
 
     /// Every track, newest first, numbered within its day.
     static func tape(_ entries: [TranscriptionEntry], _ notes: [Note], calendar: Calendar = .current) -> [HubTrack] {
-        var tracks = (entries.map(HubTrack.init) + notes.filter { $0.wordCount > 0 }.map(HubTrack.init))
+        var tracks = (entries.map(LibraryItem.init) + notes.filter { $0.wordCount > 0 }.map(LibraryItem.init))
+            .map(HubTrack.init)
             .sorted { $0.date < $1.date }
         var day: Date?
         var number = 0
@@ -71,40 +48,16 @@ struct HubTrack: Identifiable, Equatable {
     }
 }
 
-/// A permission or download the app still needs, read from `ReadinessMonitor`.
-enum HubNeed: Equatable {
-    case microphone, accessibility, model
-
-    static func needs(mic: Bool, ax: Bool, model: Bool) -> [HubNeed] {
-        (mic ? [] : [.microphone]) + (ax ? [] : [.accessibility]) + (model ? [] : [.model])
-    }
-
-    static func title(_ count: Int) -> String {
-        let number = ["One", "Two", "Three"][min(max(count, 1), 3) - 1]
-        return "\(number) thing\(count == 1 ? "" : "s") left"
-    }
-
-    var message: String {
-        switch self {
-        case .microphone: "Allow the microphone so Utter can hear you."
-        case .accessibility: "Allow Accessibility so Utter can type into other apps."
-        case .model: "Get a speech model so Utter can understand you."
-        }
-    }
-
-    var button: String { self == .model ? "Set up" : "Allow" }
-}
-
 @MainActor @Observable
 final class HubModel {
     enum Action: Equatable {
         case handsFree, newNote, recordMeeting, openLibrary, settings, whatsNew, reportIssue, quit
-        case open(HubTrack), paste(HubTrack), grant(HubNeed)
+        case open(HubTrack), paste(HubTrack), grant(SetupNeeds.Need)
     }
 
     var query = "" { didSet { selection = 0 } }
     var selection = 0
-    var needs: [HubNeed] = []
+    var needs: [SetupNeeds.Need] = []
     var recording = false
     var handsFree = false
     var hotkey = "Fn"
@@ -134,16 +87,13 @@ final class HubModel {
     var detail: String {
         searching ? Self.count(rows.count) : "\(Self.count(today.count)) · \(HubTrack.talkTime(today))"
     }
-    var segments: [TapeSegment<UUID>] {
-        today.reversed().map { TapeSegment(id: $0.id, words: $0.words, label: $0.title) } + TapeSegment.unkept(unkeptWords, id: Self.unkeptID)
-    }
-    private static let unkeptID = UUID()
-    var status: TapeStripe<UUID>.Status { recording ? .recording : needs.isEmpty ? .ready : .setup }
+    var segments: [TapeSegment<String>] { TapeSegment.today(today.reversed().map(\.item), unkept: unkeptWords) }
+    var status: TapeStripe<String>.Status { recording ? .recording : needs.isEmpty ? .ready : .setup }
 
     var stripeLabel: String {
         switch status {
         case .recording: "Recording"
-        case .setup: HubNeed.title(needs.count)
+        case .setup: SetupNeeds.cardTitle(needs.count)
         case .ready: "Ready \u{00B7} hold \(hotkey)"
         }
     }

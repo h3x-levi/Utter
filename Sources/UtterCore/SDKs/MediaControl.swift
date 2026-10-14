@@ -26,7 +26,7 @@ package enum MediaControl {
     package static func pauseIfPlaying() {
         guard UserData.shared.muteMusicWhileDictating else { return }
         queue.async {
-            guard !didPause, CallDetector.audioInUseByOtherProcesses()?.output == true else { return }
+            guard !didPause, CallDetector.otherAppIsPlaying() else { return }
             didPause = true
             DispatchQueue.main.async(execute: sendPlayPause)
         }
