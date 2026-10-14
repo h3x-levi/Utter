@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utter · Private On-Device Voice Dictation for macOS, Windows & Linux</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Impeccable Design System: Utter Mixtape J-Card (Education First + Detailed Application) */
+    :root {
+      --paper: #F7F9FC;
+      --paper-subtle: #EDF1F7;
+      --paper-card: #FFFFFF;
+      --paper-hover: #F2F5FA;
+      --ink: #141E3C;
+      --ink-muted: #4B587E;
+      --ink-subtle: #6C789B;
+      --pen: #254EDB;
+      --pen-light: #486DEB;
+      --tape-red: #D83125;
+      --tape-red-glow: rgba(216, 49, 37, 0.22);
+      --spine-gold: #EDB123;
+      --rule: rgba(37, 78, 219, 0.08);
+      --rule-bold: rgba(37, 78, 219, 0.16);
+      --key-bg: #E7ECF5;
+      --key-border: #CFD7E6;
+      --tape-dark: #0F1219;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 24px;
+      --radius-pill: 9999px;
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Plus Jakarta Sans", system-ui, sans-serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    }
+
+    [data-theme="dark"] {
+      --paper: #0E1118;
+      --paper-subtle: #151924;
+      --paper-card: #1A1F2C;
+      --paper-hover: #22293A;
+      --ink: #F2F5FC;
+      --ink-muted: #A3AFCC;
+      --ink-subtle: #7A87A6;
+      --pen: #5E82FF;
+      --pen-light: #809EFF;
+      --tape-red: #E24336;
+      --tape-red-glow: rgba(226, 67, 54, 0.3);
+      --spine-gold: #FFC635;
+      --rule: rgba(128, 158, 255, 0.1);
+      --rule-bold: rgba(128, 158, 255, 0.2);
+      --key-bg: #222736;
+      --key-border: #333B50;
+      --tape-dark: #07090D;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .ruled-bg {
+      background-image: linear-gradient(var(--rule) 1px, transparent 1px);
+      background-size: 100% 36px;
+    }
+
+    /* Top Status Bar */
+    .preview-banner {
+      background: #141E3C;
+      color: #FFFFFF;
+      padding: 10px 24px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--tape-red);
+      position: sticky;
+      top: 0;
+      z-index: 300;
+    }
+    .preview-tag {
+      background: var(--tape-red);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    /* Wide Navigation */
+    header {
+      border-bottom: 1px solid var(--rule-bold);
+      background: rgba(247, 249, 252, 0.94);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      position: sticky;
+      top: 38px;
+      z-index: 100;
+      transition: background 0.3s ease;
+    }
+    [data-theme="dark"] header {
+      background: rgba(14, 17, 24, 0.94);
+    }
+    .nav-wide {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 16px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 800;
+      font-size: 1.4rem;
+      font-family: var(--font-display);
+      letter-spacing: -0.02em;
+    }
+    .brand-logo img {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .brand-stripes {
+      display: inline-flex;
+      height: 16px;
+      gap: 3px;
+    }
+    .brand-stripes span {
+      width: 4px;
+      height: 100%;
+      border-radius: 2px;
+    }
+
+    .nav-menu {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .nav-menu a {
+      color: var(--ink-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .nav-menu a:hover {
+      color: var(--pen);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .btn-toggle-theme {
+      background: var(--paper-subtle);
+      border: 1px solid var(--rule-bold);
+      color: var(--ink);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-toggle-theme:hover {
+      border-color: var(--pen);
+    }
+    
+    .btn-apply-nav {
+      background: var(--tape-red);
+      color: #fff;
+      padding: 9px 20px;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 4px 14px var(--tape-red-glow);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .btn-apply-nav:hover {
+      background: #bf281d;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(216, 49, 37, 0.35);
+    }
+
+    /* Hero Section: Education & Storytelling First (No early waitlist box!) */
+    .hero-panoramic {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 72px 48px 90px 48px;
+    }
+    .hero-split-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 16px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--rule-bold);
+      background: var(--paper-card);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--ink-muted);
+      margin-bottom: 24px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+    .hero-tag .tag-badge {
+      background: var(--tape-red);
+      color: #fff;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+    }
+
+    .hero-title {
+      font-size: 3.9rem;
+      line-height: 1.08;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      font-family: var(--font-display);
+      margin-bottom: 24px;
+    }
+    .hero-title .accent-red {
+      color: var(--tape-red);
+      position: relative;
+    }
+    .hero-title .accent-red::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -2px;
+      width: 100%;
+      height: 4px;
+      background: var(--tape-red);
+      border-radius: 2px;
+      opacity: 0.35;
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      line-height: 1.6;
+      color: var(--ink-muted);
+      margin-bottom: 36px;
+      max-width: 620px;
+    }
+
+    /* Hero Exploration Actions */
+    .hero-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .btn-explore-reel {
+      background: var(--ink);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 16px rgba(20, 30, 60, 0.15);
+    }
+    [data-theme="dark"] .btn-explore-reel {
+      background: #FFFFFF;
+      color: #0E1118;
+    }
+    .btn-explore-reel:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(20, 30, 60, 0.25);
+    }
+
+    .btn-apply-hero {
+      background: var(--paper-card);
+      border: 2px solid var(--tape-red);
+      color: var(--tape-red);
+      padding: 14px 26px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+    .btn-apply-hero:hover {
+      background: var(--tape-red);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px var(--tape-red-glow);
+    }
+
+    /* Cross-Platform Availability Badges */
+    .platform-availability-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-top: 20px;
+      border-top: 1px dashed var(--rule-bold);
+    }
+    .platform-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--ink);
+      background: var(--paper-subtle);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--rule-bold);
+    }
+    .platform-badge.status-ready {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .platform-badge.status-dev {
+      border-color: rgba(237, 177, 35, 0.4);
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .badge-dot.green { background: #10B981; box-shadow: 0 0 8px #10B981; }
+    .badge-dot.yellow { background: #EDB123; box-shadow: 0 0 8px #EDB123; }
+
+    /* Right Column: Authentic macOS Pill & Cursor Simulation */
+    .hero-canvas-column {
+      position: relative;
+    }
+    .mac-desktop-frame {
+      background: var(--paper-card);
+      border: 2px solid var(--rule-bold);
+      border-radius: var(--radius-lg);
+      padding: 32px 36px 36px 36px;
+      box-shadow: 0 24px 60px -15px rgba(20, 30, 60, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    [data-theme="dark"] .mac-desktop-frame {
+      box-shadow: 0 28px 70px -15px rgba(0, 0, 0, 0.65);
+    }
+    .desktop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+      border-bottom: 1px dashed var(--rule-bold);
+    }
+    .window-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .dot-close { background: #FF5F56; }
+    .dot-min { background: #FFBD2E; }
+    .dot-max { background: #27C93F; }
+
+    .window-app-label {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--ink-subtle);
+    }
+
+    .state-selector-bar {
+      display: flex;
+      background: var(--paper-subtle);
+      border-radius: var(--radius-pill);
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 28px;
+      border: 1px solid var(--rule-bold);
+    }
+    .btn-pill-state {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: var(--ink-muted);
+      border-radius: var(--radius-pill);
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-pill-state.active {
+      background: var(--paper-card);
+      color: var(--ink);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .pill-hud-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 84px;
+      margin-bottom: 24px;
+      background: radial-gradient(circle at center, rgba(37,78,219,0.05) 0%, transparent 70%);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+    
+    .hud-pill {
+      height: 38px;
+      border-radius: var(--radius-pill);
+      background: #0E121A;
+      border: 1px solid rgba(255,255,255,0.18);
+      box-shadow: 
+        0 14px 34px -8px rgba(0, 0, 0, 0.45),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .hud-pill.state-resting { width: 72px; }
+    .hud-stripe-resting {
+      width: 32px;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #D83125 0%, #D83125 33%, #EDB123 33%, #EDB123 66%, #254EDB 66%, #254EDB 100%);
+    }
+
+    .hud-pill.state-listening {
+      width: 148px;
+      background: #180D0E;
+      border-color: rgba(216, 49, 37, 0.45);
+      box-shadow: 
+        0 14px 34px -8px rgba(216, 49, 37, 0.4),
+        0 0 20px rgba(216, 49, 37, 0.25),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.3);
+    }
+    .hud-audio-bars {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 22px;
+    }
+    .audio-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: #FFFFFF;
+      animation: soundWave 0.75s ease-in-out infinite alternate;
+    }
+    .audio-bar:nth-child(1) { height: 8px; animation-delay: 0.0s; }
+    .audio-bar:nth-child(2) { height: 16px; animation-delay: 0.12s; }
+    .audio-bar:nth-child(3) { height: 22px; animation-delay: 0.24s; }
+    .audio-bar:nth-child(4) { height: 26px; animation-delay: 0.36s; }
+    .audio-bar:nth-child(5) { height: 20px; animation-delay: 0.18s; }
+    .audio-bar:nth-child(6) { height: 14px; animation-delay: 0.30s; }
+    .audio-bar:nth-child(7) { height: 7px; animation-delay: 0.42s; }
+
+    @keyframes soundWave {
+      0% { height: 4px; }
+      100% { height: 24px; }
+    }
+
+    .hud-pill.state-processing {
+      width: 110px;
+      background: #0E1322;
+      border-color: rgba(37, 78, 219, 0.5);
+      box-shadow: 
+        0 14px 34px -8px rgba(37, 78, 219, 0.4),
+        0 0 20px rgba(37, 78, 219, 0.25);
+    }
+    .metal-ripple {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .metal-ripple span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--pen);
+      animation: ripplePulse 1.2s ease-in-out infinite;
+    }
+    .metal-ripple span:nth-child(2) { animation-delay: 0.2s; }
+    .metal-ripple span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes ripplePulse {
+      0%, 100% { transform: scale(0.6); opacity: 0.4; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .hud-pill.state-typed {
+      width: 72px;
+      background: #0E1815;
+      border-color: rgba(39, 201, 63, 0.5);
+    }
+    .check-mark {
+      color: #27C93F;
+      font-weight: 900;
+      font-size: 1.1rem;
+    }
+
+    .focused-text-window {
+      background: var(--paper-subtle);
+      border: 1px solid var(--rule-bold);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      min-height: 124px;
+      font-family: var(--font-body);
+      font-size: 1.1rem;
+      color: var(--ink);
+      line-height: 1.6;
+      position: relative;
+    }
+    .window-field-label {
+      position: absolute;
+      top: -10px;
+      left: 18px;
+      background: var(--paper-card);
+      border: 1px solid var(--rule-bold);
+      border-radius: 4px;
+      padding: 1px 8px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--ink-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .cursor-caret {
+      display: inline-block;
+      width: 2.5px;
+      height: 1.2em;
+      background: var(--pen);
+      vertical-align: text-bottom;
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .key-hint-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 20px;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      color: var(--ink-muted);
+    }
+    .mac-key {
+      background: var(--key-bg);
+      border: 1px solid var(--key-border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-weight: 700;
+      color: var(--ink);
+      box-shadow: 0 1.5px 0 var(--key-border);
+    }
+
+    /* 16:9 Promo Video Theatre Section */
+    .section-theatre {
+      max-width: 1520px;
+      margin: 80px auto;
+      padding: 0 48px;
+    }
+    .theatre-deck {
+      background: #0E121A;
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 28px 70px -15px rgba(0, 0, 0, 0.7);
+    }
+    .theatre-deck video {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      display: block;
+      background: #000;
+    }
+    .theatre-deck-bar {
+      background: #141722;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: #C8D3EC;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* Screenshots Gallery Section */
+    .section-gallery {
+      max-width: 1520px;
+      margin: 110px auto;
+      padding: 0 48px;
+    }
+    .section-header-center {
+      text-align: center;
+      max-width: 850px;
+      margin: 0 auto 48px auto;
+    }
+    .section-category {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--tape-red);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      font-family: var(--font-display);
+      margin-bottom: 16px;
+    }
+    .section-description {
+      font-size: 1.15rem;
+      color: var(--ink-muted);
+    }
+
+    .gallery-nav-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .gallery-tab-btn {
+      background: var(--paper-subtle);
+      border: 1.5px solid var(--rule-bold);
+      color: var(--ink-muted);
+      padding: 10px 22px;
+      border-radius: var(--radius-pill);
+      font-size: 0.88rem;
+      font-weight: 700;
+      font-family: var(--font-display);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .gallery-tab-btn:hover {
+      color: var(--ink);
+      border-color: var(--pen);
+    }
+    .gallery-tab-btn.active {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+      box-shadow: 0 4px 14px rgba(20, 30, 60, 0.15);
+    }
+    [data-theme="dark"] .gallery-tab-btn.active {
+      background: #FFFFFF;
+      color: #0E1118;
+      border-color: #FFFFFF;
+    }
+
+    .gallery-stage-window {
+      background: var(--paper-card);
+      border: 2px solid var(--rule-bold);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 24px 60px -15px rgba(20, 30, 60, 0.12);
+      margin-bottom: 40px;
+      transition: all 0.3s ease;
+    }
+    [data-theme="dark"] .gallery-stage-window {
+      box-shadow: 0 28px 70px -15px rgba(0, 0, 0, 0.65);
+    }
+    .stage-window-bar {
+      background: var(--paper-subtle);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--rule-bold);
+    }
+    .stage-image-container {
+      position: relative;
+      background: var(--tape-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 16px;
+    }
+    .stage-image-container img {
+      width: 100%;
+      height: auto;
+      max-height: 740px;
+      object-fit: contain;
+      display: block;
+      border-radius: var(--radius-md);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .stage-caption-bar {
+      padding: 20px 28px;
+      background: var(--paper-card);
+      border-top: 1px solid var(--rule-bold);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .stage-caption-title {
+      font-weight: 800;
+      font-size: 1.2rem;
+      font-family: var(--font-display);
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+    .stage-caption-desc {
+      font-size: 0.92rem;
+      color: var(--ink-muted);
+    }
+
+    .screenshots-bento-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    .screenshot-card-item {
+      background: var(--paper-card);
+      border: 1.5px solid var(--rule-bold);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+      display: flex;
+      flex-direction: column;
+    }
+    .screenshot-card-item:hover {
+      transform: translateY(-4px);
+      border-color: var(--pen);
+      box-shadow: 0 14px 30px -8px rgba(37, 78, 219, 0.18);
+    }
+    .screenshot-card-thumb {
+      height: 190px;
+      overflow: hidden;
+      background: #0E121A;
+      position: relative;
+    }
+    .screenshot-card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+      transition: transform 0.3s ease;
+    }
+    .screenshot-card-item:hover .screenshot-card-thumb img {
+      transform: scale(1.04);
+    }
+    .screenshot-card-info {
+      padding: 18px 20px;
+      flex: 1;
+    }
+    .screenshot-card-tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--tape-red);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .screenshot-card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      font-family: var(--font-display);
+      margin-bottom: 4px;
+      color: var(--ink);
+    }
+    .screenshot-card-text {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      line-height: 1.45;
+    }
+
+    /* Cassette J-Card Unfolded Architecture (Side A & Side B) */
+    .section-cassette-card {
+      max-width: 1520px;
+      margin: 110px auto;
+      padding: 0 48px;
+    }
+    .cassette-unfolded-card {
+      background: var(--paper-card);
+      border: 2px solid var(--rule-bold);
+      border-radius: var(--radius-lg);
+      padding: 48px;
+      box-shadow: 0 16px 40px rgba(20, 30, 60, 0.05);
+      position: relative;
+    }
+    .card-red-top-spine {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background: var(--tape-red);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .sides-side-by-side-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+    }
+    .tape-side-panel {
+      background: var(--paper-subtle);
+      border: 1px solid var(--rule-bold);
+      border-radius: var(--radius-md);
+      padding: 32px;
+      position: relative;
+    }
+    .side-badge-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+      border-bottom: 1.5px solid var(--rule-bold);
+    }
+    .side-label {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.4rem;
+      color: var(--ink);
+    }
+    .side-running-time {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--pen);
+    }
+    .track-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px dashed var(--rule);
+    }
+    .track-row:last-child { border-bottom: none; }
+    .track-num {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--tape-red);
+      width: 24px;
+    }
+    .track-content h4 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-family: var(--font-display);
+    }
+    .track-content p {
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+    }
+
+    /* Privacy Section */
+    .section-privacy {
+      max-width: 1520px;
+      margin: 110px auto;
+      padding: 0 48px;
+    }
+    .privacy-card-wide {
+      background: var(--paper-card);
+      border: 2px solid var(--rule-bold);
+      border-radius: var(--radius-lg);
+      padding: 56px;
+      box-shadow: 0 12px 32px rgba(20, 30, 60, 0.04);
+    }
+    .privacy-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .privacy-tag-box {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--pen);
+      background: var(--paper-subtle);
+      border: 1px solid var(--rule-bold);
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+    }
+    .privacy-row-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+    }
+    .privacy-cell {
+      border-left: 3px solid var(--pen);
+      padding-left: 18px;
+    }
+    .privacy-cell h4 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      font-family: var(--font-display);
+    }
+    .privacy-cell p {
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+      line-height: 1.55;
+    }
+
+    /* THE COMPREHENSIVE EARLY ACCESS APPLICATION SECTION (At the bottom, after customer learns!) */
+    .section-application {
+      max-width: 1520px;
+      margin: 120px auto 80px auto;
+      padding: 0 48px;
+    }
+    .application-container-card {
+      background: var(--paper-card);
+      border: 2px solid var(--rule-bold);
+      border-radius: var(--radius-lg);
+      padding: 64px 56px;
+      box-shadow: 0 24px 60px -15px rgba(20, 30, 60, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .application-container-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background: linear-gradient(90deg, var(--tape-red) 0%, var(--spine-gold) 50%, var(--pen) 100%);
+    }
+
+    .app-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.35fr;
+      gap: 56px;
+      align-items: start;
+    }
+    .app-info-column h2 {
+      font-size: 2.8rem;
+      line-height: 1.15;
+      font-weight: 800;
+      font-family: var(--font-display);
+      margin-bottom: 18px;
+    }
+    .app-info-column p {
+      font-size: 1.1rem;
+      color: var(--ink-muted);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    
+    .evaluation-criteria-box {
+      background: var(--paper-subtle);
+      border: 1px solid var(--rule-bold);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+    .eval-title {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--tape-red);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    .eval-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: var(--ink);
+    }
+    .eval-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .eval-list svg {
+      color: #10B981;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+
+    .form-switch-tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .form-tab-pill {
+      background: var(--paper-subtle);
+      border: 1.5px solid var(--rule-bold);
+      padding: 8px 18px;
+      border-radius: var(--radius-pill);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .form-tab-pill.active {
+      background: var(--pen);
+      color: #fff;
+      border-color: var(--pen);
+    }
+
+    /* Form Fields */
+    .app-form-column {
+      background: var(--paper-subtle);
+      border: 1.5px solid var(--rule-bold);
+      border-radius: var(--radius-md);
+      padding: 36px 40px;
+    }
+    .field-row {
+      margin-bottom: 24px;
+    }
+    .field-row label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: var(--font-display);
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .field-hint {
+      font-size: 0.78rem;
+      color: var(--ink-subtle);
+      margin-top: 4px;
+    }
+    .field-input, .field-textarea {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      border: 1.5px solid var(--rule-bold);
+      background: var(--paper-card);
+      color: var(--ink);
+      font-size: 0.95rem;
+      font-family: var(--font-body);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .field-input:focus, .field-textarea:focus {
+      border-color: var(--pen);
+      box-shadow: 0 0 0 3px rgba(37,78,219,0.12);
+    }
+    .field-textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    /* Platform & Use Case Pill Selectors */
+    .os-selector-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-os-pill {
+      background: var(--paper-card);
+      border: 1.5px solid var(--rule-bold);
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: var(--font-display);
+      color: var(--ink);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+    .btn-os-pill:hover {
+      border-color: var(--pen);
+    }
+    .btn-os-pill.active {
+      border-color: var(--pen);
+      background: rgba(37, 78, 219, 0.08);
+      color: var(--pen);
+      box-shadow: inset 0 0 0 1px var(--pen);
+    }
+
+    .usecase-chips-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .btn-usecase-chip {
+      background: var(--paper-card);
+      border: 1.5px solid var(--rule-bold);
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-usecase-chip.active {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+    [data-theme="dark"] .btn-usecase-chip.active {
+      background: #FFFFFF;
+      color: #0E1118;
+      border-color: #FFFFFF;
+    }
+
+    .btn-submit-application {
+      width: 100%;
+      background: var(--tape-red);
+      color: #fff;
+      padding: 16px 28px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 1.1rem;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 6px 20px var(--tape-red-glow);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      margin-top: 28px;
+    }
+    .btn-submit-application:hover {
+      background: #bf281d;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(216, 49, 37, 0.35);
+    }
+
+    .google-sheets-notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--rule-bold);
+      font-size: 0.82rem;
+      color: var(--ink-subtle);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .google-sheets-notice a {
+      color: var(--pen);
+      font-weight: 700;
+      text-decoration: underline;
+    }
+
+    /* Success State */
+    .application-success-view {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .success-check-badge {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(37,78,219,0.1);
+      color: var(--pen);
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px auto;
+      font-weight: 800;
+    }
+
+    /* Wide Footer */
+    footer {
+      border-top: 1px solid var(--rule-bold);
+      background: var(--paper-subtle);
+      padding: 64px 48px;
+      margin-top: 80px;
+    }
+    .footer-wide {
+      max-width: 1520px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 24px;
+      font-size: 0.88rem;
+      color: var(--ink-subtle);
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+    .footer-links a {
+      color: var(--ink-muted);
+      text-decoration: none;
+    }
+    .footer-links a:hover {
+      color: var(--ink);
+    }
+
+    /* Responsive */
+    @media (max-width: 1080px) {
+      .hero-split-grid { grid-template-columns: 1fr; gap: 48px; }
+      .hero-title { font-size: 3rem; }
+      .app-form-grid { grid-template-columns: 1fr; }
+      .sides-side-by-side-grid { grid-template-columns: 1fr; }
+      .privacy-row-grid { grid-template-columns: 1fr 1fr; }
+      .screenshots-bento-grid { grid-template-columns: 1fr 1fr; }
+      .nav-menu { display: none; }
+    }
+    @media (max-width: 640px) {
+      .hero-panoramic, .section-cassette-card, .section-theatre, .section-gallery, .section-privacy, .section-application { padding: 0 20px; }
+      .nav-wide { padding: 14px 20px; }
+      .hero-title { font-size: 2.3rem; }
+      .app-info-column h2 { font-size: 2.2rem; }
+      .os-selector-grid { grid-template-columns: 1fr; }
+      .privacy-row-grid { grid-template-columns: 1fr; }
+      .screenshots-bento-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="ruled-bg">
+
+  <!-- Top Status Notice -->
+  <div class="preview-banner">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="preview-tag">CROSS-PLATFORM BETA PREVIEW</span>
+      <span>Education-First Flow · macOS, Windows & Linux Application Form</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <a href="#apply" style="color: #FFC635; text-decoration: underline; font-weight: 700;">Jump to Application Form ↓</a>
+      <span>Utter 2.0</span>
+    </div>
+  </div>
+
+  <!-- Wide Panoramic Header -->
+  <header>
+    <div class="nav-wide">
+      <a href="#" class="brand-logo">
+        <img src="public/assets/brand/AppIconSource.png" alt="Utter Icon">
+        <span>Utter</span>
+        <div class="brand-stripes">
+          <span style="background: #D83125;"></span>
+          <span style="background: #EDB123;"></span>
+          <span style="background: #254EDB;"></span>
+        </div>
+      </a>
+
+      <nav class="nav-menu">
+        <a href="#promo-video">16:9 Promo Reel</a>
+        <a href="#screenshots">App Screenshots</a>
+        <a href="#library">Cassette Architecture</a>
+        <a href="#privacy">Privacy Engine</a>
+        <a href="#apply">Apply for Access</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="btn-toggle-theme" id="themeButton" onclick="toggleThemeMode()">
+          <span>◐</span> <span id="themeText">Dark Mode</span>
+        </button>
+        <a href="#apply" class="btn-apply-nav">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Apply for Beta
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Wide Panoramic Hero Section: Pure Education & Exploration (NO waitlist box here!) -->
+    <section class="hero-panoramic">
+      <div class="hero-split-grid">
+        
+        <!-- Left Column: Storytelling & Value Proposition -->
+        <div class="hero-content-column">
+          <div class="hero-tag">
+            <span class="tag-badge">CROSS-PLATFORM</span>
+            <span>MACOS · WINDOWS · LINUX · 100% ON-DEVICE SPEECH</span>
+          </div>
+
+          <h1 class="hero-title">
+            Voice dictation that <span class="accent-red">never leaves your machine</span>.
+          </h1>
+
+          <p class="hero-subtitle">
+            Hold a key, speak naturally, let go. Your words appear wherever the cursor is.<br>
+            Powered by in-process Whisper with GPU acceleration — offline, no account, no subscription, and zero cloud delay.
+          </p>
+
+          <!-- Exploration Actions: Watch Reel or Jump to Application -->
+          <div class="hero-actions-row">
+            <a href="#promo-video" class="btn-explore-reel">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Watch 16:9 Promo Reel</span>
+            </a>
+
+            <a href="#apply" class="btn-apply-hero">
+              <span>Apply for Early Access</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+          </div>
+
+          <!-- Platform Availability Status Bar -->
+          <div class="platform-availability-bar">
+            <div class="platform-badge status-ready">
+              <span class="badge-dot green"></span>
+              <span><strong>macOS</strong> (Apple Silicon & Intel) · Ready</span>
+            </div>
+            <div class="platform-badge status-dev">
+              <span class="badge-dot yellow"></span>
+              <span><strong>Windows 11</strong> · In Active Build</span>
+            </div>
+            <div class="platform-badge status-dev">
+              <span class="badge-dot yellow"></span>
+              <span><strong>Linux</strong> (X11 / Wayland) · In Active Build</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive macOS Pill & Cursor Simulation -->
+        <div class="hero-canvas-column">
+          <div class="mac-desktop-frame">
+            <div class="desktop-header">
+              <div class="window-dots">
+                <span class="dot dot-close"></span>
+                <span class="dot dot-min"></span>
+                <span class="dot dot-max"></span>
+              </div>
+              <span class="window-app-label">Floating Pill HUD · Live Feedback Simulator</span>
+              <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--pen); font-weight: 700;">HARDWARE WAVEFORM</span>
+            </div>
+
+            <!-- State Switcher -->
+            <div class="state-selector-bar">
+              <button class="btn-pill-state active" onclick="setPillState('resting', this)">1. Resting</button>
+              <button class="btn-pill-state" onclick="setPillState('listening', this)">2. Hold Key (Listen)</button>
+              <button class="btn-pill-state" onclick="setPillState('processing', this)">3. GPU Think</button>
+              <button class="btn-pill-state" onclick="setPillState('typed', this)">4. Typed</button>
+            </div>
+
+            <!-- Floating Pill HUD (Hardware feedback, strictly no text) -->
+            <div class="pill-hud-wrapper">
+              <div class="hud-pill state-resting" id="hudPillElement">
+                <div class="hud-stripe-resting" id="restingGraphic"></div>
+
+                <div class="hud-audio-bars" id="listeningGraphic" style="display: none;">
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                  <span class="audio-bar"></span>
+                </div>
+
+                <div class="metal-ripple" id="processingGraphic" style="display: none;">
+                  <span></span><span></span><span></span>
+                </div>
+
+                <div class="check-mark" id="typedGraphic" style="display: none;">✓</div>
+              </div>
+            </div>
+
+            <!-- Focused Text Window -->
+            <div class="focused-text-window">
+              <span class="window-field-label">Active App: Cursor Focus Window</span>
+              <span id="transcriptionText">Hold your trigger key and speak naturally...</span>
+              <span class="cursor-caret"></span>
+            </div>
+
+            <div class="key-hint-footer">
+              <span>Trigger: <span class="mac-key">Fn</span> or <span class="mac-key">Right-Alt</span></span>
+              <span style="color: var(--tape-red); font-weight: 700;">Audio stays in RAM</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 16:9 Landscape Promo Reel Theatre -->
+    <section class="section-theatre" id="promo-video">
+      <div class="theatre-deck">
+        <video controls playsinline preload="metadata">
+          <source src="public/assets/promo/Utter-Hype-16x9.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+        <div class="theatre-deck-bar">
+          <span style="color: var(--tape-red); font-weight: 700;">📼 promo/Utter-Hype-16x9.mp4 [1080p 16:9 Landscape Reel]</span>
+          <span>130 BPM AUDIO · SYNCHRONIZED GPU PIPELINE</span>
+          <a href="#apply" style="color: var(--spine-gold); font-family: var(--font-mono); font-weight: 700; text-decoration: none;">
+            Apply for Beta Access Below ↓
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Native App Screenshot Showcase Section -->
+    <section class="section-gallery" id="screenshots">
+      <div class="section-header-center">
+        <div class="section-category">NATIVE APP INTERFACES</div>
+        <h2 class="section-title">Designed as if built into your OS.</h2>
+        <p class="section-description">
+          From the floating REC stripe to the cassette-tape library, every screen is rendered natively with fluid 60fps animations, keyboard shortcuts, and seamless light/dark modes.
+        </p>
+      </div>
+
+      <!-- Screenshot Tabs -->
+      <div class="gallery-nav-tabs">
+        <button class="gallery-tab-btn active" onclick="switchGalleryScreenshot('library', this)">1. Cassette Library</button>
+        <button class="gallery-tab-btn" onclick="switchGalleryScreenshot('hub', this)">2. Menu Bar Hub</button>
+        <button class="gallery-tab-btn" onclick="switchGalleryScreenshot('companion', this)">3. Robot Companion</button>
+        <button class="gallery-tab-btn" onclick="switchGalleryScreenshot('settings', this)">4. App Settings</button>
+        <button class="gallery-tab-btn" onclick="switchGalleryScreenshot('onboarding', this)">5. Fast Onboarding</button>
+      </div>
+
+      <!-- Main Featured Window -->
+      <div class="gallery-stage-window">
+        <div class="stage-window-bar">
+          <div class="window-dots">
+            <span class="dot dot-close"></span>
+            <span class="dot dot-min"></span>
+            <span class="dot dot-max"></span>
+          </div>
+          <span class="window-app-label" id="galleryWindowLabel">Utter — Library (Cassette J-Card View)</span>
+          <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--pen); font-weight: 700;">NATIVE INTERFACE</span>
+        </div>
+        <div class="stage-image-container">
+          <img id="galleryMainImg" src="public/assets/screenshots/library.webp" alt="Utter App Screenshot">
+        </div>
+        <div class="stage-caption-bar">
+          <div>
+            <div class="stage-caption-title" id="galleryCaptionTitle">The Daily Tape: Side A & Side B Tracklists</div>
+            <div class="stage-caption-desc" id="galleryCaptionDesc">Organizes every dictation into morning and afternoon tracks with running times, one-click re-paste, and instant copy.</div>
+          </div>
+          <a href="#apply" class="btn-apply-nav" style="padding: 10px 20px; font-size: 0.88rem;">
+            Apply to Test This Build ↗
+          </a>
+        </div>
+      </div>
+
+      <!-- 4-Card Bento Grid -->
+      <div class="screenshots-bento-grid">
+        <div class="screenshot-card-item" onclick="switchGalleryScreenshot('hub')">
+          <div class="screenshot-card-thumb">
+            <img src="public/assets/screenshots/hub.webp" alt="Menu Bar Hub">
+          </div>
+          <div class="screenshot-card-info">
+            <div class="screenshot-card-tag">Always At Hand</div>
+            <div class="screenshot-card-title">Menu Bar Hub</div>
+            <div class="screenshot-card-text">Click or press shortcut to reveal recent clips, toggle hands-free, and switch offline models.</div>
+          </div>
+        </div>
+
+        <div class="screenshot-card-item" onclick="switchGalleryScreenshot('companion')">
+          <div class="screenshot-card-thumb">
+            <img src="public/assets/screenshots/companion.webp" alt="Robot Companion">
+          </div>
+          <div class="screenshot-card-info">
+            <div class="screenshot-card-tag">Desktop Character</div>
+            <div class="screenshot-card-title">Robot Companion</div>
+            <div class="screenshot-card-text">CX-ArtLab robot animated with hardware acceleration, reacting in real time to your voice states.</div>
+          </div>
+        </div>
+
+        <div class="screenshot-card-item" onclick="switchGalleryScreenshot('settings')">
+          <div class="screenshot-card-thumb">
+            <img src="public/assets/screenshots/settings.webp" alt="App Settings">
+          </div>
+          <div class="screenshot-card-info">
+            <div class="screenshot-card-tag">Deep Customization</div>
+            <div class="screenshot-card-title">Settings & Triggers</div>
+            <div class="screenshot-card-text">Map Fn, Right-Alt, or Command. Adjust microphone sensitivity and local model weights.</div>
+          </div>
+        </div>
+
+        <div class="screenshot-card-item" onclick="switchGalleryScreenshot('onboarding')">
+          <div class="screenshot-card-thumb">
+            <img src="public/assets/screenshots/onboarding.webp" alt="60s Setup">
+          </div>
+          <div class="screenshot-card-info">
+            <div class="screenshot-card-tag">Zero Account</div>
+            <div class="screenshot-card-title">60-Second Onboarding</div>
+            <div class="screenshot-card-text">Grants audio permissions and runs your first dictation with zero accounts or cloud keys.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cassette J-Card Unfolded Architecture (Side A & Side B) -->
+    <section class="section-cassette-card" id="library">
+      <div class="section-header-center">
+        <div class="section-category">CASSETTE J-CARD ARCHITECTURE</div>
+        <h2 class="section-title">Every day is a tape. Side A and Side B.</h2>
+        <p class="section-description">
+          Utter models daily speech history like a classic cassette J-card. Ruled cardstock, Side A morning tracks, Side B afternoon tracks, and zero cloud accounts.
+        </p>
+      </div>
+
+      <div class="cassette-unfolded-card">
+        <div class="card-red-top-spine"></div>
+        <div class="sides-side-by-side-grid">
+          
+          <!-- Side A -->
+          <div class="tape-side-panel">
+            <div class="side-badge-header">
+              <span class="side-label">Side A · Morning Session</span>
+              <span class="side-running-time">RUNNING TIME: 42 MIN</span>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">01</span>
+              <div class="track-content">
+                <h4>In-Process whisper Engine</h4>
+                <p>Bundled small model loaded directly into local memory. No Ollama, no Docker, no external daemon required.</p>
+              </div>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">02</span>
+              <div class="track-content">
+                <h4>Direct Text Injection via System Accessibility</h4>
+                <p>Simulates keystrokes directly into whichever window has active keyboard focus at sub-200ms latency.</p>
+              </div>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">03</span>
+              <div class="track-content">
+                <h4>Hands-Free Dictation Mode</h4>
+                <p>Double-tap key to enter continuous dictation. Automatic silence detection commits sentences in real-time.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Side B -->
+          <div class="tape-side-panel">
+            <div class="side-badge-header">
+              <span class="side-label">Side B · Afternoon Session</span>
+              <span class="side-running-time">RUNNING TIME: 38 MIN</span>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">04</span>
+              <div class="track-content">
+                <h4>Dual-Stream Meeting Transcription</h4>
+                <p>Captures your microphone on track 1 and system audio (Zoom, Meet, Teams) on track 2 without uploading to any cloud bot.</p>
+              </div>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">05</span>
+              <div class="track-content">
+                <h4>On-Device Voice Transforms</h4>
+                <p>Transform raw speech into structured bullet points, clean emails, or code snippets using local machine intelligence.</p>
+              </div>
+            </div>
+
+            <div class="track-row">
+              <span class="track-num">06</span>
+              <div class="track-content">
+                <h4>Desktop Robot Companion (CX-ArtLab)</h4>
+                <p>An optional, delightful desktop companion rendered natively with hardware animation reacting to your voice states.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy Vault Banner -->
+    <section class="section-privacy" id="privacy">
+      <div class="privacy-card-wide">
+        <div class="privacy-header-row">
+          <div>
+            <div class="section-category">VERIFIED SECURITY</div>
+            <h2 class="section-title" style="margin-bottom: 0;">Private by construction. Not by marketing.</h2>
+          </div>
+          <div class="privacy-tag-box">
+            0 open network sockets established
+          </div>
+        </div>
+
+        <div class="privacy-row-grid">
+          <div class="privacy-cell">
+            <h4>No Sign-In Ever</h4>
+            <p>No account, no phone number, no password. Launch and dictate without giving your identity away.</p>
+          </div>
+          <div class="privacy-cell">
+            <h4>Zero Telemetry</h4>
+            <p>We do not collect analytics, logs, telemetry, or user metrics. Zero cloud pings.</p>
+          </div>
+          <div class="privacy-cell">
+            <h4>Audio Kept in RAM</h4>
+            <p>Microphone audio streams into temporary RAM buffers and is wiped immediately after transcription.</p>
+          </div>
+          <div class="privacy-cell">
+            <h4>Plain JSON Storage</h4>
+            <p>All notes and history live locally in your user data directory. Delete the folder to wipe everything.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- THE DETAILED EARLY ACCESS APPLICATION SECTION (At the bottom, after customer learns!) -->
+    <section class="section-application" id="apply">
+      <div class="application-container-card">
+        
+        <div class="app-form-grid">
+          <!-- Left: Information & Selection Criteria -->
+          <div class="app-info-column">
+            <div class="section-category">PRIVATE BETA EVALUATION</div>
+            <h2>Apply for Early Access.</h2>
+            <p>
+              Because Utter runs 100% on-device models with direct GPU memory allocation, we review every application manually to match hardware profiles across macOS, Windows, and Linux.
+            </p>
+
+            <div class="evaluation-criteria-box">
+              <div class="eval-title">What We Look For</div>
+              <ul class="eval-list">
+                <li>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span><strong>Active Daily Workflows:</strong> Engineers, writers, and power users who dictate frequently.</span>
+                </li>
+                <li>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span><strong>Hardware Variety:</strong> Apple Silicon (M1–M4), Intel Macs, Windows 11 PCs, and Linux workstations.</span>
+                </li>
+                <li>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span><strong>Actionable Feedback:</strong> Willingness to report accuracy, shortcuts, or latency observations.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div style="font-size: 0.88rem; color: var(--ink-muted);">
+              🔒 <strong>Your Information is Safe:</strong> Details are stored strictly for beta invitations and hardware sizing. We never sell or share emails.
+            </div>
+          </div>
+
+          <!-- Right: The Detailed Application Form -->
+          <div class="app-form-column">
+            
+
+
+            <!-- Internal Comprehensive Form View (Configured to send to Google Sheets / Formspree) -->
+            <form id="betaApplicationForm" onsubmit="handleApplicationSubmit(event)">
+              
+              <!-- Name & Email -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                <div>
+                  <label for="appName" style="display: block; font-size: 0.88rem; font-weight: 700; margin-bottom: 6px;">Your Name / Handle</label>
+                  <input type="text" id="appName" required placeholder="Alex Rivera or @alex" class="field-input">
+                </div>
+                <div>
+                  <label for="appEmail" style="display: block; font-size: 0.88rem; font-weight: 700; margin-bottom: 6px;">Email Address <span style="color: var(--tape-red);">*</span></label>
+                  <input type="email" id="appEmail" required placeholder="alex@company.com" class="field-input">
+                </div>
+              </div>
+
+              <!-- Operating System Selection (macOS, Windows, Linux) -->
+              <div class="field-row">
+                <label>Target Operating System <span style="color: var(--tape-red);">*</span></label>
+                <div class="os-selector-grid">
+                  <button type="button" class="btn-os-pill active" onclick="selectOS(this, 'macOS Apple Silicon')">
+                    <span>🍎 macOS (Apple Silicon M1–M4)</span>
+                  </button>
+                  <button type="button" class="btn-os-pill" onclick="selectOS(this, 'macOS Intel')">
+                    <span>🍎 macOS (Intel Core)</span>
+                  </button>
+                  <button type="button" class="btn-os-pill" onclick="selectOS(this, 'Windows 11/10')">
+                    <span>🪟 Windows 11 / 10</span>
+                  </button>
+                  <button type="button" class="btn-os-pill" onclick="selectOS(this, 'Linux')">
+                    <span>🐧 Linux (Ubuntu / Fedora / Arch)</span>
+                  </button>
+                </div>
+                <input type="hidden" id="selectedOS" value="macOS Apple Silicon">
+                <div class="field-hint">Select the primary machine where you will test Utter.</div>
+              </div>
+
+              <!-- Primary Use Case / Workflow -->
+              <div class="field-row">
+                <label>Primary Daily Workflow (Select all that apply)</label>
+                <div class="usecase-chips-wrap">
+                  <button type="button" class="btn-usecase-chip active" onclick="toggleChip(this)">Software Engineering & Terminal</button>
+                  <button type="button" class="btn-usecase-chip" onclick="toggleChip(this)">Slack & Team Chat</button>
+                  <button type="button" class="btn-usecase-chip active" onclick="toggleChip(this)">Writing & Long-Form Docs</button>
+                  <button type="button" class="btn-usecase-chip" onclick="toggleChip(this)">Meeting Transcription</button>
+                  <button type="button" class="btn-usecase-chip" onclick="toggleChip(this)">Accessibility / RSI Injury</button>
+                </div>
+              </div>
+
+              <!-- Detailed Workflow Description (The filter criteria!) -->
+              <div class="field-row">
+                <label for="appReason">Why do you want early access & what is your workflow? <span style="color: var(--tape-red);">*</span></label>
+                <textarea id="appReason" required placeholder="Tell us how you currently dictate or write, what apps you use (e.g. VS Code, Obsidian, Slack), and what makes on-device speech important to you..." class="field-textarea"></textarea>
+                <div class="field-hint">We read every answer to prioritize beta invites. Specific workflows get approved fastest.</div>
+              </div>
+
+              <!-- Submit Button -->
+              <button type="submit" class="btn-submit-application">
+                <span>Submit Application for Review</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+
+              <div class="google-sheets-notice">
+                <span>⚡ Submissions sync securely to our private evaluation review spreadsheet.</span>
+                <span style="color: var(--ink-subtle);">Invites dispatched weekly</span>
+              </div>
+            </form>
+
+            <!-- Success Confirmation Banner -->
+            <div id="appSuccessView" class="application-success-view">
+              <div class="success-check-badge">✓</div>
+              <h3 style="font-size: 1.8rem; font-family: var(--font-display); font-weight: 800; margin-bottom: 10px;">Application Successfully Received!</h3>
+              <p style="color: var(--ink-muted); font-size: 1.05rem; max-width: 480px; margin: 0 auto 20px auto; line-height: 1.6;">
+                Thank you, <strong id="successApplicantName" style="color: var(--ink);"></strong>! Your details for <span id="successApplicantOS" style="color: var(--pen); font-weight: 700;"></span> have been logged for review.
+              </p>
+              <div style="background: var(--paper-card); border: 1px solid var(--rule-bold); border-radius: var(--radius-md); padding: 16px; max-width: 420px; margin: 0 auto 24px auto; font-family: var(--font-mono); font-size: 0.85rem; color: var(--ink-subtle);">
+                Status: Under Manual Review · Batch #4 Invites Send Weekly
+              </div>
+              <button onclick="resetApplicationForm()" class="btn-toggle-theme" style="margin: 0 auto; padding: 10px 24px;">Submit Another Setup</button>
+            </div>
+
+
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- Wide Footer -->
+  <footer>
+    <div class="footer-wide">
+      <div>
+        <strong style="color: var(--ink);">Utter</strong> · Open Source Apache License 2.0 · Private on-device voice dictation for macOS, Windows & Linux
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/h3x-levi/Utter" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="#apply">Apply for Beta</a>
+        <a href="https://github.com/h3x-levi/Utter/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">PRIVACY.md</a>
+        <a href="https://github.com/h3x-levi/Utter/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle
+    function toggleThemeMode() {
+      const html = document.documentElement;
+      const themeText = document.getElementById('themeText');
+      if (html.getAttribute('data-theme') === 'dark') {
+        html.removeAttribute('data-theme');
+        themeText.innerText = 'Dark Mode';
+        localStorage.setItem('utter_theme', 'light');
+      } else {
+        html.setAttribute('data-theme', 'dark');
+        themeText.innerText = 'Light Mode';
+        localStorage.setItem('utter_theme', 'dark');
+      }
+    }
+    if (localStorage.getItem('utter_theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      const themeText = document.getElementById('themeText');
+      if (themeText) themeText.innerText = 'Light Mode';
+    }
+
+    // OS Selection
+    function selectOS(btn, osName) {
+      document.querySelectorAll('.btn-os-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('selectedOS').value = osName;
+    }
+
+    // Use Case Multi-Select
+    function toggleChip(btn) {
+      btn.classList.toggle('active');
+    }
+
+    // Form Switcher (Direct vs Google Form)
+    function switchFormTab(tab) {
+      const tabInternal = document.getElementById('tabInternalForm');
+      const tabGoogle = document.getElementById('tabGoogleForm');
+      const internalForm = document.getElementById('betaApplicationForm');
+      const googleForm = document.getElementById('googleFormView');
+      const successView = document.getElementById('appSuccessView');
+
+      if (tab === 'internal') {
+        tabInternal.classList.add('active');
+        tabGoogle.classList.remove('active');
+        internalForm.style.display = 'block';
+        googleForm.style.display = 'none';
+        successView.style.display = 'none';
+      } else {
+        tabGoogle.classList.add('active');
+        tabInternal.classList.remove('active');
+        internalForm.style.display = 'none';
+        googleForm.style.display = 'block';
+        successView.style.display = 'none';
+      }
+    }
+
+    // Handle Detailed Application Submit
+    // Connected Live Google Form Endpoint
+    const GOOGLE_FORM_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSez9z3AlNInZ3pKbSrSr7BRswyTmoo4oxFle4ZZL4j_GBS4zQ/formResponse'; 
+
+    function handleApplicationSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('appName').value;
+      const email = document.getElementById('appEmail').value;
+      const os = document.getElementById('selectedOS').value;
+      const reason = document.getElementById('appReason').value;
+
+      // Extract active chips
+      const chips = [];
+      document.querySelectorAll('.btn-usecase-chip.active').forEach(c => chips.push(c.innerText));
+
+      // Local storage backup
+      const submissions = JSON.parse(localStorage.getItem('utter_beta_applications') || '[]');
+      const newEntry = {
+        name: name,
+        email: email,
+        os: os,
+        useCases: chips,
+        reason: reason,
+        submittedAt: new Date().toISOString()
+      };
+      submissions.push(newEntry);
+      localStorage.setItem('utter_beta_applications', JSON.stringify(submissions));
+      console.log('Submitting to Google Form & Sheet:', newEntry);
+
+      // Post directly to Google Form (mode: no-cors)
+      const formData = new FormData();
+      formData.append('entry.691724603', name);       // Name / Handle
+      formData.append('entry.1036416450', email);      // Email
+      formData.append('entry.1633620309', os);         // OS (Apple Silicon, Intel, Windows 11, Linux)
+      chips.forEach(chip => {
+        formData.append('entry.606057482', chip);      // Workflows (checkboxes)
+      });
+      formData.append('entry.991204098', reason);      // Reason / Setup
+
+      fetch(GOOGLE_FORM_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: formData
+      }).catch(err => console.error('Google Form sync:', err));
+
+      // Immediately display clean success confirmation view
+      document.getElementById('betaApplicationForm').style.display = 'none';
+      document.getElementById('successApplicantName').innerText = name;
+      document.getElementById('successApplicantOS').innerText = os;
+      document.getElementById('appSuccessView').style.display = 'block';
+    }
+
+    function resetApplicationForm() {
+      document.getElementById('betaApplicationForm').reset();
+      document.getElementById('appSuccessView').style.display = 'none';
+      document.getElementById('betaApplicationForm').style.display = 'block';
+    }
+
+    // Screenshots Switcher
+    const galleryData = {
+      library: {
+        src: 'public/assets/screenshots/library.webp',
+        label: 'Utter — Library (Cassette J-Card View)',
+        title: 'The Daily Tape: Side A & Side B Tracklists',
+        desc: 'Organizes every dictation into morning and afternoon tracks with running times, one-click re-paste, and instant copy.'
+      },
+      hub: {
+        src: 'public/assets/screenshots/hub.webp',
+        label: 'Utter — Menu Bar Hub Window',
+        title: 'Menu Bar Hub: Instant Quick Access',
+        desc: 'Lives discreetly in your menu bar. View live audio meters, access speech history, and adjust local models instantly.'
+      },
+      companion: {
+        src: 'public/assets/screenshots/companion.webp',
+        label: 'Utter — CX Robot Desktop Companion',
+        title: 'Interactive Desktop Robot Companion',
+        desc: 'Rendered with smooth hardware acceleration. Wakes up when you hold key, pulses while listening, and celebrates when typed.'
+      },
+      settings: {
+        src: 'public/assets/screenshots/settings.webp',
+        label: 'Utter — Preferences & Audio Tuning',
+        title: 'Settings, Shortcuts & Model Tuning',
+        desc: 'Choose push-to-talk keys (Fn, Right Option, Cmd), toggle system meeting audio, and manage offline model sizes.'
+      },
+      onboarding: {
+        src: 'public/assets/screenshots/onboarding.webp',
+        label: 'Utter — First Run Setup Guide',
+        title: '60-Second Onboarding (No Accounts)',
+        desc: 'Zero registration, zero password. Checks microphone accessibility and runs your first local transcription test in seconds.'
+      }
+    };
+
+    function switchGalleryScreenshot(key, btn) {
+      if (btn) {
+        document.querySelectorAll('.gallery-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        const tabs = document.querySelectorAll('.gallery-tab-btn');
+        const keys = ['library', 'hub', 'companion', 'settings', 'onboarding'];
+        const idx = keys.indexOf(key);
+        if (idx !== -1 && tabs[idx]) {
+          tabs.forEach(b => b.classList.remove('active'));
+          tabs[idx].classList.add('active');
+        }
+      }
+      const data = galleryData[key];
+      if (!data) return;
+      const img = document.getElementById('galleryMainImg');
+      const label = document.getElementById('galleryWindowLabel');
+      const title = document.getElementById('galleryCaptionTitle');
+      const desc = document.getElementById('galleryCaptionDesc');
+
+      img.style.opacity = '0';
+      setTimeout(() => {
+        img.src = data.src;
+        label.innerText = data.label;
+        title.innerText = data.title;
+        desc.innerText = data.desc;
+        img.style.opacity = '1';
+      }, 150);
+
+      const gallerySection = document.getElementById('screenshots');
+      if (gallerySection && !btn) {
+        gallerySection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // Pill Interactive Simulator (authentic no-text pill HUD)
+    function setPillState(state, btn) {
+      document.querySelectorAll('.btn-pill-state').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      const pill = document.getElementById('hudPillElement');
+      const resting = document.getElementById('restingGraphic');
+      const listening = document.getElementById('listeningGraphic');
+      const processing = document.getElementById('processingGraphic');
+      const typed = document.getElementById('typedGraphic');
+      const text = document.getElementById('transcriptionText');
+
+      resting.style.display = 'none';
+      listening.style.display = 'none';
+      processing.style.display = 'none';
+      typed.style.display = 'none';
+      pill.className = 'hud-pill';
+
+      if (state === 'resting') {
+        pill.classList.add('state-resting');
+        resting.style.display = 'block';
+        text.innerText = 'Hold your trigger key and speak naturally...';
+      } else if (state === 'listening') {
+        pill.classList.add('state-listening');
+        listening.style.display = 'flex';
+        text.innerText = 'Speaking: "Ship the new on-device speech model to production"';
+      } else if (state === 'processing') {
+        pill.classList.add('state-processing');
+        processing.style.display = 'flex';
+        text.innerText = 'Local GPU computing whisper tokens in-process...';
+      } else if (state === 'typed') {
+        pill.classList.add('state-typed');
+        typed.style.display = 'block';
+        text.innerText = 'Ship the new on-device speech model to production.';
+      }
+    }
+  </script>
+</body>
+</html>
