@@ -266,9 +266,11 @@ export default function App() {
         <div className="max-w-[1520px] mx-auto flex items-center justify-between">
           
           <a href="#" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D83125] to-[#254EDB] flex items-center justify-center text-white font-black text-lg shadow-sm group-hover:scale-105 transition-transform">
-              U
-            </div>
+            <img 
+              src="/assets/brand/AppIconSource.png" 
+              alt="Utter App Icon" 
+              className="w-9 h-9 rounded-xl shadow-sm group-hover:scale-105 transition-transform object-cover" 
+            />
             <div>
               <span className="font-display font-extrabold text-xl tracking-tight text-[#141E3C] dark:text-white">Utter</span>
               <span className="ml-2 font-mono text-[0.7rem] bg-[#EDF1F7] dark:bg-[#151924] text-[#254EDB] dark:text-[#5E82FF] px-2 py-0.5 rounded font-semibold border border-[rgba(37,78,219,0.16)] dark:border-[rgba(128,158,255,0.2)]">
