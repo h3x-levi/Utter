@@ -1697,72 +1697,18 @@
         </div>
       </div>
 
-      <!-- Reviews Carousel Grid -->
-      <div id="community-reviews-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 48px;">
-        
-        <div class="card" data-category="Performance" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-            <div>
-              <div style="font-weight: 800; font-size: 1rem;">Devon Miller</div>
-              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@devon_infra · 2 days ago</div>
-            </div>
-            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
-          </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">macOS (M3 Max)</span>
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(37,78,219,0.1); color: var(--pen); font-weight: bold;">Performance ⚡</span>
-          </div>
-          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
-            "Injecting directly into terminal and VS Code with zero network round-trip makes dictation feel like a native keyboard feature. No cloud latency lag whatsoever."
+      <!-- Reviews Carousel Grid (Empty by Default) -->
+      <div id="community-reviews-grid" style="margin-bottom: 48px;">
+        <div style="border: 2px dashed var(--rule-bold); border-radius: var(--radius-md); padding: 48px 24px; text-align: center; background: var(--paper-card);">
+          <div style="font-size: 2rem; margin-bottom: 12px;">🎙️</div>
+          <h4 style="font-size: 1.25rem; font-weight: 800; margin: 0 0 8px;">The Community Tape Deck is fresh.</h4>
+          <p style="font-size: 0.95rem; color: var(--ink-muted); max-width: 500px; margin: 0 auto 20px;">
+            Have questions, platform wishlist requests (Windows 11 / Linux), or early thoughts? Drop your note below to be the first voice on the deck!
           </p>
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
-            <span>Staff Infrastructure Engineer</span>
-            <span style="color: var(--pen); font-weight: bold;">👍 34 helpful</span>
-          </div>
+          <a href="#comm-name" class="cta-primary-btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; font-size: 0.85rem; text-decoration: none;">
+            Drop the First Community Note 📼
+          </a>
         </div>
-
-        <div class="card" data-category="Privacy" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-            <div>
-              <div style="font-weight: 800; font-size: 1rem;">Elena Rostova</div>
-              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@elena_legal · 3 days ago</div>
-            </div>
-            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
-          </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">macOS (Apple Silicon)</span>
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(16,185,129,0.1); color: #10B981; font-weight: bold;">Privacy Win 🛡️</span>
-          </div>
-          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
-            "Our compliance team strictly forbids third-party audio uploads. Utter running in-process whisper on local GPU with zero telemetry passed our air-gap security audit immediately."
-          </p>
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
-            <span>Legal Tech Consultant</span>
-            <span style="color: var(--pen); font-weight: bold;">👍 28 helpful</span>
-          </div>
-        </div>
-
-        <div class="card" data-category="Feature" style="border: 2px solid var(--rule-bold); border-radius: var(--radius-md); padding: 28px; position: relative; background: var(--paper-card);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-            <div>
-              <div style="font-weight: 800; font-size: 1rem;">Marcus Thorne</div>
-              <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">@mthorne_dev · Yesterday</div>
-            </div>
-            <div style="color: var(--spine-gold); font-size: 0.9rem;">★★★★★</div>
-          </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: var(--paper-subtle); border: 1px solid var(--rule-bold);">Windows 11 Wishlist</span>
-            <span style="font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 99px; background: rgba(237,177,35,0.1); color: var(--spine-gold); font-weight: bold;">Feature Wish 💡</span>
-          </div>
-          <p style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px;">
-            "Eagerly waiting for the Windows 11 build! If it brings the exact same local GPU pipeline and Fn push-to-talk to PC, it will easily replace Dragon and Whispering for engineering teams."
-          </p>
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--rule-bold); padding-top: 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-subtle);">
-            <span>Principal Systems Architect</span>
-            <span style="color: var(--pen); font-weight: bold;">👍 42 helpful</span>
-          </div>
-        </div>
-
       </div>
 
       <!-- Add Community Note Inline Form -->
@@ -1815,7 +1761,7 @@
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
               <span style="font-size: 0.75rem; color: var(--ink-subtle);">
-                Found a bug? Open a ticket on <a href="https://github.com/h3x-levi/Utter/issues" target="_blank" style="color: var(--pen); font-weight: bold;">GitHub Issues</a>.
+                Community notes appear immediately on the tape deck above for everyone to read.
               </span>
               <button type="submit" class="cta-primary-btn" style="padding: 12px 24px; font-size: 0.9rem;">
                 Post Community Note 📼
@@ -1963,10 +1909,9 @@
         <strong style="color: var(--ink);">Utter</strong> · Open Source Apache License 2.0 · Private on-device voice dictation for macOS, Windows & Linux
       </div>
       <div class="footer-links">
-        <a href="https://github.com/h3x-levi/Utter" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="#apply">Apply for Beta</a>
-        <a href="https://github.com/h3x-levi/Utter/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">PRIVACY.md</a>
-        <a href="https://github.com/h3x-levi/Utter/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#apply">Apply for Beta</a>
       </div>
     </div>
   </footer>
