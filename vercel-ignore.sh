@@ -8,10 +8,10 @@
 
 echo "VERCEL_GIT_COMMIT_REF: ${VERCEL_GIT_COMMIT_REF:-unknown}"
 
-if [ "$VERCEL_GIT_COMMIT_REF" = "main" ]; then
-  echo "✓ Deploying: commit is on 'main' branch."
+if [ "$VERCEL_GIT_COMMIT_REF" = "production" ] || [ "$VERCEL_GIT_COMMIT_REF" = "main" ]; then
+  echo "✓ Deploying: commit is on '$VERCEL_GIT_COMMIT_REF' branch."
   exit 1
 else
-  echo "🛑 Skipping deployment: branch '$VERCEL_GIT_COMMIT_REF' is not 'main'."
+  echo "🛑 Skipping deployment: branch '$VERCEL_GIT_COMMIT_REF' is not 'production'."
   exit 0
 fi

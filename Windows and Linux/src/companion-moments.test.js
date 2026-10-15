@@ -7,7 +7,7 @@ const { pathToFileURL } = require('node:url')
 const table = require('./companion-routes.test.json')
 const libraryFile = path.join(__dirname, 'companion-moments.json')
 const playerUrl = pathToFileURL(path.join(__dirname, 'companion-player.js')).href
-const siteRobot = path.join(__dirname, '..', '..', 'website', 'preview-busytown', 'robot')
+const siteRobot = path.join(__dirname, '..', '..', 'website', 'public', 'robot')
 const fragmentFile = process.env.FRAGMENT && path.resolve(process.env.FRAGMENT)
 
 const BASE = {

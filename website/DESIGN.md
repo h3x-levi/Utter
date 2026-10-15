@@ -139,7 +139,7 @@ components:
 
 # Design System: Utter website
 
-The marketing site's world. It is separate from the macOS app's Mixtape system in `../DESIGN.md`. Source of truth: `preview-busytown/index.html` (one file: inline CSS, JS and SVG).
+The marketing site's world. It is separate from the macOS app's Mixtape system in `../DESIGN.md`. Source of truth: `public/index.html` (one file: inline CSS, JS and SVG). `npm run build` copies `public/` to `dist/`, which Vercel publishes.
 
 ## Overview
 

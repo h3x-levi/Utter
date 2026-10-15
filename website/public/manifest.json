@@ -1,11 +1,11 @@
 {
-  "name": "Utter for macOS",
+  "name": "Utter",
   "short_name": "Utter",
-  "description": "Native on-device voice dictation for macOS with zero telemetry.",
+  "description": "Hold a key, talk, let go. Utter turns your words into text on your own computer.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#A9D5EE",
+  "theme_color": "#A9D5EE",
   "icons": [
     {
       "src": "/favicon-32x32.png",
