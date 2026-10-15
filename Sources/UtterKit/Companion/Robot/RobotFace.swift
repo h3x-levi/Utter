@@ -104,6 +104,24 @@ enum RobotEase {
 
     static let head = RobotEase.bezier(0.16, 1, 0.3, 1)
 
+    /// The moment library's easing names: poses use `pose`, head keyframes use `curve`.
+    static func pose(_ name: String?) -> RobotEase {
+        switch name {
+        case "inOut": return .inOutCubic
+        case "linear": return .linear
+        default: return .outQuint
+        }
+    }
+
+    static func curve(_ name: String?) -> RobotEase {
+        switch name {
+        case "out": return .head
+        case "linear": return .linear
+        case "back": return .bezier(0.34, 1.56, 0.64, 1)
+        default: return .bezier(0.65, 0, 0.35, 1)
+        }
+    }
+
     func callAsFunction(_ t: CGFloat) -> CGFloat {
         switch self {
         case .linear: return t
@@ -299,6 +317,71 @@ enum RobotGeometry {
             CGAffineTransform(scaleX: sx, y: sy)
                 .concatenating(CGAffineTransform(rotationAngle: degrees * .pi / 180))
                 .concatenating(CGAffineTransform(translationX: x, y: y)))
+    }
+
+    static let headCenter = CGPoint(x: 120, y: 120)
+
+    /// A CSS `transform-origin` such as "120px 204px"; anything else is the head's centre.
+    static func point(_ css: String?) -> CGPoint {
+        let v = (css ?? "").split(separator: " ").compactMap { Double($0.trimmingCharacters(in: .letters)) }
+        return v.count == 2 ? CGPoint(x: v[0], y: v[1]) : headCenter
+    }
+
+    /// A CSS transform list applied about `origin`, as `transform-box: view-box` does.
+    static func matrix(_ list: [RobotTransformFunction], origin: CGPoint) -> CGAffineTransform {
+        list.reversed().reduce(CGAffineTransform(translationX: -origin.x, y: -origin.y)) { $0.concatenating($1.matrix) }
+            .concatenating(CGAffineTransform(translationX: origin.x, y: origin.y))
+    }
+
+    static func matrix(_ k: RobotHeadKey, about c: CGPoint = headCenter) -> CGAffineTransform {
+        CGAffineTransform(translationX: -c.x, y: -c.y)
+            .concatenating(CGAffineTransform(scaleX: k.scale, y: k.scaleY ?? k.scale))
+            .concatenating(CGAffineTransform(rotationAngle: k.rotation * .pi / 180))
+            .concatenating(CGAffineTransform(translationX: c.x + k.x, y: c.y + k.y))
+    }
+
+    /// Splits a skew-free transform into translate, rotate (degrees) and scale about `c`.
+    static func decompose(_ m: CGAffineTransform, about c: CGPoint = headCenter) -> RobotHeadKey {
+        let sx = hypot(m.a, m.b), p = c.applying(m)
+        return RobotHeadKey(offset: 0, x: p.x - c.x, y: p.y - c.y, scale: sx,
+                            scaleY: sx > 0 ? (m.a * m.d - m.b * m.c) / sx : 0, rotation: atan2(m.b, m.a) * 180 / .pi)
+    }
+}
+
+/// One function of a CSS transform list: translateX, translateY, translate, rotate (deg) or scale.
+struct RobotTransformFunction: Equatable {
+    var name: String
+    var args: [CGFloat]
+
+    static func parse(_ css: String) -> [RobotTransformFunction] {
+        css.split(separator: ")").compactMap { part in
+            let pieces = part.split(separator: "(", maxSplits: 1)
+            guard pieces.count == 2 else { return nil }
+            let name = pieces[0].trimmingCharacters(in: .whitespaces)
+            var args = pieces[1].split(whereSeparator: { $0 == "," || $0 == " " })
+                .compactMap { Double($0.trimmingCharacters(in: .letters)) }.map { CGFloat($0) }
+            guard !args.isEmpty else { return nil }
+            if name == "translate", args.count == 1 { args.append(0) }
+            if name == "scale", args.count == 1 { args.append(args[0]) }
+            return RobotTransformFunction(name: name, args: args)
+        }
+    }
+
+    var matrix: CGAffineTransform {
+        let a = args[0], b = args.count > 1 ? args[1] : 0
+        switch name {
+        case "translateX": return CGAffineTransform(translationX: a, y: 0)
+        case "translateY": return CGAffineTransform(translationX: 0, y: a)
+        case "translate": return CGAffineTransform(translationX: a, y: b)
+        case "rotate": return CGAffineTransform(rotationAngle: a * .pi / 180)
+        case "scale": return CGAffineTransform(scaleX: a, y: b)
+        default: return .identity
+        }
+    }
+
+    func mixed(_ o: RobotTransformFunction, _ t: CGFloat) -> RobotTransformFunction {
+        guard o.name == name, o.args.count == args.count else { return t < 0.5 ? self : o }
+        return RobotTransformFunction(name: name, args: zip(args, o.args).map { robotLerp($0, $1, t) })
     }
 }
 

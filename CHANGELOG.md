@@ -4,6 +4,13 @@ All notable changes to Utter are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses semantic-ish versioning (the build script auto-bumps the patch).
 
+## [1.2.3] - October 2026
+
+- The companion has over a hundred new moments for dictation, meetings, care reminders, the time of day, the seasons and play
+- Choose a finish and an outfit for the companion in Settings
+- Speech detection now skips silence and background noise, so less work runs on your computer
+- Dictionary words heard as similar sounds, like "cube or needs", are written as the word you added
+
 ## [1.1.58] - October 2026
 
 - **First-Principles Utter 2.0 Architecture**: Rebuilt the entire user experience around a unified 3-tier attention hierarchy (Dynamic Capsule HUD, Unified Voice Canvas, and System Preferences).

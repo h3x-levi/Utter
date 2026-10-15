@@ -140,7 +140,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             pill: pillWindow,
             meetingIsActive: { [weak self] in self?.meetingIsRecording ?? false },
             suppressRelease: { [weak self] in self?.keyMonitor?.suppressReleaseStop = $0 },
-            celebrate: { [weak self] in self?.companionWindow?.behaviour.celebrateGoal($0) }
+            celebrate: { [weak self] in self?.companionWindow?.behaviour.celebrateGoal($0, kind: "dictation") },
+            note: { [weak self] in self?.companionWindow?.behaviour.note($0) }
         )
         applyPillVisibility()
         setupMenuBar()

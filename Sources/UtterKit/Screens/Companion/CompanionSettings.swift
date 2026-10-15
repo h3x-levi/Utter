@@ -64,6 +64,20 @@ final class CompanionSettingsModel {
 
     var wordsToday: Int { todayTape.reduce(0) { $0 + $1.words } }
 
+    var look: RobotLook { RobotLook(finish: userData.companionFinish, accessory: userData.companionAccessory) }
+
+    var finishes: [(String, String)] {
+        guard let library = RobotLibrary.shared else { return [] }
+        return library.finishOrder.compactMap { id in library.finishes[id].map { (id, $0.name) } }
+    }
+
+    var wearables: [(String, String)] {
+        guard let library = RobotLibrary.shared else { return [] }
+        return [("", "Nothing")] + library.accessoryOrder.compactMap { id in
+            library.accessories[id].flatMap { $0.wear == true ? (id, $0.name) : nil }
+        }
+    }
+
     func binding<Value>(_ key: ReferenceWritableKeyPath<UserData, Value>) -> Binding<Value> {
         Binding(get: { [userData] in userData[keyPath: key] },
                 set: { [userData] value in
@@ -109,6 +123,12 @@ struct CompanionSettingsContent: View {
                                                       set: { model.roundness = $0 }),
                                    options: [(0, "Square"), (50, "Soft"), (100, "Round")])
                 }
+                if !model.finishes.isEmpty {
+                    SettingsRow("Finish") { choose("Finish", \.companionFinish, shown: model.look.finish, options: model.finishes) }
+                    SettingsRow("Wears", "Stays on between moments") {
+                        choose("Wears", \.companionAccessory, shown: model.look.worn ?? "", options: model.wearables)
+                    }
+                }
                 toggle("Quiet mode", "Sleeps and holds its reminders", \.companionQuietMode)
                 toggle("Go quiet on its own", "While you share your screen or record a meeting", \.companionAutomaticQuietMode)
             }
@@ -124,7 +144,7 @@ struct CompanionSettingsContent: View {
     }
 
     private var stage: some View {
-        RobotPreview(roundness: model.roundness)
+        RobotPreview(roundness: model.roundness, look: model.look)
             .frame(width: 116, height: 116)
             .frame(width: 168, height: 170)
             .background(Mixtape.spine, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -234,6 +254,19 @@ struct CompanionSettingsContent: View {
         }
     }
 
+    /// The menu ticks what the robot actually shows, so a stored id the library no longer has reads as its fallback.
+    private func choose(_ title: String, _ key: ReferenceWritableKeyPath<UserData, String>, shown: String,
+                        options: [(String, String)]) -> some View {
+        let stored = model.binding(key)
+        return SettingsPick(title, value: options.first { $0.0 == shown }?.1 ?? "") {
+            Picker(title, selection: Binding(get: { shown }, set: { stored.wrappedValue = $0 })) {
+                ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        }
+    }
+
     /// The common values; the stored one is always offered, so an odd one is never lost.
     private func picker(_ title: String, _ key: ReferenceWritableKeyPath<UserData, Int>, choices: [Int],
                         label: @escaping (Int) -> String) -> some View {
@@ -285,6 +318,7 @@ private struct MemoryRow: View {
 struct RobotPreview: NSViewRepresentable {
     var state: RobotState = .idle
     var roundness: CGFloat = RobotGeometry.defaultRoundness
+    var look = RobotLook()
 
     @Environment(\.controlActiveState) private var activeState
 
@@ -294,14 +328,11 @@ struct RobotPreview: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> RobotView {
-        let view = RobotView(frame: .zero)
-        view.palette = .utter
-        return view
-    }
+    func makeNSView(context: Context) -> RobotView { RobotView(frame: .zero) }
 
     func updateNSView(_ view: RobotView, context: Context) {
         if view.roundness != roundness { view.roundness = roundness }
+        if view.look != look { view.look = look }
         if activeState == .key { view.resume() } else { view.pause() }
         guard context.coordinator.state != state else { return }
         context.coordinator.state = state

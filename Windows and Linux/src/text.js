@@ -91,7 +91,55 @@ function correct(text, words) {
     if (token[0] !== token[0].toLowerCase()) return best[0].toUpperCase() + best.slice(1)
     return best
   }
-  return text.replace(/[\p{L}']+/gu, replace)
+  return correctSounds(text.replace(/[\p{L}']+/gu, replace), canonical)
+}
+
+// Sound-alike keys: voicing pairs merge and vowels drop, so an accent's "cooper netties" keys like "Kubernetes".
+function soundKey(word) {
+  const w = word.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')
+    .replace(/^(k|g|p)n/, 'n').replace(/^wr/, 'r').replace(/ph/g, 'f').replace(/th/g, 't')
+    .replace(/c(?=[eiy])/g, 's').replace(/x/g, 'ks')
+  const map = { c: 'k', q: 'k', g: 'k', b: 'p', d: 't', v: 'f', z: 's', j: 'k' }
+  let key = ''
+  for (const ch of w) {
+    const c = map[ch] || ch
+    if ('aeiouhwy'.includes(c) || key.endsWith(c)) continue
+    key += c
+  }
+  return key
+}
+
+// Replaces 1-3 word spans that sound like a dictionary word and are spelled close enough to it.
+function correctSounds(text, canonical) {
+  const targets = canonical.map((w) => ({ w, key: soundKey(w), letters: w.toLowerCase().replace(/[^\p{L}]/gu, '') }))
+    .filter((t) => t.key.length >= 4)
+  if (!targets.length) return text
+  const known = new Set(canonical.map((w) => w.toLowerCase()))
+  const tokens = [...text.matchAll(/[\p{L}']+/gu)]
+  const out = []
+  let cursor = 0
+  for (let i = 0; i < tokens.length;) {
+    let hit = null
+    for (let n = Math.min(3, tokens.length - i); n >= 1 && !hit; n--) {
+      const span = tokens.slice(i, i + n)
+      const gap = text.slice(span[0].index, span[n - 1].index + span[n - 1][0].length)
+      if (n > 1 && /[^\p{L}'\s]/u.test(gap)) continue
+      if (span.some((t) => known.has(t[0].toLowerCase()))) continue
+      const letters = span.map((t) => t[0]).join('').toLowerCase().replace(/[^\p{L}]/gu, '')
+      if (n === 1 && letters.length < 5) continue
+      const key = soundKey(letters)
+      hit = targets.find((t) => t.key === key && letters !== t.letters
+        && letters.length >= t.letters.length * 0.6 && letters.length <= t.letters.length * 1.7
+        && levenshtein(letters, t.letters) / Math.max(letters.length, t.letters.length) <= 0.5)
+      if (hit) {
+        out.push(text.slice(cursor, span[0].index), hit.w)
+        cursor = span[0].index + gap.length
+        i += n
+      }
+    }
+    if (!hit) i++
+  }
+  return out.join('') + text.slice(cursor)
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -206,10 +254,10 @@ function meetingHeader(now = new Date(), app = '') {
   return `# ${app ? `${app} meeting` : 'Meeting'}, ${day} at ${time}\n`
 }
 
-function trimSilence(samples, threshold = 500) {
+function trimSilence(samples, threshold = 500, lead = 1600, tail = 3200) {
   let start = 0, end = samples.length - 1
-  for (let i = 0; i < samples.length; i++) if (Math.abs(samples[i]) > threshold) { start = Math.max(0, i - 1600); break }
-  for (let i = samples.length - 1; i >= 0; i--) if (Math.abs(samples[i]) > threshold) { end = Math.min(samples.length - 1, i + 3200); break }
+  for (let i = 0; i < samples.length; i++) if (Math.abs(samples[i]) > threshold) { start = Math.max(0, i - lead); break }
+  for (let i = samples.length - 1; i >= 0; i--) if (Math.abs(samples[i]) > threshold) { end = Math.min(samples.length - 1, i + tail); break }
   return samples.subarray(start, end + 1)
 }
 
@@ -227,6 +275,6 @@ function wav(samples) {
 
 module.exports = {
   RATE, isUsable, formatText, correct, applySnippets, expandPlaceholders, voiceCommand, VOICE_COMMANDS,
-  biasPrompt, derivedTitle, displayTitle, turns, isEcho, release, heading, turnLine, relabel,
+  biasPrompt, soundKey, derivedTitle, displayTitle, turns, isEcho, release, heading, turnLine, relabel,
   meetingHeader, trimSilence, peak, wav,
 }

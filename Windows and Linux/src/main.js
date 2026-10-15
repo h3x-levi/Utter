@@ -29,6 +29,8 @@ app.setPath('sessionData', path.join(dataDir, 'Session'))
 
 const resources = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..')
 const bundledModel = app.isPackaged ? path.join(resources, 'models', 'ggml-small.en-q5_1.bin') : path.join(resources, '..', 'Models', 'ggml-small.en-q5_1.bin')
+const vadModel = app.isPackaged ? path.join(resources, 'models', 'ggml-silero-v6.2.0.bin') : path.join(resources, '..', 'Models', 'ggml-silero-v6.2.0.bin')
+const vadArgs = fs.existsSync(vadModel) ? ['--vad', '-vm', vadModel, '-vp', '200'] : []
 const serverDir = app.isPackaged ? path.join(resources, 'whisper') : path.join(resources, 'vendor', WIN ? 'win' : 'linux')
 const serverBin = path.join(serverDir, WIN ? 'whisper-server.exe' : 'whisper-server')
 const asset = (name) => path.join(__dirname, '..', 'assets', name)
@@ -245,7 +247,7 @@ async function startEngine() {
   changed()
   port = await freePort()
   const threads = Math.max(1, Math.min(8, os.cpus().length - 2))
-  const child = spawn(serverBin, ['-m', modelPath, '--host', '127.0.0.1', '--port', String(port), '-t', String(threads), '-l', 'en'], {
+  const child = spawn(serverBin, ['-m', modelPath, '--host', '127.0.0.1', '--port', String(port), '-t', String(threads), '-l', 'en', '-sns', ...vadArgs], {
     cwd: serverDir, env: { ...process.env, LD_LIBRARY_PATH: serverDir }, stdio: 'ignore', windowsHide: true,
   })
   server = child
@@ -287,6 +289,8 @@ async function transcribe(samples) {
     form.append('carry_initial_prompt', 'true')
   }
   const response = await fetch(`http://127.0.0.1:${port}/inference`, { method: 'POST', body: form })
+  // whisper-server 1.9.2 answers 500 when VAD finds no speech in the clip.
+  if (response.status === 500 && vadArgs.length) return []
   const json = await response.json().catch(() => ({}))
   if (!response.ok || json.error) throw new Error('Transcription failed')
   return (json.segments || []).map((s) => ({ start: s.start, end: s.end, text: s.text }))
@@ -530,7 +534,7 @@ async function stopTurn() {
     }
   }
   addWords(prepared.split(' ').filter(Boolean).length)
-  companion.signal('delivered', { words: prepared.split(' ').filter(Boolean).length, destination: turn.destination })
+  companion.signal('delivered', { words: prepared.split(' ').filter(Boolean).length, total: ud.companionProgress.dictationWords, destination: turn.destination })
   if (holding) return endTurn(turn, 'island', prepared)
   endTurn(turn, 'done')
 }
@@ -789,6 +793,7 @@ function failMeeting(m, problem) {
   saveNow('notes')
   m.state = 'failed'
   m.problem = problem
+  companion.signal('meeting', { state: 'failed' })
   changed()
 }
 
@@ -875,7 +880,7 @@ async function meetingCommand(command, savedMessage = 'Meeting saved') {
     const note = findNote(m.noteId)
     if (note) { note.recordedSeconds = Math.round(m.elapsed * 10) / 10; saveNow('notes') }
     meeting = null
-    companion.signal('meeting', { state: 'saved' })
+    companion.signal('meeting', { state: 'saved', minutes: Math.round(m.elapsed / 60) })
     flash('notice', savedMessage, 2500)
     changed()
   }

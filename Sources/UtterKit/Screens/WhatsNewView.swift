@@ -42,6 +42,12 @@ struct WhatsNewView: View {
     }
 
     static let releases: [Release] = [
+        Release(version: "1.2.3", date: "October 2026", highlights: [
+            "The companion has over a hundred new moments for dictation, meetings, care reminders, the time of day, the seasons and play",
+            "Choose a finish and an outfit for the companion in Settings",
+            "Speech detection now skips silence and background noise, so less work runs on your computer",
+            "Dictionary words heard as similar sounds, like \"cube or needs\", are written as the word you added",
+        ]),
         Release(version: "1.1.57", date: "September 2026", highlights: [
             "Double-tap the hotkey (Fn) to start hands-free dictation without holding it",
         ]),

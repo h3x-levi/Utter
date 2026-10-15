@@ -4,7 +4,7 @@ Unicode true
 !include "LogicLib.nsh"
 
 !ifndef VERSION
-  !define VERSION "1.2.1"
+  !define VERSION "1.2.3"
 !endif
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Utter"
 

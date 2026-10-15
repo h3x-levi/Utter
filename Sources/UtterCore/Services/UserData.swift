@@ -138,6 +138,9 @@ package class UserData: ObservableObject {
     @Published package var companionFocusGoal: Int = 2
     @Published package var companionDictationGoal: Int = 500
     @Published package var companionProgress = CompanionProgress.today()
+    /// Ids from companion-moments.json, checked when the robot is drawn; "" wears nothing.
+    @Published package var companionFinish = "ink"
+    @Published package var companionAccessory = ""
 
     /// Show a rough live transcript in the pill while speaking.
     ///
@@ -328,6 +331,8 @@ package class UserData: ObservableObject {
             "companionFocusGoal": companionFocusGoal,
             "companionDictationGoal": companionDictationGoal,
             "companionProgress": companionProgress.jsonObject,
+            "companionFinish": companionFinish,
+            "companionAccessory": companionAccessory,
         ]
     }
 
@@ -433,6 +438,8 @@ package class UserData: ObservableObject {
         if let v = json["companionProgress"] as? [String: Any] {
             companionProgress = CompanionProgress(jsonObject: v)
         }
+        if let v = json["companionFinish"] as? String { companionFinish = v }
+        if let v = json["companionAccessory"] as? String { companionAccessory = v }
         if let cmds = json["customAICommands"] as? [[String: Any]],
            let raw = try? JSONSerialization.data(withJSONObject: cmds),
            let decoded = try? JSONDecoder().decode([CustomAICommand].self, from: raw) {
