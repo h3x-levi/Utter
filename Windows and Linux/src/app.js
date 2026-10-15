@@ -1091,6 +1091,19 @@ function shortcutsTab() {
 
 const companionValue = (key) => S.companionSettings?.[key]
 
+let companionLibrary = null
+const companionLibraryReady = SURFACE ? null : utter.companion('library').then((lib) => { companionLibrary = lib; render() })
+
+function companionLook() {
+  const lib = companionLibrary
+  const finish = companionValue('companionFinish')
+  const worn = companionValue('companionAccessory')
+  return {
+    finish: lib && Object.hasOwn(lib.finishes, finish) ? finish : lib?.defaults.finish,
+    worn: lib && Object.hasOwn(lib.accessories, worn) && lib.accessories[worn].wear ? worn : '',
+  }
+}
+
 function setCompanion(key, value) {
   if (S.companionSettings) S.companionSettings[key] = value
   utter.setSetting(key, value)
@@ -1107,6 +1120,11 @@ function cchoice(key, options, label, current = companionValue(key)) {
   return h('div', { class: 'choice', role: 'group', 'aria-label': label }, ...options.map(([value, text]) => h('button', {
     type: 'button', 'aria-pressed': current === value ? 'true' : 'false', onclick: () => setCompanion(key, value),
   }, text)))
+}
+
+function cselect(key, options, label, current) {
+  return h('select', { class: 'pick', 'aria-label': label, onchange: (e) => setCompanion(key, e.target.value) },
+    ...options.map(([value, text]) => h('option', { value, selected: value === current, text })))
 }
 
 // A value of 0 reads "off", as on the Mac; the current value is always offered even when it is not a preset.
@@ -1162,6 +1180,8 @@ function companionTab() {
       cpick(title, key, choices, (v) => `${v.toLocaleString('en-US')} a day`))
   }
   const memories = view.active.length + view.completed.length
+  const lib = companionLibrary
+  const look = companionLook()
   return [
     h('div', { class: 'companionTop' },
       h('div', { class: 'companionStage', 'data-companion-stage': String(roundness), role: 'img', 'aria-label': 'Your companion' }),
@@ -1169,6 +1189,9 @@ function companionTab() {
         srow('Show beside the pill', 'Listens with you and sleeps when you’re idle', ctoggle('companionEnabled', 'Show beside the pill')),
         srow('Size', null, cchoice('companionSize', [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['huge', 'Huge']], 'Size')),
         srow('Head shape', 'Square to round', cchoice('companionHeadRoundness', [[0, 'Square'], [50, 'Soft'], [100, 'Round']], 'Head shape', nearest)),
+        lib && srow('Finish', null, cselect('companionFinish', Object.entries(lib.finishes).map(([id, f]) => [id, f.name]), 'Finish', look.finish)),
+        lib && srow('Wears', 'Stays on between moments', cselect('companionAccessory',
+          [['', 'Nothing'], ...Object.entries(lib.accessories).filter(([, a]) => a.wear).map(([id, a]) => [id, a.name])], 'Wears', look.worn)),
         srow('Quiet mode', 'Sleeps and holds its reminders', ctoggle('companionQuietMode', 'Quiet mode')),
         srow('Go quiet on its own', 'While you share your screen or record a meeting', ctoggle('companionAutomaticQuietMode', 'Go quiet on its own')))),
     section('Reminders', 'it taps the pill, gently',
@@ -1205,7 +1228,10 @@ function placeCompanionStage() {
   }
   if (!companionStageFrame) {
     companionStageFrame = h('iframe', { src: 'companion.html#preview', class: 'companionStageFrame', title: 'Your companion', tabindex: '-1' })
-    companionStageFrame.addEventListener('load', placeCompanionStage)
+    companionStageFrame.addEventListener('load', () => companionLibraryReady.then(() => {
+      companionStageFrame.contentWindow?.postMessage({ library: companionLibrary }, '*')
+      placeCompanionStage()
+    }))
     document.body.append(companionStageFrame)
   }
   const r = slot.getBoundingClientRect()
@@ -1215,7 +1241,7 @@ function placeCompanionStage() {
     clipPath: `inset(${Math.max(0, view.top - r.top)}px 0 ${Math.max(0, r.bottom - view.bottom)}px 0 round 14px)`,
   })
   companionStageFrame.hidden = Boolean(ui.overlay) || r.bottom < view.top || r.top > view.bottom
-  companionStageFrame.contentWindow?.postMessage({ roundness: Number(slot.dataset.companionStage) }, '*')
+  companionStageFrame.contentWindow?.postMessage({ roundness: Number(slot.dataset.companionStage), ...companionLook() }, '*')
 }
 
 new MutationObserver(placeCompanionStage).observe(document.getElementById('main'), { childList: true })
@@ -1733,6 +1759,7 @@ function reportView() {
 }
 
 const RELEASES = [
+  ["1.2.3", "October 2026", ["The companion has over a hundred new moments for dictation, meetings, care reminders, the time of day, the seasons and play", "Choose a finish and an outfit for the companion in Settings", "Speech detection now skips silence and background noise, so less work runs on your computer", "Dictionary words heard as similar sounds, like \"cube or needs\", are written as the word you added"]],
   ["1.1.57", "September 2026", ["Double-tap the hotkey (Fn) to start hands-free dictation without holding it"]],
   ["3.0.40", "August 2026", ["Companion is now organized into native Today, Remember, Rewards, and Customize tabs.", "Type or speak private memories and reminders; review them before saving, edit them later, or erase them all.", "Dictation milestones now unlock companion objects, animations, and original cat sounds without purchases or expiring rewards.", "Pill symbols remain visible on light or dark backgrounds, and the processing pencil now draws a continuous handwriting stroke.", "Memory files recover their previous saved generation after corruption and roll back cleanly when a disk write fails."]],
   ["3.0.39", "August 2026", ["Companion now uses the full settings width instead of a narrow centered form.", "Both pixel cats have longer bodies plus new grooming, rolling, and loaf animations.", "The cat can play with its ball, box, yarn, and cushion by itself, and reacts to double-clicking, tossing, feeding, and brushing.", "Local relationship memory, daily goals, earned animations, window-edge avoidance, and automatic quiet behavior are now available."]],

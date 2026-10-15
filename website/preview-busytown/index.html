@@ -1,0 +1,1678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Utter · Say it, and it types. Nothing leaves the house.</title>
+<meta name="description" content="Hold a key, talk, let go. Utter turns your words into text on your own computer with whisper.cpp. Free and open source. Apply for the beta.">
+<link rel="icon" href="icon.png">
+<style>
+  @font-face { font-family: "Grandstander"; src: url("fonts/Grandstander.ttf") format("truetype"); font-weight: 100 900; font-display: block; }
+  @font-face { font-family: "Patrick Hand"; src: url("fonts/PatrickHand.ttf") format("truetype"); font-display: block; }
+
+  :root {
+    --paper: #FBFAF5; --brick: #C8402F; --bus: #F3C13A; --green: #4E9A4A; --outline: #6B4A2E;
+    --sand: #E8CE9C; --wood: #8C5A3C;
+    --sky: #A9D5EE; --em: #8F2B20; --ink: #3A2616; --ink2: #5A4130; --grass: #4E9A4A; --grass-hi: #6DB466; --road: #E8CE9C; --dash: rgba(251, 250, 245, .95);
+    --pad: clamp(20px, 4vw, 104px); --band: 76px;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+  }
+  * { box-sizing: border-box; }
+  html { scrollbar-color: var(--outline) var(--sand); scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: #A9D5EE; color: var(--ink); font-family: "Patrick Hand", "Comic Sans MS", cursive;
+    font-size: clamp(20px, 0.5vw + 13.5px, 27px); line-height: 1.45; caret-color: var(--brick); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--bus); color: #3A2616; }
+  a { color: inherit; }
+  img { display: block; }
+  :focus-visible { outline: 3px solid var(--brick); outline-offset: 3px; border-radius: 6px; }
+  .skip { position: absolute; left: 12px; top: -60px; z-index: 20; background: var(--bus); color: #3A2616; padding: 10px 16px; border: 2.5px solid var(--outline); border-radius: 12px; }
+  .skip:focus { top: 12px; }
+
+  /* ---------- blocks of the town ---------- */
+  .block { position: relative; isolation: isolate; background: var(--sky); color: var(--ink);
+    padding: clamp(84px, 7vw, 176px) var(--pad) var(--band); display: grid; grid-template-columns: minmax(0, 1fr);
+    column-gap: clamp(32px, 3.4vw, 96px); row-gap: clamp(28px, 3vw, 56px); align-items: end; overflow: clip; }
+  .block::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--band); z-index: -1;
+    background:
+      repeating-linear-gradient(90deg, var(--dash) 0 42px, transparent 42px 118px) 0 46px / 100% 4px no-repeat,
+      linear-gradient(var(--outline) 0 0) 0 28px / 100% 2.5px no-repeat,
+      linear-gradient(var(--outline) 0 0) 0 64px / 100% 2.5px no-repeat,
+      linear-gradient(var(--grass-hi) 0 0) 0 5px / 100% 5px no-repeat,
+      linear-gradient(var(--outline) 0 0) 0 0 / 100% 2.5px no-repeat,
+      linear-gradient(var(--grass) 0 0) 0 0 / 100% 28px no-repeat,
+      linear-gradient(var(--road) 0 0) 0 28px / 100% 36px no-repeat,
+      linear-gradient(var(--grass) 0 0) 0 64px / 100% 12px no-repeat; }
+  .night { --em: #FFE08A; --ink: #FBFAF5; --ink2: #E9E0CF; --grass: #2F6B3A; --grass-hi: #3F8048; --road: #B9A57E; --dash: rgba(251, 250, 245, .7); }
+
+  .copy { position: relative; z-index: 1; align-self: center; padding-bottom: clamp(8px, 1.6vw, 40px); }
+  .copy p { margin: 0 0 18px; color: var(--ink2); max-width: 40ch; }
+  .copy ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; max-width: 40ch; }
+  .copy li { color: var(--ink2); padding-left: 30px; position: relative; }
+  .copy li::before { content: ""; position: absolute; left: 0; top: .62em; width: 14px; height: 14px; border-radius: 50%; background: var(--bus); border: 2.5px solid var(--outline); }
+  h1, h2, h3 { font-family: "Grandstander", sans-serif; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 20px; color: var(--ink); text-wrap: balance; }
+  h1 { font-size: clamp(44px, 3.6vw, 88px); line-height: 1.04; }
+  h1 em { display: block; }
+  h2 { font-size: clamp(40px, 3.3vw, 76px); line-height: 1.04; }
+  h3 { font-size: clamp(24px, 1.4vw, 32px); line-height: 1.15; margin-bottom: 8px; }
+  h1 em, h2 em { font-style: normal; color: var(--em); }
+  .stage { position: relative; z-index: 1; width: 100%; aspect-ratio: var(--ar); }
+  .stage > svg.scene { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  @media (min-width: 1000px) and (max-width: 1199px) {
+    .block.side .copy { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(22rem, 1.25fr); column-gap: clamp(32px, 5vw, 96px); align-items: start; }
+    .block.side .copy > * { grid-column: 2; }
+    .block.side .copy > h2 { grid-column: 1; grid-row: 1 / span 8; }
+  }
+  @media (min-width: 1200px) {
+    .block.side { grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr); }
+    .block.side.flip { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
+    .block.side.flip .copy { order: 2; }
+  }
+  @media (min-width: 1600px) {
+    .block.side { grid-template-columns: minmax(26rem, 34rem) minmax(0, 1fr); }
+    .block.side.flip { grid-template-columns: minmax(0, 1fr) minmax(26rem, 34rem); }
+  }
+  @media (min-width: 1000px) {
+    .copy.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 120px); align-items: end; }
+    .copy.row > * { margin: 0; max-width: 46ch; }
+  }
+
+  /* ---------- buttons ---------- */
+  .go { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font: 700 clamp(19px, .45vw + 13px, 25px)/1 "Grandstander", sans-serif;
+    color: #3A2616; background: var(--bus); border: 2.5px solid var(--outline); border-radius: 16px; padding: .72em 1.15em; text-decoration: none; cursor: pointer;
+    box-shadow: 0 5px 12px -4px rgba(58, 38, 22, .45); transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
+  .go:hover { transform: translateY(-2px); box-shadow: 0 9px 18px -6px rgba(58, 38, 22, .5); }
+  .go:active { transform: translateY(1px) scale(.98); }
+  .go.small { font-size: clamp(17px, .3vw + 13px, 21px); border-radius: 14px; padding: .62em 1em; }
+  .go[disabled] { opacity: .6; cursor: progress; }
+  .ghost { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+  .ghost svg { width: 1.6em; height: 1.6em; flex: none; }
+  .ghost:hover span { text-decoration: underline; text-decoration-color: var(--brick); text-underline-offset: 5px; text-decoration-thickness: 2px; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; margin-top: 26px; }
+
+  /* ---------- header ---------- */
+  header.top { position: absolute; left: 0; right: 0; top: 0; z-index: 5; display: flex; align-items: center; gap: clamp(20px, 2.6vw, 48px); padding: 18px var(--pad); }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #3A2616; }
+  .brand img { width: 42px; height: 42px; border-radius: 11px; border: 2.5px solid var(--outline); }
+  .brand span { font: 800 32px/1 "Grandstander", sans-serif; letter-spacing: -0.01em; }
+  nav.main { display: flex; gap: clamp(18px, 2vw, 36px); }
+  nav.main a { color: #5A4130; text-decoration: none; font-size: clamp(19px, .3vw + 14px, 23px); }
+  nav.main a:hover { color: #3A2616; text-decoration: underline; text-decoration-color: var(--brick); text-underline-offset: 5px; text-decoration-thickness: 2px; }
+  .push { margin-left: auto; }
+
+  /* ---------- hero ---------- */
+  .hero { min-height: 100svh; padding-top: clamp(110px, 9vw, 150px); }
+  .hero .stage { --ar: 980 / 680; --fx: 13.67%; --fy: 26.47%; --fw: 82.86%; --fh: 70.88%; width: min(100%, calc((100svh - 230px) * 980 / 680)); justify-self: end; }
+  .lab.small text { font-size: 17px; }
+  @media (min-width: 1100px) { .hero { grid-template-columns: minmax(24rem, 36rem) minmax(0, 1fr); } }
+  .holdkey > span:last-child { max-width: 26ch; text-align: left; }
+  .holdkey { display: inline-flex; align-items: center; gap: 14px; margin-top: 22px; padding: 0; border: 0; background: none; color: var(--ink2); font: inherit; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .holdkey .cap { display: grid; place-items: center; width: 3.1em; height: 2.5em; border-radius: 12px; background: var(--bus); border: 2.5px solid var(--outline);
+    font: 800 .82em/1 "Grandstander", sans-serif; color: #3A2616; box-shadow: 0 5px 0 #B98A1E, 0 7px 10px -4px rgba(58, 38, 22, .45); transition: transform .08s, box-shadow .08s; }
+  .holdkey.down .cap, .holdkey:active .cap { transform: translateY(4px); box-shadow: 0 1px 0 #B98A1E, 0 2px 4px -2px rgba(58, 38, 22, .45); }
+  .where { margin-top: 20px; color: var(--ink2); }
+  .clouds { position: absolute; inset: 0 0 auto 0; height: 46%; z-index: -1; pointer-events: none; }
+  .clouds svg { position: absolute; width: clamp(110px, 9vw, 200px); }
+  .drift { animation: drift 70s linear infinite alternate; }
+  @media (max-width: 760px) { .clouds .drift { left: 70% !important; top: 3% !important; width: 90px; } .clouds .wide-only { display: none; } }
+  @keyframes drift { to { transform: translateX(12vw); } }
+  .van { position: absolute; bottom: 4px; left: var(--pad); width: clamp(300px, 24vw, 500px); z-index: 2; }
+  .van svg { width: 100%; height: auto; overflow: visible; }
+
+  /* the house demo */
+  .scene .flow { stroke-dasharray: 2 9; }
+  .live .flow { animation: flow 1.1s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -22; } }
+  .gear { transform-box: fill-box; transform-origin: center; }
+  .live .gear { animation: spin 2.4s linear infinite; }
+  .live .gear.rev { animation-direction: reverse; animation-duration: 1.6s; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .rising { opacity: 0; }
+  .live .rising { animation: rise 1.8s linear infinite; }
+  @keyframes rise { from { transform: translateY(26px); opacity: 0; } 20%, 80% { opacity: 1; } to { transform: translateY(-120px); opacity: 0; } }
+  .caret { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #pill .bars path { transform-box: fill-box; transform-origin: center; }
+  .live #pill .bars path { animation: bar .5s ease-in-out infinite alternate; }
+  .live #pill .bars path:nth-child(2n) { animation-delay: -.25s; }
+  .live #pill .bars path:nth-child(3n) { animation-delay: -.4s; }
+  @keyframes bar { to { transform: scaleY(.35); } }
+  #pill .check { opacity: 0; }
+  .typed #pill rect { fill: #1C2A5E; }
+  .typed #pill .bars { opacity: 0; }
+  .typed #pill .check { opacity: 1; }
+  #deskKey { transition: transform .08s; }
+  .live #deskKey { transform: translateY(3px); }
+  .live .balloon { opacity: 1; }
+  .scene a { cursor: pointer; }
+  .scene a:focus-visible { outline: none; }
+  .scene a:focus-visible rect { stroke: var(--brick); stroke-width: 5; }
+  .bob { animation: bob 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes bob { 50% { transform: translateY(-4px); } }
+  .robot-slot { position: absolute; transform: translate(-50%, -50%); z-index: 3; }
+  .robot-slot.sit { transform: translate(-50%, -100%); }
+  .has-robot .drawn-robot { display: none; }
+
+  /* dollhouse facades swing open as each building scrolls in */
+  .facade { position: absolute; left: var(--fx); top: var(--fy); width: var(--fw); height: var(--fh); z-index: 4; pointer-events: none;
+    transform-origin: left center; transform: perspective(1800px) rotateY(-104deg); opacity: 0;
+    transition: transform 1.25s cubic-bezier(.3, .7, .2, 1), opacity .25s linear 1s;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='24'%3E%3Crect width='44' height='24' fill='%23B9392A'/%3E%3Cpath d='M0 12H44M22 0V12M11 12V24M33 12V24' stroke='%238F2B20' stroke-width='2'/%3E%3C/svg%3E") repeat; border: 2.5px solid var(--outline); }
+  .facade::before, .facade::after { content: ""; position: absolute; top: 18%; width: 16%; height: 26%; background: #CFE6F2; border: 3px solid var(--outline); border-radius: 6px; box-shadow: inset 0 -10px 0 rgba(107, 74, 46, .15); }
+  .facade::before { left: 18%; } .facade::after { right: 18%; }
+  .facade i { position: absolute; left: 50%; bottom: 0; width: 12%; height: 34%; transform: translateX(-50%); background: #8C5A3C; border: 3px solid var(--outline); border-bottom: 0; border-radius: 40px 40px 0 0; }
+  .shut .facade { transform: perspective(1800px) rotateY(0); opacity: 1; transition: none; }
+  @media (prefers-reduced-motion: reduce) { .facade { display: none; } .drift, .bob, .caret, .live .flow, .live .gear, .live .rising, .live #pill .bars path { animation: none; } }
+
+  /* SVG text */
+  .lab text, .t { font: 21px "Patrick Hand", cursive; fill: #3A2616; }
+  .lab .ptr { stroke: var(--outline); stroke-width: 1.4; fill: none; }
+  .lab circle { fill: var(--outline); }
+  .sign { font: 800 26px "Grandstander", sans-serif; fill: #3A2616; letter-spacing: .04em; }
+  .o { stroke: var(--outline); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .h { stroke: var(--outline); stroke-width: 1.4; fill: none; }
+
+  /* ---------- sections ---------- */
+  #how { --sky: #B4DBEF; }
+  #how .stage { --ar: 1700 / 600; }
+  #reel { --sky: #C3E3F1; }
+  #reel .stage { --ar: 1700 / 980; }
+  .reel-video { position: absolute; left: 12.353%; top: 16.735%; width: 75.294%; height: 73.469%; z-index: 2; background: #121419; border-radius: 4px; object-fit: cover; }
+  .play-disc { position: absolute; left: 50%; top: 53.47%; z-index: 3; width: clamp(84px, 8vw, 168px); aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+    transform: translate(-50%, -50%); filter: drop-shadow(0 10px 14px rgba(10, 12, 30, .45)); transition: transform .2s var(--ease); }
+  .play-disc:hover { transform: translate(-50%, -50%) scale(1.06); }
+  .play-disc:active { transform: translate(-50%, -50%) scale(.97); }
+  .play-disc:focus-visible { border-radius: 50%; outline-offset: 4px; }
+  .play-disc svg { display: block; width: 100%; height: 100%; }
+  .play-disc[hidden] { display: none; }
+  #meetings { --sky: #D2E9EC; }
+  #meetings .stage { --ar: 1700 / 760; --fx: 5.9%; --fy: 15.8%; --fw: 88.2%; --fh: 84.2%; }
+  #words { --sky: #F6D2A8; }
+  #words .stage { --ar: 1700 / 760; --fx: 5.9%; --fy: 15.8%; --fw: 88.2%; --fh: 84.2%; }
+  #library { --sky: #F1BD97; }
+  #library .stage { --ar: 1700 / 800; --fx: 7.1%; --fy: 15%; --fw: 85.9%; --fh: 85%; }
+  #companion { --sky: #E8A98F; --em: #86241A; }
+  #companion .copy { align-self: end; }
+  #companion .stage { --ar: 1700 / 760; --fx: 7.1%; --fy: 15.8%; --fw: 85.9%; --fh: 84.2%; }
+  #private { --sky: #C9A2BF; --em: #7A2016; --ink2: #45301F; }
+  #private .stage { --ar: 1700 / 760; --fx: 23.5%; --fy: 17.1%; --fw: 73.5%; --fh: 82.9%; }
+  #models { --sky: #A799CB; --em: #5E1710; --ink2: #45301F; }
+  #models .stage { --ar: 1700 / 640; }
+  #platforms { --sky: #4F5C99; }
+  #platforms .stage { --ar: 1700 / 620; }
+  #apply { --sky: #3B4782; }
+  #apply .stage { --ar: 900 / 1290; --fx: 2.67%; --fy: 18.6%; --fw: 94.67%; --fh: 81.4%; }
+  #square { --sky: #35407A; }
+  #square .stage { --ar: 1700 / 700; }
+  #square .lab text { fill: #FBFAF5; }
+  #square .lab .ptr { stroke: #E9E0CF; }
+  #square .lab circle { fill: #E9E0CF; }
+  #faq { --sky: #2F3A6B; }
+
+  .companion-tries { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+  .chip { font: inherit; font-size: .9em; color: #3A2616; background: var(--paper); border: 2.5px solid var(--outline); border-radius: 999px; padding: .35em .9em; cursor: pointer; transition: transform .15s var(--ease), background .15s; }
+  .chip:hover { background: #FFF3CF; transform: translateY(-1px); }
+  .chip:active { transform: translateY(1px); }
+  .copy .moment-now { min-height: 2.9em; margin: 18px 0 0; font-size: .9em; }
+  .moment-now b { font: 700 .92em "Grandstander", sans-serif; color: var(--ink); }
+  .credit { font-size: .85em; color: var(--ink2); margin-top: 14px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- town square: three signpost arrows to GitHub Discussions ---------- */
+  .signs { position: relative; display: grid; justify-items: start; gap: 14px; margin: 26px 0 22px; padding: 12px 0; }
+  .signs::before { content: ""; position: absolute; left: 26px; top: 0; bottom: -10px; width: 16px; z-index: -1; background: #8C5A3C; border: 2.5px solid var(--outline); border-radius: 4px 4px 0 0; }
+  .sign-arrow { position: relative; display: inline-flex; align-items: center; gap: 12px; min-height: 2.6em; margin-right: 1.3em; padding: .45em .5em .45em .9em; white-space: nowrap;
+    font: 800 clamp(18px, .4vw + 12px, 24px)/1.1 "Grandstander", sans-serif; color: #3A2616; text-decoration: none;
+    background: var(--c, var(--bus)); border: 2.5px solid var(--outline); border-right: 0; border-radius: 8px 0 0 8px;
+    filter: drop-shadow(0 5px 6px rgba(10, 12, 30, .35)); transition: transform .18s var(--ease); }
+  .sign-arrow::after { content: ""; position: absolute; top: 50%; right: 0; width: 1.84em; height: 1.84em; background: inherit; border: 2.5px solid var(--outline); border-left: 0; border-bottom: 0; border-radius: 0 6px 0 0; transform: translate(50%, -50%) rotate(45deg); z-index: -1; }
+  .sign-arrow:hover { transform: translateY(-2px); }
+  .sign-arrow:active { transform: translateY(1px); }
+  .sign-arrow svg { width: 1.2em; height: 1.2em; flex: none; }
+  .quiet { color: var(--ink2); text-underline-offset: 5px; text-decoration-color: rgba(233, 224, 207, .45); }
+  .quiet:hover { text-decoration-color: var(--bus); text-decoration-thickness: 2px; }
+
+
+  /* ---------- apply: the post office ---------- */
+  #apply.block { align-items: end; }
+  #apply .form-wrap { order: 2; }
+  @media (min-width: 1200px) {
+    #apply.block { grid-template-columns: minmax(0, 1.25fr) minmax(24rem, 1fr); }
+    #apply .stage { height: var(--letter-h, auto); width: auto; max-width: calc(100% + var(--pad)); justify-self: end; }
+  }
+  @media (min-width: 1600px) { #apply.block { grid-template-columns: minmax(0, 1fr) minmax(28rem, 48rem); } }
+  .form-wrap { position: relative; z-index: 2; margin: clamp(40px, 4vw, 80px) 0 clamp(20px, 2vw, 48px); }
+  .letter { background: var(--paper); color: #3A2616; border: 2.5px solid var(--outline); border-radius: 8px; padding: clamp(22px, 2.2vw, 44px);
+    box-shadow: 0 18px 34px -16px rgba(10, 12, 30, .55); position: relative; }
+  .flap { position: absolute; left: -2.5px; bottom: calc(100% - 3px); width: calc(100% + 5px); height: clamp(40px, 4vw, 80px); z-index: -1; overflow: visible; }
+  .stamp { position: absolute; right: clamp(14px, 1.6vw, 30px); top: clamp(12px, 1.4vw, 26px); width: clamp(120px, 9vw, 170px); transform: rotate(4deg); }
+  .letter h2 { color: #3A2616; padding-right: clamp(116px, 9.4vw, 176px); }
+  .letter p.lead { color: #5A4130; max-width: 46ch; margin: 0 0 20px; }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 16px; }
+  .field { display: grid; gap: 6px; margin-bottom: 18px; }
+  .field label, .field legend { font: 700 .82em/1.2 "Grandstander", sans-serif; color: #3A2616; }
+  .field .req { color: var(--brick); }
+  .field input, .field textarea { font: inherit; color: #3A2616; background: #FFFDF6; border: 2.5px solid var(--outline); border-radius: 12px; padding: .5em .7em; width: 100%; }
+  .field textarea { min-height: 7.2em; resize: vertical; }
+  .field input::placeholder, .field textarea::placeholder { color: #7A6350; }
+  .field input:focus, .field textarea:focus { outline: 3px solid var(--bus); outline-offset: 1px; }
+  .hint { font-size: .82em; color: #6B5442; }
+  fieldset { border: 0; margin: 0 0 18px; padding: 0; min-width: 0; }
+  legend { font: 700 .82em/1.2 "Grandstander", sans-serif; color: #3A2616; padding: 0; }
+  legend .req { color: var(--brick); }
+  .os { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 10px; margin-top: 8px; }
+  .os label { display: flex; align-items: center; gap: 10px; border: 2.5px solid var(--outline); border-radius: 14px; padding: .5em .7em; cursor: pointer; background: #FFFDF6; font: inherit; font-size: .92em; color: #3A2616; }
+  .os input, .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .os svg { width: 30px; height: 30px; flex: none; }
+  .os label:has(input:checked) { background: #FFF0BD; box-shadow: inset 0 0 0 2px var(--bus); }
+  .os label:has(input:focus-visible), .chips label:has(input:focus-visible) { outline: 3px solid var(--brick); outline-offset: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .chips label { border: 2.5px solid var(--outline); border-radius: 999px; padding: .3em .85em; cursor: pointer; background: #FFFDF6; font-size: .9em; }
+  .chips label:has(input:checked) { background: #CDE8C9; }
+  .sent { display: none; text-align: left; }
+  .sent.on { display: block; }
+  .sent .note { font-size: .85em; color: #6B5442; }
+  .error { color: #A5301F; font-size: .9em; min-height: 1.3em; }
+  .env { transition: transform 1.1s cubic-bezier(.5, 0, .3, 1), opacity .3s linear .9s; }
+  .env { transform-box: fill-box; transform-origin: center; }
+  .posted .env { transform: translate(267px, 137px) rotate(18deg) scale(.5); opacity: 0; }
+
+  /* ---------- faq: town hall notice board ---------- */
+  #faq.block { grid-template-columns: minmax(0, 1fr); align-items: start; padding-bottom: calc(var(--band) + 30px); }
+  @media (min-width: 1300px) { #faq.block { grid-template-columns: minmax(20rem, 30rem) minmax(0, 1fr); } }
+  .hall { position: relative; z-index: 1; align-self: end; }
+  .hall svg { width: 100%; height: auto; display: block; }
+  .board { position: relative; z-index: 1; background: #8C5A3C; border: 3px solid var(--outline); border-radius: 18px; padding: clamp(20px, 2vw, 40px);
+    box-shadow: inset 0 0 0 10px #7A4C30, 0 22px 38px -20px rgba(0, 0, 0, .6); align-self: end; margin-bottom: clamp(24px, 2.4vw, 56px); }
+  .board h2 { color: var(--paper); margin-bottom: 18px; }
+  .notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); gap: clamp(14px, 1.4vw, 26px); align-items: start; }
+  .notes details { background: var(--paper); color: #3A2616; border: 2.5px solid var(--outline); border-radius: 6px; padding: 16px 18px 14px; position: relative; box-shadow: 0 8px 14px -8px rgba(0, 0, 0, .5); }
+  .notes details:nth-child(3n+1) { transform: rotate(-1.2deg); } .notes details:nth-child(3n+2) { transform: rotate(.9deg); background: #FFF3CF; } .notes details:nth-child(3n) { transform: rotate(-.5deg); background: #E3F1DF; }
+  .notes details::before { content: ""; position: absolute; top: -14px; left: 50%; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: var(--brick); border: 2.5px solid var(--outline); }
+  .notes summary { font: 800 1.02em/1.25 "Grandstander", sans-serif; cursor: pointer; list-style: none; padding-right: 26px; position: relative; }
+  .notes summary::-webkit-details-marker { display: none; }
+  .notes summary::before, .notes summary::after { content: ""; position: absolute; right: 3px; top: .62em; width: 13px; height: 2.5px; border-radius: 2px; background: var(--brick); }
+  .notes summary::after { transform: rotate(90deg); transition: transform .2s ease; }
+  .notes details[open] summary::after { transform: rotate(0deg); }
+  @media (prefers-reduced-motion: reduce) { .notes summary::after { transition: none; } }
+  .notes details p { margin: 10px 0 0; color: #5A4130; }
+  .oss { color: var(--paper); margin: 0 0 22px; max-width: 54ch; }
+  .oss a { color: #FFE38A; text-underline-offset: 4px; }
+
+  /* ---------- footer ---------- */
+  footer { position: relative; background: #232B52; color: #E9E0CF; padding: clamp(48px, 4vw, 96px) var(--pad) 40px; display: grid; gap: 28px clamp(28px, 3vw, 72px);
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); align-items: start; overflow: hidden; }
+  .skyline { grid-column: 1 / -1; display: block; width: calc(100% + 2 * var(--pad)); height: auto; margin: 0 calc(var(--pad) * -1) -40px; }
+  @media (min-width: 1200px) {
+    footer { grid-template-columns: max-content max-content max-content minmax(0, 1fr); }
+    footer small { grid-column: 1 / 4; }
+    .skyline { grid-column: 4; grid-row: 1 / span 2; align-self: end; width: calc(100% + var(--pad)); margin: 0 calc(var(--pad) * -1) -40px 0; }
+  }
+  footer .brand { color: #FBFAF5; }
+  footer p { margin: 10px 0 0; max-width: 34ch; }
+  footer nav { display: grid; gap: 8px; }
+  footer nav a { color: #FBFAF5; text-decoration: none; }
+  footer nav a:hover { text-decoration: underline; text-decoration-color: var(--bus); text-underline-offset: 5px; }
+  footer small { grid-column: 1 / -1; color: #E2D6BC; font-size: .8em; }
+
+  /* ---------- small screens: pan along the road ---------- */
+  .pan-hint { display: none; font-size: .8em; color: var(--ink2); margin: -8px 0 0; }
+  @media (max-width: 760px) {
+    nav.main { display: none; }
+    .block { padding-top: 76px; }
+    .hero { padding-top: 96px; min-height: auto; }
+    .hero .stage, .pan .stage { width: auto; }
+    .pan { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; margin-inline: calc(var(--pad) * -1); padding-inline: var(--pad); }
+    .pan .stage { min-width: 1080px; }
+    .hero .pan .stage { min-width: 760px; justify-self: start; }
+    #reel .stage, #apply .stage { width: auto; margin-inline: calc(var(--pad) * -1); }
+    .pan-hint { display: block; }
+    .van { position: relative; left: auto; right: auto; width: 170px; justify-self: start; margin-bottom: -4px; }
+    .stamp { width: 96px; right: 10px; top: 10px; }
+    .letter h2 { padding-right: 84px; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#how">Skip to how it works</a>
+
+<!-- shared drawing parts -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="hand"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.4"/></filter>
+    <pattern id="bricks" width="22" height="12" patternUnits="userSpaceOnUse"><rect width="22" height="12" fill="#B9392A"/><path d="M0 6H22M11 0V6M0 6V12M22 6V12" stroke="#8F2B20" stroke-width="1.2"/></pattern>
+    <pattern id="shingle" width="28" height="14" patternUnits="userSpaceOnUse"><rect width="28" height="14" fill="#C8402F"/><path d="M0 14Q7 6 14 14Q21 6 28 14" fill="none" stroke="#8F2B20" stroke-width="1.6"/></pattern>
+    <pattern id="planks" width="60" height="34" patternUnits="userSpaceOnUse"><rect width="60" height="34" fill="#E3B47A"/><path d="M0 34H60M30 0V17M0 17H60M50 17V34" stroke="#B98552" stroke-width="2"/></pattern>
+    <pattern id="peg" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="26" height="26" fill="#D9A877"/><circle cx="13" cy="13" r="2.6" fill="#8C5A3C"/></pattern>
+    <pattern id="stripes" width="28" height="10" patternUnits="userSpaceOnUse"><rect width="14" height="10" fill="#C8402F"/><rect x="14" width="14" height="10" fill="#FBFAF5"/></pattern>
+    <pattern id="floor" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#C99A68"/><path d="M0 0H40V40" fill="none" stroke="#A97B4C" stroke-width="2"/></pattern>
+    <symbol id="cloud" viewBox="0 0 160 70"><path d="M20 62q-14-30 18-36q10-24 40-16q24-16 44 6q30-2 30 26q10 4 6 20z" fill="#FBFAF5" stroke="#6B4A2E" stroke-width="2.5" stroke-linejoin="round"/></symbol>
+    <symbol id="van" viewBox="300 700 250 140">
+      <g filter="url(#hand)">
+        <rect class="o" x="318" y="744" width="152" height="74" rx="8" fill="#FBFAF5"/>
+        <rect class="o" x="430" y="752" width="36" height="58" rx="3" fill="#5A4130"/>
+        <path class="o" d="M470 770h34q14 0 20 14l8 18v16h-62z" fill="#F3C13A"/>
+        <rect class="o" x="482" y="774" width="28" height="18" rx="3" fill="#CFE6F2"/>
+        <path class="o" d="M338 772q-2-14 12-16q6-12 20-6q14-4 18 8q12 2 10 14z" fill="#A9D5EE"/>
+        <text x="338" y="806" style="font:800 15px Grandstander,sans-serif;fill:#3A2616;letter-spacing:.06em">THE CLOUD</text>
+        <circle class="o" cx="352" cy="822" r="13" fill="#3A2616"/><circle cx="352" cy="822" r="4.5" fill="#E8CE9C"/>
+        <circle class="o" cx="506" cy="822" r="13" fill="#3A2616"/><circle cx="506" cy="822" r="4.5" fill="#E8CE9C"/>
+      </g>
+    </symbol>
+    <symbol id="robot" viewBox="0 0 60 66">
+      <path d="M30 14v-10" stroke="#141414" stroke-width="3"/><circle cx="30" cy="5" r="5" fill="#141414"/>
+      <rect x="2" y="14" width="56" height="48" rx="17" fill="#141414"/>
+      <circle cx="20" cy="38" r="9" fill="#FBFAF5"/><circle cx="41" cy="38" r="9" fill="#FBFAF5"/>
+      <circle cx="17" cy="40" r="3.5" fill="#141414"/><circle cx="38" cy="40" r="3.5" fill="#141414"/>
+    </symbol>
+  </defs>
+</svg>
+
+<main id="top">
+<!-- ================= HERO: the house ================= -->
+<section class="block hero" aria-labelledby="h-hero">
+  <div class="clouds" aria-hidden="true">
+    <svg class="drift" style="left:47%;top:16%" viewBox="0 0 160 70"><use href="#cloud"/></svg>
+    <svg class="drift wide-only" style="left:76%;top:7%;animation-duration:90s" viewBox="0 0 160 70"><use href="#cloud"/></svg>
+  </div>
+  <header class="top">
+    <a class="brand" href="#top"><img src="icon.png" alt=""><span>Utter</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="#how">How it works</a><a href="#meetings">Meetings</a><a href="#companion">Companion</a><a href="#private">Privacy</a><a href="#square">Community</a><a href="#faq">Questions</a>
+    </nav>
+    <a class="go small push" href="#apply">Apply for beta</a>
+  </header>
+
+  <div class="copy">
+    <h1 id="h-hero">Say it, and it types. <em>Nothing leaves the house.</em></h1>
+    <p>Hold a key, talk, let go. Your words appear wherever you're typing, turned into text by whisper.cpp on your own computer. Free and open source.</p>
+    <div class="actions">
+      <a class="go" href="#apply">Apply for beta</a>
+      <a class="ghost" href="#reel">
+        <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15" fill="#FBFAF5" stroke="#6B4A2E" stroke-width="2.5"/><path d="M14 11l10 6l-10 6z" fill="#C8402F" stroke="#6B4A2E" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span>Watch the reel</span>
+      </a>
+    </div>
+    <button class="holdkey" id="holdKey" type="button" aria-describedby="holdHint">
+      <span class="cap" aria-hidden="true">hold</span>
+      <span id="holdHint">Try it: hold this key, or hold Space, and watch your words travel.</span>
+    </button>
+    <p class="where">On the Mac today. Windows and Linux in beta.</p>
+  </div>
+
+  <div class="pan" data-focus=".69">
+  <div class="stage shut" id="house" data-facade>
+    <svg class="scene" id="houseSvg" viewBox="440 140 980 680" preserveAspectRatio="xMidYMax meet" role="img" aria-labelledby="houseTitle">
+      <title id="houseTitle">A cutaway house. You hold a key and talk into a microphone; the sound runs down a cable to the computer's memory, through the whisper.cpp machine where the robot watches, and up a pipe to the screen, where the words type. Nothing leaves the walls.</title>
+      <g filter="url(#hand)">
+        <rect class="o" x="1206" y="172" width="44" height="86" fill="url(#bricks)"/>
+        <rect class="o" x="1198" y="164" width="60" height="14" fill="#8C5A3C"/>
+        <path class="o" d="M552 312L980 150L1408 312Z" fill="url(#shingle)"/>
+        <path class="o" d="M610 300L980 166L1350 300Z" fill="#F6E7C4"/>
+        <path class="h" d="M620 300H1340"/>
+        <circle class="o" cx="980" cy="246" r="26" fill="#A9D5EE"/>
+        <path class="h" d="M980 220V272M954 246H1006"/>
+        <rect class="o" x="560" y="300" width="840" height="20" fill="#8C5A3C"/>
+        <rect class="o" x="574" y="320" width="24" height="482" fill="url(#bricks)"/>
+        <rect class="o" x="1362" y="320" width="24" height="482" fill="url(#bricks)"/>
+        <rect x="598" y="320" width="382" height="226" fill="#F4E3B4"/>
+        <rect x="994" y="320" width="368" height="226" fill="#D3C8EC"/>
+        <rect class="o" x="980" y="320" width="14" height="226" fill="#E8CE9C"/>
+        <rect class="o" x="574" y="546" width="812" height="16" fill="#8C5A3C"/>
+        <rect x="598" y="562" width="244" height="240" fill="#ECD3A2"/>
+        <rect x="856" y="562" width="246" height="240" fill="#C6E2C5"/>
+        <rect x="1116" y="562" width="246" height="240" fill="#CFE4F1"/>
+        <rect class="o" x="842" y="562" width="14" height="240" fill="#E8CE9C"/>
+        <rect class="o" x="1102" y="562" width="14" height="240" fill="#E8CE9C"/>
+        <rect class="o" x="566" y="800" width="828" height="18" fill="#9C9389"/>
+        <path d="M598 534H980M994 534H1362M598 790H842M856 790H1102M1116 790H1362" fill="none" stroke="#6B4A2E" stroke-opacity=".28" stroke-width="2"/>
+        <!-- study -->
+        <rect class="o" x="616" y="344" width="44" height="54" rx="4" fill="#FBFAF5"/>
+        <path d="M624 386l10-14l8 8l6-6l6 12z" fill="#4E9A4A"/><circle cx="646" cy="360" r="5" fill="#F3C13A"/>
+        <rect class="o" x="626" y="404" width="12" height="82" rx="4" fill="#8C5A3C"/>
+        <rect class="o" x="626" y="474" width="70" height="12" rx="4" fill="#B7794B"/>
+        <path class="o" d="M634 486v58M688 486v58" fill="none"/>
+        <path class="o" d="M706 486h40v52h16v8h-28v-44h-28z" fill="#3E4C7A"/>
+        <path class="o" d="M656 424q38-10 50 14l6 46h-62q-4-34 6-60z" fill="#4E9A4A"/>
+        <path d="M700 438q24 6 56 22" fill="none" style="stroke:#6B4A2E;stroke-width:17;stroke-linecap:round"/>
+        <path d="M700 438q24 6 56 22" fill="none" style="stroke:#4E9A4A;stroke-width:12;stroke-linecap:round"/>
+        <circle class="o" cx="760" cy="461" r="7" fill="#E9B48A"/>
+        <circle class="o" cx="682" cy="394" r="27" fill="#E9B48A"/>
+        <path class="o" d="M656 392q-4-30 26-32q26 0 30 20q-12-8-26-4q-6 14-18 18q-6 2-12-2z" fill="#5A3A22"/>
+        <circle cx="696" cy="390" r="2.8" fill="#3A2616"/>
+        <ellipse cx="704" cy="404" rx="4" ry="5" fill="#8F2B20"/>
+        <rect class="o" x="722" y="470" width="250" height="12" rx="3" fill="#B7794B"/>
+        <path class="o" d="M738 482v62M956 482v62" fill="none"/>
+        <rect class="o" x="744" y="455" width="122" height="15" rx="3" fill="#EFEBE0"/>
+        <path class="h" d="M754 462h98" stroke-dasharray="6 4"/>
+        <ellipse class="o" cx="906" cy="470" rx="22" ry="5" fill="#4A4A55"/>
+        <rect class="o" x="903" y="430" width="6" height="40" fill="#6E6E7A"/>
+        <rect class="o" x="892" y="398" width="28" height="38" rx="14" fill="#4A4A55"/>
+        <path d="M898 410h16M898 418h16M898 426h16" stroke="#8B8B98" stroke-width="1.5"/>
+        <circle cx="914" cy="446" r="3.5" fill="#D8352A"/>
+        <!-- screen room -->
+        <rect class="o" x="1020" y="338" width="300" height="164" rx="12" fill="#2E3550"/>
+        <rect x="1032" y="350" width="276" height="140" rx="6" fill="#FBFAF5"/>
+        <path d="M1046 382H1294" stroke="#E2D9C8" stroke-width="1.5"/>
+        <rect class="o" x="1160" y="502" width="20" height="14" fill="#2E3550"/>
+        <rect class="o" x="1006" y="514" width="340" height="11" rx="3" fill="#B7794B"/>
+        <path class="o" d="M1022 525v20M1330 525v20" fill="none"/>
+        <!-- pipe -->
+        <path d="M1320 420h12q10 0 10 10v378" fill="none" style="stroke:#6B4A2E;stroke-width:20"/>
+        <path d="M1320 420h12q10 0 10 10v378" fill="none" style="stroke:#F3C13A;stroke-width:15"/>
+        <path d="M1334 470h16M1334 600h16M1334 690h16" style="stroke:#6B4A2E;stroke-width:3"/>
+        <!-- living room tv stand -->
+        <path class="o" d="M702 594l-22-32M738 594l24-30" fill="none"/>
+        <circle class="o" cx="680" cy="562" r="4" fill="#3A2616"/><circle class="o" cx="762" cy="564" r="4" fill="#3A2616"/>
+        <rect class="o" x="632" y="592" width="172" height="104" rx="14" fill="#C8402F"/>
+        <rect class="o" x="644" y="696" width="148" height="44" rx="4" fill="#8C5A3C"/>
+        <path class="h" d="M718 702v32"/>
+        <circle cx="704" cy="718" r="2.5" fill="#3A2616"/><circle cx="732" cy="718" r="2.5" fill="#3A2616"/>
+        <path class="o" d="M652 740v24M784 740v24" fill="none"/>
+        <!-- memory room -->
+        <rect class="o" x="872" y="702" width="212" height="46" rx="4" fill="#3E8E46"/>
+        <g fill="#F3C13A"><rect x="882" y="740" width="7" height="8"/><rect x="896" y="740" width="7" height="8"/><rect x="910" y="740" width="7" height="8"/><rect x="924" y="740" width="7" height="8"/><rect x="938" y="740" width="7" height="8"/><rect x="952" y="740" width="7" height="8"/><rect x="980" y="740" width="7" height="8"/><rect x="994" y="740" width="7" height="8"/><rect x="1008" y="740" width="7" height="8"/><rect x="1022" y="740" width="7" height="8"/><rect x="1036" y="740" width="7" height="8"/><rect x="1050" y="740" width="7" height="8"/><rect x="1064" y="740" width="7" height="8"/></g>
+        <g class="o" fill="#2B2B33"><rect x="886" y="710" width="34" height="22" rx="2"/><rect x="930" y="710" width="34" height="22" rx="2"/><rect x="990" y="710" width="34" height="22" rx="2"/><rect x="1034" y="710" width="34" height="22" rx="2"/></g>
+        <path d="M886 672q12-26 24 0t24 0t24 0t24 0t24 0t24 0t24 0t20 2" fill="none" style="stroke:#6B4A2E;stroke-width:10;stroke-linecap:round"/>
+        <path d="M886 672q12-26 24 0t24 0t24 0t24 0t24 0t24 0t24 0t20 2" fill="none" style="stroke:#F3C13A;stroke-width:6;stroke-linecap:round"/>
+        <path d="M1078 664h66v-38h20" fill="none" style="stroke:#6B4A2E;stroke-width:18;stroke-linejoin:round"/>
+        <path d="M1078 664h66v-38h20" fill="none" style="stroke:#E8CE9C;stroke-width:13;stroke-linejoin:round"/>
+        <!-- engine room -->
+        <path class="o" d="M1150 606h106l-24 46h-58z" fill="#C8402F"/>
+        <rect class="o" x="1138" y="650" width="174" height="142" rx="12" fill="#F3C13A"/>
+        <rect class="o" x="1152" y="666" width="104" height="72" rx="8" fill="#E2A92C"/>
+        <circle class="o" cx="1286" cy="684" r="14" fill="#FBFAF5"/>
+        <path d="M1286 684l7-7" stroke="#C8402F" stroke-width="2.5" stroke-linecap="round"/>
+        <rect class="o" x="1152" y="750" width="146" height="30" rx="5" fill="#FBFAF5"/>
+        <text x="1225" y="771" text-anchor="middle" style="font:800 17px Grandstander,sans-serif;fill:#3A2616">whisper.cpp</text>
+        <path d="M1312 708h24" fill="none" style="stroke:#6B4A2E;stroke-width:14"/>
+        <path d="M1312 708h24" fill="none" style="stroke:#E8CE9C;stroke-width:9"/>
+      </g>
+
+      <!-- moving parts live outside the hand filter so they animate cheaply -->
+      <rect id="deskKey" class="o" x="748" y="458" width="26" height="9" rx="2" fill="#F3C13A"/>
+      <path class="o flow" d="M716 404Q800 418 888 418" fill="none" stroke-width="2.2"/>
+      <path d="M906 476Q910 498 962 500V546M962 562Q962 600 940 612V694" fill="none" style="stroke:#3A2616;stroke-width:6;stroke-linecap:round"/>
+      <path class="o flow" d="M1080 664h62v-38h18" fill="none" stroke-width="2"/>
+      <g class="balloon">
+        <path class="o" d="M742 330h212q10 0 10 10v42q0 10-10 10h-168l-62 18l24-18h-6q-10 0-10-10v-42q0-10 10-10z" fill="#FBFAF5"/>
+        <text id="b1" x="756" y="356" style="font:18px 'Patrick Hand',cursive;fill:#3A2616">Thanks Priya, Thursday</text>
+        <text id="b2" x="756" y="377" style="font:18px 'Patrick Hand',cursive;fill:#3A2616">works for me.</text>
+      </g>
+      <text x="1046" y="374" style="font:15px 'Patrick Hand',cursive;fill:#7A6655">To: Priya</text>
+      <text id="s1" x="1046" y="406" style="font:17px 'Patrick Hand',cursive;fill:#3A2616">Thanks Priya, Thursday works</text>
+      <text x="1046" y="428" style="font:17px 'Patrick Hand',cursive;fill:#3A2616"><tspan id="s2">for me.</tspan><tspan class="caret" style="fill:#C8402F"> |</tspan></text>
+      <g id="pill">
+        <rect x="1140" y="464" width="60" height="18" rx="9" fill="#D8352A"/>
+        <g class="bars" stroke="#FBFAF5" stroke-width="2.2" stroke-linecap="round"><path d="M1152 470v6"/><path d="M1158 467v12"/><path d="M1164 469v8"/><path d="M1170 466v14"/><path d="M1176 468v10"/><path d="M1182 469v8"/><path d="M1188 467v12"/></g>
+        <path class="check" d="M1162 473l6 5l11-10" fill="none" stroke="#FBFAF5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g style="font:800 13px Grandstander,sans-serif;fill:#3A2616">
+        <text class="rising" x="1342" y="700" text-anchor="middle">T</text>
+        <text class="rising" x="1342" y="700" text-anchor="middle" style="animation-delay:-.6s">h</text>
+        <text class="rising" x="1342" y="700" text-anchor="middle" style="animation-delay:-1.2s">a</text>
+      </g>
+      <g class="gear" style="transform-origin:1186px 702px">
+        <circle class="o" cx="1186" cy="702" r="22" fill="#8C5A3C"/>
+        <path d="M1186 676v-6M1186 734v-6M1160 702h-6M1218 702h-6M1168 684l-4-4M1204 720l4 4M1204 684l4-4M1168 720l-4 4" stroke="#6B4A2E" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="1186" cy="702" r="7" fill="#F3C13A"/>
+      </g>
+      <g class="gear rev"><circle class="o" cx="1228" cy="718" r="14" fill="#8C5A3C"/><path d="M1228 700v-4M1228 740v-4M1210 718h-4M1250 718h-4" stroke="#6B4A2E" stroke-width="4" stroke-linecap="round"/><circle cx="1228" cy="718" r="5" fill="#F3C13A"/></g>
+      <use class="drawn-robot bob" href="#robot" x="1258" y="570" width="72" height="80"/>
+      <a href="#reel" aria-label="Watch the 23-second reel">
+        <image href="reel-poster.jpg" x="644" y="602" width="148" height="83" preserveAspectRatio="xMidYMid slice" clip-path="inset(0 round 6px)"/>
+        <rect class="o" x="644" y="602" width="148" height="83" rx="6" fill="none"/>
+        <circle class="o" cx="776" cy="670" r="11" fill="#FBFAF5"/><path d="M772 664l9 6l-9 6z" fill="#C8402F"/>
+      </a>
+      <g class="lab small">
+        <path class="ptr" d="M640 335L666 370"/><circle cx="666" cy="370" r="2.5"/><text x="610" y="332">you</text>
+        <path class="ptr" d="M774 506L762 468"/><circle cx="762" cy="468" r="2.5"/><text x="776" y="512">hold this key, talk</text>
+        <path class="ptr" d="M884 522L904 474"/><circle cx="904" cy="474" r="2.5"/><text x="776" y="534">mic on only while you hold</text>
+        <path class="ptr" d="M1036 538L1060 440"/><circle cx="1060" cy="440" r="2.5"/><text x="1042" y="541">your words land where you're typing</text>
+        <text x="612" y="786">the 23-second reel</text>
+        <path class="ptr" d="M930 774L944 750"/><circle cx="944" cy="750" r="2.5"/><text x="866" y="786">kept in memory, never saved</text>
+        <path class="ptr" d="M1252 584L1264 596"/><circle cx="1264" cy="596" r="2.5"/><text x="1250" y="586" text-anchor="end">the companion</text>
+        <path class="ptr" d="M530 676L574 692"/><circle cx="574" cy="692" r="2.5"/><text x="448" y="640">nothing leaves</text><text x="448" y="662">these walls</text>
+      </g>
+    </svg>
+    <div class="robot-slot sit" style="left:87.1%;top:75%" data-scale=".09" data-max="120"><agent-robot-avatar id="heroRobot" size="88" color="#141414"></agent-robot-avatar></div>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+  <p class="pan-hint">Swipe the house to look around.</p>
+
+  <div class="van" aria-hidden="true">
+    <svg viewBox="300 700 560 140"><use href="#van" x="300" y="700" width="250" height="140"/>
+      <path d="M552 778q20-10 40-4" fill="none" stroke="#6B4A2E" stroke-width="1.4"/><circle cx="552" cy="778" r="2.5" fill="#6B4A2E"/>
+      <text x="598" y="772" class="t" style="font-size:19px">nothing for the</text><text x="598" y="794" class="t" style="font-size:19px">cloud to pick up</text></svg>
+  </div>
+</section>
+
+<!-- ================= HOW IT WORKS: main street ================= -->
+<section class="block side" id="how" aria-labelledby="h-how">
+  <div class="copy">
+    <h2 id="h-how">Hold, speak, <em>let go.</em></h2>
+    <p>Hold the key, say what you want to write, and let go. Utter types it wherever your cursor is: Mail, Slack, Notes, your browser, your editor.</p>
+    <ul>
+      <li>Double-tap the key for hands-free. It stops after 3 seconds of quiet.</li>
+      <li>Press Esc to cancel at any time.</li>
+      <li>No text box selected? Your words wait on the pill, with Copy and Save as note.</li>
+    </ul>
+  </div>
+  <div class="pan">
+  <div class="stage">
+    <svg class="scene" viewBox="0 0 1700 600" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A signpost reading hold the key, speak, let go. The Utter pill floats over a street of shops named Mail, Slack, Notes, Browser and Editor and drops a letter into each window. A kiosk at the end shows the pill holding words when no text box is selected.">
+      <g filter="url(#hand)">
+        <!-- signpost -->
+        <rect class="o" x="166" y="190" width="20" height="410" fill="#8C5A3C"/>
+        <path class="o" d="M50 214H300L332 248L300 282H50Z" fill="#F3C13A"/>
+        <path class="o" d="M50 300H284L316 334L284 368H50Z" fill="#FBFAF5"/>
+        <path class="o" d="M50 386H300L332 420L300 454H50Z" fill="#6DB466"/>
+        <!-- blimp -->
+        <path class="o" d="M770 106l40-26v52z" fill="#8F2B20"/>
+        <rect class="o" x="470" y="66" width="310" height="82" rx="41" fill="#D8352A"/>
+        <rect class="o" x="580" y="156" width="90" height="26" rx="8" fill="#F3C13A"/>
+        <path class="h" d="M600 148v8M650 148v8"/>
+        <!-- shop: Mail -->
+        <rect class="o" x="400" y="300" width="200" height="300" fill="url(#bricks)"/>
+        <rect class="o" x="392" y="288" width="216" height="18" fill="#8C5A3C"/>
+        <rect class="o" x="420" y="320" width="160" height="44" rx="6" fill="#FBFAF5"/>
+        <rect class="o" x="426" y="400" width="148" height="104" rx="6" fill="#CFE6F2"/>
+        <rect class="o" x="474" y="524" width="52" height="76" rx="4" fill="#5A4130"/>
+        <!-- shop: Slack -->
+        <rect class="o" x="620" y="330" width="200" height="270" fill="#F4E3B4"/>
+        <path class="o" d="M608 330h224l-18 44H626z" fill="url(#stripes)"/>
+        <rect class="o" x="640" y="390" width="160" height="40" rx="6" fill="#3E4C7A"/>
+        <rect class="o" x="644" y="446" width="152" height="90" rx="6" fill="#CFE6F2"/>
+        <rect class="o" x="694" y="548" width="52" height="52" rx="4" fill="#8C5A3C"/>
+        <!-- shop: Notes -->
+        <rect class="o" x="840" y="280" width="180" height="320" fill="#F3C13A"/>
+        <path class="o" d="M830 280L930 222L1030 280Z" fill="#C8402F"/>
+        <rect class="o" x="858" y="300" width="144" height="40" rx="6" fill="#FBFAF5"/>
+        <rect class="o" x="862" y="372" width="136" height="120" rx="6" fill="#CFE6F2"/>
+        <rect class="o" x="904" y="520" width="52" height="80" rx="4" fill="#5A4130"/>
+        <!-- shop: Browser -->
+        <rect class="o" x="1040" y="318" width="200" height="282" fill="#6DB466"/>
+        <path class="o" d="M1030 318h220v-16h-220z" fill="#3F7F3C"/>
+        <circle class="o" cx="1140" cy="282" r="26" fill="#A9D5EE"/>
+        <path class="h" d="M1114 282h52M1140 256v52M1122 266q18 16 36 0M1122 298q18-16 36 0"/>
+        <rect class="o" x="1060" y="336" width="160" height="40" rx="6" fill="#FBFAF5"/>
+        <rect class="o" x="1064" y="396" width="152" height="104" rx="6" fill="#CFE6F2"/>
+        <rect class="o" x="1114" y="524" width="52" height="76" rx="4" fill="#8C5A3C"/>
+        <!-- shop: Editor -->
+        <rect class="o" x="1260" y="298" width="180" height="302" fill="#3E4C7A"/>
+        <rect class="o" x="1252" y="286" width="196" height="16" fill="#2E3550"/>
+        <rect class="o" x="1276" y="318" width="148" height="40" rx="6" fill="#FBFAF5"/>
+        <rect class="o" x="1280" y="384" width="140" height="112" rx="6" fill="#CFE6F2"/>
+        <rect class="o" x="1324" y="522" width="52" height="78" rx="4" fill="#5A4130"/>
+        <!-- kiosk -->
+        <path class="o" d="M1470 340h220l-22-40h-176z" fill="#F3C13A"/>
+        <rect class="o" x="1480" y="340" width="200" height="260" fill="#FBFAF5"/>
+        <rect class="o" x="1490" y="356" width="180" height="96" rx="10" fill="#121419"/>
+        <rect class="o" x="1500" y="470" width="160" height="40" rx="6" fill="#E8CE9C"/>
+      </g>
+      <g class="sign">
+        <text x="70" y="258" style="font-size:24px">1 Hold the key</text>
+        <text x="70" y="344" style="font-size:24px">2 Speak</text>
+        <text x="70" y="430" style="font-size:24px">3 Let go</text>
+        <text x="500" y="350" text-anchor="middle">Mail</text>
+        <text x="720" y="418" text-anchor="middle" style="fill:#FBFAF5">Slack</text>
+        <text x="930" y="328" text-anchor="middle">Notes</text>
+        <text x="1140" y="364" text-anchor="middle">Browser</text>
+        <text x="1350" y="346" text-anchor="middle">Editor</text>
+        <text x="1580" y="498" text-anchor="middle" style="font-size:19px">No text box?</text>
+      </g>
+      <!-- the pill's seven bars and falling letters -->
+      <g stroke="#FBFAF5" stroke-width="7" stroke-linecap="round"><path d="M577 96v30"/><path d="M597 88v46"/><path d="M617 100v22"/><path d="M637 82v58"/><path d="M657 94v34"/><path d="M677 100v22"/><path d="M697 90v42"/></g>
+      <g fill="none" stroke="#6B4A2E" stroke-width="2" stroke-dasharray="3 8" stroke-linecap="round">
+        <path d="M600 186Q520 300 500 404"/><path d="M630 186Q690 360 720 450"/><path d="M650 186Q860 260 930 376"/><path d="M660 180Q1040 220 1140 400"/><path d="M670 176Q1260 200 1350 388"/>
+      </g>
+      <g class="o" fill="#FBFAF5" stroke-width="2">
+        <rect x="486" y="430" width="30" height="22" rx="2" transform="rotate(-8 500 440)"/><rect x="706" y="470" width="30" height="22" rx="2" transform="rotate(6 720 480)"/>
+        <rect x="914" y="404" width="30" height="22" rx="2" transform="rotate(-4 930 414)"/><rect x="1124" y="430" width="30" height="22" rx="2" transform="rotate(8 1140 440)"/><rect x="1334" y="418" width="30" height="22" rx="2" transform="rotate(-6 1350 428)"/>
+      </g>
+      <g stroke="#8A735F" stroke-width="2" stroke-linecap="round"><path d="M492 438h18M492 445h12M712 478h18M712 485h12M920 412h18M920 419h12M1130 438h18M1130 445h12M1340 426h18M1340 433h12"/></g>
+      <image href="shots/pill-island.webp" x="1496" y="364" width="168" height="80" preserveAspectRatio="xMidYMid meet"/>
+      <g class="lab">
+        <path class="ptr" d="M820 106L784 106"/><circle cx="784" cy="106" r="2.5"/><text x="826" y="100">the pill carries your words</text><text x="826" y="122">to wherever your cursor is</text>
+        <path class="ptr" d="M940 214L930 236"/><circle cx="930" cy="236" r="2.5"/><text x="950" y="210">works in any app</text>
+        <text x="1500" y="534" style="font-size:18px">your words wait here,</text><text x="1500" y="556" style="font-size:18px">with Copy and Save as note</text>
+      </g>
+    </svg>
+  </div>
+  </div>
+</section>
+
+<!-- ================= REEL: the cinema ================= -->
+<section class="block" id="reel" aria-labelledby="h-reel">
+  <div class="copy row">
+    <h2 id="h-reel">Twenty-three seconds of <em>Utter.</em></h2>
+    <p>Hold the key, say it, let go. The reel shows the whole thing, from the pill lighting up to the words landing in the app you were already using.</p>
+  </div>
+  <div class="stage">
+    <svg class="scene" viewBox="0 0 1700 980" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A small cinema cut open. The marquee reads now showing, Utter, 23 seconds. The reel plays on a wide screen between red curtains tied back to the walls, with an audience in the front row.">
+      <g filter="url(#hand)">
+        <rect class="o" x="60" y="132" width="30" height="848" fill="url(#bricks)"/>
+        <rect class="o" x="1610" y="132" width="30" height="848" fill="url(#bricks)"/>
+        <rect x="90" y="132" width="1520" height="848" fill="#3E2E4A"/>
+        <rect class="o" x="50" y="112" width="1600" height="22" fill="#8C5A3C"/>
+        <rect class="o" x="560" y="6" width="580" height="106" rx="12" fill="#3A2616"/>
+        <rect class="o" x="578" y="22" width="544" height="74" rx="8" fill="#2A1C10"/>
+        <path class="o" d="M90 134h110v760q-30-14-56 0q-28-12-54 0z" fill="#C8402F"/>
+        <path class="o" d="M1500 134h110v760q-28-12-54 0q-26-14-56 0z" fill="#C8402F"/>
+        <path d="M122 150v730M162 150v730M1538 150v730M1578 150v730" stroke="#8F2B20" stroke-width="3"/>
+        <path class="o" d="M90 132h1520v24q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0q-20 14-40 0H90z" fill="#8F2B20"/>
+        <rect class="o" x="206" y="160" width="1288" height="728" rx="6" fill="#141018"/>
+        <rect class="o" x="170" y="892" width="1360" height="18" fill="#8C5A3C"/>
+        <g class="o" fill="#B23527"><rect x="120" y="924" width="100" height="52" rx="16"/><rect x="242" y="924" width="100" height="52" rx="16"/><rect x="364" y="924" width="100" height="52" rx="16"/><rect x="486" y="924" width="100" height="52" rx="16"/><rect x="608" y="924" width="100" height="52" rx="16"/><rect x="730" y="924" width="100" height="52" rx="16"/><rect x="852" y="924" width="100" height="52" rx="16"/><rect x="974" y="924" width="100" height="52" rx="16"/><rect x="1096" y="924" width="100" height="52" rx="16"/><rect x="1218" y="924" width="100" height="52" rx="16"/><rect x="1340" y="924" width="100" height="52" rx="16"/><rect x="1462" y="924" width="100" height="52" rx="16"/></g>
+        <g class="o"><circle cx="292" cy="918" r="22" fill="#5A3A22"/><circle cx="658" cy="914" r="24" fill="#E9B48A"/><circle cx="1024" cy="916" r="22" fill="#2A1C10"/><circle cx="1390" cy="918" r="22" fill="#C08A5A"/></g>
+      </g>
+      <g fill="#F3C13A"><circle cx="574" cy="14" r="5"/><circle cx="620" cy="14" r="5"/><circle cx="666" cy="14" r="5"/><circle cx="712" cy="14" r="5"/><circle cx="758" cy="14" r="5"/><circle cx="804" cy="14" r="5"/><circle cx="850" cy="14" r="5"/><circle cx="896" cy="14" r="5"/><circle cx="942" cy="14" r="5"/><circle cx="988" cy="14" r="5"/><circle cx="1034" cy="14" r="5"/><circle cx="1080" cy="14" r="5"/><circle cx="1126" cy="14" r="5"/><circle cx="574" cy="104" r="5"/><circle cx="620" cy="104" r="5"/><circle cx="666" cy="104" r="5"/><circle cx="712" cy="104" r="5"/><circle cx="758" cy="104" r="5"/><circle cx="804" cy="104" r="5"/><circle cx="850" cy="104" r="5"/><circle cx="896" cy="104" r="5"/><circle cx="942" cy="104" r="5"/><circle cx="988" cy="104" r="5"/><circle cx="1034" cy="104" r="5"/><circle cx="1080" cy="104" r="5"/><circle cx="1126" cy="104" r="5"/></g>
+      <text x="850" y="52" text-anchor="middle" style="font:800 20px Grandstander,sans-serif;fill:#FBFAF5;letter-spacing:.24em">NOW SHOWING</text>
+      <text x="850" y="86" text-anchor="middle" style="font:800 30px Grandstander,sans-serif;fill:#F3C13A;letter-spacing:.08em">UTTER · 23 SECONDS</text>
+    </svg>
+    <video class="reel-video" src="reel-16x9.mp4" poster="reel-poster.jpg" playsinline preload="none" aria-label="The Utter reel, 23 seconds"></video>
+    <button class="play-disc" id="playDisc" type="button" aria-label="Play the 23-second reel">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" fill="#F3C13A" stroke="#6B4A2E" stroke-width="6"/><circle cx="60" cy="60" r="42" fill="none" stroke="#B98A1E" stroke-width="3"/><path d="M48 38L84 60L48 82Z" fill="#6B4A2E" stroke="#6B4A2E" stroke-width="8" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</section>
+
+<!-- ================= MEETINGS: the meeting room ================= -->
+<section class="block side flip" id="meetings" aria-labelledby="h-meet">
+  <div class="copy">
+    <h2 id="h-meet">Meetings, written down <em>in the order they happened.</em></h2>
+    <p>Your mic is "You". The computer's sound is "Others". Every turn lands in the transcript in the order it was said.</p>
+    <ul>
+      <li>When your mic hears the call through your speakers, Utter drops the echo. Headphones keep it cleanest.</li>
+      <li>Pause and resume whenever you like.</li>
+      <li>When a Zoom, Teams, Webex, Slack or Discord call starts, Utter offers to record it, and stops when the call ends.</li>
+    </ul>
+  </div>
+  <div class="pan">
+  <div class="stage" data-facade>
+    <svg class="scene" viewBox="0 0 1700 760" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A meeting room cut open. You wear headphones and talk into a microphone, a red You pipe. The call plays on a screen, a blue Others pipe. A sieve catches the echo from the speakers. Both pipes feed a sorting machine that writes the turns on a scroll in the order they were said.">
+      <g filter="url(#hand)">
+        <rect class="o" x="76" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect class="o" x="1598" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect x="102" y="120" width="1496" height="640" fill="#D3C8EC"/>
+        <path d="M102 640H1598" stroke="#6B4A2E" stroke-opacity=".25" stroke-width="2"/>
+        <rect class="o" x="66" y="100" width="1568" height="22" fill="#8C5A3C"/>
+        <rect class="o" x="620" y="30" width="460" height="70" rx="10" fill="#FBFAF5"/>
+        <rect x="102" y="700" width="1496" height="60" fill="url(#floor)"/>
+        <!-- you -->
+        <rect class="o" x="150" y="580" width="440" height="16" rx="4" fill="#B7794B"/>
+        <path class="o" d="M172 596v104M568 596v104" fill="none"/>
+        <path class="o" d="M230 600q-6-90 40-110q48-8 66 30l10 80z" fill="#C8402F"/>
+        <circle class="o" cx="294" cy="440" r="40" fill="#E9B48A"/>
+        <path class="o" d="M254 438q-4-46 40-48q38 0 44 30q-20-12-40-6q-10 20-28 24z" fill="#2A1C10"/>
+        <path d="M252 440q0-58 44-58q46 0 46 58" fill="none" style="stroke:#3A2616;stroke-width:8"/>
+        <rect class="o" x="240" y="428" width="20" height="34" rx="8" fill="#3E4C7A"/><rect class="o" x="330" y="428" width="20" height="34" rx="8" fill="#3E4C7A"/>
+        <ellipse class="o" cx="460" cy="578" rx="26" ry="6" fill="#4A4A55"/>
+        <rect class="o" x="456" y="530" width="8" height="48" fill="#6E6E7A"/>
+        <rect class="o" x="442" y="488" width="36" height="48" rx="18" fill="#4A4A55"/>
+        <!-- call screen -->
+        <rect class="o" x="620" y="190" width="340" height="210" rx="12" fill="#2E3550"/>
+        <rect x="634" y="204" width="312" height="182" rx="6" fill="#CFE4F1"/>
+        <g class="o"><rect x="644" y="214" width="144" height="80" rx="6" fill="#F4E3B4"/><rect x="792" y="214" width="144" height="80" rx="6" fill="#C6E2C5"/><rect x="644" y="298" width="144" height="80" rx="6" fill="#F3C9A8"/><rect x="792" y="298" width="144" height="80" rx="6" fill="#D3C8EC"/></g>
+        <g class="o"><circle cx="716" cy="248" r="16" fill="#E9B48A"/><circle cx="864" cy="248" r="16" fill="#8C5A3C"/><circle cx="716" cy="332" r="16" fill="#C08A5A"/><circle cx="864" cy="332" r="12" fill="#E9B48A"/></g>
+        <path d="M700 290q16-20 32 0M848 290q16-20 32 0M700 374q16-20 32 0M852 374q12-16 24 0" fill="none" class="h"/>
+        <rect class="o" x="770" y="400" width="40" height="24" fill="#2E3550"/>
+        <path class="o" d="M740 424h100v14H740z" fill="#4A4A55"/>
+        <!-- speaker -->
+        <path class="o" d="M980 300h22l26-22v68l-26-22h-22z" fill="#6E6E7A"/>
+        <!-- sorter -->
+        <rect class="o" x="930" y="520" width="200" height="180" rx="14" fill="#F3C13A"/>
+        <path class="o" d="M950 520l20-40h40l20 40M1030 520l20-40h40l20 40" fill="#E2A92C"/>
+        <rect class="o" x="960" y="560" width="140" height="70" rx="8" fill="#FBFAF5"/>
+        <!-- scroll -->
+        <rect class="o" x="1170" y="170" width="400" height="460" fill="#FBFAF5"/>
+        <rect class="o" x="1158" y="152" width="424" height="26" rx="13" fill="#B7794B"/>
+        <rect class="o" x="1158" y="622" width="424" height="26" rx="13" fill="#B7794B"/>
+        <path d="M1130 610Q1150 560 1170 560" fill="none" style="stroke:#6B4A2E;stroke-width:3"/>
+        <!-- switches and call board -->
+        <rect class="o" x="160" y="200" width="150" height="90" rx="10" fill="#FBFAF5"/>
+        <rect class="o" x="186" y="220" width="30" height="50" rx="6" fill="#E8CE9C"/><rect class="o" x="254" y="220" width="30" height="50" rx="6" fill="#E8CE9C"/>
+        <rect class="o" x="192" y="226" width="18" height="20" rx="4" fill="#C8402F"/><rect class="o" x="260" y="244" width="18" height="20" rx="4" fill="#4E9A4A"/>
+        <rect class="o" x="370" y="190" width="200" height="140" rx="8" fill="#B7794B"/>
+        <rect class="o" x="384" y="204" width="172" height="112" rx="4" fill="#FBFAF5"/>
+      </g>
+      <!-- pipes -->
+      <path d="M478 512H560Q600 512 600 552V660H940" fill="none" style="stroke:#6B4A2E;stroke-width:18;stroke-linejoin:round"/>
+      <path d="M478 512H560Q600 512 600 552V660H940" fill="none" style="stroke:#D8352A;stroke-width:12;stroke-linejoin:round"/>
+      <path d="M1028 312H1090Q1110 312 1110 340V490" fill="none" style="stroke:#6B4A2E;stroke-width:18;stroke-linejoin:round"/>
+      <path d="M1028 312H1090Q1110 312 1110 340V490" fill="none" style="stroke:#3E7FD0;stroke-width:12;stroke-linejoin:round"/>
+      <!-- echo waves and the sieve -->
+      <g fill="none" stroke="#3E7FD0" stroke-width="3" stroke-linecap="round" opacity=".8">
+        <path d="M960 410q-30 20-60 30"/><path d="M920 440q-40 24-90 36"/><path d="M880 470q-50 26-110 38"/>
+      </g>
+      <g filter="url(#hand)">
+        <path class="o" d="M640 470h120q0 60-60 60t-60-60z" fill="#E8CE9C"/>
+        <path class="h" d="M656 484h88M664 498h72M676 512h48"/>
+        <rect class="o" x="756" y="462" width="70" height="10" rx="5" fill="#8C5A3C"/>
+      </g>
+      <g style="font:800 17px Grandstander,sans-serif;fill:#3E7FD0"><text x="664" y="462">e</text><text x="684" y="456">c</text><text x="704" y="462">h</text><text x="724" y="456">o</text></g>
+      <g class="t" style="font-size:20px">
+        <text x="1196" y="218"><tspan style="fill:#2E5DA8;font-family:Grandstander;font-weight:800">Others:</tspan> Morning. Shall we start</text>
+        <text x="1196" y="246">with the launch dates?</text>
+        <text x="1196" y="296"><tspan style="fill:#C8402F;font-family:Grandstander;font-weight:800">You:</tspan> Yes. Thursday works</text>
+        <text x="1196" y="324">for the beta.</text>
+        <text x="1196" y="374"><tspan style="fill:#2E5DA8;font-family:Grandstander;font-weight:800">Others:</tspan> Great, I'll send</text>
+        <text x="1196" y="402">the invite.</text>
+        <text x="1196" y="452"><tspan style="fill:#C8402F;font-family:Grandstander;font-weight:800">You:</tspan> Thanks.</text>
+        <text x="1540" y="600" text-anchor="end" style="fill:#8A735F;font-size:17px">example</text>
+      </g>
+      <g class="t" style="font-size:16px">
+        <text x="396" y="228">offers to record when</text><text x="396" y="250">a call starts:</text><text x="396" y="278" style="font-family:Grandstander;font-weight:800;font-size:15px">Zoom · Teams · Webex</text><text x="396" y="300" style="font-family:Grandstander;font-weight:800;font-size:15px">Slack · Discord</text>
+      </g>
+      <text x="850" y="76" text-anchor="middle" class="sign">MEETING ROOM</text>
+      <g class="t" style="font-size:17px"><text x="972" y="590">turn sorter</text><text x="972" y="614" style="font-size:15px;fill:#5A4130">in the order said</text></g>
+      <g class="lab">
+        <path class="ptr" d="M206 450L240 446"/><circle cx="240" cy="446" r="2.5"/><text x="114" y="424">headphones</text><text x="114" y="446">keep it</text><text x="114" y="468">cleanest</text>
+        <path class="ptr" d="M490 470L470 494"/><circle cx="470" cy="494" r="2.5"/><text x="420" y="462">your mic is "You"</text>
+        <path class="ptr" d="M1004 192L1004 276"/><circle cx="1004" cy="276" r="2.5"/><text x="980" y="160">the computer's</text><text x="980" y="182">sound is "Others"</text>
+        <path class="ptr" d="M700 550L700 532"/><circle cx="700" cy="532" r="2.5"/><text x="626" y="570">echo from your</text><text x="626" y="592">speakers, dropped</text>
+        <text x="170" y="318">pause · resume</text>
+      </g>
+    </svg>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+</section>
+
+<!-- ================= WORDS: the word workshop ================= -->
+<section class="block side" id="words" aria-labelledby="h-words">
+  <div class="copy">
+    <h2 id="h-words">Your words, <em>spelled your way.</em></h2>
+    <p>Teach Utter the names and terms it gets wrong, and it spells them the way you do. Say a trigger and a whole snippet types itself.</p>
+    <ul>
+      <li>Snippets fill in [date], [time], [datetime], [day] and [clipboard] as they type.</li>
+      <li>Voice commands: "delete that", "new line", "new paragraph", "select all", "copy that", "new note", "continue the note".</li>
+      <li>Spoken punctuation, if you want it: say "comma" or "question mark".</li>
+    </ul>
+  </div>
+  <div class="pan" data-focus=".49">
+  <div class="stage" data-facade>
+    <svg class="scene" viewBox="0 0 1700 760" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A word workshop cut open. An open dictionary lists names spelled your way. Rubber stamps hang for date, time, datetime, day and clipboard, and one stamps Best regards. A pegboard of tools is tagged with voice commands, and a jar holds spoken punctuation.">
+      <g filter="url(#hand)">
+        <rect class="o" x="76" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect class="o" x="1598" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect x="102" y="120" width="1496" height="640" fill="url(#planks)"/>
+        <rect class="o" x="66" y="100" width="1568" height="22" fill="#8C5A3C"/>
+        <rect class="o" x="600" y="30" width="500" height="70" rx="10" fill="#FBFAF5"/>
+        <rect x="102" y="704" width="1496" height="56" fill="#9C7650"/>
+        <!-- lectern and dictionary -->
+        <path class="o" d="M250 704l30-220h100l30 220z" fill="#8C5A3C"/>
+        <path class="o" d="M160 470q110-40 170 0q60-40 170 0v-150q-110-40-170 0q-60-40-170 0z" fill="#FBFAF5"/>
+        <path class="h" d="M330 320v150"/>
+        <path class="o" d="M150 476q120-34 180 6q60-40 180-6" fill="none"/>
+        <!-- stamp rail -->
+        <rect class="o" x="600" y="200" width="460" height="18" rx="6" fill="#8C5A3C"/>
+        <g class="o" fill="#C8402F"><rect x="628" y="218" width="16" height="44"/><rect x="718" y="218" width="16" height="44"/><rect x="808" y="218" width="16" height="44"/><rect x="898" y="218" width="16" height="44"/><rect x="988" y="218" width="16" height="44"/></g>
+        <g class="o" fill="#E8CE9C"><rect x="604" y="262" width="64" height="26" rx="5"/><rect x="694" y="262" width="64" height="26" rx="5"/><rect x="784" y="262" width="64" height="26" rx="5"/><rect x="874" y="262" width="64" height="26" rx="5"/><rect x="964" y="262" width="64" height="26" rx="5"/></g>
+        <!-- a stamper behind the bench -->
+        <path class="o" d="M1004 560q0-82 36-102q36 20 38 102z" fill="#4E9A4A"/>
+        <circle class="o" cx="1040" cy="430" r="24" fill="#C08A5A"/>
+        <path class="o" d="M1016 426q0-32 26-32q26 0 24 28q-12-12-26-10q-12 2-24 14z" fill="#3A2616"/>
+        <!-- workbench -->
+        <rect class="o" x="580" y="560" width="520" height="22" rx="4" fill="#B7794B"/>
+        <path class="o" d="M600 582v122M1080 582v122" fill="none"/>
+        <rect class="o" x="680" y="500" width="300" height="60" rx="4" fill="#FBFAF5" transform="rotate(-2 830 530)"/>
+        <rect class="o" x="900" y="400" width="24" height="70" fill="#4E9A4A"/><rect class="o" x="876" y="466" width="72" height="30" rx="6" fill="#E8CE9C"/>
+        <path d="M1024 478Q978 470 934 412" fill="none" style="stroke:#6B4A2E;stroke-width:15;stroke-linecap:round"/>
+        <path d="M1024 478Q978 470 934 412" fill="none" style="stroke:#4E9A4A;stroke-width:10;stroke-linecap:round"/>
+        <circle class="o" cx="928" cy="406" r="9" fill="#C08A5A"/>
+        <!-- pegboard -->
+        <rect class="o" x="1150" y="190" width="420" height="380" rx="8" fill="url(#peg)"/>
+        <!-- tools -->
+        <rect class="o" x="1190" y="220" width="16" height="110" rx="4" fill="#8C5A3C"/><rect class="o" x="1170" y="214" width="56" height="26" rx="5" fill="#6E6E7A"/>
+        <path class="o" d="M1290 226h22v90l-11 16l-11-16z" fill="#3E4C7A"/>
+        <path class="o" d="M1380 220l40 0l-6 30h-28z" fill="#F3C13A"/><rect class="o" x="1394" y="250" width="12" height="80" fill="#8C5A3C"/>
+        <path class="o" d="M1480 222q30 0 30 30t-30 30" fill="none" style="stroke-width:10"/>
+        <rect class="o" x="1184" y="390" width="70" height="44" rx="10" fill="#C8402F"/><circle cx="1219" cy="412" r="9" fill="#FBFAF5"/>
+        <path class="o" d="M1300 380l40 70M1340 380l-40 70" fill="none" style="stroke-width:6"/>
+        <rect class="o" x="1400" y="384" width="12" height="90" fill="#8C5A3C"/><path class="o" d="M1392 474h28l-4 30h-20z" fill="#F3C13A"/>
+        <!-- jar -->
+        <rect class="o" x="1250" y="620" width="120" height="84" rx="18" fill="#CFE6F2" opacity=".9"/>
+        <rect class="o" x="1244" y="608" width="132" height="16" rx="6" fill="#8C5A3C"/>
+      </g>
+      <g style="font:800 30px Grandstander,sans-serif;fill:#3A2616"><text x="1272" y="676">,</text><text x="1300" y="668">.</text><text x="1322" y="684">?</text><text x="1290" y="694">!</text></g>
+      <text x="850" y="76" text-anchor="middle" class="sign">WORD WORKSHOP</text>
+      <g class="t" style="font-size:22px"><text x="186" y="360">Priya</text><text x="186" y="392">Okafor</text><text x="186" y="424">Arnav</text><text x="346" y="360">Kubernetes</text><text x="346" y="392">Utter</text><text x="346" y="424">whisper.cpp</text></g>
+      <g class="t" style="font-size:16px" text-anchor="middle"><text x="636" y="281">[date]</text><text x="726" y="281">[time]</text><text x="816" y="281">[datetime]</text><text x="906" y="281">[day]</text><text x="996" y="281">[clipboard]</text></g>
+      <text x="700" y="540" class="t" transform="rotate(-2 830 530)" style="font:800 26px Grandstander,sans-serif;fill:#C8402F">Best regards,</text>
+      <g class="t" style="font-size:15px">
+        <text x="1166" y="356">delete that</text><text x="1276" y="350">new line</text><text x="1366" y="356">new paragraph</text><text x="1466" y="306">select all</text>
+        <text x="1170" y="456">copy that</text><text x="1290" y="476">new note</text><text x="1426" y="530">continue the note</text>
+      </g>
+      <g class="lab">
+        <path class="ptr" d="M250 290L280 330"/><circle cx="280" cy="330" r="2.5"/><text x="130" y="282">a dictionary spelled your way</text>
+        <path class="ptr" d="M760 330L800 292"/><circle cx="800" cy="292" r="2.5"/><text x="620" y="352">fills itself in as it types</text>
+        <path class="ptr" d="M760 620L790 560"/><circle cx="790" cy="560" r="2.5"/><text x="600" y="642">say "my sign", it types "Best regards,"</text>
+        <path class="ptr" d="M1250 178L1262 196"/><circle cx="1262" cy="196" r="2.5"/><text x="1150" y="170">voice commands</text>
+        <path class="ptr" d="M1430 640L1372 660"/><circle cx="1372" cy="660" r="2.5"/><text x="1400" y="626">spoken punctuation,</text><text x="1400" y="648" dx="34">if you want it</text>
+      </g>
+    </svg>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+</section>
+
+<!-- ================= LIBRARY ================= -->
+<section class="block side flip" id="library" aria-labelledby="h-lib">
+  <div class="copy">
+    <h2 id="h-lib">Every day <em>is a tape.</em></h2>
+    <p>Your dictations land on today's tape: Side A for the morning, Side B for the afternoon. Notes and meetings sit beside them in the Library.</p>
+  </div>
+  <div class="pan">
+  <div class="stage" data-facade>
+    <svg class="scene" viewBox="0 0 1700 800" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A library cut open. Upstairs, shelves of cassette tapes marked Side A and Side B and a word-goal thermometer. Downstairs, the real Library and menu-bar hub screens hang in frames, beside a search lamp and an export chute with Markdown, CSV and text parcels.">
+      <g filter="url(#hand)">
+        <path class="o" d="M90 132L850 20L1610 132Z" fill="#E8CE9C"/>
+        <path class="o" d="M150 124L850 34L1550 124Z" fill="#FBFAF5"/>
+        <rect class="o" x="96" y="120" width="26" height="680" fill="url(#bricks)"/>
+        <rect class="o" x="1578" y="120" width="26" height="680" fill="url(#bricks)"/>
+        <rect x="122" y="132" width="1456" height="250" fill="#F4E3B4"/>
+        <rect x="122" y="398" width="1456" height="402" fill="#F6E7C4"/>
+        <rect class="o" x="96" y="120" width="1508" height="14" fill="#8C5A3C"/>
+        <rect class="o" x="96" y="382" width="1508" height="18" fill="#8C5A3C"/>
+        <rect x="122" y="760" width="1456" height="40" fill="url(#floor)"/>
+        <!-- shelves upstairs -->
+        <g class="o" fill="#B7794B"><rect x="170" y="156" width="420" height="214" rx="6"/><rect x="640" y="156" width="420" height="214" rx="6"/></g>
+        <g class="o" fill="#8C5A3C"><rect x="180" y="222" width="400" height="10"/><rect x="180" y="292" width="400" height="10"/><rect x="650" y="222" width="400" height="10"/><rect x="650" y="292" width="400" height="10"/></g>
+        <!-- framed screens -->
+        <rect class="o" x="190" y="420" width="586" height="404" rx="10" fill="#8C5A3C" transform="scale(1 .82) translate(0 92)"/>
+        <rect class="o" x="826" y="430" width="242" height="312" rx="10" fill="#8C5A3C"/>
+        <!-- search desk -->
+        <rect class="o" x="1110" y="640" width="290" height="18" rx="4" fill="#B7794B"/>
+        <path class="o" d="M1130 658v102M1380 658v102" fill="none"/>
+        <rect class="o" x="1140" y="590" width="120" height="50" rx="4" fill="#E8CE9C"/>
+        <path class="o" d="M1290 640l20-100l60-20" fill="none" style="stroke-width:4"/>
+        <path class="o" d="M1340 506l60-10l-14 40z" fill="#F3C13A"/>
+        <circle class="o" cx="1190" cy="566" r="26" fill="#CFE6F2" opacity=".85"/><path class="o" d="M1208 584l26 26" style="stroke-width:7"/>
+        <!-- export chute -->
+        <path class="o" d="M1440 430h110v80l-50 230h-60l10-230z" fill="#9C9389"/>
+        <g class="o"><rect x="1452" y="560" width="80" height="44" rx="4" fill="#F3C13A" transform="rotate(-6 1492 582)"/><rect x="1444" y="620" width="80" height="44" rx="4" fill="#C6E2C5" transform="rotate(4 1484 642)"/><rect x="1450" y="684" width="80" height="44" rx="4" fill="#D3C8EC" transform="rotate(-3 1490 706)"/></g>
+        <!-- shelving the day's tapes -->
+        <rect class="o" x="1420" y="230" width="150" height="12" rx="3" fill="#8C5A3C"/>
+        <path class="o" d="M1452 382q0-64 26-76q26 12 28 76z" fill="#C8402F"/>
+        <circle class="o" cx="1478" cy="290" r="18" fill="#E9B48A"/>
+        <path class="o" d="M1460 288q0-24 18-24q20 0 20 22q-10-8-20-6q-8 0-18 8z" fill="#5A3A22"/>
+        <path d="M1494 320Q1522 292 1534 240" fill="none" style="stroke:#6B4A2E;stroke-width:13;stroke-linecap:round"/>
+        <path d="M1494 320Q1522 292 1534 240" fill="none" style="stroke:#C8402F;stroke-width:8;stroke-linecap:round"/>
+        <!-- word goal thermometer -->
+        <rect class="o" x="1180" y="160" width="40" height="190" rx="20" fill="#FBFAF5"/>
+        <rect x="1188" y="268" width="24" height="76" rx="12" fill="#D8352A"/>
+        <circle class="o" cx="1200" cy="350" r="26" fill="#D8352A"/>
+      </g>
+      <!-- cassettes -->
+      <g>
+        <g fill="#D8352A" stroke="#6B4A2E" stroke-width="2"><rect x="194" y="176" width="64" height="44" rx="5"/><rect x="266" y="176" width="64" height="44" rx="5"/><rect x="338" y="176" width="64" height="44" rx="5"/><rect x="410" y="176" width="64" height="44" rx="5"/><rect x="194" y="246" width="64" height="44" rx="5"/><rect x="266" y="246" width="64" height="44" rx="5"/></g>
+        <g fill="#D8352A" stroke="#6B4A2E" stroke-width="2"><rect x="1432" y="196" width="46" height="34" rx="4"/><rect x="1512" y="200" width="46" height="34" rx="4" transform="rotate(-8 1535 217)"/></g>
+        <g fill="#2E3A75" stroke="#6B4A2E" stroke-width="2"><rect x="664" y="176" width="64" height="44" rx="5"/><rect x="736" y="176" width="64" height="44" rx="5"/><rect x="808" y="176" width="64" height="44" rx="5"/><rect x="664" y="246" width="64" height="44" rx="5"/><rect x="736" y="246" width="64" height="44" rx="5"/><rect x="808" y="246" width="64" height="44" rx="5"/><rect x="880" y="246" width="64" height="44" rx="5"/></g>
+        <g fill="#FBFAF5"><circle cx="214" cy="198" r="6"/><circle cx="238" cy="198" r="6"/><circle cx="286" cy="198" r="6"/><circle cx="310" cy="198" r="6"/><circle cx="358" cy="198" r="6"/><circle cx="382" cy="198" r="6"/><circle cx="430" cy="198" r="6"/><circle cx="454" cy="198" r="6"/><circle cx="214" cy="268" r="6"/><circle cx="238" cy="268" r="6"/><circle cx="286" cy="268" r="6"/><circle cx="310" cy="268" r="6"/>
+          <circle cx="684" cy="198" r="6"/><circle cx="708" cy="198" r="6"/><circle cx="756" cy="198" r="6"/><circle cx="780" cy="198" r="6"/><circle cx="828" cy="198" r="6"/><circle cx="852" cy="198" r="6"/><circle cx="684" cy="268" r="6"/><circle cx="708" cy="268" r="6"/><circle cx="756" cy="268" r="6"/><circle cx="780" cy="268" r="6"/><circle cx="828" cy="268" r="6"/><circle cx="852" cy="268" r="6"/><circle cx="900" cy="268" r="6"/><circle cx="924" cy="268" r="6"/></g>
+      </g>
+      <image href="shots/library.webp" x="204" y="420" width="558" height="318" preserveAspectRatio="xMidYMid slice"/>
+      <rect x="204" y="420" width="558" height="318" fill="none" stroke="#6B4A2E" stroke-width="2.5"/>
+      <image href="shots/hub.webp" x="838" y="442" width="218" height="288" preserveAspectRatio="xMidYMid slice"/>
+      <rect x="838" y="442" width="218" height="288" fill="none" stroke="#6B4A2E" stroke-width="2.5"/>
+      <text x="850" y="96" text-anchor="middle" class="sign">LIBRARY</text>
+      <g class="t" style="font-size:15px" text-anchor="middle"><text x="1492" y="588" transform="rotate(-6 1492 582)">Markdown</text><text x="1484" y="648" transform="rotate(4 1484 642)">CSV</text><text x="1490" y="712" transform="rotate(-3 1490 706)">text</text></g>
+      <g class="lab">
+        <text x="190" y="350" style="font-size:19px">Side A, morning</text>
+        <text x="660" y="350" style="font-size:19px">Side B, afternoon</text>
+        <path class="ptr" d="M1260 210L1222 230"/><circle cx="1222" cy="230" r="2.5"/><text x="1268" y="210">daily word goal</text>
+        <text x="204" y="776">today's tape, in the real Library</text>
+        <text x="830" y="776" style="font-size:19px">the menu-bar hub</text>
+        <path class="ptr" d="M1150 520L1176 546"/><circle cx="1176" cy="546" r="2.5"/><text x="1100" y="476">search every track,</text><text x="1100" y="498">note and meeting</text>
+        <path class="ptr" d="M1560 420L1540 444"/><circle cx="1540" cy="444" r="2.5"/><text x="1418" y="412">export</text>
+      </g>
+    </svg>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+</section>
+
+<!-- ================= COMPANION: the robot's room ================= -->
+<section class="block side" id="companion" aria-labelledby="h-comp">
+  <div class="copy">
+    <h2 id="h-comp">A robot that <em>keeps you company.</em></h2>
+    <p>It perks up while you talk and naps when you don't. It can remind you to stretch, drink water or take a focus break, keep the things you tell it with the Remember shortcut, and cheer when you reach today's goal.</p>
+    <p>It has over a hundred small moments, each one tied to something that really happens. Optional, and off until you turn it on.</p>
+    <div class="companion-tries" id="roomTries" role="group" aria-label="Play a moment"></div>
+    <p class="moment-now" id="roomNow" aria-live="polite"></p>
+    <p class="credit">Robot by CX ArtLab.</p>
+  </div>
+  <div class="pan" data-focus=".5">
+  <div class="stage" data-facade>
+    <svg class="scene" viewBox="0 0 1700 760" preserveAspectRatio="xMidYMax meet" role="img" aria-label="The robot's room. The robot sits on a desk under a lamp. A focus timer clock, a glass of water and a stretching poster are its reminders. A memory jar holds notes, a sticker chart tracks daily goals, and a cushion waits for naps.">
+      <g filter="url(#hand)">
+        <rect class="o" x="96" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect class="o" x="1578" y="120" width="26" height="640" fill="url(#bricks)"/>
+        <rect x="122" y="120" width="1456" height="640" fill="#C6E2C5"/>
+        <path d="M122 160H1578M122 200H1578" stroke="#FBFAF5" stroke-opacity=".35" stroke-width="10"/>
+        <rect class="o" x="86" y="100" width="1528" height="22" fill="#8C5A3C"/>
+        <rect class="o" x="580" y="30" width="540" height="70" rx="10" fill="#FBFAF5"/>
+        <rect x="122" y="704" width="1456" height="56" fill="url(#floor)"/>
+        <!-- window -->
+        <rect class="o" x="190" y="200" width="250" height="210" rx="8" fill="#F6C9A0"/>
+        <path class="h" d="M315 200v210M190 305h250"/>
+        <path class="o" d="M176 190h50q-10 120 10 240h-60zM404 190h50v240h-60q20-120 10-240z" fill="#C8402F"/>
+        <!-- shelf + jar -->
+        <rect class="o" x="190" y="470" width="260" height="14" rx="4" fill="#8C5A3C"/>
+        <rect class="o" x="232" y="384" width="104" height="86" rx="18" fill="#CFE6F2" opacity=".95"/>
+        <rect class="o" x="226" y="374" width="116" height="16" rx="6" fill="#B7794B"/>
+        <g class="o" stroke-width="1.6"><rect x="250" y="410" width="34" height="22" fill="#FFF3CF" transform="rotate(-10 266 420)"/><rect x="284" y="424" width="34" height="22" fill="#FBFAF5" transform="rotate(8 300 434)"/><rect x="258" y="440" width="34" height="22" fill="#E3F1DF" transform="rotate(-4 274 450)"/></g>
+        <!-- desk -->
+        <rect class="o" x="520" y="560" width="600" height="22" rx="4" fill="#B7794B"/>
+        <rect class="o" x="540" y="582" width="160" height="122" fill="#A0683F"/>
+        <path class="o" d="M1100 582v122" fill="none"/>
+        <rect class="o" x="580" y="626" width="80" height="16" rx="6" fill="#E8CE9C"/>
+        <path class="o" d="M560 560v-120l40-40" fill="none" style="stroke-width:5"/>
+        <path class="o" d="M580 372l70 20l-30 40z" fill="#F3C13A"/>
+        <path d="M636 426L740 548H900L660 404Z" fill="#F3C13A" opacity=".2"/>
+        <ellipse class="o" cx="850" cy="556" rx="140" ry="11" fill="#8C5A3C" opacity=".6"/>
+        <!-- water glass -->
+        <path class="o" d="M1052 490h40l-6 70h-28z" fill="#CFE6F2"/>
+        <path d="M1056 514h32l-4 42h-24z" fill="#7EC0E6"/>
+        <!-- clock -->
+        <circle class="o" cx="1180" cy="240" r="62" fill="#FBFAF5"/>
+        <path class="o" d="M1180 240v-40M1180 240l28 16" fill="none" style="stroke-width:5"/>
+        <path d="M1180 186v8M1180 286v8M1126 240h8M1226 240h8" stroke="#6B4A2E" stroke-width="3"/>
+        <!-- stretch poster -->
+        <rect class="o" x="1300" y="170" width="200" height="230" rx="6" fill="#FFF3CF"/>
+        <circle class="o" cx="1400" cy="214" r="16" fill="#E9B48A"/>
+        <path class="o" d="M1400 230v80M1400 250l-50-40M1400 250l50-40M1400 310l-36 60M1400 310l36 60" fill="none" style="stroke-width:6"/>
+        <!-- sticker chart -->
+        <rect class="o" x="1290" y="440" width="230" height="150" rx="6" fill="#FBFAF5"/>
+        <path class="h" d="M1290 476H1520M1290 514H1520M1290 552H1520M1346 440V590M1404 440V590M1462 440V590"/>
+        <!-- nap cushion -->
+        <ellipse class="o" cx="1230" cy="690" rx="110" ry="30" fill="#C8402F"/>
+        <ellipse cx="1230" cy="682" rx="80" ry="16" fill="#E06A57"/>
+        <!-- switch -->
+        <rect class="o" x="460" y="250" width="60" height="90" rx="10" fill="#FBFAF5"/>
+        <rect class="o" x="478" y="268" width="24" height="54" rx="6" fill="#E8CE9C"/><rect class="o" x="482" y="296" width="16" height="22" rx="4" fill="#6E6E7A"/>
+      </g>
+      <g fill="#F3C13A" stroke="#6B4A2E" stroke-width="1.5"><path d="M1318 458l4 9l10 1l-7 7l2 10l-9-5l-9 5l2-10l-7-7l10-1z"/><path d="M1376 458l4 9l10 1l-7 7l2 10l-9-5l-9 5l2-10l-7-7l10-1z"/><path d="M1434 458l4 9l10 1l-7 7l2 10l-9-5l-9 5l2-10l-7-7l10-1z"/><path d="M1318 496l4 9l10 1l-7 7l2 10l-9-5l-9 5l2-10l-7-7l10-1z"/><path d="M1376 496l4 9l10 1l-7 7l2 10l-9-5l-9 5l2-10l-7-7l10-1z"/></g>
+      <use class="drawn-robot bob" href="#robot" x="760" y="362" width="180" height="198"/>
+      <text x="850" y="76" text-anchor="middle" class="sign">THE ROBOT'S ROOM</text>
+      <g class="lab">
+        <path class="ptr" d="M1130 330L1150 296"/><circle cx="1150" cy="296" r="2.5"/><text x="1060" y="350">focus timer</text>
+        <path class="ptr" d="M1072 470L1072 492"/><circle cx="1072" cy="492" r="2.5"/><text x="1048" y="462">water</text>
+        <text x="1352" y="390">stretch</text>
+        <text x="1300" y="616" style="font-size:19px">daily goals</text>
+        <path class="ptr" d="M210 520L250 470"/><circle cx="250" cy="470" r="2.5"/><text x="140" y="544">memories, kept with</text><text x="140" y="566">the Remember shortcut</text>
+        <path class="ptr" d="M1060 650L1134 676"/><circle cx="1134" cy="676" r="2.5"/><text x="904" y="646">naps when you're quiet</text>
+        <path class="ptr" d="M486 234L486 252"/><circle cx="486" cy="252" r="2.5"/><text x="466" y="204">off until you</text><text x="466" y="226">turn it on</text>
+      </g>
+    </svg>
+    <div class="robot-slot sit" style="left:50%;top:73.7%;transform:translate(-50%,-84%)" data-scale=".22" data-max="320"><agent-robot-avatar id="roomRobot" size="240" color="#141414"></agent-robot-avatar></div>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+</section>
+
+<!-- ================= PRIVACY: the speech engine works ================= -->
+<section class="block side flip" id="private" aria-labelledby="h-priv">
+  <div class="copy">
+    <h2 id="h-priv">Your voice <em>stays home.</em></h2>
+    <p>Audio is never written to disk or uploaded. whisper.cpp turns it into text right on your computer, so it works offline, with no account and no analytics. Crash reports stay with you, and the only download is a speech model you choose.</p>
+  </div>
+  <div class="pan" data-focus=".62">
+  <div class="stage" data-facade>
+    <svg class="scene" viewBox="0 0 1700 760" preserveAspectRatio="xMidYMax meet" role="img" aria-label="The speech engine works, cut open, behind a locked gate. Outside, the cloud van waits with an empty sack. Inside, the whisper.cpp machine turns sound into text, an empty filing cabinet shows nothing is saved, an unplugged cable shows it works offline, and the only delivery is a speech model sealed with SHA-256.">
+      <g filter="url(#hand)">
+        <!-- gate and boundary wall -->
+        <rect class="o" x="340" y="420" width="40" height="340" fill="url(#bricks)"/>
+        <path class="o" d="M230 520h110M230 760V520M260 760V520M290 760V520M320 760V520" fill="none" style="stroke-width:5"/>
+        <rect class="o" x="300" y="600" width="30" height="40" rx="6" fill="#F3C13A"/>
+        <!-- works building -->
+        <path class="o" d="M400 130l150-60v60l150-60v60l150-60v60l150-60v60l150-60v60l150-60v60l150-60v60z" fill="url(#shingle)"/>
+        <rect class="o" x="396" y="130" width="26" height="630" fill="url(#bricks)"/>
+        <rect class="o" x="1626" y="130" width="26" height="630" fill="url(#bricks)"/>
+        <rect x="422" y="130" width="1204" height="630" fill="#EFE3C8"/>
+        <rect x="422" y="706" width="1204" height="54" fill="url(#floor)"/>
+        <!-- signs -->
+        <rect class="o" x="460" y="190" width="250" height="60" rx="8" fill="#FBFAF5"/>
+        <rect class="o" x="460" y="270" width="250" height="60" rx="8" fill="#FBFAF5"/>
+        <!-- filing cabinet -->
+        <rect class="o" x="470" y="520" width="150" height="186" rx="6" fill="#9C9389"/>
+        <rect class="o" x="460" y="470" width="170" height="60" rx="4" fill="#B5ACA2"/>
+        <rect x="474" y="478" width="142" height="40" fill="#6E665E"/>
+        <rect class="o" x="484" y="560" width="122" height="54" rx="4" fill="#B5ACA2"/><rect class="o" x="484" y="630" width="122" height="54" rx="4" fill="#B5ACA2"/>
+        <!-- machine -->
+        <rect class="o" x="860" y="360" width="400" height="346" rx="18" fill="#F3C13A"/>
+        <rect class="o" x="900" y="400" width="320" height="170" rx="12" fill="#E2A92C"/>
+        <rect class="o" x="940" y="600" width="240" height="56" rx="8" fill="#FBFAF5"/>
+        <path class="o" d="M900 360l40-80h240l40 80" fill="#C8402F"/>
+        <!-- conveyor in and out -->
+        <rect class="o" x="700" y="560" width="160" height="22" rx="11" fill="#6E6E7A"/>
+        <rect class="o" x="1260" y="460" width="190" height="22" rx="11" fill="#6E6E7A"/>
+        <rect class="o" x="1450" y="380" width="140" height="140" rx="10" fill="#CFE6F2"/>
+        <!-- crash box shelf -->
+        <rect class="o" x="1300" y="620" width="200" height="14" rx="4" fill="#8C5A3C"/>
+        <rect class="o" x="1340" y="560" width="120" height="60" rx="4" fill="#E8CE9C"/>
+        <!-- delivery hatch -->
+        <rect class="o" x="1300" y="180" width="270" height="150" rx="10" fill="#8C5A3C"/>
+        <rect class="o" x="1340" y="214" width="150" height="96" rx="6" fill="#E3B47A"/>
+        <path class="h" d="M1340 246h150M1340 278h150M1390 214v96M1440 214v96"/>
+        <circle class="o" cx="1500" cy="300" r="26" fill="#C8402F"/>
+        <!-- unplugged cable -->
+        <rect class="o" x="740" y="640" width="30" height="40" rx="5" fill="#FBFAF5"/>
+        <path d="M790 704q30-30 60 0" fill="none" style="stroke:#3A2616;stroke-width:6;stroke-linecap:round"/>
+        <rect class="o" x="776" y="690" width="22" height="16" rx="3" fill="#6E6E7A"/>
+      </g>
+      <g class="gear" style="transform-origin:1000px 485px"><circle class="o" cx="1000" cy="485" r="54" fill="#8C5A3C"/><path d="M1000 421v-10M1000 559v-10M936 485h-10M1074 485h-10M954 439l-7-7M1046 531l7 7M1046 439l7-7M954 531l-7 7" stroke="#6B4A2E" stroke-width="8" stroke-linecap="round"/><circle cx="1000" cy="485" r="16" fill="#F3C13A"/></g>
+      <g class="gear rev" style="transform-origin:1130px 470px"><circle class="o" cx="1130" cy="470" r="38" fill="#8C5A3C"/><path d="M1130 424v-8M1130 524v-8M1084 470h-8M1184 470h-8" stroke="#6B4A2E" stroke-width="7" stroke-linecap="round"/><circle cx="1130" cy="470" r="12" fill="#F3C13A"/></g>
+      <g fill="none" stroke="#3E7FD0" stroke-width="4" stroke-linecap="round"><path d="M720 548q10-16 20 0t20 0t20 0"/><path d="M790 548q10-16 20 0t20 0"/></g>
+      <g class="o" fill="#FBFAF5" stroke-width="2"><rect x="1290" y="430" width="34" height="26" rx="2"/><rect x="1352" y="430" width="34" height="26" rx="2"/></g>
+      <use href="#van" x="0" y="620" width="250" height="140"/>
+      <g filter="url(#hand)">
+        <circle class="o" cx="196" cy="596" r="20" fill="#E9B48A"/>
+        <path class="o" d="M176 616h40l8 84h-56z" fill="#3E4C7A"/>
+        <path class="o" d="M216 650q30 0 30 30q-6 26-30 20z" fill="#E8CE9C"/>
+        <path class="o" d="M168 590q28-22 56 0z" fill="#3A2616"/>
+      </g>
+      <text x="585" y="227" text-anchor="middle" class="sign" style="font-size:22px">No account needed</text>
+      <text x="585" y="307" text-anchor="middle" class="sign" style="font-size:22px">No analytics</text>
+      <text x="1060" y="636" text-anchor="middle" style="font:800 24px Grandstander,sans-serif;fill:#3A2616">whisper.cpp</text>
+      <text x="1400" y="596" text-anchor="middle" class="t" style="font-size:16px">crash reports</text>
+      <text x="1500" y="306" text-anchor="middle" style="font:800 11px Grandstander,sans-serif;fill:#FBFAF5">SHA</text>
+      <g class="t" style="font-size:16px"><text x="1466" y="428">your</text><text x="1466" y="450">text box</text></g>
+      <g class="lab">
+        <text x="18" y="560" style="font-size:19px">the cloud waits outside,</text><text x="18" y="582" style="font-size:19px" dx="0" dy="-0">with nothing to pick up</text>
+        <path class="ptr" d="M560 420L556 476"/><circle cx="556" cy="476" r="2.5"/><text x="470" y="396">audio is never written</text><text x="470" y="418">to disk: the drawer is empty</text>
+        <text x="640" y="740" style="font-size:19px">unplugged, still works</text>
+        <path class="ptr" d="M1420 160L1430 180"/><circle cx="1430" cy="180" r="2.5"/><text x="1240" y="152">the only delivery: a speech</text>
+        <text x="1300" y="358" style="font-size:18px">model you choose, sealed and checked</text>
+        <text x="1360" y="660" style="font-size:18px">stay here</text>
+      </g>
+    </svg>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+  </div>
+</section>
+
+<!-- ================= MODELS: the engine shed ================= -->
+<section class="block side" id="models" aria-labelledby="h-models">
+  <div class="copy">
+    <h2 id="h-models">Pick the engine <em>that fits.</em></h2>
+    <p>Small, in English, comes with Utter and works offline from the first minute. Base is the smallest, Medium is best on technical terms, and Large Turbo covers 99 languages and handles accents best. The optional ones download from Hugging Face and are checked by SHA-256 before Utter uses them.</p>
+  </div>
+  <div class="pan">
+  <div class="stage">
+    <svg class="scene" viewBox="0 0 1700 640" preserveAspectRatio="xMidYMax meet" role="img" aria-label="An engine shed with four engines drawn to scale by size: Base 57 MB, Small 181 MB which comes with Utter, Medium 514 MB, and Large Turbo 547 MB.">
+      <g filter="url(#hand)">
+        <rect class="o" x="96" y="80" width="26" height="560" fill="url(#bricks)"/>
+        <rect class="o" x="1578" y="80" width="26" height="560" fill="url(#bricks)"/>
+        <rect x="122" y="80" width="1456" height="560" fill="#CFE4F1"/>
+        <rect class="o" x="86" y="60" width="1528" height="22" fill="#8C5A3C"/>
+        <path d="M122 120H1578M122 140H1578" stroke="#6B4A2E" stroke-opacity=".25" stroke-width="3"/>
+        <rect x="122" y="600" width="1456" height="40" fill="#9C9389"/>
+        <!-- stands -->
+        <g class="o" fill="#6E6E7A"><rect x="200" y="590" width="260" height="14" rx="4"/><rect x="540" y="590" width="260" height="14" rx="4"/><rect x="880" y="590" width="260" height="14" rx="4"/><rect x="1220" y="590" width="260" height="14" rx="4"/></g>
+        <path class="o" d="M220 604v36M440 604v36M560 604v36M780 604v36M900 604v36M1120 604v36M1240 604v36M1460 604v36" fill="none"/>
+        <!-- engines, height = 0.72 px per MB -->
+        <rect class="o" x="240" y="549" width="180" height="41" rx="8" fill="#6DB466"/>
+        <rect class="o" x="580" y="460" width="180" height="130" rx="10" fill="#F3C13A"/>
+        <rect class="o" x="920" y="220" width="180" height="370" rx="12" fill="#C8402F"/>
+        <rect class="o" x="1260" y="196" width="180" height="394" rx="12" fill="#3E4C7A"/>
+        <g class="o" fill="#FBFAF5"><circle cx="330" cy="569" r="10"/><circle cx="640" cy="520" r="20"/><circle cx="700" cy="520" r="14"/><circle cx="980" cy="300" r="26"/><circle cx="1040" cy="380" r="20"/><circle cx="990" cy="470" r="16"/><circle cx="1320" cy="280" r="26"/><circle cx="1384" cy="360" r="20"/><circle cx="1330" cy="460" r="16"/></g>
+        <path class="o" d="M610 460v-20h40v20M940 220v-30h50v30M1050 220v-20h30v20M1280 196v-30h50v30M1400 196v-20h30v20" fill="#6E6E7A"/>
+        <!-- tags -->
+        <g class="o" fill="#FBFAF5"><rect x="250" y="440" width="160" height="70" rx="6"/><rect x="590" y="330" width="160" height="90" rx="6"/><rect x="930" y="110" width="160" height="70" rx="6"/><rect x="1270" y="96" width="160" height="70" rx="6" transform="translate(0 -8)"/></g>
+        <path class="h" d="M330 510v39M670 420v40M1010 180v40M1350 158v38"/>
+      </g>
+      <path class="o" d="M738 318l10 20l22 3l-16 15l4 22l-20-11l-20 11l4-22l-16-15l22-3z" fill="#F3C13A"/>
+      <g text-anchor="middle">
+        <text x="330" y="470" class="sign" style="font-size:22px">Base</text><text x="330" y="496" class="t" style="font-size:18px">57 MB</text>
+        <text x="670" y="362" class="sign" style="font-size:22px">Small</text><text x="670" y="386" class="t" style="font-size:18px">181 MB</text><text x="670" y="408" class="t" style="font-size:15px;fill:#5A4130">comes with Utter</text>
+        <text x="1010" y="140" class="sign" style="font-size:22px">Medium</text><text x="1010" y="166" class="t" style="font-size:18px">514 MB</text>
+        <text x="1350" y="118" class="sign" style="font-size:20px">Large Turbo</text><text x="1350" y="146" class="t" style="font-size:18px">547 MB</text>
+      </g>
+      <g class="lab"><text x="150" y="214" style="font-size:19px">drawn to scale by size</text></g>
+    </svg>
+  </div>
+  </div>
+</section>
+
+<!-- ================= PLATFORMS: the bus stop at night ================= -->
+<section class="block side flip night" id="platforms" aria-labelledby="h-plat">
+  <div class="copy">
+    <h2 id="h-plat">Catch it on <em>your computer.</em></h2>
+    <p>On the Mac now: macOS 14 or later, Apple silicon or Intel. Windows 10 and 11 and Linux x64, as an AppImage or .deb, are in beta. You can pick a different hold key in Settings.</p>
+  </div>
+  <div class="pan">
+  <div class="stage">
+    <svg class="scene" viewBox="0 0 1700 620" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A bus stop at night. The timetable lists Mac now, Windows beta and Linux beta, each with the key to hold: Fn, Ctrl plus Windows, Ctrl plus Super. A yellow bus marked Utter beta waits with its lights on.">
+      <path d="M684 140L572 620H828L716 140Z" fill="#FFE38A" opacity=".14"/>
+      <ellipse cx="700" cy="616" rx="150" ry="12" fill="#FFE38A" opacity=".3"/>
+      <g filter="url(#hand)">
+        <rect class="o" x="694" y="140" width="12" height="480" fill="#3A2616"/>
+        <path class="o" d="M676 140h48l-8-30h-32z" fill="#F3C13A"/>
+        <!-- shelter -->
+        <path class="o" d="M60 220h560l-30-40H90z" fill="#C8402F"/>
+        <rect class="o" x="80" y="220" width="16" height="400" fill="#6E6E7A"/><rect class="o" x="584" y="220" width="16" height="400" fill="#6E6E7A"/>
+        <rect x="96" y="220" width="488" height="300" fill="#CFE6F2" opacity=".22"/>
+        <rect class="o" x="120" y="236" width="440" height="276" rx="8" fill="#FBFAF5"/>
+        <rect class="o" x="120" y="540" width="460" height="18" rx="6" fill="#B7794B"/>
+        <path class="o" d="M140 558v62M560 558v62" fill="none"/>
+        <!-- bus -->
+        <rect class="o" x="760" y="290" width="860" height="280" rx="34" fill="#F3C13A"/>
+        <rect class="o" x="790" y="320" width="300" height="56" rx="10" fill="#3A2616"/>
+        <g class="o" fill="#FFE9A8"><rect x="800" y="396" width="140" height="96" rx="10"/><rect x="960" y="396" width="140" height="96" rx="10"/><rect x="1120" y="396" width="140" height="96" rx="10"/><rect x="1280" y="396" width="140" height="96" rx="10"/></g>
+        <rect class="o" x="1450" y="396" width="110" height="170" rx="10" fill="#E2A92C"/>
+        <path class="h" d="M1505 396v170"/>
+        <rect class="o" x="1580" y="470" width="40" height="40" rx="8" fill="#FFE9A8"/>
+        <path class="o" d="M760 520h860" fill="none"/>
+        <circle class="o" cx="900" cy="572" r="44" fill="#3A2616"/><circle cx="900" cy="572" r="16" fill="#9C9389"/>
+        <circle class="o" cx="1440" cy="572" r="44" fill="#3A2616"/><circle cx="1440" cy="572" r="16" fill="#9C9389"/>
+      </g>
+      <g class="o"><circle cx="880" cy="430" r="18" fill="#E9B48A"/><circle cx="1030" cy="434" r="18" fill="#8C5A3C"/><circle cx="1190" cy="430" r="18" fill="#C08A5A"/></g>
+      <g class="o" fill="#3E4C7A"><path d="M858 492q22-40 44 0z"/><path d="M1008 492q22-40 44 0z" fill="#4E9A4A"/><path d="M1168 492q22-40 44 0z" fill="#C8402F"/></g>
+      <text x="940" y="358" text-anchor="middle" style="font:800 30px Grandstander,sans-serif;fill:#F3C13A;letter-spacing:.06em">UTTER BETA</text>
+      <text x="340" y="276" text-anchor="middle" class="sign" style="font-size:22px">TIMETABLE</text>
+      <g class="t" style="font-size:21px">
+        <text x="144" y="322" style="font-family:Grandstander;font-weight:800">Mac</text><text x="250" y="322">now</text>
+        <text x="144" y="392" style="font-family:Grandstander;font-weight:800">Windows</text><text x="250" y="392">beta</text>
+        <text x="144" y="462" style="font-family:Grandstander;font-weight:800">Linux</text><text x="250" y="462">beta</text>
+      </g>
+      <g class="o" fill="#F3C13A" stroke-width="2.2">
+        <rect x="350" y="296" width="54" height="38" rx="8"/>
+        <rect x="350" y="366" width="64" height="38" rx="8"/><rect x="438" y="366" width="104" height="38" rx="8"/>
+        <rect x="350" y="436" width="64" height="38" rx="8"/><rect x="438" y="436" width="90" height="38" rx="8"/>
+      </g>
+      <g text-anchor="middle" style="font:800 17px Grandstander,sans-serif;fill:#3A2616">
+        <text x="377" y="321">Fn</text><text x="382" y="391">Ctrl</text><text x="426" y="391" style="font-family:'Patrick Hand';font-weight:400">+</text><text x="490" y="391">Windows</text>
+        <text x="382" y="461">Ctrl</text><text x="426" y="461" style="font-family:'Patrick Hand';font-weight:400">+</text><text x="483" y="461">Super</text>
+      </g>
+    </svg>
+  </div>
+  </div>
+</section>
+
+<!-- ================= APPLY: the post office ================= -->
+<section class="block night" id="apply" aria-labelledby="h-apply">
+  <div class="form-wrap">
+    <div class="letter">
+      <svg class="flap" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 30L50 1L100 30Z" fill="#EFE4CB" stroke="#6B4A2E" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+      <svg class="stamp" viewBox="-52 0 132 96" aria-hidden="true" focusable="false">
+        <rect x="4" y="4" width="72" height="88" fill="#FFF3CF" stroke="#6B4A2E" stroke-width="2"/>
+        <rect x="4" y="4" width="72" height="88" fill="none" stroke="#FBFAF5" stroke-width="7" stroke-dasharray="0 8" stroke-linecap="round"/>
+        <rect x="13" y="13" width="54" height="58" fill="#A9D5EE" stroke="#6B4A2E" stroke-width="1.6"/>
+        <rect x="13" y="62" width="54" height="9" fill="#4E9A4A"/>
+        <path d="M20 46L40 30L60 46Z" fill="#C8402F" stroke="#6B4A2E" stroke-width="1.6" stroke-linejoin="round"/>
+        <rect x="24" y="46" width="32" height="18" fill="#F6E7C4" stroke="#6B4A2E" stroke-width="1.6"/>
+        <rect x="36" y="53" width="8" height="11" fill="#8C5A3C"/>
+        <path d="M40 30v-4" stroke="#6B4A2E" stroke-width="1.6"/>
+        <text x="40" y="85" text-anchor="middle" style="font:800 10px Grandstander,sans-serif;fill:#3A2616;letter-spacing:.08em">UTTER</text>
+        <g fill="none" stroke="#8F2B20" stroke-width="2" opacity=".75"><circle cx="-4" cy="44" r="24"/><path d="M-50 30q8-6 16 0t16 0M-50 44q8-6 16 0M-50 58q8-6 16 0t16 0"/></g>
+        <text x="-4" y="48" text-anchor="middle" style="font:800 10px Grandstander,sans-serif;fill:#8F2B20;opacity:.75;letter-spacing:.06em">BETA</text>
+      </svg>
+      <form id="betaApplicationForm" novalidate>
+        <h2 id="h-apply">Apply for the beta.</h2>
+        <p class="lead">Tell us a little about how you write. We read every answer when we send beta invites.</p>
+        <div class="row2">
+          <div class="field"><label for="appName">Your name or handle</label><input type="text" id="appName" name="name" autocomplete="name" placeholder="Alex Rivera or @alex"></div>
+          <div class="field"><label for="appEmail">Email <span class="req">*</span></label><input type="email" id="appEmail" name="email" autocomplete="email" required placeholder="alex@example.com"></div>
+        </div>
+        <fieldset>
+          <legend>Operating system <span class="req">*</span></legend>
+          <div class="os">
+            <label><input type="radio" name="os" value="macOS Apple Silicon" checked><svg viewBox="0 0 30 30" aria-hidden="true"><rect x="4" y="6" width="22" height="15" rx="2" fill="#CFE6F2" stroke="#6B4A2E" stroke-width="2"/><path d="M2 24h26" stroke="#6B4A2E" stroke-width="2.5" stroke-linecap="round"/><rect x="11" y="9" width="8" height="8" rx="1.5" fill="#F3C13A" stroke="#6B4A2E" stroke-width="1.5"/></svg>macOS, Apple silicon</label>
+            <label><input type="radio" name="os" value="macOS Intel"><svg viewBox="0 0 30 30" aria-hidden="true"><rect x="4" y="6" width="22" height="15" rx="2" fill="#CFE6F2" stroke="#6B4A2E" stroke-width="2"/><path d="M2 24h26" stroke="#6B4A2E" stroke-width="2.5" stroke-linecap="round"/></svg>macOS, Intel</label>
+            <label><input type="radio" name="os" value="Windows 11/10"><svg viewBox="0 0 30 30" aria-hidden="true"><g fill="#A9D5EE" stroke="#6B4A2E" stroke-width="2"><rect x="5" y="5" width="9" height="9"/><rect x="16" y="5" width="9" height="9"/><rect x="5" y="16" width="9" height="9"/><rect x="16" y="16" width="9" height="9"/></g></svg>Windows 11 or 10</label>
+            <label><input type="radio" name="os" value="Linux"><svg viewBox="0 0 30 30" aria-hidden="true"><ellipse cx="15" cy="17" rx="8" ry="10" fill="#3A2616"/><ellipse cx="15" cy="19" rx="5" ry="7" fill="#FBFAF5"/><circle cx="12.5" cy="11" r="1.6" fill="#FBFAF5"/><circle cx="17.5" cy="11" r="1.6" fill="#FBFAF5"/><path d="M13 14l2 2l2-2z" fill="#F3C13A"/><path d="M9 27h5M16 27h5" stroke="#F3C13A" stroke-width="2.5" stroke-linecap="round"/></svg>Linux</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>How you'll use it</legend>
+          <div class="chips">
+            <label><input type="checkbox" name="use" value="Software Engineering & Terminal" checked>Software and the terminal</label>
+            <label><input type="checkbox" name="use" value="Slack & Team Chat">Slack and team chat</label>
+            <label><input type="checkbox" name="use" value="Writing & Long-Form Docs" checked>Writing and long documents</label>
+            <label><input type="checkbox" name="use" value="Meeting Transcription">Meeting transcription</label>
+            <label><input type="checkbox" name="use" value="Accessibility / RSI Injury">Accessibility or RSI</label>
+          </div>
+        </fieldset>
+        <div class="field"><label for="appReason">Why do you want early access? <span class="req">*</span></label>
+          <textarea id="appReason" name="reason" required placeholder="How you write today, which apps you use, and why on-device speech matters to you."></textarea>
+          <span class="hint">Specific workflows help us choose who to invite first.</span></div>
+        <p class="error" id="formError" role="alert"></p>
+        <button class="go" type="submit" id="applyBtn">Apply for beta</button>
+      </form>
+      <div class="sent" id="appSuccessView" tabindex="-1">
+        <h2>Your letter is in the post.</h2>
+        <p class="lead">Thanks, <span id="successApplicantName">friend</span>. We'll email you when there's a beta spot for <span id="successApplicantOS">your computer</span>.</p>
+        <p class="note" id="previewNote"></p>
+        <button class="go small" type="button" id="againBtn">Send another</button>
+      </div>
+    </div>
+  </div>
+  <div class="stage" data-facade id="postOffice">
+    <svg class="scene" viewBox="0 0 900 1290" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A two-storey post office at night, cut open, with its lamps on. Upstairs, pigeonholes full of letters and a sorting table stacked with parcels. Downstairs, a clerk waits at the window behind the counter, a letter waits on the counter, and a red mailbox marked beta stands in front.">
+      <g filter="url(#hand)">
+        <path class="o" d="M30 230L450 80L870 230Z" fill="url(#shingle)"/>
+        <rect class="o" x="24" y="220" width="852" height="20" fill="#8C5A3C"/>
+        <rect class="o" x="300" y="118" width="300" height="56" rx="8" fill="#FBFAF5"/>
+        <rect class="o" x="24" y="240" width="26" height="1050" fill="url(#bricks)"/>
+        <rect class="o" x="850" y="240" width="26" height="1050" fill="url(#bricks)"/>
+        <rect x="50" y="240" width="800" height="460" fill="#F6E7C4"/>
+        <rect x="50" y="720" width="800" height="570" fill="#F4E3B4"/>
+        <rect class="o" x="34" y="700" width="832" height="20" fill="#8C5A3C"/>
+        <rect x="50" y="1240" width="800" height="50" fill="url(#floor)"/>
+        <!-- upstairs: pigeonholes and the sorting table -->
+        <g transform="translate(-10 80)">
+          <rect class="o" x="100" y="220" width="420" height="230" rx="6" fill="#B7794B"/>
+          <path class="o" d="M100 296H520M100 372H520M184 220V450M268 220V450M352 220V450M436 220V450" fill="none"/>
+          <g class="o" fill="#FBFAF5" stroke-width="1.6"><rect x="116" y="248" width="50" height="34" rx="2"/><rect x="290" y="244" width="50" height="34" rx="2"/><rect x="452" y="250" width="50" height="34" rx="2"/><rect x="200" y="322" width="50" height="34" rx="2"/><rect x="368" y="326" width="50" height="34" rx="2"/><rect x="120" y="398" width="50" height="34" rx="2"/><rect x="284" y="402" width="50" height="34" rx="2"/><rect x="452" y="398" width="50" height="34" rx="2"/></g>
+        </g>
+        <rect class="o" x="560" y="600" width="260" height="16" rx="4" fill="#8C5A3C"/>
+        <path class="o" d="M576 616v84M804 616v84" fill="none"/>
+        <g class="o"><rect x="584" y="548" width="82" height="52" rx="4" fill="#E3B47A"/><rect x="674" y="564" width="62" height="36" rx="4" fill="#C6E2C5"/><rect x="744" y="532" width="62" height="68" rx="4" fill="#F3C13A"/></g>
+        <path class="h" d="M625 548v52M584 574h82M775 532v68"/>
+        <!-- downstairs: clock, clerk window, counter, mailbox -->
+        <circle class="o" cx="400" cy="830" r="40" fill="#FBFAF5"/>
+        <path class="o" d="M400 830v-26M400 830l18 10" fill="none" style="stroke-width:4"/>
+        <rect class="o" x="560" y="760" width="240" height="260" rx="8" fill="#C6E2C5"/>
+        <path class="h" d="M560 840h240"/>
+        <circle class="o" cx="680" cy="920" r="34" fill="#E9B48A"/>
+        <path class="o" d="M646 914q2-40 34-40q34 0 34 40q-14-16-34-14q-20-2-34 14z" fill="#3A2616"/>
+        <path class="o" d="M630 1020q10-60 50-60q40 0 50 60z" fill="#3E4C7A"/>
+        <rect class="o" x="80" y="1020" width="740" height="30" rx="6" fill="#8C5A3C"/>
+        <rect x="96" y="1050" width="708" height="190" fill="#B7794B"/>
+        <path class="o" d="M96 1050h708v190H96z" fill="none"/>
+        <path class="h" d="M330 1050v190M570 1050v190"/>
+        <rect class="o" x="680" y="1090" width="110" height="150" rx="14" fill="#C8402F"/>
+        <path class="o" d="M672 1098q63-60 126 0z" fill="#C8402F"/>
+        <rect class="o" x="700" y="1120" width="70" height="12" rx="4" fill="#3A2616"/>
+        <!-- pendant lamps -->
+        <path class="h" d="M690 240v78M220 720v70"/>
+        <path class="o" d="M650 350l16-32h48l16 32z" fill="#F3C13A"/>
+        <path class="o" d="M180 822l16-32h48l16 32z" fill="#F3C13A"/>
+      </g>
+      <path d="M656 350L580 598H800L724 350Z" fill="#FFE38A" opacity=".22"/>
+      <path d="M186 822L120 1018H320L254 822Z" fill="#FFE38A" opacity=".22"/>
+      <text x="450" y="156" text-anchor="middle" class="sign">POST OFFICE</text>
+      <text x="735" y="1190" text-anchor="middle" style="font:800 15px Grandstander,sans-serif;fill:#FBFAF5;letter-spacing:.08em">BETA</text>
+      <g class="env"><rect class="o" x="420" y="958" width="96" height="62" rx="4" fill="#FBFAF5"/><path class="o" d="M420 962l48 32l48-32" fill="none"/></g>
+      <g class="lab"><path class="ptr" d="M196 566L210 534"/><circle cx="210" cy="534" r="2.5"/><text x="100" y="588">we read every one</text></g>
+    </svg>
+    <div class="facade" aria-hidden="true"><i></i></div>
+  </div>
+</section>
+
+<!-- ================= TOWN SQUARE: reviews, ideas and questions on GitHub Discussions ================= -->
+<section class="block side night" id="square" aria-labelledby="h-square">
+  <div class="copy">
+    <h2 id="h-square">Tell the town <em>what you think.</em></h2>
+    <p>Reviews, feature ideas and questions live on GitHub Discussions, where everyone can read them. Posting needs a free GitHub account.</p>
+    <nav class="signs" aria-label="Community on GitHub Discussions">
+      <a class="sign-arrow" href="https://github.com/h3x-levi/Utter/discussions/new?category=show-and-tell" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H11l-5 4v-4H4z" fill="#FBFAF5" stroke="#6B4A2E" stroke-width="2" stroke-linejoin="round"/></svg>Leave a review<span class="sr">, opens GitHub in a new tab</span></a>
+      <a class="sign-arrow" style="--c:#FBFAF5" href="https://github.com/h3x-levi/Utter/discussions/new?category=ideas" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="6.5" fill="#FFE08A" stroke="#6B4A2E" stroke-width="2"/><path d="M9.5 16.5h5v3.5h-5z" fill="#9C9389" stroke="#6B4A2E" stroke-width="2" stroke-linejoin="round"/></svg>Suggest a feature<span class="sr">, opens GitHub in a new tab</span></a>
+      <a class="sign-arrow" style="--c:#6DB466" href="https://github.com/h3x-levi/Utter/discussions/new?category=q-a" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#FBFAF5" stroke="#6B4A2E" stroke-width="2"/><path d="M9.5 9.6q0-3.1 2.6-3.1t2.5 2.6q0 2-2.5 2.6v1.8" fill="none" stroke="#C8402F" stroke-width="2.2" stroke-linecap="round"/><circle cx="12.1" cy="16.8" r="1.3" fill="#C8402F"/></svg>Ask a question<span class="sr">, opens GitHub in a new tab</span></a>
+    </nav>
+    <a class="quiet" href="https://github.com/h3x-levi/Utter/discussions" target="_blank" rel="noopener">Read what people are saying<span class="sr">, opens GitHub in a new tab</span></a>
+  </div>
+  <div class="pan" data-focus=".6">
+  <div class="stage">
+    <svg class="scene" viewBox="0 0 1700 700" preserveAspectRatio="xMidYMax meet" role="img" aria-label="The town square at night. A striped bandstand strung with lights, a lamp post, and a notice board headed Discussions with three columns, show and tell, ideas and Q and A, covered in pinned notes. Someone pins up a new note, and two people on a bench talk over a question and an idea.">
+      <defs><pattern id="cobble" width="44" height="22" patternUnits="userSpaceOnUse"><rect width="44" height="22" fill="#7E7568"/><rect x="2" y="2" width="40" height="18" rx="7" fill="#9C9389"/></pattern></defs>
+      <g fill="#FBFAF5" opacity=".8"><circle cx="60" cy="60" r="2"/><circle cx="240" cy="30" r="2"/><circle cx="560" cy="90" r="2"/><circle cx="760" cy="40" r="2"/><circle cx="980" cy="120" r="2"/><circle cx="1180" cy="50" r="2"/><circle cx="1440" cy="110" r="2"/><circle cx="1640" cy="40" r="2"/><circle cx="1320" cy="170" r="2"/></g>
+      <path d="M684 262L612 640H788L716 262Z" fill="#FFE38A" opacity=".14"/>
+      <ellipse cx="700" cy="638" rx="110" ry="10" fill="#FFE38A" opacity=".28"/>
+      <g filter="url(#hand)">
+        <rect x="0" y="640" width="1700" height="60" fill="url(#cobble)"/>
+        <!-- bandstand -->
+        <g fill="#FBFAF5" class="o"><rect x="214" y="352" width="12" height="208"/><rect x="316" y="352" width="12" height="208"/><rect x="472" y="352" width="12" height="208"/><rect x="574" y="352" width="12" height="208"/></g>
+        <path class="o" d="M372 560q0-86 28-100q30 14 30 100z" fill="#3E4C7A"/>
+        <circle class="o" cx="400" cy="438" r="22" fill="#E9B48A"/>
+        <path class="o" d="M374 426h52l-8-22h-36z" fill="#3A2616"/>
+        <rect class="o" x="420" y="446" width="40" height="52" rx="4" fill="#FBFAF5"/>
+        <path class="h" d="M427 460h26M427 470h20M427 480h26"/>
+        <rect class="o" x="204" y="500" width="392" height="10" rx="3" fill="#FBFAF5"/>
+        <path class="h" d="M232 510v50M254 510v50M276 510v50M298 510v50M320 510v50M342 510v50M452 510v50M474 510v50M496 510v50M518 510v50M540 510v50M562 510v50" style="stroke-width:3"/>
+        <path class="o" d="M190 560H610L590 640H210Z" fill="#E8CE9C"/>
+        <path class="h" d="M262 568v66M332 568v70M468 568v70M538 568v66"/>
+        <rect class="o" x="346" y="632" width="108" height="16" rx="3" fill="#C9A06A"/>
+        <path class="o" d="M168 352L400 226L632 352Z" fill="url(#stripes)"/>
+        <path class="o" d="M168 352H632v14q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0q-14 12-29 0H168z" fill="#C8402F"/>
+        <path class="h" d="M400 226v-30"/>
+        <path class="o" d="M400 196h34l-8 9l8 9h-34z" fill="#F3C13A"/>
+        <!-- lamp -->
+        <rect class="o" x="694" y="262" width="12" height="378" fill="#3A2616"/>
+        <path class="o" d="M676 262h48l-8-30h-32z" fill="#F3C13A"/>
+        <!-- notice board -->
+        <rect class="o" x="856" y="300" width="20" height="340" fill="#8C5A3C"/>
+        <rect class="o" x="1324" y="300" width="20" height="340" fill="#8C5A3C"/>
+        <path class="o" d="M820 302L1100 238L1380 302Z" fill="url(#shingle)"/>
+        <rect class="o" x="836" y="300" width="528" height="270" rx="10" fill="#8C5A3C"/>
+        <rect class="o" x="852" y="342" width="496" height="212" rx="6" fill="#B7794B"/>
+        <path d="M1017 352v192M1183 352v192" stroke="#8C5A3C" stroke-width="3"/>
+        <g class="o" fill="#FBFAF5"><rect x="868" y="352" width="134" height="28" rx="4"/><rect x="1050" y="352" width="100" height="28" rx="4"/><rect x="1216" y="352" width="100" height="28" rx="4"/></g>
+        <g transform="rotate(-6 905.0 418.0)"><rect class="o" x="874" y="390" width="62" height="56" rx="3" fill="#FBFAF5" style="stroke-width:2"/><path class="h" d="M884 408h40M884 420h32M884 432h36"/><circle class="o" cx="905.0" cy="394" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(5 974.0 428.0)"><rect class="o" x="946" y="404" width="56" height="48" rx="3" fill="#FFF3CF" style="stroke-width:2"/><path class="h" d="M956 422h34M956 434h26M956 446h30"/><circle class="o" cx="974.0" cy="408" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(-3 978.0 499.0)"><rect class="o" x="950" y="474" width="56" height="50" rx="3" fill="#E3F1DF" style="stroke-width:2"/><path class="h" d="M960 492h34M960 504h26M960 516h30"/><circle class="o" cx="978.0" cy="478" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(-4 1067.0 420.0)"><rect class="o" x="1036" y="392" width="62" height="56" rx="3" fill="#FFF3CF" style="stroke-width:2"/><path class="h" d="M1046 410h40M1046 422h32M1046 434h36"/><circle class="o" cx="1067.0" cy="396" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(6 1137.0 425.0)"><rect class="o" x="1110" y="400" width="54" height="50" rx="3" fill="#FBFAF5" style="stroke-width:2"/><path class="h" d="M1120 418h32M1120 430h24M1120 442h28"/><circle class="o" cx="1137.0" cy="404" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(-2 1086.0 497.0)"><rect class="o" x="1050" y="470" width="72" height="54" rx="3" fill="#FBFAF5" style="stroke-width:2"/><path class="h" d="M1060 488h50M1060 500h42M1060 512h46"/><circle class="o" cx="1086.0" cy="474" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(5 1231.0 419.0)"><rect class="o" x="1202" y="392" width="58" height="54" rx="3" fill="#E3F1DF" style="stroke-width:2"/><path class="h" d="M1212 410h36M1212 422h28M1212 434h32"/><circle class="o" cx="1231.0" cy="396" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(-5 1298.0 431.0)"><rect class="o" x="1272" y="402" width="52" height="58" rx="3" fill="#FBFAF5" style="stroke-width:2"/><path class="h" d="M1282 420h30M1282 432h22M1282 444h26"/><circle class="o" cx="1298.0" cy="406" r="5" fill="#C8402F" style="stroke-width:1.6"/></g><g transform="rotate(2 1253.0 500.0)"><rect class="o" x="1220" y="474" width="66" height="52" rx="3" fill="#FFF3CF" style="stroke-width:2"/><path class="h" d="M1230 492h44M1230 504h36M1230 516h40"/><circle class="o" cx="1253.0" cy="478" r="5" fill="#C8402F" style="stroke-width:1.6"/></g>
+        <!-- someone pinning up a new note -->
+        <path class="o" d="M770 640q0-120 32-140q32 20 34 140z" fill="#4E9A4A"/>
+        <circle class="o" cx="802" cy="478" r="22" fill="#C08A5A"/>
+        <path class="o" d="M780 474q0-28 22-28q24 0 24 26q-12-10-24-8q-10 0-22 10z" fill="#3A2616"/>
+        <g transform="rotate(-4 896 506)"><rect class="o" x="866" y="480" width="60" height="52" rx="3" fill="#FBFAF5" style="stroke-width:2"/><path class="h" d="M876 498h38M876 510h30"/></g>
+        <path d="M818 526Q850 520 872 504" fill="none" style="stroke:#6B4A2E;stroke-width:13;stroke-linecap:round"/>
+        <path d="M818 526Q850 520 872 504" fill="none" style="stroke:#4E9A4A;stroke-width:8;stroke-linecap:round"/>
+        <circle class="o" cx="874" cy="502" r="7" fill="#C08A5A"/>
+        <!-- the bench -->
+        <rect class="o" x="1420" y="520" width="230" height="12" rx="4" fill="#B7794B"/>
+        <path class="o" d="M1440 532v48M1630 532v48" fill="none"/>
+        <path class="o" d="M1452 584q0-70 28-84q28 14 30 84z" fill="#C8402F"/>
+        <circle class="o" cx="1480" cy="482" r="20" fill="#E9B48A"/>
+        <path class="o" d="M1460 478q0-24 20-24q22 0 22 22q-10-8-22-6q-10 0-20 8z" fill="#5A3A22"/>
+        <path class="o" d="M1562 584q0-70 28-84q28 14 30 84z" fill="#3E4C7A"/>
+        <circle class="o" cx="1590" cy="484" r="20" fill="#8C5A3C"/>
+        <path class="o" d="M1570 480q0-24 20-24q22 0 22 22q-10-8-22-6q-10 0-20 8z" fill="#2A1C10"/>
+        <rect class="o" x="1420" y="580" width="230" height="14" rx="4" fill="#B7794B"/>
+        <path class="o" d="M1436 594v46M1634 594v46" fill="none"/>
+        <path class="o" d="M1440 380h80q10 0 10 10v40q0 10-10 10h-46l-16 14l4-14h-22q-10 0-10-10v-40q0-10 10-10z" fill="#FBFAF5"/>
+        <circle class="o" cx="1600" cy="404" r="22" fill="#FFE08A"/>
+        <rect class="o" x="1590" y="424" width="20" height="14" rx="3" fill="#9C9389"/>
+        <path d="M1600 370v-10M1572 382l-8-6M1628 382l8-6" stroke="#FFE08A" stroke-width="3" stroke-linecap="round"/>
+      </g>
+      <path d="M400 232Q620 336 846 300" fill="none" stroke="#3A2616" stroke-width="2"/>
+      <g fill="#FFE08A" stroke="#6B4A2E" stroke-width="1.5"><circle cx="440" cy="250" r="6"/><circle cx="480" cy="265" r="6"/><circle cx="520" cy="278" r="6"/><circle cx="561" cy="289" r="6"/><circle cx="601" cy="298" r="6"/><circle cx="642" cy="304" r="6"/><circle cx="682" cy="308" r="6"/><circle cx="723" cy="309" r="6"/><circle cx="764" cy="308" r="6"/><circle cx="805" cy="305" r="6"/></g>
+      <text x="1100" y="330" text-anchor="middle" class="sign" style="font-size:22px;fill:#FBFAF5">DISCUSSIONS</text>
+      <g text-anchor="middle" style="font:800 13px Grandstander,sans-serif;fill:#3A2616;letter-spacing:.04em"><text x="935" y="371">SHOW AND TELL</text><text x="1100" y="371">IDEAS</text><text x="1266" y="371">Q &amp; A</text></g>
+      <text x="1480" y="426" text-anchor="middle" style="font:800 30px Grandstander,sans-serif;fill:#C8402F">?</text>
+      <g class="lab">
+        <path class="ptr" d="M882 600L838 588"/><circle cx="838" cy="588" r="2.5"/><text x="888" y="606">anyone with a GitHub account can post</text>
+        <path class="ptr" d="M1388 282L1350 326"/><circle cx="1350" cy="326" r="2.5"/><text x="1394" y="270">everyone can</text><text x="1394" y="292">read them</text>
+        <path class="ptr" d="M1492 368L1488 380"/><circle cx="1488" cy="380" r="2.5"/><text x="1440" y="340">questions and ideas,</text><text x="1440" y="362">out in the open</text>
+      </g>
+    </svg>
+  </div>
+  </div>
+</section>
+
+<!-- ================= FAQ: the town hall notice board ================= -->
+<section class="block night" id="faq" aria-labelledby="h-faq">
+  <div class="hall" aria-hidden="true">
+    <svg viewBox="0 0 600 560">
+      <circle cx="300" cy="120" r="84" fill="#FFE38A" opacity=".12"/>
+      <circle cx="300" cy="120" r="64" fill="#FFE38A" opacity=".24"/>
+      <g filter="url(#hand)">
+        <rect class="o" x="230" y="40" width="140" height="200" fill="#E8CE9C"/>
+        <path class="o" d="M218 40L300 0L382 40Z" fill="#C8402F"/>
+        <circle class="o" cx="300" cy="120" r="46" fill="#FFF3CF"/>
+        <path class="o" d="M300 120v-30M300 120l20 12" fill="none" style="stroke-width:4"/>
+        <path class="o" d="M40 300L300 220L560 300Z" fill="#C8402F"/>
+        <rect class="o" x="60" y="300" width="480" height="260" fill="#F4E3B4"/>
+        <g class="o" fill="#FBFAF5"><rect x="90" y="320" width="34" height="240"/><rect x="190" y="320" width="34" height="240"/><rect x="376" y="320" width="34" height="240"/><rect x="476" y="320" width="34" height="240"/></g>
+        <rect class="o" x="262" y="420" width="76" height="140" rx="38" fill="#8C5A3C"/>
+        <rect class="o" x="236" y="330" width="128" height="64" rx="8" fill="#FBFAF5"/>
+      </g>
+      <text x="300" y="358" text-anchor="middle" style="font:800 19px Grandstander,sans-serif;fill:#3A2616">APACHE 2.0</text>
+      <text x="300" y="382" text-anchor="middle" style="font:15px 'Patrick Hand';fill:#3A2616">open to everyone</text>
+    </svg>
+  </div>
+  <div class="board">
+    <h2 id="h-faq">Questions on the board</h2>
+    <p class="oss">Utter is open source under Apache 2.0. Read every line, or build it yourself, on <a href="https://github.com/h3x-levi/Utter">GitHub</a>.</p>
+    <div class="notes">
+      <details open><summary>Is Utter free?</summary><p>Yes. It's free and open source under the Apache 2.0 license.</p></details>
+      <details><summary>Does my voice leave my computer?</summary><p>No. whisper.cpp turns it into text on your computer. Audio is never uploaded and never written to disk.</p></details>
+      <details><summary>Does it work offline?</summary><p>Yes. The Small English model comes with Utter, so dictation works without the internet from the first minute.</p></details>
+      <details><summary>Which key do I hold?</summary><p>Fn on the Mac, Ctrl + Windows on Windows and Ctrl + Super on Linux. You can choose another key in Settings.</p></details>
+      <details><summary>Which languages does it understand?</summary><p>The bundled model understands English. Large Turbo, an optional download, covers 99 languages.</p></details>
+      <details><summary>Do I need an account?</summary><p>No. Utter works without signing in.</p></details>
+      <details><summary>What about the Apple Intelligence features?</summary><p>Voice transforms like "make it concise" and meeting summaries use Apple Intelligence, so they're on the Mac only, where Apple Intelligence is available.</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div>
+    <a class="brand" href="#top"><img src="icon.png" alt=""><span>Utter</span></a>
+    <p>Say it, and it types. Nothing leaves the house.</p>
+  </div>
+  <nav aria-label="Footer">
+    <a href="#how">How it works</a><a href="#meetings">Meetings</a><a href="#private">Privacy</a><a href="#apply">Apply for beta</a>
+  </nav>
+  <nav aria-label="More">
+    <a href="https://github.com/h3x-levi/Utter">Source on GitHub</a><a href="https://github.com/h3x-levi/Utter/issues/new">Report an issue</a><a href="#faq">Questions</a>
+  </nav>
+  <small>Free and open source under Apache 2.0. Robot by CX ArtLab. Speech by whisper.cpp.</small>
+  <svg class="skyline" viewBox="0 0 1600 360" aria-hidden="true" focusable="false">
+    <g fill="#FBFAF5" opacity=".8"><circle cx="40" cy="40" r="2"/><circle cx="170" cy="24" r="1.6"/><circle cx="260" cy="80" r="2"/><circle cx="380" cy="36" r="1.6"/><circle cx="520" cy="62" r="2"/><circle cx="610" cy="20" r="1.6"/><circle cx="700" cy="90" r="2"/><circle cx="820" cy="44" r="1.6"/><circle cx="940" cy="26" r="2"/><circle cx="1060" cy="74" r="1.6"/><circle cx="1180" cy="30" r="2"/><circle cx="1290" cy="96" r="1.6"/><circle cx="1560" cy="40" r="2"/><circle cx="1350" cy="20" r="1.6"/></g>
+    <circle cx="1440" cy="70" r="28" fill="#FFF3CF"/>
+    <g stroke="#141A3D" stroke-width="2.5" stroke-linejoin="round">
+      <rect x="30" y="230" width="150" height="90" fill="#2B3566"/><path d="M20 232L105 196L190 232Z" fill="#8F2B20"/>
+      <rect x="72" y="118" width="66" height="96" fill="#34407A"/><path d="M64 120L105 92L146 120Z" fill="#8F2B20"/><circle cx="105" cy="156" r="20" fill="#FFF3CF"/>
+      <path d="M220 320V232L290 182L360 232V320Z" fill="#2B3566"/><rect x="318" y="176" width="20" height="40" fill="#2B3566"/>
+      <rect x="392" y="112" width="128" height="208" fill="#34407A"/>
+      <path d="M550 320V222L640 172L730 222V320Z" fill="#2B3566"/><path d="M540 226L640 166L740 226" fill="none" stroke="#8F2B20" stroke-width="7"/>
+      <rect x="770" y="142" width="80" height="58" rx="10" fill="#34407A"/><path d="M782 200L772 320M838 200L848 320M776 262H844" fill="none"/>
+      <rect x="880" y="190" width="200" height="130" fill="#2B3566"/><rect x="920" y="158" width="120" height="34" rx="6" fill="#3A2616"/>
+      <path d="M1110 320V242L1170 202L1230 242V320Z" fill="#34407A"/>
+      <circle cx="1270" cy="268" r="28" fill="#2F6B3A"/><rect x="1265" y="292" width="10" height="28" fill="#3A2616"/>
+    </g>
+    <g fill="#FFE08A"><rect x="46" y="254" width="18" height="24" rx="2"/><rect x="150" y="254" width="18" height="24" rx="2"/><rect x="94" y="284" width="22" height="36" rx="2"/><rect x="254" y="252" width="26" height="24" rx="2"/><rect x="582" y="240" width="34" height="34" rx="2"/><rect x="664" y="240" width="34" height="34" rx="2"/><rect x="900" y="214" width="40" height="30" rx="2"/><rect x="1020" y="214" width="40" height="30" rx="2"/><rect x="1144" y="262" width="26" height="24" rx="2"/></g>
+    <g fill="#FFE08A"><rect x="408" y="130" width="22" height="24" rx="2"/><rect x="482" y="130" width="22" height="24" rx="2"/><rect x="408" y="168" width="22" height="24" rx="2"/><rect x="445" y="168" width="22" height="24" rx="2"/><rect x="408" y="206" width="22" height="24" rx="2"/><rect x="482" y="206" width="22" height="24" rx="2"/><rect x="408" y="244" width="22" height="24" rx="2"/><rect x="445" y="244" width="22" height="24" rx="2"/><rect x="482" y="244" width="22" height="24" rx="2"/><rect x="445" y="282" width="22" height="24" rx="2"/><rect x="482" y="282" width="22" height="24" rx="2"/></g><g fill="#3B4782"><rect x="445" y="130" width="22" height="24" rx="2"/><rect x="482" y="168" width="22" height="24" rx="2"/><rect x="445" y="206" width="22" height="24" rx="2"/><rect x="408" y="282" width="22" height="24" rx="2"/></g>
+    <g fill="#F3C13A"><circle cx="930" cy="166" r="3"/><circle cx="944" cy="166" r="3"/><circle cx="958" cy="166" r="3"/><circle cx="972" cy="166" r="3"/><circle cx="986" cy="166" r="3"/><circle cx="1000" cy="166" r="3"/><circle cx="1014" cy="166" r="3"/><circle cx="1028" cy="166" r="3"/></g>
+    <rect y="318" width="1600" height="12" fill="#2F6B3A"/><rect y="330" width="1600" height="30" fill="#B9A57E"/>
+    <g fill="#FBFAF5" opacity=".7"><rect x="20" y="343" width="44" height="4" rx="2"/><rect x="110" y="343" width="44" height="4" rx="2"/><rect x="200" y="343" width="44" height="4" rx="2"/><rect x="290" y="343" width="44" height="4" rx="2"/><rect x="380" y="343" width="44" height="4" rx="2"/><rect x="470" y="343" width="44" height="4" rx="2"/><rect x="560" y="343" width="44" height="4" rx="2"/><rect x="650" y="343" width="44" height="4" rx="2"/><rect x="740" y="343" width="44" height="4" rx="2"/><rect x="830" y="343" width="44" height="4" rx="2"/><rect x="920" y="343" width="44" height="4" rx="2"/><rect x="1010" y="343" width="44" height="4" rx="2"/><rect x="1100" y="343" width="44" height="4" rx="2"/><rect x="1190" y="343" width="44" height="4" rx="2"/><rect x="1280" y="343" width="44" height="4" rx="2"/><rect x="1370" y="343" width="44" height="4" rx="2"/><rect x="1460" y="343" width="44" height="4" rx="2"/><rect x="1550" y="343" width="44" height="4" rx="2"/></g>
+    <g fill="none" stroke="#E9E0CF" stroke-width="3" stroke-linecap="round" opacity=".55"><path d="M1262 270h44M1244 290h60M1274 310h30"/></g>
+    <path d="M1572 296L1600 284V318Z" fill="#FFE08A" opacity=".35"/>
+    <g stroke="#141A3D" stroke-width="2.5" stroke-linejoin="round">
+      <rect x="1320" y="250" width="252" height="76" rx="18" fill="#F3C13A"/>
+      <g fill="#FFE9A8"><rect x="1340" y="264" width="46" height="28" rx="5"/><rect x="1394" y="264" width="46" height="28" rx="5"/><rect x="1448" y="264" width="46" height="28" rx="5"/><rect x="1502" y="264" width="52" height="28" rx="5"/></g>
+      <rect x="1318" y="298" width="9" height="16" rx="2" fill="#D8352A"/><rect x="1564" y="296" width="9" height="12" rx="2" fill="#FFE08A"/>
+      <circle cx="1368" cy="328" r="16" fill="#141A3D"/><circle cx="1524" cy="328" r="16" fill="#141A3D"/>
+    </g>
+    <text x="1446" y="316" text-anchor="middle" style="font:800 13px Grandstander,sans-serif;fill:#3A2616;letter-spacing:.06em">UTTER BETA</text>
+  </svg>
+</footer>
+
+<script>
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // ---------- the house: hold to talk ----------
+  const house = document.getElementById('houseSvg')
+  const b1 = document.getElementById('b1'), b2 = document.getElementById('b2')
+  const s1 = document.getElementById('s1'), s2 = document.getElementById('s2')
+  const holdKey = document.getElementById('holdKey')
+  const robot = () => document.getElementById('heroRobot')
+  const sentences = ['Thanks Priya, Thursday works for me.', 'Running ten minutes late, save me a seat.', 'Can you send the draft before lunch?']
+  let turn = 0, holding = false, started = 0, words = sentences[0], raf = 0, typer = 0
+
+  function lines(text, width) {
+    const out = ['', '']
+    for (const w of text.split(' ')) {
+      const i = (out[0] + ' ' + w).trim().length > width && out[0] ? 1 : 0
+      if (i === 1 || out[1]) out[1] = (out[1] + ' ' + w).trim()
+      else out[0] = (out[0] + ' ' + w).trim()
+    }
+    return out
+  }
+  function show(spoken, typed) {
+    const b = lines(spoken, 22), s = lines(typed, 27)
+    b1.textContent = b[0]; b2.textContent = b[1]; s1.textContent = s[0]; s2.textContent = s[1]
+  }
+  function frame(now) {
+    const said = Math.min(words.length, Math.floor((now - started) / 52))
+    show(words.slice(0, said), words.slice(0, Math.max(0, said - 7)))
+    if (holding) raf = requestAnimationFrame(frame)
+  }
+  function press() {
+    if (holding) return
+    holding = true
+    clearInterval(typer)
+    words = sentences[turn++ % sentences.length]
+    house.classList.remove('typed'); house.classList.add('live'); holdKey.classList.add('down')
+    robot()?.play?.('input')
+    started = performance.now()
+    if (reduce) show(words, '')
+    else raf = requestAnimationFrame(frame)
+  }
+  function release() {
+    if (!holding) return
+    holding = false
+    cancelAnimationFrame(raf)
+    holdKey.classList.remove('down')
+    const said = reduce ? words.length : Math.max(Math.floor((performance.now() - started) / 52), 10)
+    let typed = Math.max(0, Math.min(said, words.length) - 7)
+    show(words, words.slice(0, typed))
+    typer = setInterval(() => {
+      typed += 2
+      show(words, words.slice(0, typed))
+      if (typed >= words.length) {
+        clearInterval(typer)
+        house.classList.remove('live'); house.classList.add('typed')
+        robot()?.play?.('success')
+      }
+    }, reduce ? 0 : 28)
+  }
+  holdKey.addEventListener('pointerdown', (e) => { e.preventDefault(); holdKey.setPointerCapture?.(e.pointerId); press() })
+  holdKey.addEventListener('pointerup', release)
+  holdKey.addEventListener('pointercancel', release)
+  holdKey.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); press() } })
+  holdKey.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release() })
+  const typing = (el) => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|VIDEO)$/.test(el.tagName))
+  addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || e.repeat || typing(document.activeElement)) return
+    const r = house.getBoundingClientRect()
+    if (r.bottom < 0 || r.top > innerHeight) return
+    e.preventDefault(); press()
+  })
+  addEventListener('keyup', (e) => { if (e.code === 'Space' && !typing(document.activeElement)) release() })
+  house.addEventListener('pointerdown', (e) => { if (!e.target.closest('a')) { press(); addEventListener('pointerup', release, { once: true }) } })
+
+  // the house swings open once the fonts are in, then a short demo shows it's alive
+  document.fonts.ready.then(() => setTimeout(() => {
+    document.getElementById('house').classList.remove('shut')
+    if (!reduce) setTimeout(() => { if (!holding && turn === 0) { press(); setTimeout(release, 2300) } }, 1300)
+  }, 400))
+
+  // ---------- the reel plays from its in-world disc ----------
+  const reel = document.querySelector('.reel-video'), disc = document.getElementById('playDisc')
+  disc.addEventListener('click', () => { reel.controls = true; disc.hidden = true; reel.play().catch(() => {}) })
+
+  // ---------- small screens: each pan starts on what it's about ----------
+  document.fonts.ready.then(() => document.querySelectorAll('.pan[data-focus]').forEach((p) => {
+    if (p.scrollWidth <= p.clientWidth) return
+    const st = p.firstElementChild
+    p.scrollLeft = st.offsetLeft - p.offsetLeft + st.offsetWidth * Number(p.dataset.focus) - p.clientWidth / 2
+  }))
+
+  // ---------- live robots, sized to their drawings ----------
+  const slots = [...document.querySelectorAll('.robot-slot')]
+  const fit = () => slots.forEach((s) => {
+    const stage = s.closest('.stage'), bot = s.firstElementChild
+    const size = Math.round(Math.min(stage.clientWidth * Number(s.dataset.scale), Number(s.dataset.max) || Infinity))
+    if (size > 0 && bot.getAttribute('size') !== String(size)) bot.setAttribute('size', size)
+  })
+  new ResizeObserver(fit).observe(document.body)
+  import('./robot/vendor/agent-robot-avatar/agent-robot-avatar.js').then(() => customElements.whenDefined('agent-robot-avatar')).then(() => {
+    slots.forEach((s) => s.closest('.stage').classList.add('has-robot'))
+    fit()
+    return Promise.all([import('./robot/companion-player.js'), fetch('./robot/companion-moments.json').then((r) => r.json())])
+  }).then(([player, lib]) => room(player, lib)).catch(() => {})
+
+  // ---------- the robot's room plays the app's own moments ----------
+  function room({ MomentPlayer, route, timeOfDay }, lib) {
+    const bot = document.getElementById('roomRobot'), tries = document.getElementById('roomTries'), caption = document.getElementById('roomNow')
+    const player = new MomentPlayer(bot, lib)
+    player.setLook({ time: timeOfDay(lib) })
+    const wired = Object.keys(lib.moments).filter((id) => !lib.moments[id].unwired)
+    const say = (title, line) => caption.replaceChildren(Object.assign(document.createElement('b'), { textContent: title }), line ? ' ' + line : '')
+    const chip = (label, onclick) => Object.assign(document.createElement('button'), { type: 'button', className: 'chip', textContent: label, onclick })
+    let wait = 0
+    const play = (id) => {
+      clearTimeout(wait)
+      say(lib.moments[id].name + '.', lib.moments[id].trigger + '.')
+      player.play(id)
+    }
+    for (const [group, label] of Object.entries(lib.groups)) {
+      const ids = wired.filter((id) => lib.moments[id].group === group)
+      let next = 0
+      if (ids.length) tries.append(chip(label, () => play(ids[next++ % ids.length])))
+    }
+    const finishes = Object.keys(lib.finishes)
+    const wearable = ['', ...Object.keys(lib.accessories).filter((id) => lib.accessories[id].wear)]
+    let look = 0
+    tries.append(chip('Change its look', () => {
+      look++
+      const finish = finishes[look % finishes.length], worn = wearable[look % wearable.length]
+      player.setLook({ finish, worn: worn || null })
+      say(lib.finishes[finish].name + ' finish.', worn ? `Wearing the ${lib.accessories[worn].name.toLowerCase()}.` : '')
+    }))
+    if (reduce) return
+    let seen = false
+    new IntersectionObserver(([e]) => {
+      clearTimeout(wait)
+      if (!e.isIntersecting) return player.stop()
+      if (e.intersectionRatio < 0.75 || player.current) return
+      const id = (!seen && route(lib, 'shown', { time: player.look.time })) || wired[Math.floor(Math.random() * wired.length)]
+      seen = true
+      wait = setTimeout(() => play(id), 700)
+    }, { threshold: 0.75 }).observe(bot)
+  }
+
+  // ---------- dollhouse facades swing open as each building arrives ----------
+  if (!reduce && 'IntersectionObserver' in window) {
+    const stages = [...document.querySelectorAll('.block:not(.hero) [data-facade]')]
+    stages.forEach((s) => { if (s.getBoundingClientRect().top > innerHeight) s.classList.add('shut') })
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+      if (e.isIntersecting) { e.target.classList.remove('shut'); io.unobserve(e.target) }
+    }), { threshold: 0.32 })
+    stages.forEach((s) => io.observe(s))
+  }
+
+  // ---------- apply for beta (same Google Form as the live site) ----------
+  // Local previews never post; the deployed site sends to the Google Form.
+  const PREVIEW = ['localhost', '127.0.0.1', ''].includes(location.hostname)
+  const GOOGLE_FORM_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSez9z3AlNInZ3pKbSrSr7BRswyTmoo4oxFle4ZZL4j_GBS4zQ/formResponse'
+  const form = document.getElementById('betaApplicationForm')
+  const sent = document.getElementById('appSuccessView')
+  const err = document.getElementById('formError')
+  const wrap = document.querySelector('#apply .form-wrap'), office = document.getElementById('postOffice')
+  new ResizeObserver(() => {
+    if (!sent.classList.contains('on')) office.style.setProperty('--letter-h', wrap.offsetHeight + parseFloat(getComputedStyle(wrap).marginBottom) + 'px')
+  }).observe(wrap)
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const name = form.appName.value.trim()
+    const email = form.appEmail.value.trim()
+    const reason = form.appReason.value.trim()
+    const os = form.querySelector('input[name="os"]:checked')?.value || ''
+    const uses = [...form.querySelectorAll('input[name="use"]:checked')].map((c) => c.value)
+    if (!email || !form.appEmail.checkValidity()) { err.textContent = 'Add an email address we can reach you at.'; form.appEmail.focus(); return }
+    if (!reason) { err.textContent = 'Tell us a little about why you want early access.'; form.appReason.focus(); return }
+    err.textContent = ''
+    const entry = { name, email, os, useCases: uses, reason, submittedAt: new Date().toISOString() }
+    const saved = JSON.parse(localStorage.getItem('utter_beta_applications') || '[]')
+    saved.push(entry)
+    localStorage.setItem('utter_beta_applications', JSON.stringify(saved))
+    if (!PREVIEW) {
+      const data = new FormData()
+      data.append('entry.691724603', name)
+      data.append('entry.1036416450', email)
+      data.append('entry.1633620309', os)
+      uses.forEach((u) => data.append('entry.606057482', u))
+      data.append('entry.991204098', reason)
+      fetch(GOOGLE_FORM_ENDPOINT, { method: 'POST', mode: 'no-cors', body: data }).catch(() => {})
+    }
+    document.getElementById('postOffice').classList.add('posted')
+    document.getElementById('successApplicantName').textContent = name || 'friend'
+    document.getElementById('successApplicantOS').textContent = os.replace('macOS ', 'macOS, ').replace('Apple Silicon', 'Apple silicon')
+    document.getElementById('previewNote').textContent = PREVIEW ? 'Preview: nothing was sent. The live site sends this to the beta sheet.' : ''
+    form.style.display = 'none'
+    sent.classList.add('on')
+    sent.focus()
+  })
+  document.getElementById('againBtn').addEventListener('click', () => {
+    form.reset(); sent.classList.remove('on'); form.style.display = ''
+    document.getElementById('postOffice').classList.remove('posted')
+    form.appName.focus()
+  })
+</script>
+</body>
+</html>

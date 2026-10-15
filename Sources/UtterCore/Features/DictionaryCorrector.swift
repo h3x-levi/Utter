@@ -10,13 +10,13 @@ import Foundation
 /// Both passes are kept because they fail in opposite directions. Biasing prevents
 /// an unfamiliar name from being split into common words in the first place, but
 /// cannot help a term the user never added. This pass repairs a near-miss whatever
-/// its cause, but only while the word is still recognisable as one - once
-/// "Kubernetes" has become "cooper netties", the token boundaries are gone and edit
-/// distance can no longer find it.
+/// its cause.
 ///
 /// Each token in the result is compared to every dictionary word by
 /// case-insensitive Levenshtein distance, and a token that is a close-but-not-exact
-/// match is replaced with the canonical spelling.
+/// match is replaced with the canonical spelling. A second sweep catches words split
+/// apart by an accent ("Kubernetes" heard as "cooper netties"): a 1-3 word span that
+/// sounds like a dictionary word and is spelled close enough to it is replaced.
 ///
 /// The matcher is deliberately conservative - it only fires on small edit distances
 /// scaled to word length - so ordinary words are never rewritten into jargon.
@@ -61,7 +61,79 @@ enum DictionaryCorrector {
             }
         }
         flushWord()
+        return correctSounds(result, canonical: canonical)
+    }
+
+    private static func correctSounds(_ text: String, canonical: [String]) -> String {
+        let targets = canonical.map { (word: $0, key: soundKey($0), letters: letters(of: $0)) }
+            .filter { $0.key.count >= 4 }
+        guard !targets.isEmpty else { return text }
+        let known = Set(canonical.map { $0.lowercased() })
+
+        var tokens: [Range<String.Index>] = []
+        var start: String.Index?
+        for i in text.indices {
+            if text[i].isLetter || text[i] == "'" {
+                if start == nil { start = i }
+            } else if let s = start {
+                tokens.append(s..<i)
+                start = nil
+            }
+        }
+        if let start { tokens.append(start..<text.endIndex) }
+
+        var result = ""
+        var cursor = text.startIndex
+        var i = 0
+        while i < tokens.count {
+            var replaced = false
+            for n in stride(from: min(3, tokens.count - i), through: 1, by: -1) {
+                let span = tokens[i..<(i + n)]
+                let whole = span.first!.lowerBound..<span.last!.upperBound
+                if n > 1, text[whole].contains(where: { !($0.isLetter || $0 == "'" || $0.isWhitespace) }) { continue }
+                if span.contains(where: { known.contains(text[$0].lowercased()) }) { continue }
+                let heard = letters(of: span.map { String(text[$0]) }.joined())
+                if n == 1 && heard.count < 5 { continue }
+                let key = soundKey(heard)
+                guard let hit = targets.first(where: { t in
+                    let longer = Double(max(heard.count, t.letters.count))
+                    return t.key == key && heard != t.letters
+                        && Double(heard.count) >= Double(t.letters.count) * 0.6
+                        && Double(heard.count) <= Double(t.letters.count) * 1.7
+                        && Double(levenshtein(heard, t.letters)) / longer <= 0.5
+                }) else { continue }
+                result += text[cursor..<whole.lowerBound]
+                result += hit.word
+                cursor = whole.upperBound
+                i += n
+                replaced = true
+                break
+            }
+            if !replaced { i += 1 }
+        }
+        result += text[cursor...]
         return result
+    }
+
+    private static func letters(of text: String) -> String {
+        String(text.lowercased().filter(\.isLetter))
+    }
+
+    /// A rough phonetic key: voicing pairs merge, vowels and h/w/y drop, repeats collapse.
+    private static func soundKey(_ word: String) -> String {
+        var w = String(word.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .filter { $0.isASCII && $0.isLetter })
+        for (pattern, replacement) in [("^[kgp]n", "n"), ("^wr", "r"), ("ph", "f"), ("th", "t"), ("c(?=[eiy])", "s"), ("x", "ks")] {
+            w = w.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
+        }
+        let merged: [Character: Character] = ["c": "k", "q": "k", "g": "k", "b": "p", "d": "t", "v": "f", "z": "s", "j": "k"]
+        var key = ""
+        for ch in w {
+            let c = merged[ch] ?? ch
+            if "aeiouhwy".contains(c) || key.last == c { continue }
+            key.append(c)
+        }
+        return key
     }
 
     /// Decide the replacement for a single transcribed word.

@@ -113,3 +113,108 @@ test('the panel keeps the robot on screen and moves the bubble below when there 
   c.normalise(ud)
   assert.deepEqual([ud.companionSize, ud.companionStretchMinutes, ud.companionHeadRoundness, ud.companionWaterMinutes], ['medium', 480, 50, 0])
 })
+
+const listening = (onChange = () => {}) => {
+  const b = new c.Behaviour(() => onChange(b))
+  b.tag('listening', { mode: 'recording', destination: 'app' })
+  b.apply('listening')
+  return b
+}
+
+test('a cue carries the clock and arrives in the same update as its state', () => {
+  const seen = []
+  const b = listening((robot) => seen.push([robot.robotState, robot.cue?.event]))
+  assert.deepEqual(seen, [['input', 'listening']])
+  const { time, hour, weekday, month, day, ...rest } = b.cue.detail
+  assert.deepEqual(rest, { mode: 'recording', destination: 'app' })
+  assert.ok(time && [hour, weekday, month, day].every(Number.isInteger))
+  const id = b.cue.id
+  b.tag('thinking')
+  assert.equal(b.cue.id, id + 1)
+})
+
+test('turn notes ride on the turn-end cue, then the turn clears', () => {
+  const b = listening()
+  b.note({ words: 40, total: 1010, destination: 'note' })
+  b.note({ goal: 'dictation' })
+  b.tag('island', { message: 'the dictated words' })
+  const { words, total, destination, goal, message } = b.cue.detail
+  assert.deepEqual([words, total, destination, goal, message], [40, 1010, 'note', 'dictation', undefined], 'no cue carries a message')
+  b.tag('error', { message: 'No speech detected' })
+  assert.equal(b.cue.detail.words, undefined)
+  b.note({ remembered: true, timed: false })
+  b.tag('listening', { mode: 'handsFree', destination: 'memory' })
+  b.tag('notice')
+  assert.equal(b.cue.detail.remembered, undefined, 'listening starts a new turn')
+})
+
+test('hearing cues talking after four loud seconds, once a turn', () => {
+  const b = listening()
+  const heard = []
+  for (let t = 0; t <= 6000; t += 50) heard.push(b.hear(0.3, t))
+  assert.deepEqual(heard.filter(Boolean), ['talking'])
+  assert.equal(heard.indexOf('talking') * 50, c.HEAR.talkingMs)
+  const gaps = listening()
+  for (let t = 0; t < 30 * 1000; t += 1000) assert.equal(gaps.hear(0.3, t), null, 'a gap counts as 100 ms at most')
+  assert.equal(gaps.hearing.loudMs, 2900)
+})
+
+test('hearing cues quiet after two soft seconds; silence or a loud sample starts it again', () => {
+  const b = listening()
+  const at = (pairs) => pairs.map(([t, level]) => b.hear(level, t))
+  assert.deepEqual(at([[0, 0.05], [1900, 0.05], [1950, 0], [2000, 0.05], [3999, 0.05], [4000, 0.3], [4100, 0.05]]).filter(Boolean), [])
+  assert.equal(b.hear(0.05, 6100), 'quiet')
+  assert.equal(b.cue.event, 'quiet')
+  assert.equal(b.hear(0.05, 9000), null)
+})
+
+test('hearing only listens in input and starts over with each listening', () => {
+  const b = new c.Behaviour(() => {})
+  assert.equal(b.hear(0.3, 0), null)
+  let sent = 0
+  const l = listening(() => sent++)
+  for (let t = 0; t <= 4000; t += 100) l.hear(0.3, t)
+  assert.equal(l.cue.event, 'talking')
+  assert.equal(sent, 2, 'a heard cue is sent at once')
+  l.tag('listening', { mode: 'handsFree', destination: 'app' })
+  for (let t = 5000; t <= 9000; t += 100) l.hear(0.3, t)
+  assert.equal(l.cue.event, 'talking')
+})
+
+test('reminders and goals cue with their kind; the dictation goal is a turn note', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const b = new c.Behaviour(() => {})
+  b.announce({ kind: 'pomodoro', focus: true }, '')
+  assert.deepEqual([b.cue.event, b.cue.detail.kind, b.cue.detail.focus, b.robotState], ['reminder', 'pomodoro', true, 'send'])
+  b.announce({ kind: 'water' }, '')
+  assert.equal(b.cue.detail.focus, false)
+  b.celebrate('Hydration goal complete', 'hydration')
+  assert.deepEqual([b.cue.event, b.cue.detail.kind, b.robotState], ['goal', 'hydration', 'love'])
+  const id = b.cue.id
+  b.celebrate('Dictation goal complete', 'dictation')
+  assert.equal(b.cue.id, id, 'no cue of its own')
+  b.tag('done')
+  assert.equal(b.cue.detail.goal, 'dictation')
+  b.setQuiet(true)
+  b.announce({ kind: 'stretch' }, '')
+  assert.equal(b.cue.event, 'done', 'quiet holds reminders back')
+})
+
+test('main and the player agree on the clock', async () => {
+  const lib = require('./companion-moments.json')
+  const player = await import('./companion-player.js')
+  for (let hour = 0; hour < 24; hour++) {
+    const date = new Date(2026, 0, 4, hour, 30)
+    assert.deepEqual(c.clock(date), player.clock(lib, date), `${hour}:30`)
+  }
+  assert.deepEqual(c.clock(new Date(2026, 9, 31, 23, 30)), { time: 'night', hour: 23, weekday: 6, month: 10, day: 31 })
+})
+
+test('finish and accessory are strings that default to ink and nothing', () => {
+  const ud = { companionFinish: 3, companionAccessory: null }
+  c.normalise(ud)
+  assert.deepEqual([ud.companionFinish, ud.companionAccessory], ['ink', ''])
+  const kept = { companionFinish: 'retired-finish', companionAccessory: 'bow' }
+  c.normalise(kept)
+  assert.deepEqual([kept.companionFinish, kept.companionAccessory], ['retired-finish', 'bow'], 'unknown ids are judged when drawn, not stored')
+})

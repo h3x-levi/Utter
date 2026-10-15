@@ -87,3 +87,13 @@ test('trim keeps lead-in and tail and wav has a 44-byte header', () => {
   assert.equal(t.meetingHeader(new Date(2026, 9, 14, 15, 42)), '# Meeting, Oct 14 at 3:42 PM\n')
   assert.equal(t.meetingHeader(new Date(2026, 9, 14, 15, 42), 'Zoom'), '# Zoom meeting, Oct 14 at 3:42 PM\n')
 })
+
+test('dictionary words heard as sound-alike spans are restored', () => {
+  const words = ['Kubernetes', 'PostgreSQL', 'Grafana']
+  assert.equal(t.correct('push the cooper netties config', words), 'push the Kubernetes config')
+  assert.equal(t.correct('migrate the post grey sequel database', words), 'migrate the PostgreSQL database')
+  assert.equal(t.correct('review the graph on a dashboard', words), 'review the Grafana dashboard')
+  assert.equal(t.correct('we carve on the left', words), 'we carve on the left')
+  assert.equal(t.correct('cooper, netties', words), 'cooper, netties')
+  assert.equal(t.soundKey('Kubernetes'), t.soundKey('coopernetties'))
+})

@@ -1,6 +1,7 @@
 // CX ArtLab's agent-robot-avatar (what the Mac's RobotView was ported from) plus the Mac port's additions:
-// the love state, the mic-level caret swell, the dark rim, window dragging and the bubble.
+// the mic-level caret swell, window dragging, the bubble and the moments in companion-moments.json.
 import './vendor/agent-robot-avatar/agent-robot-avatar.js'
+import { MomentPlayer, clock, route, timeOfDay } from './companion-player.js'
 
 const PREVIEW = location.hash === '#preview'
 const avatar = document.getElementById('avatar')
@@ -10,8 +11,6 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)')
 const dark = matchMedia('(prefers-color-scheme: dark)')
 const shadow = avatar.shadowRoot
 const $ = (id) => shadow.getElementById(id)
-const smooth = (t) => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c) }
-const lerp = (a, b, t) => a + (b - a) * t
 
 const ICONS = {
   failure: 'M6 1.2 11.3 10.6H.7zM5.4 4.4v3.3h1.2V4.4zM5.4 8.3v1.2h1.2V8.3z',
@@ -21,25 +20,29 @@ const ICONS = {
 }
 const SPOKEN = { failure: 'Dictation failed', timer: 'Focus timer', reminder: 'Reminder', pinned: 'Pinned note' }
 
+const PERSISTS = new Set(['input', 'waiting', 'sleep'])
+const IDLE_ONLY = new Set(['ambient', 'near', 'poke', 'fling'])
+const NO_REPLAY = new Set(['listening', 'thinking'])
+const HOLD = new Set(['listening', 'talking', 'quiet'])
+const AMBIENT_AFTER_MS = 12000
+const POKE_MS = 140
+const POKE_STREAK_MS = 1500
+
 let current = { robotState: 'idle', playToken: -1, quiet: false, notice: null }
 let shownToken = -1
 let lastQuip = 0
+let player = null
+let started = false
+let seenCue = null
+let lastActivity = Date.now()
+let pointerNear = false
+let poke = { at: -Infinity, count: 0 }
+const memory = { at: {}, last: {} }
 
 // ---------- Drawing on top of upstream's frame ----------
 
 let level = 0
 let lastLoud = 0
-let love = null
-let loveTimers = []
-
-function rim() {
-  const on = dark.matches
-  for (const [el, width] of [[$('head'), 5 / 0.94], [$('antennaDot'), 5]]) {
-    if (!el) continue
-    if (on) { el.setAttribute('stroke', 'rgba(255, 255, 255, 0.32)'); el.setAttribute('stroke-width', String(width)) }
-    else el.removeAttribute('stroke')
-  }
-}
 
 // RobotView.levelChanged: the input caret swells with the voice and stops blinking while it is loud.
 function drawLevel(now) {
@@ -54,86 +57,63 @@ function drawLevel(now) {
   }
 }
 
-// RobotChoreography.drawLove: the eyes tilt into a heart and beat three times.
-function drawLove(now) {
-  if (!love) return
-  const el = Math.min(2880, Math.max(0, now - love))
-  const holdEnd = 240 + 760 * 3
-  const reduced = reduce.matches
-  const morph = reduced ? 1 : el < 240 ? smooth(el / 240) : el > holdEnd ? 1 - smooth((el - holdEnd) / 360) : 1
-  let pulse = 0
-  if (!reduced && el >= 240 && el <= holdEnd) {
-    const phase = ((el - 240) % 760) / 760
-    const swell = (c, w) => Math.max(0, 1 - Math.abs(phase - c) / w)
-    pulse = Math.max(smooth(swell(0.12, 0.12)), 0.6 * smooth(swell(0.36, 0.12)))
-  }
-  const scale = 1 + 0.155 * pulse
-  const tilt = 42
-  const baseY = 126 + 40 * Math.cos((tilt * Math.PI) / 180)
-  for (const [prefix, restX, side] of [['left', 86, -1], ['right', 154, 1]]) {
-    const x = 120 + scale * (lerp(restX, 120 - side * 13, morph) - 120)
-    const y = 126 + scale * (lerp(126, baseY, morph) - 126)
-    $(`${prefix}Eye`).setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(side * tilt * morph).toFixed(2)}) scale(${scale.toFixed(3)})`)
-    const base = $(`${prefix}Base`)
-    base.setAttribute('cx', '0')
-    base.setAttribute('cy', lerp(0, -40, morph).toFixed(2))
-    base.setAttribute('rx', lerp(27, 28, morph).toFixed(2))
-    base.setAttribute('ry', lerp(29, 43, morph).toFixed(2))
-    base.setAttribute('opacity', '1')
-    $(`${prefix}InputBase`).setAttribute('opacity', '0')
-    const top = $(`${prefix}Top`)
-    const bottom = $(`${prefix}Bottom`)
-    top.setAttribute('y', (lerp(-36, -150, morph) - 60).toFixed(2))
-    bottom.setAttribute('y', lerp(36, 150, morph).toFixed(2))
-    top.removeAttribute('transform')
-    bottom.removeAttribute('transform')
-  }
-}
-
 const baseDraw = avatar._draw.bind(avatar)
 avatar._draw = (now) => {
   const result = baseDraw(now)
   drawLevel(now)
-  drawLove(now)
   return result
 }
 
-function stopLove() {
-  loveTimers.forEach(clearTimeout)
-  loveTimers = []
-  robot.getAnimations().forEach((a) => a.cancel())
-  if (love !== null || !avatar._pointerFollowEnabled) avatar.setPointerFollow(true)
-  love = null
+// ---------- Moments: cues from main and from this window, gated the same way as CompanionWindow ----------
+
+function syncLook() {
+  if (!player) return
+  const lib = player.lib
+  const look = {
+    finish: Object.hasOwn(lib.finishes, current.finish) ? current.finish : lib.defaults.finish,
+    worn: Object.hasOwn(lib.accessories, current.worn) && lib.accessories[current.worn].wear ? current.worn : null,
+    time: timeOfDay(lib),
+    dark: dark.matches,
+  }
+  if (Object.keys(look).some((k) => look[k] !== player.look[k])) player.setLook(look)
 }
 
-function startLove() {
-  avatar.play('idle')
-  avatar.setPointerFollow(false)
-  loveTimers.push(setTimeout(() => {
-    love = performance.now()
-    avatar._resumeFrames?.()
-    if (!reduce.matches) {
-      const unit = robot.clientHeight / 240
-      robot.animate([
-        { transform: 'translateY(0)', easing: 'cubic-bezier(0.38, 0, 0.25, 1)' },
-        { transform: `translateY(${-2 * unit}px)`, offset: 0.3, easing: 'cubic-bezier(0.35, 0, 0.22, 1)' },
-        { transform: `translateY(${-unit}px)`, offset: 0.68, easing: 'cubic-bezier(0.35, 0, 0.22, 1)' },
-        { transform: 'translateY(0)' },
-      ], { duration: 2880 })
-    }
-    loveTimers.push(setTimeout(stopLove, 2910))
-  }, 280))
+function playState(name) {
+  lastActivity = Date.now()
+  avatar.play(name)
+}
+
+function pick(event, detail, fresh) {
+  if (!player || current.quiet) return null
+  if (IDLE_ONLY.has(event) && (player.current || PERSISTS.has(current.robotState))) return null
+  if (NO_REPLAY.has(event) && !fresh) return null
+  return route(player.lib, event, { ...clock(player.lib), ...detail }, memory)
+}
+
+function perform(id, event) {
+  lastActivity = Date.now()
+  return player.play(id, { loop: player.lib.moments[id].loopFrom != null, hold: HOLD.has(event) }).then((ended) => {
+    lastActivity = Date.now()
+    if (ended && PERSISTS.has(current.robotState)) playState(current.robotState)
+  })
+}
+
+// True when the cue took the robot over, so the upstream state from the same update is not played.
+function cue(event, detail = {}, fresh = false) {
+  lastActivity = Date.now()
+  const id = pick(event, detail, fresh)
+  const run = id ? perform(id, event) : Promise.resolve()
+  if (event === 'hiding') run.finally(() => utter.companion('bye'))
+  return Boolean(id) || event === 'hiding'
+}
+
+function tick() {
+  syncLook()
+  const idle = started && player && !current.quiet && !PERSISTS.has(current.robotState) && !player.current && !avatar._sleeping
+  if (idle && Date.now() - lastActivity >= AMBIENT_AFTER_MS) cue('ambient')
 }
 
 // ---------- State from main ----------
-
-function play(state) {
-  if (state.playToken === shownToken) return
-  shownToken = state.playToken
-  stopLove()
-  if (state.robotState === 'love') return startLove()
-  avatar.play(state.robotState)
-}
 
 function layout(state) {
   const side = state.size
@@ -180,23 +160,36 @@ function leave() {
   fade.onfinish = () => { if (!current.notice) bubble.hidden = true }
 }
 
+// The first message's cue happened before this window existed, so it is taken as seen and `shown` plays instead.
 function apply(state) {
+  const fresh = state.playToken !== shownToken
+  const incoming = !started ? { event: 'shown' } : state.cue?.id !== seenCue ? state.cue : null
+  started = true
+  if (state.cue) seenCue = state.cue.id
   current = state
+  shownToken = state.playToken
   layout(state)
   showBubble(state)
-  play(state)
-  rim()
+  syncLook()
+  if (incoming && cue(incoming.event, incoming.detail, fresh)) return
+  if (!fresh) return
+  if (player?.current) player.stop()
+  playState(state.robotState)
 }
 
 // Pointer positions come from main, because the cursor is usually outside this small window.
 function pointer({ x, y }) {
-  window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y }))
   const r = avatar.getBoundingClientRect()
-  const influence = 1 - Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) / (Math.max(r.width, r.height) * 2.55)
-  if (influence <= 0.65) return
-  avatar.noteActivity?.()
+  const near = 1 - Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) / (Math.max(r.width, r.height) * 2.55) > 0.65
+  const rising = near && !pointerNear
+  pointerNear = near
+  if (player?.current) return
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y }))
+  if (!near) return
+  avatar.noteActivity?.(false)
   if (avatar._boredRoutine) avatar.play('idle')
-  else if (avatar._sleeping && !current.quiet) avatar.play('wake')
+  else if (avatar._sleeping) { if (!current.quiet) playState('wake') }
+  else if (rising) cue('near')
 }
 
 function onLevel(target) {
@@ -215,6 +208,7 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
+  if (!press && player?.current) e.stopImmediatePropagation()
   if (!press || e.pointerId !== press.id) return
   if (avatar._gestureFx?.kind === 'antenna-drag') return
   if (!press.moving && Math.hypot(e.screenX - press.x, e.screenY - press.y) > 3) {
@@ -225,6 +219,7 @@ function onPointerMove(e) {
   }
   if (!press.moving) return
   e.stopImmediatePropagation()
+  lastActivity = Date.now()
   press.samples = [...press.samples, [e.screenX, e.screenY, e.timeStamp]].slice(-4)
   utter.companion('drag')
 }
@@ -234,24 +229,35 @@ function onPointerUp(e) {
   const moving = press.moving
   const samples = press.samples
   press = null
-  if (!moving) return
+  if (!moving) {
+    const tap = e.type === 'pointerup' && e.timeStamp - samples[0][2] <= POKE_MS && robot.contains(e.target)
+    if (!tap || avatar._gestureFx?.kind === 'antenna-drag') return
+    const now = Date.now()
+    poke = { at: now, count: now - poke.at < POKE_STREAK_MS ? poke.count + 1 : 1 }
+    cue('poke', { count: poke.count })
+    return
+  }
   e.stopImmediatePropagation()
   const [first, last] = [samples[0], samples[samples.length - 1]]
   const fresh = e.timeStamp - last[2] < 50 && last[2] > first[2]
   const dt = (last[2] - first[2]) / 1000
-  utter.companion('drag-end', {
-    vx: fresh ? (last[0] - first[0]) / dt : 0, vy: fresh ? (last[1] - first[1]) / dt : 0, reduce: reduce.matches,
-  })
+  const vx = fresh ? (last[0] - first[0]) / dt : 0
+  const vy = fresh ? (last[1] - first[1]) / dt : 0
+  utter.companion('drag-end', { vx, vy, reduce: reduce.matches })
+  cue('fling', { speed: Math.hypot(vx, vy) })
 }
 
 if (PREVIEW) {
   document.body.classList.add('preview')
   avatar.setAttribute('size', '116')
   avatar.setAttribute('auto-sleep', '0')
-  window.addEventListener('message', (e) => {
-    if (typeof e.data?.roundness === 'number') avatar.setHeadRoundness?.(e.data.roundness)
+  window.addEventListener('message', ({ data }) => {
+    if (data?.library && !player) player = new MomentPlayer(avatar, data.library)
+    if (typeof data?.roundness === 'number') avatar.setHeadRoundness?.(data.roundness)
+    if (typeof data?.finish === 'string') current.finish = data.finish
+    if (typeof data?.worn === 'string') current.worn = data.worn
+    syncLook()
   })
-  rim()
 } else {
   window.addEventListener('pointerdown', onPointerDown, true)
   window.addEventListener('pointermove', onPointerMove, true)
@@ -260,6 +266,8 @@ if (PREVIEW) {
   robot.addEventListener('mouseenter', () => utter.companion('mouse', true))
   robot.addEventListener('mouseleave', () => utter.companion('mouse', false))
   robot.addEventListener('contextmenu', (e) => { e.preventDefault(); utter.companion('menu') })
+  const library = await utter.companion('library').catch(() => null)
+  if (library) player = new MomentPlayer(avatar, library)
   utter.onCompanion((message) => {
     if (message.type === 'state') apply(message)
     else if (message.type === 'pointer') pointer(message)
@@ -267,4 +275,5 @@ if (PREVIEW) {
   })
   utter.companion('ready')
 }
-dark.addEventListener('change', rim)
+dark.addEventListener('change', syncLook)
+setInterval(tick, 1000)

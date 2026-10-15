@@ -18,6 +18,7 @@ final class CaptureSession {
     private let meetingIsActive: () -> Bool
     private let suppressRelease: (Bool) -> Void
     private let celebrate: (String) -> Void
+    private let note: ([String: RobotValue]) -> Void
 
     private var expiry: DispatchWorkItem?
     /// The frontmost app when the turn started, to notice the user moving away before delivery.
@@ -33,13 +34,15 @@ final class CaptureSession {
     init(recorder: AudioRecorder, transcriber: TranscriptionService, pill: PillWindow,
          meetingIsActive: @escaping () -> Bool,
          suppressRelease: @escaping (Bool) -> Void,
-         celebrate: @escaping (String) -> Void) {
+         celebrate: @escaping (String) -> Void,
+         note: @escaping ([String: RobotValue]) -> Void) {
         self.recorder = recorder
         self.transcriber = transcriber
         self.pill = pill
         self.meetingIsActive = meetingIsActive
         self.suppressRelease = suppressRelease
         self.celebrate = celebrate
+        self.note = note
         pill.onCloseIsland = { [weak self] in self?.handle(.islandClosed) }
     }
 
@@ -243,11 +246,12 @@ final class CaptureSession {
             TextInjector.typeText(text)
         }
         UserData.shared.lastTranscription = text
-        if let celebration = UserData.shared.recordCompanionDictation(
-            words: text.split(whereSeparator: \.isWhitespace).count
-        ) {
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        if let celebration = UserData.shared.recordCompanionDictation(words: words) {
             celebrate(celebration)
         }
+        note(["words": .number(Double(words)), "total": .number(Double(UserData.shared.companionProgress.dictationWords)),
+              "destination": .string(destination == .note ? "note" : "app")])
         // History is opt-out; language detection only feeds it.
         if UserData.shared.keepHistory {
             let app = destination == .app && !held ? NSWorkspace.shared.frontmostApplication?.localizedName ?? "" : ""
@@ -282,6 +286,7 @@ final class CaptureSession {
             _ = UserData.shared.recordCompanionDictation(
                 words: proposal.text.split(whereSeparator: \.isWhitespace).count
             )
+            note(["remembered": .bool(true), "timed": .bool(proposal.remindAt != nil)])
             Self.log.info("Saved spoken memory in \(Date().timeIntervalSince(self.stoppedAt), format: .fixed(precision: 1))s")
             return .notice(proposal.remindAt == nil ? "Remembered" : "Reminder saved")
         } catch {

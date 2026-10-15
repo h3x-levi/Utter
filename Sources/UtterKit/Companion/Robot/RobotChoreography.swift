@@ -52,7 +52,7 @@ struct RobotPose: Equatable {
     }
 }
 
-enum RobotExpression {
+enum RobotExpression: String {
     case idle, happy, sad, angry, sleepy, input, sleep, surprise
 
     var pose: RobotPose {
@@ -74,27 +74,61 @@ struct RobotHeadKey {
     var x: CGFloat = 0
     var y: CGFloat = 0
     var scale: CGFloat = 1
+    var scaleY: CGFloat?
+    var rotation: CGFloat = 0
     var ease: RobotEase?
 }
 
 /// A head keyframe animation with fill-forwards, like the upstream Web Animations calls.
+/// With `css` set, each key's values come from that CSS transform list about `origin` instead.
 struct RobotHeadMotion {
     var start: Double
     var duration: Double
     var keys: [RobotHeadKey]
     var ease: RobotEase
     var held: RobotHeadKey
+    var css: [[RobotTransformFunction]] = []
+    var origin = RobotGeometry.headCenter
+    var iterations = 1
 
     func value(at t: Double) -> RobotHeadKey {
         guard t >= start, keys.count > 1 else { return held }
-        let p = Double(ease(CGFloat(min(1, (t - start) / max(1, duration)))))
+        let raw = (t - start) / max(1, duration)
+        let p = Double(ease(CGFloat(raw >= Double(iterations) ? 1 : raw.truncatingRemainder(dividingBy: 1))))
         var i = 0
         while i < keys.count - 2, p > keys[i + 1].offset { i += 1 }
         let a = keys[i], b = keys[i + 1]
         var u = CGFloat(robotClamp((p - a.offset) / max(1e-9, b.offset - a.offset), 0, 1))
         if let e = a.ease { u = e(u) }
-        return RobotHeadKey(offset: p, x: robotLerp(a.x, b.x, u), y: robotLerp(a.y, b.y, u), scale: robotLerp(a.scale, b.scale, u))
+        if css.count == keys.count {
+            let list = zip(css[i], css[i + 1]).map { $0.mixed($1, u) }
+            var key = RobotGeometry.decompose(RobotGeometry.matrix(list, origin: origin))
+            key.offset = p
+            return key
+        }
+        return RobotHeadKey(offset: p, x: robotLerp(a.x, b.x, u), y: robotLerp(a.y, b.y, u), scale: robotLerp(a.scale, b.scale, u),
+                            scaleY: a.scaleY == nil && b.scaleY == nil ? nil : robotLerp(a.scaleY ?? a.scale, b.scaleY ?? b.scale, u),
+                            rotation: robotLerp(a.rotation, b.rotation, u))
     }
+}
+
+extension RobotHeadMotion {
+    /// Web Animations keyframes: evenly spaced, `ease` on every segment, `iterations` repeats, then held.
+    init?(css lists: [[RobotTransformFunction]], origin: CGPoint, start: Double, duration: Double, iterations: Int = 1,
+          ease: RobotEase, held: RobotHeadKey) {
+        guard lists.count > 1, duration > 0 else { return nil }
+        let n = Double(lists.count - 1)
+        self.init(start: start, duration: duration, keys: lists.indices.map { RobotHeadKey(offset: Double($0) / n, ease: ease) },
+                  ease: .linear, held: held, css: lists, origin: origin, iterations: max(1, iterations))
+    }
+}
+
+/// An eye-look routine like upstream's bored one: each target is held for its time, then the eyes rest.
+struct RobotGaze {
+    var targets: [(point: CGPoint, hold: Double)]
+    var speed: CGFloat
+    var index = 0
+    var nextAt: Double
 }
 
 struct RobotPointer {
@@ -109,13 +143,14 @@ struct RobotBlinks {
     let period: Double
     let events: [(at: Double, duration: Double)]
 
-    init(random r: inout RobotRandom, count: Int = 6) {
+    /// `rate` above 1 blinks more often: every gap is divided by it, as the time-of-day `blink` does upstream.
+    init(random r: inout RobotRandom, count: Int = 6, rate: Double = 1) {
         var list: [(Double, Double)] = []
-        var at = 1800 + Double(r.next()) * 1800
+        var at = (1800 + Double(r.next()) * 1800) / rate
         for _ in 0..<count {
             let duration = 150 + Double(r.next()) * 70
             list.append((at, duration))
-            at += duration + 1900 + Double(r.next()) * 2600
+            at += duration + (1900 + Double(r.next()) * 2600) / rate
         }
         events = list
         // The next loop's first blink lands where a seventh would have, so every gap keeps upstream's spacing.
@@ -176,6 +211,9 @@ struct RobotSim {
     private var wander: [(at: Double, target: CGPoint)] = []
     private var wanderIndex = 0
     var boredStart: Double?
+    var gaze: RobotGaze?
+    /// Time-of-day eyelid drop, added to every top lid except while typing or asleep.
+    var lid: CGFloat = 0
     var pointer: RobotPointer?
     var antennaGaze: CGPoint?
     var dragging = false
@@ -194,7 +232,8 @@ struct RobotSim {
     var nod: Double?
     var bob: (start: Double, duration: Double, amp: CGFloat)?
     var angryDrop: (start: Double, release: Double?)?
-    var shake: Double?
+    var shake: (start: Double, duration: Double)?
+    var wink: (start: Double, duration: Double)?
     var errorSweep: Double?
     var warning: Double?
     var waiting: (start: Double, wrap: Bool)?
@@ -203,11 +242,29 @@ struct RobotSim {
     var love: Double?
     var random: Double?
 
-    mutating func setState(_ e: RobotExpression, _ duration: Double, ease: RobotEase = .outQuint, keepLock: Bool = false) {
+    mutating func setState(_ e: RobotExpression, _ duration: Double, ease: RobotEase = .outQuint, keepLock: Bool = false,
+                           pose target: RobotPose? = nil) {
         expression = e
         sleeping = e == .sleep
         if e == .idle && !keepLock { release() }
-        startMorph(e.pose, duration, ease)
+        startMorph(target ?? e.pose, duration, ease)
+    }
+
+    mutating func blink(_ duration: Double) {
+        blinkStart = now
+        blinkDuration = duration
+    }
+
+    /// Eases the head transform back to rest about the motion's own origin, as CSS interpolates to `none`.
+    mutating func homeHead(_ duration: Double) {
+        guard let h = head, !reduced else { head = nil; return }
+        let from = RobotGeometry.decompose(RobotGeometry.matrix(headValue), about: h.origin)
+        let list = [RobotTransformFunction(name: "translate", args: [from.x, from.y]),
+                    RobotTransformFunction(name: "rotate", args: [from.rotation]),
+                    RobotTransformFunction(name: "scale", args: [from.scale, from.scaleY ?? from.scale])]
+        let home = [RobotTransformFunction(name: "translate", args: [0, 0]), RobotTransformFunction(name: "rotate", args: [0]),
+                    RobotTransformFunction(name: "scale", args: [1, 1])]
+        head = RobotHeadMotion(css: [list, home], origin: h.origin, start: now, duration: duration, ease: .head, held: headValue)
     }
 
     mutating func startMorph(_ target: RobotPose, _ duration: Double, _ ease: RobotEase = .outQuint) {
@@ -245,6 +302,12 @@ struct RobotSim {
         lastBlinkPhase = -1
     }
 
+    /// Upstream wanders whenever nothing locks the eyes, moments included; nil stops it.
+    mutating func useWander(_ w: RobotWander?, from t: Double = 0) {
+        wander = w?.events.map { ($0.at + t, $0.target) } ?? []
+        wanderIndex = 0
+    }
+
     mutating func useBlinks(_ b: RobotBlinks, from t: Double) {
         blinks = b
         blinkOrigin = t
@@ -275,11 +338,12 @@ struct RobotSim {
     }
 
     private mutating func updateBlink() {
-        guard let blinks, !reduced, !sleeping, expression != .input else {
+        guard !reduced, !sleeping, expression != .input else {
             blinkStart = nil
             return
         }
         if let s = blinkStart, now - s >= blinkDuration { blinkStart = nil }
+        guard let blinks else { return }
         let elapsed = now - blinkOrigin
         let phase = elapsed.truncatingRemainder(dividingBy: blinks.period)
         if blinkStart == nil, !lock {
@@ -311,7 +375,18 @@ struct RobotSim {
                 wanderTarget = e < 1400 ? CGPoint(x: -18, y: -16) : (e < 2800 ? CGPoint(x: 18, y: -16) : .zero)
             }
         }
-        if !lock, boredStart == nil, !sleeping, expression != .input {
+        if var g = gaze, now >= g.nextAt {
+            if g.index < g.targets.count {
+                wanderTarget = g.targets[g.index].point
+                g.nextAt = now + g.targets[g.index].hold
+                g.index += 1
+                gaze = g
+            } else {
+                gaze = nil
+                wanderTarget = .zero
+            }
+        }
+        if !lock, boredStart == nil, gaze == nil, !sleeping, expression != .input {
             while wanderIndex < wander.count, wander[wanderIndex].at <= now {
                 wanderTarget = wander[wanderIndex].target
                 wanderIndex += 1
@@ -319,7 +394,7 @@ struct RobotSim {
         }
         let gazeLocked = lock && antennaGaze == nil
         let mix: CGFloat
-        if let p = pointer, !gazeLocked, boredStart == nil, pointerFresh, p.influence > 0.001, !sleeping, expression != .input {
+        if let p = pointer, !gazeLocked, boredStart == nil, gaze == nil, pointerFresh, p.influence > 0.001, !sleeping, expression != .input {
             mix = pow(p.influence, 1.6)
         } else {
             mix = 0
@@ -333,7 +408,8 @@ struct RobotSim {
             let p = pointer.map { CGPoint(x: $0.x, y: $0.y) } ?? .zero
             target = CGPoint(x: robotLerp(wanderTarget.x, p.x, mix), y: robotLerp(wanderTarget.y, p.y, mix))
         }
-        let speed: CGFloat = antennaGaze != nil ? 0.42 : (gazeLocked ? 0.40 : (dragging ? 0.42 : (boredStart != nil ? 0.5 : (mix > 0.05 ? 0.28 : 0.16))))
+        let speed: CGFloat = antennaGaze != nil ? 0.42 : (gazeLocked ? 0.40 : (dragging ? 0.42 : (boredStart != nil ? 0.5
+            : (gaze?.speed ?? (mix > 0.05 ? 0.28 : 0.16)))))
         let k = 1 - pow(1 - robotClamp(speed, 0.02, 0.9), CGFloat(dt / 16.67))
         look.x += (target.x - look.x) * k
         look.y += (target.y - look.y) * k
@@ -361,7 +437,7 @@ struct RobotSim {
             return
         }
         let inRange = pointerFresh && (pointer?.influence ?? 0) > 0.03
-        let follow = inRange && !dragging && !sleeping && boredStart == nil && now >= headCenteringUntil && !lock
+        let follow = inRange && !dragging && !sleeping && boredStart == nil && gaze == nil && now >= headCenteringUntil && !lock
         let source = follow ? CGPoint(x: pointer?.x ?? 0, y: pointer?.y ?? 0) : look
         let nx = robotClamp(source.x / 48, -1, 1), ny = robotClamp(source.y / 34, -1, 1)
         let seconds = min(dt, 34) / 1000
@@ -410,7 +486,7 @@ struct RobotSim {
         }
         var surpriseScale: CGFloat = 1
         if let s = shake {
-            let t = CGFloat(robotClamp((now - s) / 420, 0, 1))
+            let t = CGFloat(robotClamp((now - s.start) / s.duration, 0, 1))
             surpriseScale = 1 + 0.022 * sin(t * .pi * 8) * (1 - 0.18 * t)
         }
         let eyeHeight = max(2.6, p.h * nodScale * surpriseScale)
@@ -438,11 +514,12 @@ struct RobotSim {
         face.right = eye(left: false)
 
         let h = headValue
-        face.headX = h.x + followX.value
-        face.headY = h.y + followY.value
-        face.headRotation = followRotation.value
+        let r = followRotation.value * .pi / 180
+        face.headX = followX.value + h.x * cos(r) - h.y * sin(r)
+        face.headY = followY.value + h.x * sin(r) + h.y * cos(r)
+        face.headRotation = followRotation.value + h.rotation
         face.headScaleX = h.scale
-        face.headScaleY = h.scale
+        face.headScaleY = h.scaleY ?? h.scale
         face.blink = blinkValue
 
         drawWarning(&face)
@@ -452,6 +529,13 @@ struct RobotSim {
         drawLove(&face)
         drawRandom(&face)
         if reduced { drawReduced(&face) }
+        if let w = wink, now < w.start + w.duration {
+            face.right.scaleY *= 1 - 0.92 * sin(.pi * CGFloat(robotClamp((now - w.start) / w.duration, 0, 1)))
+        }
+        if lid != 0, expression != .input, expression != .sleep {
+            face.left.topY += lid
+            face.right.topY += lid
+        }
         return face
     }
 
@@ -683,6 +767,8 @@ enum RobotTail {
     case ambient
     case loop(Double)
     case hold
+    /// A script that repeats from the end of the intro until replaced: a moment's loop section.
+    case pass(RobotScript)
 }
 
 /// The upstream async action bodies, flattened into timed steps.
@@ -855,7 +941,7 @@ struct RobotScript {
                 $0.animateHead([RobotHeadKey(offset: 0), RobotHeadKey(offset: 1, scale: 1.035)], 175)
             }
             s.wait(175)
-            s.run { $0.shake = $0.now }
+            s.run { $0.shake = ($0.now, 420) }
             s.wait(420)
             s.run {
                 $0.shake = nil
@@ -929,6 +1015,7 @@ struct RobotPlan {
     let loop: [RobotFace]
     let blinkLoop: [CGFloat]
     let caretBlinks: Bool
+    let isMoment: Bool
 
     var loopPeriod: Double { Double(max(0, loop.count - 1)) / Self.frameRate }
     var blinkPeriod: Double { Double(max(0, blinkLoop.count - 1)) / Self.frameRate }
@@ -957,7 +1044,7 @@ struct RobotPlan {
 
     static func make(_ state: RobotState, from start: RobotFace, antennaVelocity: CGVector = .zero,
                      reduced: Bool, seed: UInt64, fromDrag: Bool = false, resting: Bool = false,
-                     withLoop: Bool = true) -> RobotPlan {
+                     withLoop: Bool = true, time: RobotTime? = nil) -> RobotPlan {
         var sim = RobotSim()
         sim.reduced = reduced
         let (script, tail) = RobotScript.make(state, fromDrag: fromDrag, resting: resting)
@@ -966,26 +1053,37 @@ struct RobotPlan {
                                    y: RobotSpring(value: start.antennaY, velocity: antennaVelocity.dy))
         if resting { antenna = RobotAntenna(x: RobotSpring(value: 120), y: RobotSpring(value: 12)) }
         return build(state: state, sim: sim, script: script, tail: withLoop ? tail : .hold, origin: 0,
-                     start: resting ? nil : start, blend: blend, antenna: antenna, reduced: reduced, seed: seed)
+                     start: resting ? nil : start, blend: blend, antenna: antenna, reduced: reduced, seed: seed, time: time)
     }
 
     /// Hands a live pointer-follow simulation to Core Animation once the pointer stops.
-    static func settle(from live: RobotSim, antenna: RobotAntenna, seed: UInt64) -> RobotPlan {
+    static func settle(from live: RobotSim, antenna: RobotAntenna, seed: UInt64, time: RobotTime? = nil) -> RobotPlan {
         var script = RobotScript()
         script.wait(max(0, (live.pointer?.lastMove ?? live.now) + 900 - live.now))
         return build(state: .idle, sim: live, script: script, tail: .ambient, origin: live.now, start: nil,
-                     blend: 0, antenna: antenna, reduced: live.reduced, seed: seed)
+                     blend: 0, antenna: antenna, reduced: live.reduced, seed: seed, time: time)
     }
 
     private static func build(state: RobotState, sim initial: RobotSim, script: RobotScript, tail: RobotTail,
                               origin: Double, start: RobotFace?, blend: Double, antenna initialAntenna: RobotAntenna,
-                              reduced: Bool, seed: UInt64) -> RobotPlan {
+                              reduced: Bool, seed: UInt64, time: RobotTime? = nil, moment: Bool = false,
+                              caret: Bool = false) -> RobotPlan {
         var random = RobotRandom(seed: seed)
-        let blinks = RobotBlinks(random: &random)
+        let blinks = RobotBlinks(random: &random, rate: time.map { $0.blink > 0 ? $0.blink : 1 } ?? 1)
         let wander = RobotWander(random: &random)
         var sim = initial
-        if state == .bored { sim.useBlinks(blinks, from: origin) }
+        if let time { sim.lid = CGFloat(time.lid) }
+        if state == .bored || moment { sim.useBlinks(blinks, from: origin) }
+        if moment { sim.useWander(wander, from: origin - (wander.events.first?.at ?? 0)) }
         let introEnd = script.cursor
+        var steps = script.steps
+        if case let .pass(pass) = tail, pass.cursor >= frameMs {
+            var at = introEnd
+            while at < introEnd + settle {
+                steps += pass.steps.map { (at + $0.at, $0.run) }
+                at += pass.cursor
+            }
+        }
         var frames: [RobotFace] = []
         var loopSim: RobotSim?
         var next = 0
@@ -993,9 +1091,13 @@ struct RobotPlan {
         let count = Int(((introEnd + settle) / frameMs).rounded(.up)) + 1
         for i in 0..<count {
             let t = Double(i) * frameMs
-            while next < script.steps.count, script.steps[next].at <= t + 1e-6 {
-                sim.now = origin + script.steps[next].at
-                script.steps[next].run(&sim)
+            while next < steps.count, steps[next].at <= t + 1e-6 {
+                if next == script.steps.count, loopSim == nil, case .pass = tail {
+                    sim.useBlinks(blinks, from: origin + introEnd)
+                    loopSim = sim
+                }
+                sim.now = origin + steps[next].at
+                steps[next].run(&sim)
                 next += 1
             }
             if next == script.steps.count, loopSim == nil, case .loop = tail { loopSim = sim }
@@ -1020,6 +1122,12 @@ struct RobotPlan {
 
         var loop: [RobotFace] = []
         var blinkLoop: [CGFloat] = []
+        func blinkCycle() -> [CGFloat] {
+            let b = Int((blinks.period / frameMs).rounded())
+            var cycle = (0...b).map { blinks.value(at: Double($0) * frameMs) }
+            cycle[b] = cycle[0]
+            return cycle
+        }
         switch tail {
         case let .loop(period):
             if var looping = loopSim {
@@ -1027,14 +1135,29 @@ struct RobotPlan {
                 let n = Int((period / frameMs).rounded())
                 loop = (0...n).map { looping.advance(to: start + Double($0) * period / Double(n)) }
             }
+        case let .pass(pass):
+            if var looping = loopSim {
+                let start = origin + introEnd, period = pass.cursor
+                let n = max(1, Int((period / frameMs).rounded()))
+                var k = 0
+                loop = (0...n).map { j in
+                    let t = Double(j) * period / Double(n)
+                    while k < pass.steps.count, pass.steps[k].at <= t + 1e-6 {
+                        looping.now = start + pass.steps[k].at
+                        pass.steps[k].run(&looping)
+                        k += 1
+                    }
+                    return looping.advance(to: start + t)
+                }
+                if !reduced, !looping.lock, !looping.sleeping, looping.expression != .input { blinkLoop = blinkCycle() }
+            }
         case .ambient where !reduced:
             var looping = RobotSim()
+            looping.lid = sim.lid
             looping.startAmbient(wander: wander, blinks: blinks, at: 0)
             let n = Int((wander.period / frameMs).rounded())
             loop = (0...n).map { looping.advance(to: Double($0) * frameMs) }
-            let b = Int((blinks.period / frameMs).rounded())
-            blinkLoop = (0...b).map { blinks.value(at: Double($0) * frameMs) }
-            blinkLoop[b] = blinkLoop[0]
+            blinkLoop = blinkCycle()
         default:
             break
         }
@@ -1055,7 +1178,7 @@ struct RobotPlan {
         var introDuration = introEnd / 1000
         if reduced, let start { introDuration += dissolve(&frames, from: start) }
         return RobotPlan(state: state, frames: frames, introDuration: introDuration, loop: loop, blinkLoop: blinkLoop,
-                         caretBlinks: state == .input && !reduced)
+                         caretBlinks: (state == .input || caret) && !reduced, isMoment: moment)
     }
 
     private static let dissolveFrames = 6
@@ -1080,5 +1203,118 @@ struct RobotPlan {
             }
         }
         return added
+    }
+}
+
+/// An accessory change due `at` ms after the plan starts.
+struct RobotMomentCue { let at: Double; let on: String?; let off: String?; let instant: Bool; let exit: String? }
+
+extension RobotScript {
+    private static let poseKeys: [String: WritableKeyPath<RobotPose, CGFloat>] = [
+        "w": \.w, "h": \.h, "topY": \.topY, "bottomY": \.bottomY, "topAL": \.topLeft, "topAR": \.topRight,
+    ]
+
+    /// A moment's steps as the web player runs them, every duration divided by the time of day's `speed`.
+    mutating func add(_ steps: ArraySlice<RobotStep>, speed: Double, reduced: Bool, cues: inout [RobotMomentCue]) {
+        for s in steps {
+            if let ms = s.wait {
+                wait(ms / speed)
+                continue
+            }
+            if s.lock == true { run { $0.gaze = nil; $0.lock = true; $0.wanderTarget = .zero } }
+            if s.unlock == true { run { $0.release() } }
+            if let name = s.pose, let e = RobotExpression(rawValue: name) {
+                var target = e.pose
+                for (key, value) in s.set ?? [:] { if let path = Self.poseKeys[key] { target[keyPath: path] = CGFloat(value) } }
+                let ms = (s.ms ?? 320) / speed, ease = RobotEase.pose(s.ease)
+                run { $0.setState(e, ms, ease: ease, keepLock: true, pose: target) }
+            }
+            if let list = s.gaze {
+                let targets = list.filter { $0.count >= 3 }.map { (point: CGPoint(x: $0[0], y: $0[1]), hold: $0[2] / speed) }
+                let look = CGFloat(s.speed ?? 0.3)
+                run { $0.lock = false; $0.gaze = RobotGaze(targets: targets, speed: look, nextAt: $0.now) }
+            }
+            if let frames = s.head, !reduced {
+                let lists = frames.map(RobotTransformFunction.parse), origin = RobotGeometry.point(s.origin)
+                let ms = (s.ms ?? 0) / speed, times = s.times ?? 1, ease = RobotEase.curve(s.ease)
+                run { sim in
+                    sim.head = RobotHeadMotion(css: lists, origin: origin, start: sim.now, duration: ms, iterations: times,
+                                               ease: ease, held: sim.headValue) ?? sim.head
+                }
+            }
+            if let fx = s.fx, !reduced {
+                let ms = (s.ms ?? 0) / speed, amp = CGFloat(s.amp ?? 0)
+                run { sim in
+                    switch fx {
+                    case "nod": sim.nod = sim.now
+                    case "bob": sim.bob = (sim.now, ms > 0 ? ms : 620, amp != 0 ? amp : 7)
+                    case "shake": sim.shake = (sim.now, 420 / speed)
+                    case "blink": sim.blink(170)
+                    case "wink": sim.wink = (sim.now, ms > 0 ? ms : 420)
+                    default: break
+                    }
+                }
+            }
+            if s.on != nil || s.off != nil {
+                cues.append(RobotMomentCue(at: cursor, on: s.on, off: s.off, instant: s.instant ?? false, exit: s.exit))
+            }
+        }
+    }
+
+    /// The player's settle: head home, routines and effects cleared, then idle unless the pose is held.
+    mutating func finishMoment(hold: Bool) {
+        run { sim in
+            sim.homeHead(320)
+            sim.gaze = nil
+            sim.useWander(nil)
+            sim.wanderTarget = .zero
+            sim.nod = nil
+            sim.bob = nil
+            sim.shake = nil
+            sim.angryDrop = nil
+            sim.wink = nil
+            if !hold { sim.setState(.idle, 360) }
+        }
+        wait(hold ? 320 : 360)
+    }
+}
+
+extension RobotPlan {
+    /// `loop` repeats from `loopFrom` (the whole list when reduced) until replaced; `hold` ends on the input
+    /// pose with the plan reporting `.input`; otherwise the moment settles to idle. Cues fire at `at` ms.
+    static func make(moment: RobotMoment, from start: RobotFace, antennaVelocity: CGVector, reduced: Bool, time: RobotTime,
+                     seed: UInt64, loop: Bool, hold: Bool) -> (plan: RobotPlan, cues: [RobotMomentCue]) {
+        let steps = reduced ? moment.reduced : moment.steps
+        let speed = time.speed > 0 ? time.speed : 1
+        var cues: [RobotMomentCue] = []
+        var script = RobotScript()
+        script.add(steps[...], speed: speed, reduced: reduced, cues: &cues)
+        var pass = RobotScript()
+        if loop {
+            var ignored: [RobotMomentCue] = []
+            pass.add(steps[min(steps.count, reduced ? 0 : moment.loopFrom ?? 0)...], speed: speed, reduced: reduced, cues: &ignored)
+        }
+        let tail: RobotTail
+        if pass.cursor >= frameMs {
+            tail = .pass(pass)
+        } else {
+            var worn: [String] = []
+            for c in cues {
+                if let id = c.on, !worn.contains(id) { worn.append(id) }
+                if let id = c.off { worn.removeAll { $0 == id } }
+            }
+            cues += worn.map { RobotMomentCue(at: script.cursor, on: nil, off: $0, instant: false, exit: nil) }
+            script.finishMoment(hold: hold)
+            tail = hold ? .hold : .ambient
+        }
+        var sim = RobotSim()
+        sim.reduced = reduced
+        let antenna = RobotAntenna(x: RobotSpring(value: start.antennaX, velocity: antennaVelocity.dx),
+                                   y: RobotSpring(value: start.antennaY, velocity: antennaVelocity.dy))
+        let plan = build(state: hold ? .input : .idle, sim: sim, script: script, tail: tail, origin: 0, start: start,
+                         blend: reduced ? 0 : 320, antenna: antenna, reduced: reduced, seed: seed, time: time,
+                         moment: true, caret: steps.contains { $0.pose == "input" })
+        let shift = plan.introDuration * 1000 - script.cursor
+        return (plan, cues.map { RobotMomentCue(at: $0.at + shift, on: $0.on, off: $0.off, instant: $0.instant, exit: $0.exit) })
     }
 }

@@ -1,15 +1,38 @@
 import AppKit
 import Combine
 
+struct RobotLook: Equatable {
+    var finish = "ink"
+    var worn: String? = nil
+    var time = "day"
+}
+
 /// CX ArtLab's agent-robot-avatar, drawn with Core Animation.
 ///
 /// Every state is precomputed into keyframes that the render server plays, so an idle robot costs
 /// no main-thread work. A display link runs only while a gesture is live or the pointer is moving
 /// near the robot, and stops the moment that motion settles.
 final class RobotView: NSView {
-    var palette = RobotPalette.upstream {
+    var palette = RobotPalette.utter {
         didSet { applyPalette() }
     }
+
+    /// Unknown finish or time ids fall back to the library defaults; an unknown or unwearable accessory wears nothing.
+    var look = RobotLook() {
+        didSet { if look != oldValue { applyLook() } }
+    }
+
+    var library = RobotLibrary.shared {
+        didSet { applyLook() }
+    }
+
+    /// Called when a moment runs to its end, or a pause or Reduce Motion change skips or cuts it; never for `stopMoment`.
+    var onMomentEnd: ((String) -> Void)?
+    /// The pointer came close, unless the robot was napping.
+    var onNear: (() -> Void)?
+
+    var isPlayingMoment: Bool { moment != nil }
+    var isNapping: Bool { state == .sleep }
 
     /// 0 is squarest, 100 roundest; 50 is the upstream head.
     var roundness = RobotGeometry.defaultRoundness {
@@ -56,6 +79,11 @@ final class RobotView: NSView {
     private let faceLayer = CALayer()
     private let faceMask = CAShapeLayer()
     private let antennaLayer = CAShapeLayer()
+    private let behindLayer = CALayer()
+    private let finishLayer = CALayer()
+    private let finishMask = CAShapeLayer()
+    private let headAccessories = CALayer()
+    private let frontLayer = CALayer()
     private let eyes = [RobotEyeLayers(), RobotEyeLayers()]
     private var tracks: [Track] = []
     private var applied: [[CGFloat]?] = []
@@ -90,6 +118,11 @@ final class RobotView: NSView {
     private var lastActivity: CFTimeInterval = 0
     private var napTimer: Timer?
 
+    private var moment: (id: String, mine: [String])?
+    private var momentToken = 0
+    private(set) var shown: [String: CALayer] = [:]
+    private var wasNear = false
+
     private struct Live {
         var sim: RobotSim
         var antenna: RobotAntenna
@@ -121,6 +154,7 @@ final class RobotView: NSView {
         withoutActions {
             applyHeadPath(headPoints)
             applyPalette()
+            applyLook()
             applyFace(plan.frames[plan.frames.count - 1])
         }
         setAccessibilityElement(true)
@@ -171,17 +205,54 @@ final class RobotView: NSView {
         }
         let (face, velocity) = currentFace(at: now)
         endInteraction()
-        install(RobotPlan.make(state, from: face, antennaVelocity: velocity, reduced: reduceMotion, seed: .random(in: 0...UInt64.max)), at: now)
+        install(RobotPlan.make(state, from: face, antennaVelocity: velocity, reduced: reduceMotion, seed: .random(in: 0...UInt64.max),
+                               time: time), at: now)
+    }
+
+    func play(moment id: String, loop: Bool, hold: Bool) {
+        guard let spec = library?.moments[id], let time else { return }
+        let now = CACurrentMediaTime()
+        noteActivity()
+        endMoment(instant: true)
+        momentToken += 1
+        guard pauseReasons.isEmpty else {
+            shownState = hold ? .input : .idle
+            shownUntil = now
+            return after(0) { $0.onMomentEnd?(id) }
+        }
+        let (face, velocity) = currentFace(at: now)
+        endInteraction()
+        let made = RobotPlan.make(moment: spec, from: face, antennaVelocity: velocity, reduced: reduceMotion, time: time,
+                                  seed: .random(in: 0...UInt64.max), loop: loop, hold: hold)
+        install(made.plan, at: now)
+        moment = (id, spec.accessories)
+        withoutActions { syncWorn(enter: true) }
+        for cue in made.cues { after(cue.at / 1000) { $0.run(cue) } }
+        guard !loop else { return }
+        let waits = (reduceMotion ? spec.reduced : spec.steps).compactMap(\.wait).reduce(0, +)
+        after(waits / time.speed / 1000) { $0.finishMoment() }
+    }
+
+    /// Eases the head home and settles to idle; the caller then plays whatever state should show.
+    func stopMoment() {
+        guard moment != nil else { return }
+        let now = CACurrentMediaTime()
+        let (face, velocity) = currentFace(at: now)
+        install(RobotPlan.make(.idle, from: face, antennaVelocity: velocity, reduced: reduceMotion,
+                               seed: .random(in: 0...UInt64.max), time: time), at: now)
     }
 
     func pause() { setPaused(.manual, true) }
     func resume() { setPaused(.manual, false) }
 
-    /// Shows one frame with no animation; used to render snapshots.
-    func showStill(_ face: RobotFace) {
+    /// Shows one frame with no animation, wearing exactly `accessories`; used to render snapshots.
+    func showStill(_ face: RobotFace, accessories: [String] = []) {
+        endMoment(instant: true)
         withoutActions {
             removePlanAnimations(keepBlink: false)
             applyFace(face)
+            for id in shown.keys { hide(id, instant: true) }
+            for id in accessories { show(id, enter: false) }
         }
     }
 
@@ -194,16 +265,21 @@ final class RobotView: NSView {
         canvas.isGeometryFlipped = true
         root.addSublayer(canvas)
 
-        for l in [dragLayer, headLayer, faceLayer] {
+        for l in [dragLayer, headLayer, faceLayer, behindLayer, finishLayer, headAccessories, frontLayer] {
             l.bounds = canvas.bounds
             l.position = CGPoint(x: 120, y: 120)
         }
+        canvas.addSublayer(behindLayer)
         canvas.addSublayer(dragLayer)
         dragLayer.addSublayer(headLayer)
         headLayer.addSublayer(headShape)
+        headLayer.addSublayer(finishLayer)
         headLayer.addSublayer(faceLayer)
+        headLayer.addSublayer(headAccessories)
+        canvas.addSublayer(frontLayer)
+        finishLayer.mask = finishMask
         faceLayer.mask = faceMask
-        faceMask.fillColor = NSColor.black.cgColor
+        for mask in [faceMask, finishMask] { mask.fillColor = NSColor.black.cgColor }
 
         for eye in eyes { eye.install(in: faceLayer) }
 
@@ -278,9 +354,12 @@ final class RobotView: NSView {
         applyPalette()
     }
 
+    private var layerScale: CGFloat { (window?.backingScaleFactor ?? 2) * max(1, min(bounds.width, bounds.height) / 240) }
+
     private func updateContentsScale() {
-        let scale = (window?.backingScaleFactor ?? 2) * max(1, min(bounds.width, bounds.height) / 240)
-        for l in [headShape, faceMask, antennaLayer] + eyes.flatMap({ [$0.base, $0.caret] }) { l.contentsScale = scale }
+        let scale = layerScale
+        for l in [headShape, faceMask, finishMask, antennaLayer] + eyes.flatMap({ [$0.base, $0.caret] }) { l.contentsScale = scale }
+        for l in [behindLayer, finishLayer, headAccessories, frontLayer] { RobotShapes.walk(l) { $0.contentsScale = scale } }
     }
 
     private func applyPalette() {
@@ -298,6 +377,9 @@ final class RobotView: NSView {
                     eye.top.backgroundColor = palette.face.cgColor
                     eye.bottom.backgroundColor = palette.face.cgColor
                 }
+                guard let colours else { return }
+                for l in finishLayer.sublayers ?? [] { RobotShapes.recolour(l, colours: colours) }
+                for root in shown.values { RobotShapes.recolour(root, colours: colours) }
             }
         }
     }
@@ -306,6 +388,131 @@ final class RobotView: NSView {
         let path = RobotGeometry.headPath(points)
         headShape.path = path
         faceMask.path = path
+        finishMask.path = path
+    }
+
+    // MARK: Look and accessories
+
+    private var finish: RobotFinish? {
+        guard let library else { return nil }
+        return library.finishes[look.finish] ?? library.defaults["finish"].flatMap { library.finishes[$0] }
+    }
+
+    private var time: RobotTime? {
+        guard let library else { return nil }
+        return library.times[look.time] ?? library.defaults["time"].flatMap { library.times[$0] }
+    }
+
+    private var worn: String? {
+        guard let id = look.worn, library?.accessories[id]?.wear == true else { return nil }
+        return id
+    }
+
+    private var colours: RobotColours? {
+        guard let library, let finish else { return nil }
+        return RobotColours(library: library, finish: finish)
+    }
+
+    private static let rims = ["dark": NSColor(white: 1, alpha: 0.32), "light": NSColor(srgbRed: 28 / 255, green: 42 / 255, blue: 94 / 255, alpha: 0.3)]
+
+    private func applyLook() {
+        guard let finish, let colours else { return }
+        withoutActions {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                finishLayer.sublayers = (finish.shapes ?? []).map { RobotShapes.layer($0, colours: colours) }
+            }
+            updateContentsScale()
+            let body = colours.colour("body") ?? palette.body
+            var next = RobotPalette(body: body, face: body, eye: colours.colour("eyes") ?? palette.eye, accent: body)
+            if let outline = finish.outline, let rim = Self.rims[outline] {
+                next.rim = NSColor(name: nil) { ($0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "light") == outline ? rim : .clear }
+            }
+            palette = next
+            syncWorn(enter: false)
+        }
+    }
+
+    /// The worn accessory stays on unless the playing moment needs its slot or already wears two.
+    private func syncWorn(enter: Bool) {
+        guard let library else { return }
+        let worn = self.worn, mine = moment?.mine ?? []
+        for id in shown.keys where id != worn && !mine.contains(id) { hide(id, instant: !enter) }
+        guard let worn, let slot = library.accessories[worn]?.slot else { return }
+        if mine.contains(worn) || (mine.count < 2 && !mine.contains { library.accessories[$0]?.slot == slot }) {
+            show(worn, enter: enter)
+        } else {
+            hide(worn, instant: false)
+        }
+    }
+
+    private func show(_ id: String, enter: Bool) {
+        guard shown[id] == nil, let library, let spec = library.accessories[id], let colours else { return }
+        for other in shown.keys where library.accessories[other]?.slot == spec.slot { hide(other, instant: true) }
+        var made: CALayer?
+        effectiveAppearance.performAsCurrentDrawingAppearance { made = RobotShapes.accessory(id, colours: colours) }
+        guard let root = made else { return }
+        let scale = layerScale
+        RobotShapes.walk(root) { $0.contentsScale = scale }
+        (spec.layer == "behind" ? behindLayer : spec.layer == "head" ? headAccessories : frontLayer).addSublayer(root)
+        shown[id] = root
+        if enter && !reduceMotion { RobotShapes.enter(root, spec.enter) }
+    }
+
+    private func hide(_ id: String, instant: Bool, exit: String? = nil) {
+        guard let root = shown.removeValue(forKey: id) else { return }
+        RobotShapes.stopLoops(root)
+        guard !instant, !reduceMotion, let spec = library?.accessories[id] else { return root.removeFromSuperlayer() }
+        RobotShapes.exit(root, exit ?? spec.enter) { [weak root] in root?.removeFromSuperlayer() }
+    }
+
+    // MARK: Moments
+
+    /// Runs `body` after `seconds` unless a moment started or ended in between.
+    private func after(_ seconds: Double, _ body: @escaping (RobotView) -> Void) {
+        let token = momentToken
+        let timer = Timer(timeInterval: max(0, seconds), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.momentToken == token else { return }
+                body(self)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func run(_ cue: RobotMomentCue) {
+        withoutActions {
+            if let on = cue.on {
+                show(on, enter: !cue.instant)
+                if let root = shown[on], !reduceMotion { RobotShapes.startLoops(root) }
+            }
+            if let off = cue.off {
+                if off == worn, let root = shown[off] { RobotShapes.stopLoops(root) } else { hide(off, instant: false, exit: cue.exit) }
+            }
+        }
+    }
+
+    private func endMoment(instant: Bool) {
+        guard let ended = moment else { return }
+        momentToken += 1
+        moment = nil
+        withoutActions {
+            if let worn, ended.mine.contains(worn), let root = shown[worn] { RobotShapes.stopLoops(root) }
+            syncWorn(enter: !instant)
+        }
+    }
+
+    private func finishMoment() {
+        guard let id = moment?.id else { return }
+        endMoment(instant: false)
+        noteActivity()
+        onMomentEnd?(id)
+    }
+
+    /// For cuts nobody asked for; the caller learns of them as an end, so it can show its state again.
+    private func cutMoment() {
+        guard let id = moment?.id else { return }
+        endMoment(instant: true)
+        after(0) { $0.onMomentEnd?(id) }
     }
 
     private func withoutActions(_ body: () -> Void) {
@@ -325,7 +532,7 @@ final class RobotView: NSView {
     }
 
     private func isIdleRest(at now: CFTimeInterval) -> Bool {
-        logicalState(at: now) == .idle && takeover == nil
+        logicalState(at: now) == .idle && takeover == nil && moment == nil
     }
 
     private func currentFace(at now: CFTimeInterval) -> (RobotFace, CGVector) {
@@ -339,6 +546,7 @@ final class RobotView: NSView {
     }
 
     private func install(_ next: RobotPlan, at start: CFTimeInterval) {
+        if !next.isMoment { endMoment(instant: false) }
         plan = next
         planStart = start
         shownState = next.state
@@ -481,10 +689,12 @@ final class RobotView: NSView {
 
     private func suspend() {
         let now = CACurrentMediaTime()
+        cutMoment()
         endInteraction()
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
-        let rest = RobotPlan.make(logicalState(at: now), from: RobotFace(), reduced: reduceMotion, seed: 0, resting: true, withLoop: false)
+        let rest = RobotPlan.make(logicalState(at: now), from: RobotFace(), reduced: reduceMotion, seed: 0, resting: true, withLoop: false,
+                                  time: time)
         withoutActions {
             removePlanAnimations(keepBlink: false)
             for eye in eyes { eye.caretHolder.removeAllAnimations() }
@@ -497,8 +707,10 @@ final class RobotView: NSView {
     private func restart() {
         guard pauseReasons.isEmpty else { return }
         let now = CACurrentMediaTime()
+        cutMoment()
         endInteraction()
-        install(RobotPlan.make(logicalState(at: now), from: RobotFace(), reduced: reduceMotion, seed: .random(in: 0...UInt64.max), resting: true), at: now)
+        install(RobotPlan.make(logicalState(at: now), from: RobotFace(), reduced: reduceMotion, seed: .random(in: 0...UInt64.max), resting: true,
+                               time: time), at: now)
         guard monitors.isEmpty else { return }
         let moved: (NSEvent) -> Void = { [weak self] _ in MainActor.assumeIsolated { self?.pointerMoved() } }
         if let global = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: moved) { monitors.append(global) }
@@ -562,6 +774,7 @@ final class RobotView: NSView {
         napTimer = nil
         guard let delay = napDelayNow else { return }
         let quiet = CACurrentMediaTime() - lastActivity
+        if moment != nil { return scheduleNap(after: delay) }
         if quiet < delay - 0.05 { return scheduleNap(after: delay - quiet) }
         switch state {
         case .input, .waiting, .waitingWrap, .sleep: return
@@ -615,6 +828,8 @@ final class RobotView: NSView {
         let dx = mouse.x - center.x, dy = center.y - mouse.y
         let influence = robotClamp(1 - hypot(dx, dy) / max(1, max(bounds.width, bounds.height) * 2.55), 0, 1)
         let now = CACurrentMediaTime()
+        if influence > 0.65, !wasNear, logicalState(at: now) != .sleep { onNear?() }
+        wasNear = influence > 0.65
         if influence > 0.65 {
             noteActivity()
             switch logicalState(at: now) {
@@ -635,6 +850,7 @@ final class RobotView: NSView {
     private func beginLive(at now: CFTimeInterval) {
         let (face, velocity) = currentFace(at: now)
         var sim = RobotSim()
+        sim.lid = CGFloat(time?.lid ?? 0)
         sim.look = CGPoint(x: (face.left.x + face.right.x) / 2 - 120, y: (face.left.y + face.right.y) / 2 - 126)
         sim.wanderTarget = sim.look
         sim.followX = RobotSpring(value: face.headX)
@@ -669,7 +885,7 @@ final class RobotView: NSView {
         liveFace = face
         live = l
         guard l.quietTicks >= 6, gesture == nil else { return }
-        let settle = RobotPlan.settle(from: l.sim, antenna: l.antenna, seed: .random(in: 0...UInt64.max))
+        let settle = RobotPlan.settle(from: l.sim, antenna: l.antenna, seed: .random(in: 0...UInt64.max), time: time)
         live = nil
         liveFace = nil
         install(settle, at: now)
@@ -702,6 +918,7 @@ final class RobotView: NSView {
             takeOver(face: face, at: now)
             var sim = RobotSim()
             sim.reduced = reduceMotion
+            sim.lid = CGFloat(time?.lid ?? 0)
             sim.lock = true
             sim.look = CGPoint(x: (face.left.x + face.right.x) / 2 - 120, y: (face.left.y + face.right.y) / 2 - 126)
             sim.antennaGaze = gaze(at: p)
@@ -757,6 +974,7 @@ final class RobotView: NSView {
 
     /// Squeeze and antenna drag own the whole face, as upstream's gesture commit resets the robot.
     private func takeOver(face: RobotFace, at now: CFTimeInterval) {
+        endMoment(instant: false)
         live = nil
         takeover = (face, now)
         shownState = .idle
@@ -861,10 +1079,11 @@ final class RobotView: NSView {
             live = nil
             liveFace = nil
             install(RobotPlan.make(reaction == .angry ? .angry : .success, from: face, antennaVelocity: velocity,
-                                   reduced: reduceMotion, seed: .random(in: 0...UInt64.max), fromDrag: true), at: now)
+                                   reduced: reduceMotion, seed: .random(in: 0...UInt64.max), fromDrag: true, time: time), at: now)
         } else if wasTakeover {
             liveFace = nil
-            install(RobotPlan.make(.idle, from: face, antennaVelocity: velocity, reduced: reduceMotion, seed: .random(in: 0...UInt64.max)), at: now)
+            install(RobotPlan.make(.idle, from: face, antennaVelocity: velocity, reduced: reduceMotion, seed: .random(in: 0...UInt64.max),
+                                   time: time), at: now)
         }
     }
 }

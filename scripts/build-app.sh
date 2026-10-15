@@ -330,6 +330,7 @@ echo "   ✓ Icon bundled"
 
 # Sounds
 cp -r Sounds "$RESOURCES/Sounds"
+cp "Windows and Linux/src/companion-moments.json" "$RESOURCES/companion-moments.json"
 echo "   ✓ Sounds bundled ($(ls Sounds/*.wav | wc -l | tr -d ' ') files)"
 
 # Menu bar icon. A template image derived from the same artwork as the app icon,
@@ -411,6 +412,19 @@ if [ "$NEEDLE_SLICE_SHA256" != "$NEEDLE_SHA256" ]; then
 fi
 cp Models/whistle.cact "$RESOURCES/Models/whistle.cact"
 echo "   ✓ Whistle model bundled: whistle.cact ($(du -h Models/whistle.cact | cut -f1 | tr -d ' '))"
+
+# Silero VAD lets whisper skip stretches with no speech.
+VAD_MODEL="ggml-silero-v6.2.0.bin"
+VAD_SHA256="2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"
+if [ "$(shasum -a 256 "Models/$VAD_MODEL" 2>/dev/null | awk '{print $1}')" != "$VAD_SHA256" ]; then
+    echo "❌ Models/$VAD_MODEL is missing or failed its SHA-256 integrity check (expected $VAD_SHA256)."
+    echo "   Fetch it with:"
+    echo "     curl --fail --location -o Models/$VAD_MODEL \\"
+    echo "       https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/$VAD_MODEL"
+    exit 1
+fi
+cp "Models/$VAD_MODEL" "$RESOURCES/Models/$VAD_MODEL"
+echo "   ✓ VAD model bundled: $VAD_MODEL"
 
 # whisper.cpp dylib — SwiftPM links the prebuilt xcframework, so the built
 # binary needs the framework alongside it inside the bundle.

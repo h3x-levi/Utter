@@ -8,11 +8,10 @@ import Foundation
 /// bias recognition toward vocabulary the model would otherwise mis-hear - proper
 /// nouns, product names, internal jargon.
 ///
-/// It is genuinely better than fixing the output afterwards, because
-/// `DictionaryCorrector` can only repair a word it can still recognise as a
-/// near-miss. Once Whisper turns an unfamiliar name into two common words
-/// ("Kubernetes" → "cooper netties"), the token boundaries are gone and edit
-/// distance can't find it. Biasing prevents that split from happening.
+/// It is better than fixing the output afterwards, because `DictionaryCorrector`
+/// can only repair a word that still looks or sounds like the original. Once Whisper
+/// turns an unfamiliar name into unrelated words, nothing can find it. Biasing
+/// prevents that split from happening.
 ///
 /// ## Why this is deliberately conservative
 ///

@@ -24,6 +24,8 @@ struct UserDataPersistenceTests {
         saved.companionSize = .huge
         saved.companionMemoryEnabled = true
         saved.companionHydrationGoal = 6
+        saved.companionFinish = "gold"
+        saved.companionAccessory = "bow"
         _ = saved.recordCompanionReminder(.water, completed: false)
         _ = saved.recordCompanionReminder(.stretch, completed: true)
         _ = saved.recordCompanionDictation(words: 1_200)
@@ -43,6 +45,7 @@ struct UserDataPersistenceTests {
         #expect(loaded.companionSize == .huge)
         #expect(loaded.companionMemoryEnabled)
         #expect(loaded.companionHydrationGoal == 6)
+        #expect(loaded.companionFinish == "gold" && loaded.companionAccessory == "bow")
         #expect(loaded.companionProgress.dismissed["water"] == 1)
         #expect(loaded.companionProgress.extraDelayMinutes["water"] == 5)
         #expect(loaded.companionProgress.stretches == 1)
@@ -82,7 +85,7 @@ struct UserDataPersistenceTests {
         "companionMemoryEnabled", "companionGoalsEnabled",
         "companionQuietMode", "companionAutomaticQuietMode",
         "companionHydrationGoal", "companionStretchGoal", "companionFocusGoal",
-        "companionDictationGoal", "companionProgress",
+        "companionDictationGoal", "companionProgress", "companionFinish", "companionAccessory",
     ]
 
     private static let goldenFile = """
@@ -138,7 +141,9 @@ struct UserDataPersistenceTests {
         "dictationWords": 4, "dismissed": {"water": 2}, "preferredHours": {"stretch": 9},
         "extraDelayMinutes": {"water": 5},
         "dictations": 8, "memoriesCreated": 3, "memoriesCompleted": 2
-      }
+      },
+      "companionFinish": "porcelain",
+      "companionAccessory": "nightcap"
     }
     """
 
@@ -180,6 +185,7 @@ struct UserDataPersistenceTests {
         #expect(AppTheme.find(loaded.appTheme) == .dark)
         #expect(loaded.companionSize == UserData.defaultCompanionSize)
         #expect(loaded.companionStretchMinutes == 480)
+        #expect(loaded.companionFinish == "ink" && loaded.companionAccessory == "")
 
         loaded.save()
         loaded.flushNow()

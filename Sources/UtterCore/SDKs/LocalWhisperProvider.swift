@@ -508,6 +508,11 @@ package final class LocalWhisperProvider: TranscriptionProvider, @unchecked Send
         Int32(max(1, min(limit, ProcessInfo.processInfo.activeProcessorCount - 2)))
     }
 
+    /// Silero VAD lets whisper skip stretches with no speech. Copied once and never freed, because
+    /// `vad_model_path` is a borrowed pointer that has to outlive every `whisper_full` call.
+    nonisolated(unsafe) private static let vadModelPath: UnsafePointer<CChar>? =
+        bundledModelURL(named: "ggml-silero-v6.2.0.bin").flatMap { strdup($0.path) }.map { UnsafePointer($0) }
+
     /// Run inference. `shouldAbort` is polled during compute and aborts the run
     /// as soon as it returns true.
     private static func run(
@@ -529,8 +534,14 @@ package final class LocalWhisperProvider: TranscriptionProvider, @unchecked Send
         // recorder already trims silence, but a near-silent clip can still
         // produce invented text.
         params.suppress_blank = true
+        params.suppress_nst = true
         params.no_speech_thold = 0.6
         params.n_threads = threads
+        if let vadModelPath {
+            params.vad = true
+            params.vad_model_path = vadModelPath
+            params.vad_params.speech_pad_ms = 200
+        }
 
         // `abort_callback` is a C function pointer, so it cannot capture context -
         // the Swift closure is passed through `user_data` and read back inside. The

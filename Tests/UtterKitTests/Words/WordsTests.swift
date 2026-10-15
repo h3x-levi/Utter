@@ -119,6 +119,16 @@ struct WordsTests {
         #expect(frames[3].width == 100)
         #expect(size == CGSize(width: 100, height: 90))
     }
+
+    @Test func dictionaryWordsHeardAsSoundAlikeSpansAreRestored() {
+        let words = ["Kubernetes", "PostgreSQL", "Grafana"]
+        #expect(DictionaryCorrector.correct("push the cooper netties config", using: words) == "push the Kubernetes config")
+        #expect(DictionaryCorrector.correct("migrate the post grey sequel database", using: words) == "migrate the PostgreSQL database")
+        #expect(DictionaryCorrector.correct("review the graph on a dashboard", using: words) == "review the Grafana dashboard")
+        #expect(DictionaryCorrector.correct("we carve on the left", using: words) == "we carve on the left")
+        #expect(DictionaryCorrector.correct("cooper, netties", using: words) == "cooper, netties")
+        #expect(DictionaryCorrector.correct("Kubernetes is up", using: words) == "Kubernetes is up")
+    }
 }
 
 @MainActor

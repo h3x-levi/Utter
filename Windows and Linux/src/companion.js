@@ -12,13 +12,19 @@ const SIZES = { small: 32, medium: 40, large: 56, huge: 72 }
 const BUBBLE_WIDTH = 220
 const BUBBLE_ROOM = 64
 const PERSISTS = new Set(['waiting', 'input', 'sleep'])
+const TURN_ENDS = new Set(['done', 'error', 'notice', 'island'])
+const GOALS = { water: 'hydration', stretch: 'stretch', pomodoro: 'focus' }
+const HEAR = { loud: 0.08, soft: 0.02, talkingMs: 4000, quietMs: 2000 }
+
+let library = null
+try { library = require('./companion-moments.json') } catch {}
 
 const DEFAULTS = {
   companionEnabled: false, companionSize: 'medium', companionUserName: '', companionStretchMinutes: 45,
   companionWaterMinutes: 0, companionPomodoroFocusMinutes: 0, companionPomodoroBreakMinutes: 5, companionPinnedMessage: '',
   companionSounds: true, companionMemoryEnabled: true, companionGoalsEnabled: true, companionQuietMode: false,
   companionAutomaticQuietMode: true, companionHydrationGoal: 4, companionStretchGoal: 3, companionFocusGoal: 2,
-  companionDictationGoal: 500, companionHeadRoundness: 50,
+  companionDictationGoal: 500, companionHeadRoundness: 50, companionFinish: 'ink', companionAccessory: '',
 }
 const CLAMPS = {
   companionStretchMinutes: 480, companionWaterMinutes: 480, companionPomodoroFocusMinutes: 480, companionPomodoroBreakMinutes: 480,
@@ -129,6 +135,17 @@ const countdown = (ms) => {
 
 // ---------- Behaviour: what the robot shows, as values ----------
 
+function clock(date = new Date()) {
+  const hour = date.getHours()
+  const time = Object.keys(library?.times || {}).find((id) => {
+    const { from, to } = library.times[id]
+    return from < to ? hour >= from && hour < to : hour >= from || hour < to
+  })
+  return { time, hour, weekday: date.getDay(), month: date.getMonth() + 1, day: date.getDate() }
+}
+
+const freshHearing = () => ({ loudMs: 0, softSince: null, at: null, said: new Set() })
+
 class Behaviour {
   constructor(onChange) {
     this.onChange = onChange
@@ -141,6 +158,40 @@ class Behaviour {
     this.countdown = null
     this.pinned = ''
     this.reachedProcessing = false
+    this.cue = null
+    this.cueId = 0
+    this.turn = {}
+    this.hearing = freshHearing()
+  }
+
+  // An island's message is the dictated text, so no cue carries a message.
+  tag(event, detail = {}) {
+    const { message, ...rest } = detail
+    if (event === 'listening') { this.turn = {}; this.hearing = freshHearing() }
+    const ends = TURN_ENDS.has(event)
+    this.cue = { id: ++this.cueId, event, detail: { ...clock(), ...(ends && this.turn), ...rest } }
+    if (ends) this.turn = {}
+  }
+
+  note(detail) {
+    this.turn = { ...this.turn, ...detail }
+  }
+
+  hear(level, now) {
+    if (this.robotState !== 'input') return null
+    const h = this.hearing
+    const dt = h.at == null ? 0 : Math.min(now - h.at, 100)
+    h.at = now
+    if (level > HEAR.loud) { h.loudMs += dt; h.softSince = null }
+    else if (level > HEAR.soft) h.softSince ??= now
+    else h.softSince = null
+    const event = h.loudMs >= HEAR.talkingMs && !h.said.has('talking') ? 'talking'
+      : h.softSince != null && now - h.softSince >= HEAR.quietMs && !h.said.has('quiet') ? 'quiet' : null
+    if (!event) return null
+    h.said.add(event)
+    this.tag(event)
+    this.onChange()
+    return event
   }
 
   get notice() {
@@ -171,12 +222,15 @@ class Behaviour {
   announce(reminder, name) {
     if (this.quiet) return
     this.currentReminder = reminder
+    this.tag('reminder', { kind: reminder.kind, focus: Boolean(reminder.focus) })
     this.show('send')
     this.say({ kind: 'reminder', line: reminderLine(reminder, name) }, 8)
   }
 
-  celebrate(line) {
+  celebrate(line, kind) {
     if (this.quiet) return
+    if (kind === 'dictation') this.note({ goal: 'dictation' })
+    else this.tag('goal', { kind })
     this.show('love')
     this.say({ kind: 'reminder', line }, 5)
   }
@@ -401,6 +455,7 @@ let glide = null
 let mouseOver = false
 let memoryTimer = null
 let lastLevelSent = 0
+let byeTimer = null
 
 const work = () => screen.getDisplayMatching(win?.getBounds() || screen.getPrimaryDisplay().bounds).workArea
 
@@ -408,11 +463,15 @@ function send(message) {
   if (win && !win.isDestroyed()) win.webContents.send('companion:state', message)
 }
 
+// A cue goes out once, in the same message as the state it came with; one tagged while hidden is dropped.
 function sendState() {
+  const cue = behaviour.cue
+  behaviour.cue = null
   if (!win || win.isDestroyed()) return
   const origin = win.getBounds()
   send({ type: 'state', robotState: behaviour.robotState, playToken: behaviour.playToken, quiet: behaviour.quiet,
-    notice: behaviour.notice, quipId: behaviour.quip ? behaviour.quipGeneration : 0, size: geo.robotSide, roundness: ud.companionHeadRoundness, layout: bubbleLayout(geo, origin, work()) })
+    notice: behaviour.notice, quipId: behaviour.quip ? behaviour.quipGeneration : 0, size: geo.robotSide, roundness: ud.companionHeadRoundness,
+    finish: ud.companionFinish, worn: ud.companionAccessory, cue, layout: bubbleLayout(geo, origin, work()) })
   applyShape()
 }
 
@@ -483,6 +542,7 @@ function show() {
 }
 
 function hide() {
+  clearTimeout(byeTimer)
   clearInterval(heartbeat)
   clearInterval(pointerTimer)
   clearInterval(glide)
@@ -571,9 +631,24 @@ function menu() {
     { label: 'Reset Position', click: () => { delete ud.companionWindowPosition; opts.saveUserdata(); moveTo(placeBesidePill()); sendState() } },
     { type: 'separator' },
     { label: 'Companion Settings…', click: () => opts.showApp('companion') },
-    { label: 'Hide Companion', click: () => { ud.companionEnabled = false; opts.saveUserdata(); hide(); opts.changed() } },
+    { label: 'Hide Companion', click: hiding },
   )
   Menu.buildFromTemplate(items).popup({ window: win })
+}
+
+// The renderer plays its goodbye and then asks for 'bye'; the timer covers a renderer that never does.
+function hiding() {
+  behaviour.tag('hiding')
+  sendState()
+  clearTimeout(byeTimer)
+  byeTimer = setTimeout(bye, 8000)
+}
+
+function bye() {
+  ud.companionEnabled = false
+  opts.saveUserdata()
+  hide()
+  opts.changed()
 }
 
 function respond(completed) {
@@ -582,7 +657,7 @@ function respond(completed) {
   const celebration = recordReminder(ud, reminder, completed)
   opts.saveUserdata()
   opts.changed()
-  if (celebration) behaviour.celebrate(celebration)
+  if (celebration) behaviour.celebrate(celebration, GOALS[reminder.kind])
 }
 
 async function robotCommand(command, arg) {
@@ -652,6 +727,8 @@ module.exports = {
     scheduleMemories()
     ipcMain.handle('companion', async (_e, command, ...args) => {
       if (['mouse', 'drag-start', 'drag', 'drag-end', 'menu', 'ready'].includes(command)) return robotCommand(command, args[0])
+      if (command === 'library') return library
+      if (command === 'bye') return bye()
       if (command === 'complete') return store.complete(args[0])
       if (command === 'delete') return store.delete(args[0])
       if (command === 'deleteAll') {
@@ -666,17 +743,25 @@ module.exports = {
   },
 
   signal(event, detail = {}) {
-    if (event === 'meeting') meetingRecording = detail.state === 'recording'
+    if (!behaviour) return
     if (event === 'level') {
-      if (behaviour?.robotState !== 'input' || Date.now() - lastLevelSent < 33) return
+      behaviour.hear(detail.level, Date.now())
+      if (behaviour.robotState !== 'input' || Date.now() - lastLevelSent < 33) return
       lastLevelSent = Date.now()
       return send({ type: 'level', level: detail.level })
     }
-    if (event === 'delivered' && dictationGoalReached(ud, detail.words || 0)) {
-      behaviour?.celebrate('Dictation goal complete')
-      return
+    if (event === 'delivered') {
+      behaviour.note(detail)
+      if (dictationGoalReached(ud, detail.words || 0)) behaviour.celebrate('Dictation goal complete', 'dictation')
+    } else {
+      if (event === 'meeting') {
+        meetingRecording = detail.state === 'recording'
+        if (win) beat()
+      }
+      behaviour.tag(event, detail)
+      behaviour.apply(event, detail)
     }
-    behaviour?.apply(event, detail)
+    sendState()
   },
 
   view() {
@@ -690,6 +775,7 @@ module.exports = {
     try {
       const proposal = parseMemory(input)
       store.add(proposal, 'spoken')
+      behaviour?.note({ remembered: true, timed: Boolean(proposal.remindAt) })
       const words = proposal.text.split(/\s+/).filter(Boolean).length
       const p = progressFor(ud.companionProgress)
       p.dictationWords += words
@@ -718,5 +804,5 @@ module.exports = {
 
   // For companion.test.js.
   _test: { reminderLine, progressFor, recordReminder, dictationGoalReached, ReminderScheduler, Behaviour, parseMemory, stripCommandWords,
-    MemoryStore, geometry, clampOrigin, bubbleLayout, countdown, normalise },
+    MemoryStore, geometry, clampOrigin, bubbleLayout, countdown, normalise, clock, HEAR },
 }

@@ -23,6 +23,15 @@ final class CompanionWindow: NSPanel {
     private var workspaceTokens: [NSObjectProtocol] = []
     private var screenSharing = false
     private var grabOffset: CGSize?
+    private let library = RobotLibrary.shared
+    private var routeMemory = RobotRouteMemory()
+    private var stateChanged = false
+    private var applyQueued = false
+    private var pendingCues: [CompanionCue] = []
+    private var lastActivity = CACurrentMediaTime()
+    private var meetingSeconds = 0
+    private var hidingMoment: String?
+    private var hideFallback: DispatchWorkItem?
 
     init(pill: PillWindow, onOpenSettings: @escaping () -> Void) {
         self.pill = pill
@@ -49,12 +58,15 @@ final class CompanionWindow: NSPanel {
         content.addSubview(host)
         contentView = content
 
-        robot.palette = .utter
         robot.roundness = UserDefaults.standard.companionHeadRoundness
         host.menuSource = { [weak self] in self?.makeMenu() ?? NSMenu() }
         host.onDragBegan = { [weak self] cursor in self?.beginDrag(at: cursor) }
         host.onDrag = { [weak self] cursor in self?.drag(to: cursor) }
         host.onDragEnded = { [weak self] velocity in self?.endDrag(velocity: velocity) }
+        host.onPoke = { [weak self] count in self?.behaviour.signal("poke", ["count": .number(Double(count))]) }
+        robot.onNear = { [weak self] in self?.behaviour.signal("near") }
+        robot.onMomentEnd = { [weak self] id in self?.momentEnded(id) }
+        updateLook()
         layoutRobot()
         observe()
         restorePosition()
@@ -68,8 +80,10 @@ final class CompanionWindow: NSPanel {
     }
 
     func show() {
+        let wasVisible = isVisible
         orderFront(nil)
         startHeartbeat()
+        if !wasVisible { behaviour.signal("shown") }
     }
 
     func hide() {
@@ -82,8 +96,17 @@ final class CompanionWindow: NSPanel {
 
     private func observe() {
         observers = [
-            behaviour.$robotState.sink { [weak self] state in
-                MainActor.assumeIsolated { self?.play(state) }
+            behaviour.$robotState.sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.stateChanged = true
+                    self?.queueApply()
+                }
+            },
+            behaviour.$cue.compactMap { $0 }.sink { [weak self] cue in
+                MainActor.assumeIsolated {
+                    self?.pendingCues.append(cue)
+                    self?.queueApply()
+                }
             },
             behaviour.$isQuiet.sink { [weak self] quiet in
                 MainActor.assumeIsolated { self?.robot.isQuiet = quiet }
@@ -98,6 +121,18 @@ final class CompanionWindow: NSPanel {
                 MainActor.assumeIsolated { self?.robot.roundness = value }
             },
         ]
+        if let meeting = AppDelegate.current?.meetingSession {
+            observers += [
+                // Read `elapsed` now: the sink runs before the change, and stopping zeroes it.
+                meeting.$state.dropFirst().removeDuplicates().sink { [weak self] state in
+                    let seconds = meeting.elapsed
+                    DispatchQueue.main.async { MainActor.assumeIsolated { self?.meetingChanged(state, seconds: seconds) } }
+                },
+                meeting.$finishedNoteID.dropFirst().compactMap { $0 }.receive(on: DispatchQueue.main).sink { [weak self] _ in
+                    MainActor.assumeIsolated { self?.meetingSaved() }
+                },
+            ]
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         let workspace = NSWorkspace.shared.notificationCenter
@@ -109,15 +144,99 @@ final class CompanionWindow: NSPanel {
         refreshScreenSharing()
     }
 
+    private func queueApply() {
+        guard !applyQueued else { return }
+        applyQueued = true
+        DispatchQueue.main.async { [weak self] in MainActor.assumeIsolated { self?.applyBehaviour() } }
+    }
+
+    /// As the Windows and Linux renderer applies an update: a routed moment beats the state that came with it.
+    private func applyBehaviour() {
+        applyQueued = false
+        let state = behaviour.robotState
+        let changed = stateChanged
+        stateChanged = false
+        let cues = pendingCues
+        pendingCues = []
+        var picked: (moment: String, cue: CompanionCue)?
+        for cue in cues {
+            lastActivity = CACurrentMediaTime()
+            guard !behaviour.isQuiet,
+                  cue.mayRoute(state: state, stateChanged: changed, momentPlaying: robot.isPlayingMoment || picked != nil),
+                  let moment = route(cue) else { continue }
+            picked = (moment, cue)
+        }
+        if hidingMoment != nil, picked != nil || changed { return disable() }
+        if let picked {
+            robot.play(moment: picked.moment, loop: library?.moments[picked.moment]?.loopFrom != nil,
+                       hold: CompanionCue.hold.contains(picked.cue.event))
+        } else if changed {
+            if robot.isPlayingMoment { robot.stopMoment() }
+            play(state)
+        }
+        if let picked, picked.cue.event == "hiding" {
+            hideAfter(picked.moment)
+        } else if cues.contains(where: { $0.event == "hiding" }) {
+            disable()
+        }
+        watchLevels()
+    }
+
+    private func route(_ cue: CompanionCue) -> String? {
+        guard let library else { return nil }
+        let now = Date()
+        let detail = cue.detail.merging(library.clock(now)) { own, _ in own }
+        return library.route(cue.event, detail, memory: &routeMemory, now: now.timeIntervalSince1970 * 1000)
+    }
+
+    private func momentEnded(_ id: String) {
+        lastActivity = CACurrentMediaTime()
+        if id == hidingMoment { return disable() }
+        let state = behaviour.robotState
+        guard !robot.isPlayingMoment, !behaviour.isQuiet, state.persists else { return }
+        play(state)
+    }
+
     private func play(_ state: RobotState) {
         robot.play(state)
-        guard state == .input, let pill else {
+        lastActivity = CACurrentMediaTime()
+    }
+
+    private func watchLevels() {
+        guard behaviour.robotState == .input, let pill else {
             levelWatch = nil
             return
         }
+        guard levelWatch == nil else { return }
         levelWatch = pill.stateModel.levels.$value.sink { [weak self] level in
-            MainActor.assumeIsolated { self?.robot.inputLevel = level }
+            MainActor.assumeIsolated {
+                self?.robot.inputLevel = level
+                self?.behaviour.hear(level, at: CACurrentMediaTime() * 1000)
+            }
         }
+    }
+
+    private func updateLook() {
+        let data = UserData.shared
+        let look = RobotLook(finish: data.companionFinish, accessory: data.companionAccessory)
+        if robot.look != look { robot.look = look }
+    }
+
+    private func meetingChanged(_ state: MeetingSession.State, seconds: Int) {
+        switch state {
+        case .recording:
+            refreshQuiet()
+            behaviour.signal("meeting", ["state": .string("recording")])
+        case .finishing:
+            meetingSeconds = seconds
+        default:
+            break
+        }
+    }
+
+    private func meetingSaved() {
+        refreshQuiet()
+        behaviour.signal("meeting", ["state": .string("saved"), "minutes": .number((Double(meetingSeconds) / 60).rounded())])
     }
 
     private func startHeartbeat() {
@@ -141,10 +260,20 @@ final class CompanionWindow: NSPanel {
         reminders.waterEvery = every(data.companionWaterMinutes, .water)
         reminders.pomodoroFocus = data.companionPomodoroFocusMinutes > 0 ? TimeInterval(data.companionPomodoroFocusMinutes) * 60 : nil
         reminders.pomodoroBreak = data.companionPomodoroBreakMinutes > 0 ? TimeInterval(data.companionPomodoroBreakMinutes) * 60 : nil
-        behaviour.setQuietMode(data.companionQuietMode || (data.companionAutomaticQuietMode && automaticQuiet))
+        refreshQuiet()
         let now = Date()
         behaviour.setPomodoroCountdown(reminders.pomodoroRemaining(at: now))
         if let due = reminders.due(at: now) { behaviour.announce(due, name: data.companionUserName) }
+        updateLook()
+        if !applyQueued, !behaviour.isQuiet, !behaviour.robotState.persists, !robot.isPlayingMoment, !robot.isNapping,
+           CACurrentMediaTime() - lastActivity >= 12 {
+            behaviour.signal("ambient")
+        }
+    }
+
+    private func refreshQuiet() {
+        let data = UserData.shared
+        behaviour.setQuietMode(data.companionQuietMode || (data.companionAutomaticQuietMode && automaticQuiet))
     }
 
     private var automaticQuiet: Bool {
@@ -231,6 +360,7 @@ final class CompanionWindow: NSPanel {
     // MARK: Dragging
 
     private func beginDrag(at cursor: CGPoint) {
+        lastActivity = CACurrentMediaTime()
         grabOffset = CGSize(width: cursor.x - frame.origin.x, height: cursor.y - frame.origin.y)
     }
 
@@ -243,6 +373,7 @@ final class CompanionWindow: NSPanel {
     private func endDrag(velocity: CGVector) {
         grabOffset = nil
         let speed = hypot(velocity.dx, velocity.dy)
+        behaviour.signal("fling", ["speed": .number(speed)])
         guard speed > 300, !MotionPreference.shared.reduceMotion else {
             savePosition()
             updateBubbleLayout()
@@ -286,7 +417,12 @@ final class CompanionWindow: NSPanel {
     @objc private func completeReminder() {
         guard let reminder = behaviour.respondToCurrentReminder(completed: true) else { return }
         if let celebration = UserData.shared.recordCompanionReminder(reminder, completed: true) {
-            behaviour.celebrateGoal(celebration)
+            let kind = switch reminder {
+            case .water: "hydration"
+            case .stretch: "stretch"
+            default: "focus"
+            }
+            behaviour.celebrateGoal(celebration, kind: kind)
         }
     }
 
@@ -302,7 +438,19 @@ final class CompanionWindow: NSPanel {
 
     @objc private func openSettings() { onOpenSettings() }
 
-    @objc private func hideCompanion() {
+    @objc private func hideCompanion() { behaviour.signal("hiding") }
+
+    private func hideAfter(_ moment: String) {
+        hidingMoment = moment
+        let fallback = DispatchWorkItem { [weak self] in self?.disable() }
+        hideFallback = fallback
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: fallback)
+    }
+
+    private func disable() {
+        hideFallback?.cancel()
+        hideFallback = nil
+        hidingMoment = nil
         UserData.shared.companionEnabled = false
         UserData.shared.save()
     }
@@ -325,8 +473,12 @@ private final class CompanionRobotHost: NSView {
     var onDragBegan: (CGPoint) -> Void = { _ in }
     var onDrag: (CGPoint) -> Void = { _ in }
     var onDragEnded: (CGVector) -> Void = { _ in }
+    var onPoke: (Int) -> Void = { _ in }
 
     private var pressedAt: CGPoint?
+    private var pressedTime: TimeInterval = 0
+    private var pressedAntenna = false
+    private var lastPoke: (time: TimeInterval, count: Int)?
     private var moving = false
     private var samples: [(point: CGPoint, time: TimeInterval)] = []
 
@@ -358,6 +510,8 @@ private final class CompanionRobotHost: NSView {
         if event.modifierFlags.contains(.control) { return rightMouseDown(with: event) }
         robot.mouseDown(with: event)
         pressedAt = NSEvent.mouseLocation
+        pressedTime = event.timestamp
+        pressedAntenna = robot.isHoldingAntenna
         moving = false
         samples = [(NSEvent.mouseLocation, event.timestamp)]
     }
@@ -381,8 +535,15 @@ private final class CompanionRobotHost: NSView {
             pressedAt = nil
             moving = false
         }
-        guard moving else { return }
+        guard moving else { return poked(at: event.timestamp) }
         onDragEnded(velocity(endingAt: event.timestamp))
+    }
+
+    private func poked(at time: TimeInterval) {
+        guard pressedAt != nil, !pressedAntenna, time - pressedTime <= 0.14 else { return }
+        let count = lastPoke.map { time - $0.time < 1.5 ? $0.count + 1 : 1 } ?? 1
+        lastPoke = (time, count)
+        onPoke(count)
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -449,6 +610,17 @@ private struct CompanionBubbleSlot: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edge == .bottom ? .bottom : .top)
         .frame(height: CompanionGeometry.bubbleRoom)
+    }
+}
+
+extension RobotLook {
+    /// Saved ids are checked when drawn, not when stored, so a library edit never strands a setting.
+    init(finish: String, accessory: String, at date: Date = Date(), library: RobotLibrary? = RobotLibrary.shared) {
+        self.init()
+        guard let library else { return }
+        self.finish = library.finishes[finish] == nil ? library.defaults["finish"] ?? self.finish : finish
+        worn = library.accessories[accessory]?.wear == true ? accessory : nil
+        time = library.timeOfDay(date)
     }
 }
 
