@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- The robot's shadow DOM carries its own <style>, hence 'unsafe-inline' for styles only. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<link rel="stylesheet" href="companion.css">
+</head>
+<body>
+  <div id="panel">
+    <div class="slot top"></div>
+    <div id="robot" role="button" aria-label="Companion" aria-description="Drag to move. Open the actions menu for reminders and settings.">
+      <agent-robot-avatar id="avatar" color="#08090b" auto-sleep="30000" wake-on="interaction"></agent-robot-avatar>
+    </div>
+    <div class="slot bottom"></div>
+  </div>
+  <div id="bubble" aria-hidden="true" hidden>
+    <svg class="icon" viewBox="0 0 12 12" aria-hidden="true"><path></path></svg>
+    <div class="words"><div class="line"></div><div class="detail"></div></div>
+  </div>
+  <div id="announce" class="visually-hidden" aria-live="assertive"></div>
+  <script type="module" src="companion-robot.js"></script>
+</body>
+</html>

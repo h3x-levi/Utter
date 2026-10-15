@@ -1,0 +1,103 @@
+{
+  "name": "utter",
+  "productName": "Utter",
+  "version": "1.2.1",
+  "description": "Private on-device dictation",
+  "homepage": "https://github.com/h3x-levi/Utter",
+  "author": {
+    "name": "Utter"
+  },
+  "license": "Apache-2.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test src/text.test.js src/companion.test.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win --x64 && makensis -DVERSION=$npm_package_version installer.nsi"
+  },
+  "dependencies": {
+    "chrono-node": "2.10.3",
+    "uiohook-napi": "1.5.5"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "utter.dictation.app",
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "!src/**/*.test.js",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../Models/ggml-small.en-q5_1.bin",
+        "to": "models/ggml-small.en-q5_1.bin"
+      }
+    ],
+    "directories": {
+      "output": "Builds"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "extraResources": [
+        {
+          "from": "vendor/win",
+          "to": "whisper"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "synopsis": "Private on-device dictation",
+      "artifactName": "Utter-${version}-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "vendor/linux",
+          "to": "whisper"
+        }
+      ],
+      "maintainer": "Utter",
+      "executableArgs": [
+        "--ozone-platform=x11"
+      ]
+    },
+    "deb": {
+      "depends": [
+        "libnotify4",
+        "libxtst6",
+        "libnss3",
+        "libpulse0"
+      ],
+      "recommends": [
+        "pulseaudio-utils"
+      ]
+    }
+  }
+}
